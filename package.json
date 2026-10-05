@@ -1,15 +1,16 @@
 {
-  "name": "3d-sandbox-backend",
+  "name": "kwg-3d-online",
   "version": "1.0.0",
-  "description": "Multiplayer Backend for 3D Sandbox Game",
+  "description": "KWG 3D Online Multiplayer Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
     "express": "^4.19.2",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   }
 }
