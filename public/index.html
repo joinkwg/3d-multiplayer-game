@@ -143,8 +143,8 @@
     .close-btn:hover { color: #fff; }
   </style>
 
-  <script src="[https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js](https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js)"></script>
-  <script src="[https://cdn.socket.io/4.7.5/socket.io.min.js](https://cdn.socket.io/4.7.5/socket.io.min.js)"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
 
@@ -356,8 +356,11 @@
   </div>
 
   <script>
+    // --- SERVER URL CONFIGURATION ---
+    const SERVER_URL = 'https://kwg3d.onrender.com';
+
     // --- SOCKET.IO & MULTIPLAYER SETUP ---
-    const socket = io(); // Connects automatically to the backend host
+    const socket = io(SERVER_URL);
     let currentUsername = null;
     let currentWorldName = null;
     let remotePlayers = {}; // id -> Mesh Avatar
@@ -390,7 +393,7 @@
       if (!u || !p) { errBox.textContent = 'Please fill out all fields.'; return; }
 
       try {
-        const res = await fetch(endpoint, {
+        const res = await fetch(`${SERVER_URL}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: u, password: p })
@@ -412,7 +415,7 @@
 
     async function fetchWorldList() {
       try {
-        const res = await fetch('/api/worlds');
+        const res = await fetch(`${SERVER_URL}/api/worlds`);
         const worlds = await res.json();
         renderRoomList(worlds);
       } catch(e) {}
