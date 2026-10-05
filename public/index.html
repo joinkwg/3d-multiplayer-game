@@ -141,6 +141,27 @@
     }
     .close-btn { position: absolute; top: 8px; right: 14px; font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; font-family: monospace; }
     .close-btn:hover { color: #fff; }
+
+    /* Per-world chat */
+    #world-chat {
+      display: none; position: absolute; right: 10px; bottom: 10px; z-index: 20;
+      width: 320px; background: rgba(20,23,28,.96); color:#fff; border:3px solid #fff;
+      box-shadow:5px 5px 0 #000; font-size:12px;
+    }
+    #world-chat-header { padding:8px 10px; border-bottom:2px solid #444; font-weight:bold; text-transform:uppercase; }
+    #world-chat-messages { height:180px; overflow-y:auto; padding:8px; }
+    .chat-line { margin-bottom:6px; word-break:break-word; }
+    .chat-name { color:#5bc0de; font-weight:bold; }
+    .chat-time { color:#777; font-size:10px; margin-left:5px; }
+    #world-chat-form { display:flex; gap:5px; padding:7px; border-top:2px solid #444; }
+    #world-chat-input { flex:1; min-width:0; padding:8px; background:#111; color:#fff; border:2px solid #555; font-family:inherit; }
+    #world-chat-send { padding:8px 10px; background:#3388ff; color:#fff; border:2px solid #fff; font-weight:bold; cursor:pointer; font-family:inherit; }
+    #admin-panel { display:none; position:absolute; inset:0; background:rgba(0,0,0,.88); z-index:250; align-items:center; justify-content:center; }
+    #admin-card { width:720px; max-width:92vw; max-height:86vh; overflow:auto; background:#22252a; color:#fff; border:4px solid #fff; box-shadow:8px 8px #000; padding:20px; }
+    .admin-section { margin-top:14px; border-top:2px solid #444; padding-top:10px; }
+    .admin-row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px; background:#15181c; border:2px solid #333; margin-bottom:5px; }
+    .admin-delete { background:#e74c3c; color:#fff; border:2px solid #fff; padding:5px 9px; cursor:pointer; font-weight:bold; font-family:inherit; }
+
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -175,6 +196,7 @@
       <div id="room-list" class="room-list-container"></div>
 
       <button id="open-create-world-btn" class="submit-btn secondary">+ Create New World</button>
+      <button id="open-admin-btn" class="submit-btn danger" style="display:none;">ADMIN PANEL</button>
       <div id="home-error-msg" class="error-msg"></div>
     </div>
   </div>
@@ -199,6 +221,34 @@
   </div>
 
   <div id="room-info-label">World: <span id="current-room-text">Default World</span></div>
+
+
+  <!-- Per-world chat -->
+  <div id="world-chat">
+    <div id="world-chat-header">World Chat</div>
+    <div id="world-chat-messages"></div>
+    <form id="world-chat-form">
+      <input id="world-chat-input" maxlength="300" autocomplete="off" placeholder="Type a message..." />
+      <button id="world-chat-send" type="submit">SEND</button>
+    </form>
+  </div>
+
+  <!-- Admin management panel -->
+  <div id="admin-panel">
+    <div id="admin-card">
+      <span class="close-btn" id="close-admin-panel">X</span>
+      <h3 style="margin:0;text-transform:uppercase;">Admin Management</h3>
+      <div class="admin-section">
+        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">ACCOUNTS</div>
+        <div id="admin-users-list"></div>
+      </div>
+      <div class="admin-section">
+        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">WORLDS</div>
+        <div id="admin-worlds-list"></div>
+      </div>
+      <div id="admin-error" class="error-msg"></div>
+    </div>
+  </div>
 
   <!-- Build Toolbar -->
   <div id="build-toolbar">
@@ -360,6 +410,8 @@
     let currentCheckpoint = null;
     let cloudRotationSpeedMultiplier = 1.0;
     let currentWorldData = null;
+    let isAdmin = false;
+    let chatMessagesLoaded = false;
     
     const otherPlayers = {};
 
@@ -403,6 +455,8 @@
       socket.emit('login', { username, password }, (res) => {
         if (res.success) {
           loggedInUsername = res.username;
+          isAdmin = !!res.isAdmin;
+          document.getElementById('open-admin-btn').style.display = isAdmin ? 'block' : 'none';
           if (res.appearance) playerAppearance = res.appearance;
           document.getElementById('auth-screen').style.display = 'none';
           document.getElementById('home-screen').style.display = 'flex';
@@ -422,6 +476,8 @@
       socket.emit('register', { username, password }, (res) => {
         if (res.success) {
           loggedInUsername = res.username;
+          isAdmin = !!res.isAdmin;
+          document.getElementById('open-admin-btn').style.display = isAdmin ? 'block' : 'none';
           document.getElementById('auth-screen').style.display = 'none';
           document.getElementById('home-screen').style.display = 'flex';
           document.getElementById('logged-user-display').textContent = loggedInUsername;
@@ -509,11 +565,13 @@
           card.className = 'room-card';
           card.innerHTML = `
             <div class="room-info">
-              <span class="room-title">${w.name}</span>
+              <span class="room-title"></span>
               <span class="room-meta">Online Players: ${w.onlineCount}</span>
             </div>
-            <button class="join-btn" onclick="joinSelectedWorld('${w.name}')">Enter</button>
+            <button class="join-btn">Enter</button>
           `;
+          card.querySelector('.room-title').textContent = w.name;
+          card.querySelector('.join-btn').addEventListener('click', () => joinSelectedWorld(w.name));
           listElem.appendChild(card);
         });
       });
@@ -536,6 +594,8 @@
         document.getElementById('current-room-text').textContent = roomName;
 
         loadWorldData(res.worldData, res.players, res.selfId);
+        document.getElementById('world-chat').style.display = 'block';
+        loadWorldChat();
       });
     }
 
@@ -583,6 +643,8 @@
       currentWorldName = null;
 
       document.getElementById('hud').style.display = 'none';
+      document.getElementById('world-chat').style.display = 'none';
+      document.getElementById('world-chat-messages').innerHTML = '';
       document.getElementById('room-info-label').style.display = 'none';
       document.getElementById('build-toolbar').style.display = 'none';
       document.getElementById('home-screen').style.display = 'flex';
@@ -595,6 +657,133 @@
 
     document.getElementById('respawn-btn').addEventListener('click', () => {
       respawnPlayer();
+    });
+
+
+    // --- PER-WORLD CHAT ---
+    function escapeChatText(value) {
+      const div = document.createElement('div');
+      div.textContent = value;
+      return div.innerHTML;
+    }
+
+    function appendChatMessage(msg) {
+      const box = document.getElementById('world-chat-messages');
+      if (!box) return;
+      const row = document.createElement('div');
+      row.className = 'chat-line';
+      const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+      row.innerHTML = `<span class="chat-name">${escapeChatText(msg.username || 'Player')}:</span> ${escapeChatText(msg.message || '')}<span class="chat-time">${escapeChatText(time)}</span>`;
+      box.appendChild(row);
+      while (box.children.length > 100) box.removeChild(box.firstChild);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function loadWorldChat() {
+      if (!currentWorldName) return;
+      socket.emit('get_world_chat', { worldName: currentWorldName }, (res) => {
+        if (!res || !res.success) return;
+        const box = document.getElementById('world-chat-messages');
+        box.innerHTML = '';
+        (res.messages || []).forEach(appendChatMessage);
+        chatMessagesLoaded = true;
+      });
+    }
+
+    document.getElementById('world-chat-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('world-chat-input');
+      const message = input.value.trim();
+      if (!message || !currentWorldName) return;
+      socket.emit('send_world_chat', { worldName: currentWorldName, message }, (res) => {
+        if (res && res.success) input.value = '';
+        else if (res && res.message) showToast(res.message);
+      });
+    });
+
+    socket.on('world_chat_message', (msg) => {
+      if (msg.worldName === currentWorldName) appendChatMessage(msg);
+    });
+
+    socket.on('account_deleted', () => {
+      alert('Your account was permanently deleted by an administrator.');
+      window.location.reload();
+    });
+
+    socket.on('world_deleted', ({worldName}) => {
+      if (worldName !== currentWorldName) return;
+      alert('This world was permanently deleted by an administrator.');
+      document.getElementById('leave-world-btn').click();
+    });
+
+    // --- ADMIN MANAGEMENT ---
+    function refreshAdminPanel() {
+      if (!isAdmin) return;
+      socket.emit('admin_list', (res) => {
+        if (!res || !res.success) {
+          document.getElementById('admin-error').textContent = (res && res.message) || 'Admin access denied.';
+          return;
+        }
+        const users = document.getElementById('admin-users-list');
+        const worlds = document.getElementById('admin-worlds-list');
+        users.innerHTML = '';
+        worlds.innerHTML = '';
+
+        (res.users || []).forEach(u => {
+          const row = document.createElement('div');
+          row.className = 'admin-row';
+          const role = u.isAdmin ? 'ADMIN' : 'USER';
+          row.innerHTML = `<span><b>${escapeChatText(u.username)}</b> <small style="color:#aaa;">${role}</small></span>`;
+          if (!u.isAdmin) {
+            const btn = document.createElement('button');
+            btn.className = 'admin-delete';
+            btn.textContent = 'DELETE ACCOUNT';
+            btn.onclick = () => {
+              if (confirm(`Permanently delete account "${u.username}"?`)) {
+                socket.emit('admin_delete_user', { username: u.username }, (r) => {
+                  if (!r.success) document.getElementById('admin-error').textContent = r.message;
+                  else refreshAdminPanel();
+                });
+              }
+            };
+            row.appendChild(btn);
+          }
+          users.appendChild(row);
+        });
+
+        (res.worlds || []).forEach(w => {
+          const row = document.createElement('div');
+          row.className = 'admin-row';
+          row.innerHTML = `<span><b>${escapeChatText(w.name)}</b><small style="color:#aaa;"> owner: ${escapeChatText(w.ownerUsername || 'unknown')}</small></span>`;
+          const btn = document.createElement('button');
+          btn.className = 'admin-delete';
+          btn.textContent = 'DELETE WORLD';
+          btn.onclick = () => {
+            if (confirm(`Permanently delete world "${w.name}"?`)) {
+              socket.emit('admin_delete_world', { worldName: w.name }, (r) => {
+                if (!r.success) document.getElementById('admin-error').textContent = r.message;
+                else {
+                  if (currentWorldName === w.name) document.getElementById('leave-world-btn').click();
+                  refreshAdminPanel();
+                  renderRoomList();
+                }
+              });
+            }
+          };
+          row.appendChild(btn);
+          worlds.appendChild(row);
+        });
+      });
+    }
+
+    document.getElementById('open-admin-btn').addEventListener('click', () => {
+      if (!isAdmin) return;
+      document.getElementById('admin-error').textContent = '';
+      document.getElementById('admin-panel').style.display = 'flex';
+      refreshAdminPanel();
+    });
+    document.getElementById('close-admin-panel').addEventListener('click', () => {
+      document.getElementById('admin-panel').style.display = 'none';
     });
 
     // --- THREE.JS SCENE SETUP ---
@@ -849,6 +1038,21 @@
       mesh.position.set(pData.x, pData.y, pData.z);
       scene.add(mesh);
       otherPlayers[pData.id] = { mesh, username: pData.username };
+    });
+
+    socket.on('player_appearance_updated', (pData) => {
+      const p = otherPlayers[pData.id];
+      if (!p) return;
+      const currentPos = p.mesh.position.clone();
+      const currentRot = p.mesh.rotation.y;
+      scene.remove(p.mesh);
+      const mesh = buildBlockyAvatar(pData.appearance || {});
+      mesh.add(createNameTagSprite(pData.username || p.username || 'Player'));
+      mesh.position.copy(currentPos);
+      mesh.rotation.y = currentRot;
+      scene.add(mesh);
+      p.mesh = mesh;
+      p.username = pData.username || p.username;
     });
 
     socket.on('player_moved', (pData) => {
