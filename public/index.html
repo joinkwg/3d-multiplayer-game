@@ -1919,21 +1919,9 @@
     const gravity = -28;
     const jumpVelocity = 11;
     const moveSpeed = 7.5;
-    const turnSpeed = 2.4; // radians per second for turning/spinning with A/D
 
     const PLAYER_RADIUS = 0.35;
     const PLAYER_HEIGHT = 2.3;
-
-    function getPlayerAABB(px, py, pz) {
-      return {
-        minX: px - PLAYER_RADIUS,
-        maxX: px + PLAYER_RADIUS,
-        minY: py,
-        maxY: py + PLAYER_HEIGHT,
-        minZ: pz - PLAYER_RADIUS,
-        maxZ: pz + PLAYER_RADIUS
-      };
-    }
 
     function getBlockAABB(block) {
       const sx = block.scaleX || 1;
@@ -1957,7 +1945,6 @@
       );
     }
 
-    // Precise shape collision check and resolution against player position (px, py, pz)
     function checkPlayerShapeCollision(px, py, pz, b) {
       const shape = b.shape || 'box';
       const sx = b.scaleX || 1;
@@ -1974,7 +1961,6 @@
       if (shape === 'sphere') {
         const radius = sx * 0.5;
         const cx = b.x, cy = b.y, cz = b.z;
-        // Closest point on player AABB to sphere center
         const closestX = Math.max(pMinX, Math.min(cx, pMaxX));
         const closestY = Math.max(pMinY, Math.min(cy, pMaxY));
         const closestZ = Math.max(pMinZ, Math.min(cz, pMaxZ));
@@ -1993,9 +1979,7 @@
         const cyMin = b.y - halfH;
         const cyMax = b.y + halfH;
 
-        // Check vertical overlap first
         if (pMaxY > cyMin && pMinY < cyMax) {
-          // Check horizontal distance from cylinder center (b.x, b.z)
           const closestX = Math.max(pMinX, Math.min(b.x, pMaxX));
           const closestZ = Math.max(pMinZ, Math.min(b.z, pMaxZ));
           const dx = closestX - b.x;
@@ -2005,21 +1989,17 @@
           }
         }
       } else if (shape === 'wedge') {
-        // Wedge bounds: slope goes from low at front (z = -sz/2) to high at back (z = sz/2) or similar
         const bBox = getBlockAABB(b);
-        if (checkAABBOverlap({minX: pMinX, maxX: pMaxX, minY: pMinY, maxY: pMaxY, minZ: pMinZ, maxZ: pZ = pMaxZ}, bBox)) {
-          // Refine wedge ramp check: height increases linearly along Z
-          const localZ = (pz - b.x) / sz; // normalized local coordinate
+        if (checkAABBOverlap({minX: pMinX, maxX: pMaxX, minY: pMinY, maxY: pMaxY, minZ: pMinZ, maxZ: pMaxZ}, bBox)) {
+          const localZ = (pz - b.x) / sz;
           const rampHeightMax = b.y + sy / 2;
           const rampHeightMin = b.y - sy / 2;
-          // Ramp slope formula
           const currentRampHeight = rampHeightMin + (localZ + 0.5) * sy;
           if (py <= currentRampHeight + 0.1 && py >= rampHeightMin - 0.5) {
             return { collided: true, type: 'wedge', topY: currentRampHeight };
           }
         }
       } else {
-        // Default Box AABB
         const bBox = getBlockAABB(b);
         if (checkAABBOverlap({minX: pMinX, maxX: pMaxX, minY: pMinY, maxY: pMaxY, minZ: pMinZ, maxZ: pMaxZ}, bBox)) {
           return { collided: true, type: 'box', bBox };
@@ -2053,143 +2033,7 @@
       const now = Date.now();
       if (now - lastFinishTime < 3000) return;
       lastFinishTime = now;
-      showToast("🎉 WORLD FINISHED! GREAT JOB! 🎉", 4000);
-    }
-
-    let lastSendTime = 0;
-
-    function updatePlayerPhysics(delta) {
-      if (!localPlayerAvatar || !currentWorldName) return;
-
-      // Camera-following turn / spin control (A/D spin the heading, W/S walk forward/backward)
-      if (keys['KeyA'] || keys['ArrowLeft']) {
-        camOrbitAngleY += turnSpeed * delta;
-      }
-      if (keys['KeyD'] || keys['ArrowRight']) {
-        camOrbitAngleY -= turnSpeed * delta;
-      }
-
-      // Keep character rotation in sync with camera facing direction
-      localPlayerAvatar.rotation.y = camOrbitAngleY + Math.PI;
-
-      const moveForward = (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0) - (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0);
-      const isMoving = moveForward !== 0;
-
-      const moveVector = new THREE.Vector3(0, 0, -moveForward);
-      if (isMoving) {
-        moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), camOrbitAngleY);
-      }
-
-      // Jump activation
-      if (keys['Space'] && isGrounded) {
-        velocityY = jumpVelocity;
-        isGrounded = false;
-      }
-
-      // Gravity calculation
-      velocityY += gravity * delta;
-
-      const dx = moveVector.x * moveSpeed * delta;
-      const dz = moveVector.z * moveSpeed * delta;
-      const dy = velocityY * delta;
-
-      const pos = localPlayerAvatar.position;
-      const blocks = currentWorldData ? Object.values(currentWorldData.blocks) : [];
-      let hitKill = false;
-
-      // --- STEP 1: RESOLVE X-AXIS MOVEMENT ---
-      pos.x += dx;
-      for (const b of blocks) {
-        const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
-        if (res.collided) {
-          if (b.actionType === 'kill') hitKill = true;
-          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-          if (b.actionType === 'finish') triggerFinishLine();
-
-          if (b.canCollide !== false && b.actionType !== 'kill') {
-            const bBox = getBlockAABB(b);
-            if (dx > 0) pos.x = bBox.minX - PLAYER_RADIUS;
-            else if (dx < 0) pos.x = bBox.maxX + PLAYER_RADIUS;
-          }
-        }
-      }
-
-      // --- STEP 2: RESOLVE Z-AXIS MOVEMENT ---
-      pos.z += dz;
-      for (const b of blocks) {
-        const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
-        if (res.collided) {
-          if (b.actionType === 'kill') hitKill = true;
-          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-          if (b.actionType === 'finish') triggerFinishLine();
-
-          if (b.canCollide !== false && b.actionType !== 'kill') {
-            const bBox = getBlockAABB(b);
-            if (dz > 0) pos.z = bBox.minZ - PLAYER_RADIUS;
-            else if (dz < 0) pos.z = bBox.maxZ + PLAYER_RADIUS;
-          }
-        }
-      }
-
-      // --- STEP 3: RESOLVE Y-AXIS MOVEMENT ---
-      isGrounded = false;
-      pos.y += dy;
-      for (const b of blocks) {
-        const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
-        if (res.collided) {
-          if (b.actionType === 'kill') hitKill = true;
-          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-          if (b.actionType === 'finish') triggerFinishLine();
-
-          if (b.canCollide !== false && b.actionType !== 'kill') {
-            const bBox = getBlockAABB(b);
-            if (res.type === 'wedge' && res.topY !== undefined) {
-              pos.y = res.topY;
-              velocityY = 0;
-              isGrounded = true;
-            } else {
-              if (dy <= 0) {
-                pos.y = bBox.maxY;
-                velocityY = 0;
-                isGrounded = true;
-              } else if (dy > 0) {
-                pos.y = bBox.minY - PLAYER_HEIGHT;
-                velocityY = 0;
-              }
-            }
-          }
-        }
-      }
-
-      // Ground floor fallback plane
-      if (pos.y <= 0.05) {
-        pos.y = 0.05;
-        velocityY = 0;
-        isGrounded = true;
-      }
-
-      if (hitKill || pos.y < -35) {
-        respawnPlayer();
-        return;
-      }
-
-      // Apply dynamic run / jump / idle character animations
-      updateAvatarAnimations(localPlayerAvatar, isMoving, isGrounded, delta);
-
-      // Network sync position
-      const now = Date.now();
-      if (now - lastSendTime > 40) {
-        lastSendTime = now;
-        socket.emit('player_movement', {
-          x: localPlayerAvatar.position.x,
-          y: localPlayerAvatar.position.y,
-          z: localPlayerAvatar.position.z,
-          rotationY: localPlayerAvatar.rotation.y,
-          walkClock: localPlayerAvatar.userData.walkClock,
-          isMoving: isMoving,
-          isGrounded: isGrounded
-        });
-      }
+      showToast("Level Finished! Congratulations!");
     }
 
     // --- MAIN GAME LOOP ---
@@ -2197,27 +2041,155 @@
 
     function animate() {
       requestAnimationFrame(animate);
-      const delta = Math.min(clock.getDelta(), 0.1);
 
-      updatePlayerPhysics(delta);
+      const delta = clock.getDelta();
 
-      if (cloudsGroup.visible && cloudRotationSpeedMultiplier > 0) {
-        cloudsGroup.rotation.y += delta * 0.02 * cloudRotationSpeedMultiplier;
-      }
+      // Cloud rotation & movement
+      cloudsGroup.rotation.y += 0.0008 * cloudRotationSpeedMultiplier;
 
-      if (previewRenderer && previewScene) {
-        previewRenderer.render(previewScene, previewCamera);
-      }
+      if (localPlayerAvatar && currentWorldName) {
+        // Movement input vector
+        const moveDir = new THREE.Vector3(0, 0, 0);
+        if (keys['KeyW'] || keys['ArrowUp']) moveDir.z -= 1;
+        if (keys['KeyS'] || keys['ArrowDown']) moveDir.z += 1;
+        if (keys['KeyA'] || keys['ArrowLeft']) moveDir.x -= 1;
+        if (keys['KeyD'] || keys['ArrowRight']) moveDir.x += 1;
 
-      if (localPlayerAvatar) {
-        // Camera adjustments: slightly closer and higher up behind the player
-        const targetCamDist = 5.0;
-        const camX = localPlayerAvatar.position.x + Math.sin(camOrbitAngleY) * Math.cos(camOrbitAngleX) * targetCamDist;
-        const camY = localPlayerAvatar.position.y + 2.4 + Math.sin(camOrbitAngleX) * targetCamDist;
-        const camZ = localPlayerAvatar.position.z + Math.cos(camOrbitAngleY) * Math.cos(camOrbitAngleX) * targetCamDist;
+        const isMoving = moveDir.lengthSq() > 0;
+        if (isMoving) {
+          moveDir.normalize();
+          moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), camOrbitAngleY);
+        }
 
-        camera.position.set(camX, Math.max(localPlayerAvatar.position.y + 0.5, camY), camZ);
+        const vx = moveDir.x * moveSpeed;
+        const vz = moveDir.z * moveSpeed;
+
+        if (keys['Space'] && isGrounded) {
+          velocityY = jumpVelocity;
+          isGrounded = false;
+        }
+
+        velocityY += gravity * delta;
+
+        let newX = localPlayerAvatar.position.x + vx * delta;
+        let newY = localPlayerAvatar.position.y + velocityY * delta;
+        let newZ = localPlayerAvatar.position.z + vz * delta;
+
+        isGrounded = false;
+
+        if (currentWorldData && currentWorldData.blocks) {
+          // X axis collision
+          let testPx = newX;
+          let testPy = localPlayerAvatar.position.y;
+          let testPz = localPlayerAvatar.position.z;
+          let collidedX = false;
+
+          for (const bId in currentWorldData.blocks) {
+            const b = currentWorldData.blocks[bId];
+            if (b.canCollide === false) continue;
+            const res = checkPlayerShapeCollision(testPx, testPy, testPz, b);
+            if (res.collided) {
+              collidedX = true;
+              break;
+            }
+          }
+          if (collidedX) {
+            newX = localPlayerAvatar.position.x;
+          }
+
+          // Z axis collision
+          testPx = newX;
+          testPz = newZ;
+          let collidedZ = false;
+
+          for (const bId in currentWorldData.blocks) {
+            const b = currentWorldData.blocks[bId];
+            if (b.canCollide === false) continue;
+            const res = checkPlayerShapeCollision(testPx, testPy, testPz, b);
+            if (res.collided) {
+              collidedZ = true;
+              break;
+            }
+          }
+          if (collidedZ) {
+            newZ = localPlayerAvatar.position.z;
+          }
+
+          // Y axis collision (Vertical)
+          testPx = newX;
+          testPy = newY;
+          testPz = newZ;
+          let collidedY = false;
+
+          for (const bId in currentWorldData.blocks) {
+            const b = currentWorldData.blocks[bId];
+            if (b.canCollide === false) continue;
+            const res = checkPlayerShapeCollision(testPx, testPy, testPz, b);
+            if (res.collided) {
+              collidedY = true;
+              if (velocityY <= 0) {
+                const bBox = getBlockAABB(b);
+                newY = bBox.maxY;
+                isGrounded = true;
+                velocityY = 0;
+              } else {
+                velocityY = 0;
+              }
+              break;
+            }
+          }
+
+          // Check action blocks
+          for (const bId in currentWorldData.blocks) {
+            const b = currentWorldData.blocks[bId];
+            const res = checkPlayerShapeCollision(newX, newY, newZ, b);
+            if (res.collided) {
+              if (b.actionType === 'kill') {
+                respawnPlayer();
+                showToast("Oof! You died.");
+              } else if (b.actionType === 'checkpoint') {
+                triggerCheckpoint(b);
+              } else if (b.actionType === 'finish') {
+                triggerFinishLine();
+              }
+            }
+          }
+        }
+
+        if (newY < -30) {
+          respawnPlayer();
+          showToast("Fall into void!");
+        }
+
+        localPlayerAvatar.position.set(newX, newY, newZ);
+
+        if (isMoving) {
+          const targetRotationY = Math.atan2(moveDir.x, moveDir.z);
+          localPlayerAvatar.rotation.y = THREE.MathUtils.lerp(localPlayerAvatar.rotation.y, targetRotationY, 0.15);
+        }
+
+        updateAvatarAnimations(localPlayerAvatar, isMoving, isGrounded, delta);
+
+        // Camera follow system (Third person smooth orbit)
+        const camDist = 7;
+        const camHeight = 3.5;
+        const targetCamX = localPlayerAvatar.position.x - Math.sin(camOrbitAngleY) * Math.cos(camOrbitAngleX) * camDist;
+        const targetCamY = localPlayerAvatar.position.y + camHeight + Math.sin(camOrbitAngleX) * camDist;
+        const targetCamZ = localPlayerAvatar.position.z - Math.cos(camOrbitAngleY) * Math.cos(camOrbitAngleX) * camDist;
+
+        camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.2);
         camera.lookAt(localPlayerAvatar.position.x, localPlayerAvatar.position.y + 1.2, localPlayerAvatar.position.z);
+
+        // Send network movement update
+        socket.emit('player_move', {
+          x: newX,
+          y: newY,
+          z: newZ,
+          rotationY: localPlayerAvatar.rotation.y,
+          isMoving: isMoving,
+          isGrounded: isGrounded,
+          walkClock: localPlayerAvatar.userData.walkClock || 0
+        });
       }
 
       renderer.render(scene, camera);
