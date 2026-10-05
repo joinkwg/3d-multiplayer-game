@@ -60,6 +60,14 @@
     }
     .join-btn:hover { background: #2266cc; }
 
+    /* Notification Banner */
+    #game-toast {
+      display: none; position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+      background: rgba(39, 174, 96, 0.95); color: #ffffff; padding: 10px 24px;
+      border: 3px solid #ffffff; box-shadow: 4px 4px 0px #000000; font-weight: bold;
+      font-size: 14px; text-transform: uppercase; z-index: 200; pointer-events: none;
+    }
+
     /* Top HUD Navigation */
     #hud {
       display: none; position: absolute; top: 10px; left: 10px; z-index: 10; gap: 10px; flex-wrap: wrap;
@@ -139,6 +147,9 @@
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+
+  <!-- Game Notification Banner -->
+  <div id="game-toast"></div>
 
   <!-- Authentication Screen -->
   <div id="auth-screen" class="overlay-screen">
@@ -357,6 +368,18 @@
     let camOrbitAngleY = 0; 
     let lastMouseX = 0;
     let lastMouseY = 0;
+
+    let toastTimeout = null;
+    function showToast(msg, duration = 2500) {
+      const toast = document.getElementById('game-toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.style.display = 'block';
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.style.display = 'none';
+      }, duration);
+    }
 
     let playerAppearance = JSON.parse(localStorage.getItem('sp_player_appearance')) || {
       hat: 'none',
@@ -763,7 +786,7 @@
       const hatMesh = createHatMesh(app.hat);
       if (hatMesh) group.add(hatMesh);
 
-      group.userData.limbs = { leftArm: leftArmPivot, rightArm: rightArmPivot, leftLeg: leftLegPivot, rightLeg: rightLegPivot };
+      group.userData.limbs = { leftArm: leftArmPivot, rightArm: rightArmPivot, leftLeg: leftLegPivot, rightLeg: rightLegPivot, torso };
       return group;
     }
 
@@ -779,6 +802,66 @@
       sprite.scale.set(1.5, 0.375, 1); 
       sprite.position.y = 2.5;
       return sprite;
+    }
+
+    // --- ANIMATION CONTROLLER FOR RUN / JUMP / IDLE ---
+    function updateAvatarAnimations(avatarMesh, isMoving, isGrounded, delta, walkClockOverride) {
+      if (!avatarMesh || !avatarMesh.userData || !avatarMesh.userData.limbs) return;
+
+      const limbs = avatarMesh.userData.limbs;
+      if (walkClockOverride !== undefined) {
+        avatarMesh.userData.walkClock = walkClockOverride;
+      } else if (isMoving && isGrounded) {
+        avatarMesh.userData.walkClock = (avatarMesh.userData.walkClock || 0) + delta * 14;
+      } else {
+        avatarMesh.userData.walkClock = 0;
+      }
+
+      const clockVal = avatarMesh.userData.walkClock || 0;
+
+      if (!isGrounded) {
+        // JUMP ANIMATION - Arms up & outward, legs posed dynamically in air
+        limbs.leftArm.rotation.x = THREE.MathUtils.lerp(limbs.leftArm.rotation.x, -2.2, 0.2);
+        limbs.rightArm.rotation.x = THREE.MathUtils.lerp(limbs.rightArm.rotation.x, -2.2, 0.2);
+        limbs.leftArm.rotation.z = THREE.MathUtils.lerp(limbs.leftArm.rotation.z, -0.3, 0.2);
+        limbs.rightArm.rotation.z = THREE.MathUtils.lerp(limbs.rightArm.rotation.z, 0.3, 0.2);
+
+        limbs.leftLeg.rotation.x = THREE.MathUtils.lerp(limbs.leftLeg.rotation.x, -0.55, 0.2);
+        limbs.rightLeg.rotation.x = THREE.MathUtils.lerp(limbs.rightLeg.rotation.x, 0.45, 0.2);
+        limbs.leftLeg.rotation.z = THREE.MathUtils.lerp(limbs.leftLeg.rotation.z, 0.05, 0.2);
+        limbs.rightLeg.rotation.z = THREE.MathUtils.lerp(limbs.rightLeg.rotation.z, -0.05, 0.2);
+
+        if (limbs.torso) limbs.torso.rotation.x = THREE.MathUtils.lerp(limbs.torso.rotation.x, -0.1, 0.2);
+      } else if (isMoving) {
+        // RUN ANIMATION - High-energy limb swing & forward lean
+        const swing = Math.sin(clockVal) * 0.85;
+
+        limbs.leftArm.rotation.x = swing;
+        limbs.rightArm.rotation.x = -swing;
+        limbs.leftArm.rotation.z = THREE.MathUtils.lerp(limbs.leftArm.rotation.z, -0.15, 0.2);
+        limbs.rightArm.rotation.z = THREE.MathUtils.lerp(limbs.rightArm.rotation.z, 0.15, 0.2);
+
+        limbs.leftLeg.rotation.x = -swing;
+        limbs.rightLeg.rotation.x = swing;
+        limbs.leftLeg.rotation.z = THREE.MathUtils.lerp(limbs.leftLeg.rotation.z, 0, 0.2);
+        limbs.rightLeg.rotation.z = THREE.MathUtils.lerp(limbs.rightLeg.rotation.z, 0, 0.2);
+
+        if (limbs.torso) limbs.torso.rotation.x = THREE.MathUtils.lerp(limbs.torso.rotation.x, 0.12, 0.2);
+      } else {
+        // IDLE ANIMATION - Gentle breathing motion
+        const idleSwing = Math.sin(Date.now() * 0.003) * 0.04;
+        limbs.leftArm.rotation.x = THREE.MathUtils.lerp(limbs.leftArm.rotation.x, idleSwing, 0.2);
+        limbs.rightArm.rotation.x = THREE.MathUtils.lerp(limbs.rightArm.rotation.x, -idleSwing, 0.2);
+        limbs.leftArm.rotation.z = THREE.MathUtils.lerp(limbs.leftArm.rotation.z, 0, 0.2);
+        limbs.rightArm.rotation.z = THREE.MathUtils.lerp(limbs.rightArm.rotation.z, 0, 0.2);
+
+        limbs.leftLeg.rotation.x = THREE.MathUtils.lerp(limbs.leftLeg.rotation.x, 0, 0.2);
+        limbs.rightLeg.rotation.x = THREE.MathUtils.lerp(limbs.rightLeg.rotation.x, 0, 0.2);
+        limbs.leftLeg.rotation.z = THREE.MathUtils.lerp(limbs.leftLeg.rotation.z, 0, 0.2);
+        limbs.rightLeg.rotation.z = THREE.MathUtils.lerp(limbs.rightLeg.rotation.z, 0, 0.2);
+
+        if (limbs.torso) limbs.torso.rotation.x = THREE.MathUtils.lerp(limbs.torso.rotation.x, 0, 0.2);
+      }
     }
 
     // --- MULTIPLAYER PLAYER SYNC ---
@@ -797,14 +880,7 @@
       p.mesh.position.set(pData.x, pData.y, pData.z);
       p.mesh.rotation.y = pData.rotationY;
 
-      const limbs = p.mesh.userData.limbs;
-      if (limbs) {
-        const swing = Math.sin(pData.walkClock || 0) * 0.6;
-        limbs.leftArm.rotation.x = swing;
-        limbs.rightArm.rotation.x = -swing;
-        limbs.leftLeg.rotation.x = -swing;
-        limbs.rightLeg.rotation.x = swing;
-      }
+      updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock);
     });
 
     socket.on('player_left', (id) => {
@@ -1368,6 +1444,7 @@
         };
         spawnMarker.position.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
         socket.emit('world_settings_update', { worldName: currentWorldName, settings: { spawnPoint } });
+        showToast("Spawn Point Set!");
       }
     });
 
@@ -1528,8 +1605,9 @@
         const maxPitch = Math.PI / 2 - 0.05;
         camOrbitAngleX = Math.max(-maxPitch, Math.min(maxPitch, camOrbitAngleX));
 
+        // Player turns / spins in sync with camera rotation
         if (localPlayerAvatar) {
-          localPlayerAvatar.rotation.y = camOrbitAngleY;
+          localPlayerAvatar.rotation.y = camOrbitAngleY + Math.PI;
         }
       }
 
@@ -1857,7 +1935,7 @@
       document.getElementById('customizer-modal').style.display = 'none';
     });
 
-    // --- PLAYER MOVEMENT & PHYSICS ENGINE ---
+    // --- ACCURATE 3D AABB PLAYER COLLISION & PHYSICS ENGINE ---
     const keys = {};
     window.addEventListener('keydown', (e) => keys[e.code] = true);
     window.addEventListener('keyup', (e) => keys[e.code] = false);
@@ -1868,6 +1946,42 @@
     const jumpVelocity = 11;
     const moveSpeed = 7.5;
 
+    const PLAYER_RADIUS = 0.35;
+    const PLAYER_HEIGHT = 2.3;
+
+    function getPlayerAABB(px, py, pz) {
+      return {
+        minX: px - PLAYER_RADIUS,
+        maxX: px + PLAYER_RADIUS,
+        minY: py,
+        maxY: py + PLAYER_HEIGHT,
+        minZ: pz - PLAYER_RADIUS,
+        maxZ: pz + PLAYER_RADIUS
+      };
+    }
+
+    function getBlockAABB(block) {
+      const sx = block.scaleX || 1;
+      const sy = block.scaleY || 1;
+      const sz = block.scaleZ || 1;
+      return {
+        minX: block.x - sx / 2,
+        maxX: block.x + sx / 2,
+        minY: block.y - sy / 2,
+        maxY: block.y + sy / 2,
+        minZ: block.z - sz / 2,
+        maxZ: block.z + sz / 2
+      };
+    }
+
+    function checkAABBOverlap(boxA, boxB) {
+      return (
+        boxA.minX < boxB.maxX && boxA.maxX > boxB.minX &&
+        boxA.minY < boxB.maxY && boxA.maxY > boxB.minY &&
+        boxA.minZ < boxB.maxZ && boxA.maxZ > boxB.minZ
+      );
+    }
+
     function respawnPlayer() {
       if (localPlayerAvatar) {
         const spawnPos = currentCheckpoint || (currentWorldData ? currentWorldData.spawnPoint : { x: 0, y: 0.05, z: 0 });
@@ -1876,10 +1990,32 @@
       }
     }
 
+    function triggerCheckpoint(block) {
+      if (currentCheckpoint && currentCheckpoint.id === block.id) return;
+      currentCheckpoint = { id: block.id, x: block.x, y: block.y + 0.6, z: block.z };
+      showToast("Checkpoint Saved!");
+      
+      const flagMesh = worldBlocks[block.id];
+      if (flagMesh && flagMesh.userData && flagMesh.userData.flagCloth) {
+        flagMesh.userData.flagCloth.position.y = 1.6;
+      }
+    }
+
+    let lastFinishTime = 0;
+    function triggerFinishLine() {
+      const now = Date.now();
+      if (now - lastFinishTime < 3000) return;
+      lastFinishTime = now;
+      showToast("🎉 WORLD FINISHED! GREAT JOB! 🎉", 4000);
+    }
+
     let lastSendTime = 0;
 
     function updatePlayerPhysics(delta) {
       if (!localPlayerAvatar || !currentWorldName) return;
+
+      // Keep character spinning/turning in sync with camera view angle
+      localPlayerAvatar.rotation.y = camOrbitAngleY + Math.PI;
 
       const moveVector = new THREE.Vector3();
       if (keys['KeyW'] || keys['ArrowUp']) moveVector.z -= 1;
@@ -1887,47 +2023,119 @@
       if (keys['KeyA'] || keys['ArrowLeft']) moveVector.x -= 1;
       if (keys['KeyD'] || keys['ArrowRight']) moveVector.x += 1;
 
-      moveVector.normalize();
-      moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), camOrbitAngleY);
-
-      localPlayerAvatar.position.x += moveVector.x * moveSpeed * delta;
-      localPlayerAvatar.position.z += moveVector.z * moveSpeed * delta;
-
       const isMoving = moveVector.lengthSq() > 0.01;
       if (isMoving) {
-        localPlayerAvatar.userData.walkClock = (localPlayerAvatar.userData.walkClock || 0) + delta * 12;
-      } else {
-        localPlayerAvatar.userData.walkClock = 0;
+        moveVector.normalize();
+        moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), camOrbitAngleY);
       }
 
-      const limbs = localPlayerAvatar.userData.limbs;
-      if (limbs) {
-        const swing = Math.sin(localPlayerAvatar.userData.walkClock) * 0.6;
-        limbs.leftArm.rotation.x = swing;
-        limbs.rightArm.rotation.x = -swing;
-        limbs.leftLeg.rotation.x = -swing;
-        limbs.rightLeg.rotation.x = swing;
-      }
-
+      // Jump activation
       if (keys['Space'] && isGrounded) {
         velocityY = jumpVelocity;
         isGrounded = false;
       }
 
+      // Gravity calculation
       velocityY += gravity * delta;
-      localPlayerAvatar.position.y += velocityY * delta;
 
-      if (localPlayerAvatar.position.y <= 0.05) {
-        localPlayerAvatar.position.y = 0.05;
+      const dx = moveVector.x * moveSpeed * delta;
+      const dz = moveVector.z * moveSpeed * delta;
+      const dy = velocityY * delta;
+
+      const pos = localPlayerAvatar.position;
+      const blocks = currentWorldData ? Object.values(currentWorldData.blocks) : [];
+      let hitKill = false;
+
+      // --- STEP 1: RESOLVE X-AXIS MOVEMENT & SOLID COLLISIONS ---
+      pos.x += dx;
+      let pBox = getPlayerAABB(pos.x, pos.y, pos.z);
+
+      for (const b of blocks) {
+        const bBox = getBlockAABB(b);
+        if (checkAABBOverlap(pBox, bBox)) {
+          if (b.actionType === 'kill') hitKill = true;
+          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
+          if (b.actionType === 'finish') triggerFinishLine();
+
+          if (b.canCollide !== false && b.actionType !== 'kill') {
+            // Step-up helper for low obstacles up to 0.55 height
+            if (isGrounded && (bBox.maxY - pos.y) <= 0.55 && (bBox.maxY > pos.y)) {
+              pos.y = bBox.maxY;
+            } else {
+              if (dx > 0) pos.x = bBox.minX - PLAYER_RADIUS;
+              else if (dx < 0) pos.x = bBox.maxX + PLAYER_RADIUS;
+            }
+            pBox = getPlayerAABB(pos.x, pos.y, pos.z);
+          }
+        }
+      }
+
+      // --- STEP 2: RESOLVE Z-AXIS MOVEMENT & SOLID COLLISIONS ---
+      pos.z += dz;
+      pBox = getPlayerAABB(pos.x, pos.y, pos.z);
+
+      for (const b of blocks) {
+        const bBox = getBlockAABB(b);
+        if (checkAABBOverlap(pBox, bBox)) {
+          if (b.actionType === 'kill') hitKill = true;
+          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
+          if (b.actionType === 'finish') triggerFinishLine();
+
+          if (b.canCollide !== false && b.actionType !== 'kill') {
+            // Step-up helper for low obstacles up to 0.55 height
+            if (isGrounded && (bBox.maxY - pos.y) <= 0.55 && (bBox.maxY > pos.y)) {
+              pos.y = bBox.maxY;
+            } else {
+              if (dz > 0) pos.z = bBox.minZ - PLAYER_RADIUS;
+              else if (dz < 0) pos.z = bBox.maxZ + PLAYER_RADIUS;
+            }
+            pBox = getPlayerAABB(pos.x, pos.y, pos.z);
+          }
+        }
+      }
+
+      // --- STEP 3: RESOLVE Y-AXIS MOVEMENT & SOLID COLLISIONS ---
+      isGrounded = false;
+      pos.y += dy;
+      pBox = getPlayerAABB(pos.x, pos.y, pos.z);
+
+      for (const b of blocks) {
+        const bBox = getBlockAABB(b);
+        if (checkAABBOverlap(pBox, bBox)) {
+          if (b.actionType === 'kill') hitKill = true;
+          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
+          if (b.actionType === 'finish') triggerFinishLine();
+
+          if (b.canCollide !== false && b.actionType !== 'kill') {
+            if (dy <= 0) {
+              pos.y = bBox.maxY;
+              velocityY = 0;
+              isGrounded = true;
+            } else if (dy > 0) {
+              pos.y = bBox.minY - PLAYER_HEIGHT;
+              velocityY = 0;
+            }
+            pBox = getPlayerAABB(pos.x, pos.y, pos.z);
+          }
+        }
+      }
+
+      // Ground floor fallback plane
+      if (pos.y <= 0.05) {
+        pos.y = 0.05;
         velocityY = 0;
         isGrounded = true;
       }
 
-      if (localPlayerAvatar.position.y < -35) {
+      if (hitKill || pos.y < -35) {
         respawnPlayer();
+        return;
       }
 
-      // Sync position to server
+      // Apply dynamic run / jump / idle character animations
+      updateAvatarAnimations(localPlayerAvatar, isMoving, isGrounded, delta);
+
+      // Network sync position
       const now = Date.now();
       if (now - lastSendTime > 40) {
         lastSendTime = now;
@@ -1936,7 +2144,9 @@
           y: localPlayerAvatar.position.y,
           z: localPlayerAvatar.position.z,
           rotationY: localPlayerAvatar.rotation.y,
-          walkClock: localPlayerAvatar.userData.walkClock
+          walkClock: localPlayerAvatar.userData.walkClock,
+          isMoving: isMoving,
+          isGrounded: isGrounded
         });
       }
     }
