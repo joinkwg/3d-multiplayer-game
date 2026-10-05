@@ -341,8 +341,7 @@
 
   <script>
     // --- SOCKET.IO BACKEND CONNECTION ---
-    const RENDER_URL = "https://kwg3d.onrender.com";
-    const socket = (typeof io !== 'undefined') ? io(RENDER_URL) : null;
+    const socket = (typeof io !== 'undefined') ? io() : null;
 
     let currentWorldName = null;
     let loggedInUsername = null;
