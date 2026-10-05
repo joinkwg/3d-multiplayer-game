@@ -1,251 +1,302 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+const sqlite3 = require('sqlite3');
+const { open } = require('sqlite');
 const bcrypt = require('bcryptjs');
+const path = require('path');
 
 const app = express();
-app.use(cors());
-
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: '*',
+    methods: ['GET', 'POST']
   }
-});
-
-const DB_FILE = path.join(__dirname, 'data.json');
-
-// Initial Database Structure
-let db = {
-  users: {},
-  worlds: {
-    "Default World": {
-      spawnPoint: { x: 0, y: 0.05, z: 0 },
-      skyColor: '#a0a0e0',
-      cloudsEnabled: true,
-      cloudSpeed: 1.0,
-      cloudColor: '#ffffff',
-      blocks: {
-        "0_ -1_0": {
-          id: "0_ -1_0",
-          shape: "baseplate",
-          actionType: "normal",
-          material: "grid",
-          color: "#555555",
-          transparency: 0,
-          canCollide: true,
-          anchored: true,
-          x: 0, y: -0.5, z: 0,
-          scaleX: 250, scaleY: 1, scaleZ: 250
-        }
-      }
-    }
-  }
-};
-
-// Load database if file exists
-if (fs.existsSync(DB_FILE)) {
-  try {
-    db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-  } catch (err) {
-    console.error("Error reading data.json, starting with default state.");
-  }
-}
-
-function saveDB() {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-}
-
-// Track active player sockets
-const activePlayers = {}; // socket.id -> { username, worldName, appearance, pos }
-
-io.on('connection', (socket) => {
-  console.log(`Player connected: ${socket.id}`);
-
-  // --- AUTHENTICATION ---
-  socket.on('register', async ({ username, password }, callback) => {
-    const cleanUser = username.trim().toLowerCase();
-    if (!cleanUser || !password) {
-      return callback({ success: false, message: 'Username and password required.' });
-    }
-    if (db.users[cleanUser]) {
-      return callback({ success: false, message: 'Username already taken.' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    db.users[cleanUser] = { username: username.trim(), password: hashedPassword };
-    saveDB();
-    callback({ success: true, message: 'Account created! You can now log in.' });
-  });
-
-  socket.on('login', async ({ username, password }, callback) => {
-    const cleanUser = username.trim().toLowerCase();
-    const user = db.users[cleanUser];
-    if (!user) {
-      return callback({ success: false, message: 'User does not exist.' });
-    }
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return callback({ success: false, message: 'Incorrect password.' });
-    }
-
-    callback({ success: true, username: user.username });
-  });
-
-  // --- WORLD MANAGEMENT ---
-  socket.on('get_worlds', (callback) => {
-    callback(Object.keys(db.worlds));
-  });
-
-  socket.on('create_world', ({ worldName }, callback) => {
-    if (!worldName || db.worlds[worldName]) {
-      return callback({ success: false, message: 'World already exists or invalid name.' });
-    }
-
-    db.worlds[worldName] = {
-      spawnPoint: { x: 0, y: 0.05, z: 0 },
-      skyColor: '#a0a0e0',
-      cloudsEnabled: true,
-      cloudSpeed: 1.0,
-      cloudColor: '#ffffff',
-      blocks: {
-        "0_ -1_0": {
-          id: "0_ -1_0",
-          shape: "baseplate",
-          actionType: "normal",
-          material: "grid",
-          color: "#555555",
-          transparency: 0,
-          canCollide: true,
-          anchored: true,
-          x: 0, y: -0.5, z: 0,
-          scaleX: 250, scaleY: 1, scaleZ: 250
-        }
-      }
-    };
-    saveDB();
-    io.emit('world_list_updated', Object.keys(db.worlds));
-    callback({ success: true, worldName });
-  });
-
-  socket.on('join_world', ({ worldName, username, appearance }) => {
-    if (!db.worlds[worldName]) return;
-
-    // Leave any prior world
-    if (socket.worldName) {
-      socket.leave(socket.worldName);
-      socket.to(socket.worldName).emit('player_left', socket.id);
-    }
-
-    socket.worldName = worldName;
-    socket.username = username;
-    socket.appearance = appearance;
-    socket.join(worldName);
-
-    activePlayers[socket.id] = {
-      id: socket.id,
-      username,
-      appearance,
-      x: db.worlds[worldName].spawnPoint.x,
-      y: db.worlds[worldName].spawnPoint.y,
-      z: db.worlds[worldName].spawnPoint.z,
-      rotY: 0,
-      isMoving: false
-    };
-
-    // Send world state to joining player
-    socket.emit('load_world_state', {
-      worldName,
-      worldData: db.worlds[worldName]
-    });
-
-    // Gather existing players in this world
-    const roomPlayers = {};
-    for (const id in activePlayers) {
-      if (activePlayers[id].worldName === worldName && id !== socket.id) {
-        roomPlayers[id] = activePlayers[id];
-      }
-    }
-    socket.emit('existing_players', roomPlayers);
-
-    // Notify others in room
-    socket.to(worldName).emit('player_joined', activePlayers[socket.id]);
-  });
-
-  socket.on('leave_world', () => {
-    if (socket.worldName) {
-      socket.to(socket.worldName).emit('player_left', socket.id);
-      socket.leave(socket.worldName);
-      delete activePlayers[socket.id];
-      socket.worldName = null;
-    }
-  });
-
-  // --- REAL-TIME MOVEMENT ---
-  socket.on('player_move', (moveData) => {
-    if (!socket.worldName || !activePlayers[socket.id]) return;
-
-    Object.assign(activePlayers[socket.id], moveData);
-    socket.to(socket.worldName).emit('player_moved', {
-      id: socket.id,
-      ...moveData
-    });
-  });
-
-  // --- PER-WORLD CHAT SYSTEM ---
-  socket.on('send_chat', (msg) => {
-    if (!socket.worldName || !msg.trim()) return;
-    const chatPayload = {
-      sender: socket.username || 'Anonymous',
-      message: msg.trim().substring(0, 150),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    io.to(socket.worldName).emit('receive_chat', chatPayload);
-  });
-
-  // --- REAL-TIME BLOCK & ENVIRONMENT EDITS ---
-  socket.on('place_block', (blockData) => {
-    const worldName = socket.worldName;
-    if (!worldName || !db.worlds[worldName]) return;
-
-    db.worlds[worldName].blocks[blockData.id] = blockData;
-    saveDB();
-    socket.to(worldName).emit('block_placed', blockData);
-  });
-
-  socket.on('delete_block', (blockId) => {
-    const worldName = socket.worldName;
-    if (!worldName || !db.worlds[worldName]) return;
-
-    delete db.worlds[worldName].blocks[blockId];
-    saveDB();
-    socket.to(worldName).emit('block_deleted', blockId);
-  });
-
-  socket.on('update_environment', (envData) => {
-    const worldName = socket.worldName;
-    if (!worldName || !db.worlds[worldName]) return;
-
-    Object.assign(db.worlds[worldName], envData);
-    saveDB();
-    socket.to(worldName).emit('environment_updated', envData);
-  });
-
-  socket.on('disconnect', () => {
-    if (socket.worldName) {
-      io.to(socket.worldName).emit('player_left', socket.id);
-    }
-    delete activePlayers[socket.id];
-    console.log(`Player disconnected: ${socket.id}`);
-  });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Backend server running on port ${PORT}`);
+
+app.use(express.static(path.join(__dirname)));
+
+let db;
+
+async function initDB() {
+  db = await open({
+    filename: path.join(__dirname, 'database.db'),
+    driver: sqlite3.Database
+  });
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      appearance TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS worlds (
+      name TEXT PRIMARY KEY,
+      data TEXT NOT NULL
+    );
+  `);
+
+  const defaultWorld = await db.get('SELECT * FROM worlds WHERE name = ?', ['Default World']);
+  if (!defaultWorld) {
+    const initialWorldData = {
+      spawnPoint: { x: 0, y: 0.05, z: 0 },
+      skyColor: '#a0a0e0',
+      cloudsEnabled: true,
+      cloudSpeed: 1.0,
+      cloudColor: '#ffffff',
+      blocks: {
+        "0_ -1_0": {
+          id: "0_ -1_0",
+          shape: "baseplate",
+          actionType: "normal",
+          material: "grid",
+          color: "#555555",
+          transparency: 0,
+          canCollide: true,
+          anchored: true,
+          x: 0, y: -0.5, z: 0,
+          scaleX: 250, scaleY: 1, scaleZ: 250
+        }
+      }
+    };
+    await db.run('INSERT INTO worlds (name, data) VALUES (?, ?)', ['Default World', JSON.stringify(initialWorldData)]);
+  }
+}
+
+const activePlayers = {}; 
+
+io.on('connection', (socket) => {
+  let currentUsername = null;
+  let currentWorld = null;
+
+  socket.on('register', async ({ username, password }, callback) => {
+    const cleanUser = (username || '').trim();
+    if (!cleanUser || !password) {
+      return callback({ success: false, message: 'Username and password required.' });
+    }
+    try {
+      const existing = await db.get('SELECT id FROM users WHERE username = ?', [cleanUser]);
+      if (existing) {
+        return callback({ success: false, message: 'Username already exists.' });
+      }
+
+      const hash = await bcrypt.hash(password, 10);
+      await db.run('INSERT INTO users (username, password) VALUES (?, ?)', [cleanUser, hash]);
+      currentUsername = cleanUser;
+      callback({ success: true, username: cleanUser });
+    } catch (err) {
+      callback({ success: false, message: 'Registration failed server-side.' });
+    }
+  });
+
+  socket.on('login', async ({ username, password }, callback) => {
+    const cleanUser = (username || '').trim();
+    if (!cleanUser || !password) {
+      return callback({ success: false, message: 'Username and password required.' });
+    }
+    try {
+      const user = await db.get('SELECT * FROM users WHERE username = ?', [cleanUser]);
+      if (!user) {
+        return callback({ success: false, message: 'Invalid username or password.' });
+      }
+
+      const match = await bcrypt.compare(password, user.password);
+      if (!match) {
+        return callback({ success: false, message: 'Invalid username or password.' });
+      }
+
+      currentUsername = cleanUser;
+      let appearance = null;
+      try { appearance = JSON.parse(user.appearance); } catch (e) {}
+
+      callback({ success: true, username: cleanUser, appearance });
+    } catch (err) {
+      callback({ success: false, message: 'Login failed server-side.' });
+    }
+  });
+
+  socket.on('save_appearance', async (appearance) => {
+    if (!currentUsername) return;
+    await db.run('UPDATE users SET appearance = ? WHERE username = ?', [JSON.stringify(appearance), currentUsername]);
+  });
+
+  socket.on('get_worlds', async (callback) => {
+    try {
+      const rows = await db.all('SELECT name FROM worlds');
+      const worldList = rows.map(r => {
+        const roomSockets = io.sockets.adapter.rooms.get(r.name);
+        return {
+          name: r.name,
+          onlineCount: roomSockets ? roomSockets.size : 0
+        };
+      });
+      callback({ success: true, worlds: worldList });
+    } catch (err) {
+      callback({ success: false, worlds: [] });
+    }
+  });
+
+  socket.on('create_world', async ({ name }, callback) => {
+    const cleanName = (name || '').trim();
+    if (!cleanName) return callback({ success: false, message: 'World name required.' });
+
+    try {
+      const existing = await db.get('SELECT name FROM worlds WHERE name = ?', [cleanName]);
+      if (existing) {
+        return callback({ success: false, message: 'World already exists.' });
+      }
+
+      const newWorldData = {
+        spawnPoint: { x: 0, y: 0.05, z: 0 },
+        skyColor: '#a0a0e0',
+        cloudsEnabled: true,
+        cloudSpeed: 1.0,
+        cloudColor: '#ffffff',
+        blocks: {
+          "0_ -1_0": {
+            id: "0_ -1_0",
+            shape: "baseplate",
+            actionType: "normal",
+            material: "grid",
+            color: "#555555",
+            transparency: 0,
+            canCollide: true,
+            anchored: true,
+            x: 0, y: -0.5, z: 0,
+            scaleX: 250, scaleY: 1, scaleZ: 250
+          }
+        }
+      };
+
+      await db.run('INSERT INTO worlds (name, data) VALUES (?, ?)', [cleanName, JSON.stringify(newWorldData)]);
+      callback({ success: true, name: cleanName });
+    } catch (err) {
+      callback({ success: false, message: 'Failed to create world.' });
+    }
+  });
+
+  socket.on('join_world', async ({ worldName, appearance }, callback) => {
+    try {
+      const worldRecord = await db.get('SELECT * FROM worlds WHERE name = ?', [worldName]);
+      if (!worldRecord) {
+        return callback({ success: false, message: 'World not found.' });
+      }
+
+      if (currentWorld) {
+        socket.leave(currentWorld);
+        socket.to(currentWorld).emit('player_left', socket.id);
+        delete activePlayers[socket.id];
+      }
+
+      currentWorld = worldName;
+      socket.join(worldName);
+
+      const worldData = JSON.parse(worldRecord.data);
+
+      activePlayers[socket.id] = {
+        id: socket.id,
+        username: currentUsername || 'Guest',
+        appearance: appearance,
+        x: worldData.spawnPoint.x,
+        y: worldData.spawnPoint.y,
+        z: worldData.spawnPoint.z,
+        rotationY: 0,
+        walkClock: 0
+      };
+
+      const roomPlayers = {};
+      const clientsInRoom = io.sockets.adapter.rooms.get(worldName);
+      if (clientsInRoom) {
+        for (const id of clientsInRoom) {
+          if (activePlayers[id]) {
+            roomPlayers[id] = activePlayers[id];
+          }
+        }
+      }
+
+      socket.to(worldName).emit('player_joined', activePlayers[socket.id]);
+
+      callback({
+        success: true,
+        worldData,
+        players: roomPlayers,
+        selfId: socket.id
+      });
+    } catch (err) {
+      callback({ success: false, message: 'Failed to join world.' });
+    }
+  });
+
+  socket.on('leave_world', () => {
+    if (currentWorld) {
+      socket.to(currentWorld).emit('player_left', socket.id);
+      socket.leave(currentWorld);
+      delete activePlayers[socket.id];
+      currentWorld = null;
+    }
+  });
+
+  socket.on('player_movement', (data) => {
+    if (!currentWorld || !activePlayers[socket.id]) return;
+    activePlayers[socket.id].x = data.x;
+    activePlayers[socket.id].y = data.y;
+    activePlayers[socket.id].z = data.z;
+    activePlayers[socket.id].rotationY = data.rotationY;
+    activePlayers[socket.id].walkClock = data.walkClock;
+
+    socket.to(currentWorld).emit('player_moved', {
+      id: socket.id,
+      ...data
+    });
+  });
+
+  socket.on('block_update', async ({ worldName, action, blockData, blockId }) => {
+    if (!worldName) return;
+    try {
+      const row = await db.get('SELECT data FROM worlds WHERE name = ?', [worldName]);
+      if (!row) return;
+
+      const worldData = JSON.parse(row.data);
+      if (action === 'add' || action === 'update') {
+        worldData.blocks[blockData.id] = blockData;
+      } else if (action === 'delete') {
+        delete worldData.blocks[blockId];
+      }
+
+      await db.run('UPDATE worlds SET data = ? WHERE name = ?', [JSON.stringify(worldData), worldName]);
+      socket.to(worldName).emit('block_updated', { action, blockData, blockId });
+    } catch (e) {}
+  });
+
+  socket.on('world_settings_update', async ({ worldName, settings }) => {
+    if (!worldName) return;
+    try {
+      const row = await db.get('SELECT data FROM worlds WHERE name = ?', [worldName]);
+      if (!row) return;
+
+      const worldData = JSON.parse(row.data);
+      Object.assign(worldData, settings);
+
+      await db.run('UPDATE worlds SET data = ? WHERE name = ?', [JSON.stringify(worldData), worldName]);
+      socket.to(worldName).emit('world_settings_updated', settings);
+    } catch (e) {}
+  });
+
+  socket.on('disconnect', () => {
+    if (currentWorld) {
+      socket.to(currentWorld).emit('player_left', socket.id);
+      delete activePlayers[socket.id];
+    }
+  });
+});
+
+initDB().then(() => {
+  server.listen(PORT, () => {
+    console.log(`KWG 3D Server running on port ${PORT}`);
+  });
 });
