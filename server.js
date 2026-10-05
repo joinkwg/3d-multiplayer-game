@@ -17,7 +17,13 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static(path.join(__dirname)));
+// Serve static assets from the public directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Explicit route for entry point
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 let db;
 
@@ -122,7 +128,9 @@ io.on('connection', (socket) => {
 
   socket.on('save_appearance', async (appearance) => {
     if (!currentUsername) return;
-    await db.run('UPDATE users SET appearance = ? WHERE username = ?', [JSON.stringify(appearance), currentUsername]);
+    try {
+      await db.run('UPDATE users SET appearance = ? WHERE username = ?', [JSON.stringify(appearance), currentUsername]);
+    } catch (e) {}
   });
 
   socket.on('get_worlds', async (callback) => {
@@ -198,28 +206,30 @@ io.on('connection', (socket) => {
 
       const worldData = JSON.parse(worldRecord.data);
 
-      activePlayers[socket.id] = {
+      const playerData = {
         id: socket.id,
         username: currentUsername || 'Guest',
-        appearance: appearance,
-        x: worldData.spawnPoint.x,
-        y: worldData.spawnPoint.y,
-        z: worldData.spawnPoint.z,
+        appearance: appearance || {},
+        x: worldData.spawnPoint ? worldData.spawnPoint.x : 0,
+        y: worldData.spawnPoint ? worldData.spawnPoint.y : 0.05,
+        z: worldData.spawnPoint ? worldData.spawnPoint.z : 0,
         rotationY: 0,
         walkClock: 0
       };
 
+      activePlayers[socket.id] = playerData;
+
       const roomPlayers = {};
       const clientsInRoom = io.sockets.adapter.rooms.get(worldName);
       if (clientsInRoom) {
-        for (const id of clientsInRoom) {
-          if (activePlayers[id]) {
-            roomPlayers[id] = activePlayers[id];
+        clientsInRoom.forEach(clientId => {
+          if (activePlayers[clientId]) {
+            roomPlayers[clientId] = activePlayers[clientId];
           }
-        }
+        });
       }
 
-      socket.to(worldName).emit('player_joined', activePlayers[socket.id]);
+      socket.to(worldName).emit('player_joined', playerData);
 
       callback({
         success: true,
@@ -234,34 +244,40 @@ io.on('connection', (socket) => {
 
   socket.on('leave_world', () => {
     if (currentWorld) {
-      socket.to(currentWorld).emit('player_left', socket.id);
       socket.leave(currentWorld);
+      socket.to(currentWorld).emit('player_left', socket.id);
       delete activePlayers[socket.id];
       currentWorld = null;
     }
   });
 
-  socket.on('player_movement', (data) => {
+  socket.on('player_movement', (pData) => {
     if (!currentWorld || !activePlayers[socket.id]) return;
-    activePlayers[socket.id].x = data.x;
-    activePlayers[socket.id].y = data.y;
-    activePlayers[socket.id].z = data.z;
-    activePlayers[socket.id].rotationY = data.rotationY;
-    activePlayers[socket.id].walkClock = data.walkClock;
+
+    activePlayers[socket.id].x = pData.x;
+    activePlayers[socket.id].y = pData.y;
+    activePlayers[socket.id].z = pData.z;
+    activePlayers[socket.id].rotationY = pData.rotationY;
+    activePlayers[socket.id].walkClock = pData.walkClock;
 
     socket.to(currentWorld).emit('player_moved', {
       id: socket.id,
-      ...data
+      x: pData.x,
+      y: pData.y,
+      z: pData.z,
+      rotationY: pData.rotationY,
+      walkClock: pData.walkClock
     });
   });
 
   socket.on('block_update', async ({ worldName, action, blockData, blockId }) => {
-    if (!worldName) return;
     try {
-      const row = await db.get('SELECT data FROM worlds WHERE name = ?', [worldName]);
-      if (!row) return;
+      const worldRecord = await db.get('SELECT data FROM worlds WHERE name = ?', [worldName]);
+      if (!worldRecord) return;
 
-      const worldData = JSON.parse(row.data);
+      const worldData = JSON.parse(worldRecord.data);
+      if (!worldData.blocks) worldData.blocks = {};
+
       if (action === 'add' || action === 'update') {
         worldData.blocks[blockData.id] = blockData;
       } else if (action === 'delete') {
@@ -269,34 +285,41 @@ io.on('connection', (socket) => {
       }
 
       await db.run('UPDATE worlds SET data = ? WHERE name = ?', [JSON.stringify(worldData), worldName]);
+
       socket.to(worldName).emit('block_updated', { action, blockData, blockId });
-    } catch (e) {}
+    } catch (err) {
+      console.error('block_update error:', err);
+    }
   });
 
   socket.on('world_settings_update', async ({ worldName, settings }) => {
-    if (!worldName) return;
     try {
-      const row = await db.get('SELECT data FROM worlds WHERE name = ?', [worldName]);
-      if (!row) return;
+      const worldRecord = await db.get('SELECT data FROM worlds WHERE name = ?', [worldName]);
+      if (!worldRecord) return;
 
-      const worldData = JSON.parse(row.data);
+      const worldData = JSON.parse(worldRecord.data);
       Object.assign(worldData, settings);
 
       await db.run('UPDATE worlds SET data = ? WHERE name = ?', [JSON.stringify(worldData), worldName]);
+
       socket.to(worldName).emit('world_settings_updated', settings);
-    } catch (e) {}
+    } catch (err) {
+      console.error('world_settings_update error:', err);
+    }
   });
 
   socket.on('disconnect', () => {
     if (currentWorld) {
       socket.to(currentWorld).emit('player_left', socket.id);
-      delete activePlayers[socket.id];
     }
+    delete activePlayers[socket.id];
   });
 });
 
 initDB().then(() => {
   server.listen(PORT, () => {
-    console.log(`KWG 3D Server running on port ${PORT}`);
+    console.log(`Server listening on port ${PORT}`);
   });
+}).catch(err => {
+  console.error('Database initialization failed:', err);
 });
