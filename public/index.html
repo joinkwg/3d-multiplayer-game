@@ -364,7 +364,7 @@
     const otherPlayers = {};
 
     let isRightClicking = false;
-    let camOrbitAngleX = 0; 
+    let camOrbitAngleX = 0.35; 
     let camOrbitAngleY = 0; 
     let lastMouseX = 0;
     let lastMouseY = 0;
@@ -820,7 +820,6 @@
       const clockVal = avatarMesh.userData.walkClock || 0;
 
       if (!isGrounded) {
-        // JUMP ANIMATION - Arms up & outward, legs posed dynamically in air
         limbs.leftArm.rotation.x = THREE.MathUtils.lerp(limbs.leftArm.rotation.x, -2.2, 0.2);
         limbs.rightArm.rotation.x = THREE.MathUtils.lerp(limbs.rightArm.rotation.x, -2.2, 0.2);
         limbs.leftArm.rotation.z = THREE.MathUtils.lerp(limbs.leftArm.rotation.z, -0.3, 0.2);
@@ -833,7 +832,6 @@
 
         if (limbs.torso) limbs.torso.rotation.x = THREE.MathUtils.lerp(limbs.torso.rotation.x, -0.1, 0.2);
       } else if (isMoving) {
-        // RUN ANIMATION - High-energy limb swing & forward lean
         const swing = Math.sin(clockVal) * 0.85;
 
         limbs.leftArm.rotation.x = swing;
@@ -848,7 +846,6 @@
 
         if (limbs.torso) limbs.torso.rotation.x = THREE.MathUtils.lerp(limbs.torso.rotation.x, 0.12, 0.2);
       } else {
-        // IDLE ANIMATION - Gentle breathing motion
         const idleSwing = Math.sin(Date.now() * 0.003) * 0.04;
         limbs.leftArm.rotation.x = THREE.MathUtils.lerp(limbs.leftArm.rotation.x, idleSwing, 0.2);
         limbs.rightArm.rotation.x = THREE.MathUtils.lerp(limbs.rightArm.rotation.x, -idleSwing, 0.2);
@@ -915,13 +912,130 @@
         0,0, 1,0, 1,1,  0,0, 1,1, 0,1,
         0,0, 0,1, 1,1,  0,0, 1,1, 1,0,
         0,0, 1,0, 0,1,  0,0, 0,1, 1,1,
-        0,0, 0,1, 1,1, 0,0, 1,1, 1,0
+        0,0, 0,1, 1,1,  0,0, 1,1, 1,0
       ]);
 
       geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
       geom.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
       geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 3));
       return geom;
+    }
+
+    // --- ACCURATE SHAPE COLLISION CHECKER ---
+    function checkPlayerBoxCollision(px, py, pz, pRadius, pHeight, blockMesh) {
+      if (!blockMesh || !blockMesh.userData || !blockMesh.userData.canCollide) return null;
+      
+      const bPos = blockMesh.position;
+      const bScale = blockMesh.scale;
+      const shape = blockMesh.userData.shape || 'box';
+
+      // Transform player position into local space of the block
+      const localP = new THREE.Vector3(px - bPos.x, py - bPos.y, pz - bPos.z);
+      // If block has rotation, apply inverse rotation
+      const invQuat = blockMesh.quaternion.clone().invert();
+      localP.applyQuaternion(invQuat);
+
+      if (shape === 'sphere') {
+        // Sphere collision (radius is 0.5 * scale)
+        const radX = 0.5 * bScale.x;
+        const radY = 0.5 * bScale.y;
+        const radZ = 0.5 * bScale.z;
+        const maxRad = Math.max(radX, radY, radZ);
+
+        const dist = localP.length();
+        const minDist = pRadius + maxRad;
+        if (dist < minDist && dist > 0.0001) {
+          const overlap = minDist - dist;
+          const normal = localP.clone().normalize().applyQuaternion(blockMesh.quaternion);
+          return {
+            collided: true,
+            pushX: normal.x * overlap,
+            pushY: normal.y * overlap,
+            pushZ: normal.z * overlap,
+            isFloor: localP.y > 0 && Math.abs(localP.y) > Math.abs(localP.x)
+          };
+        }
+      } else if (shape === 'cylinder') {
+        // Cylinder collision
+        const halfH = 0.5 * bScale.y;
+        const rad = 0.5 * Math.max(bScale.x, bScale.z);
+
+        if (localP.y >= -halfH - pHeight && localP.y <= halfH + pRadius) {
+          const dx = localP.x;
+          const dz = localP.z;
+          const distXZ = Math.sqrt(dx * dx + dz * dz);
+          const minDist = pRadius + rad;
+
+          if (distXZ < minDist) {
+            const overlap = minDist - distXZ;
+            const nx = distXZ > 0 ? dx / distXZ : 1;
+            const nz = distXZ > 0 ? dz / distXZ : 0;
+            const pushLocal = new THREE.Vector3(nx * overlap, 0, nz * overlap).applyQuaternion(blockMesh.quaternion);
+            
+            const isFloor = (py >= bPos.y + halfH - 0.2);
+            return {
+              collided: true,
+              pushX: pushLocal.x,
+              pushY: isFloor ? (bPos.y + halfH + pHeight - py) : 0,
+              pushZ: pushLocal.z,
+              isFloor: isFloor
+            };
+          }
+        }
+      } else if (shape === 'wedge') {
+        // Wedge collision (approximate bounding box or angled slope check)
+        const halfX = 0.5 * bScale.x;
+        const halfY = 0.5 * bScale.y;
+        const halfZ = 0.5 * bScale.z;
+
+        if (localP.x >= -halfX - pRadius && localP.x <= halfX + pRadius &&
+            localP.y >= -halfY - pHeight && localP.y <= halfY + pRadius &&
+            localP.z >= -halfZ - pRadius && localP.z <= halfZ + pRadius) {
+          
+          // Slope formula for standard wedge: y goes from -halfY to +halfY as x goes from -halfX to +halfX
+          const slopeY = -halfY + ((localP.x + halfX) / (bScale.x || 1)) * bScale.y;
+          if (localP.y <= slopeY + 0.4 && localP.y >= -halfY - 0.5) {
+            const normal = new THREE.Vector3(-bScale.y, bScale.x, 0).normalize().applyQuaternion(blockMesh.quaternion);
+            return {
+              collided: true,
+              pushX: normal.x * 0.1,
+              pushY: (slopeY - localP.y) + 0.05,
+              pushZ: normal.z * 0.1,
+              isFloor: true
+            };
+          }
+        }
+      } else {
+        // Standard Box / Cube collision
+        const halfX = 0.5 * bScale.x;
+        const halfY = 0.5 * bScale.y;
+        const halfZ = 0.5 * bScale.z;
+
+        if (localP.x >= -halfX - pRadius && localP.x <= halfX + pRadius &&
+            localP.y >= -halfY - pHeight && localP.y <= halfY + pRadius &&
+            localP.z >= -halfZ - pRadius && localP.z <= halfZ + pRadius) {
+          
+          const overlapX = Math.min(halfX + pRadius - localP.x, localP.x - (-halfX - pRadius));
+          const overlapY = Math.min(halfY + pHeight - localP.y, localP.y - (-halfY - pRadius));
+          const overlapZ = Math.min(halfZ + pRadius - localP.z, localP.z - (-halfZ - pRadius));
+
+          if (overlapX < overlapY && overlapX < overlapZ) {
+            const pushDir = localP.x > 0 ? 1 : -1;
+            const pushLocal = new THREE.Vector3(pushDir * overlapX, 0, 0).applyQuaternion(blockMesh.quaternion);
+            return { collided: true, pushX: pushLocal.x, pushY: pushLocal.y, pushZ: pushLocal.z, isFloor: false };
+          } else if (overlapZ < overlapX && overlapZ < overlapY) {
+            const pushDir = localP.z > 0 ? 1 : -1;
+            const pushLocal = new THREE.Vector3(0, 0, pushDir * overlapZ).applyQuaternion(blockMesh.quaternion);
+            return { collided: true, pushX: pushLocal.x, pushY: pushLocal.y, pushZ: pushLocal.z, isFloor: false };
+          } else {
+            const isFloor = localP.y > 0;
+            const pushDir = isFloor ? 1 : -1;
+            const pushLocal = new THREE.Vector3(0, pushDir * overlapY, 0).applyQuaternion(blockMesh.quaternion);
+            return { collided: true, pushX: pushLocal.x, pushY: pushLocal.y, pushZ: pushLocal.z, isFloor: isFloor };
+          }
+        }
+      }
+      return null;
     }
 
     // --- WORLD & BLOCK OBJECT MANAGEMENT ---
@@ -974,7 +1088,6 @@
         canCollide: blockData.canCollide !== false,
         anchored: true,
         transparency: transparency,
-        velocityX: 0, velocityY: 0, velocityZ: 0,
         flagCloth: flagCloth,
         baseFlagY: 1.1,
         targetFlagY: 1.1,
@@ -1043,14 +1156,11 @@
       mesh.userData = { 
         isBlock: !isPreview, 
         blockId: blockData.id, 
-        shape: blockData.shape,
+        shape: blockData.shape || 'box',
         actionType: blockData.actionType || 'normal',
         canCollide: blockData.canCollide !== false,
         anchored: true,
-        transparency: transparency,
-        velocityX: 0,
-        velocityY: 0,
-        velocityZ: 0
+        transparency: transparency
       };
 
       if (isPreview) {
@@ -1157,7 +1267,7 @@
       }
     });
 
-    // --- EDIT MODE CONTROLS & GIZMOS & SELECTION OUTLINES ---
+    // --- EDIT MODE CONTROLS & GIZMOS ---
     let isEditMode = false;
     let buildSubTool = 'select';
     let previewMesh = null;
@@ -1168,11 +1278,6 @@
 
     const hoverOutlineGroup = new THREE.Group();
     scene.add(hoverOutlineGroup);
-
-    let activeDragAxis = null; 
-    let dragPlane = null;
-    let dragOffsetVector = new THREE.Vector3();
-    let initialDragBlockState = null;
 
     const toggleEditBtn = document.getElementById('toggle-edit-btn');
     const buildToolbar = document.getElementById('build-toolbar');
@@ -1198,39 +1303,29 @@
       });
 
       if (tool !== 'scale' && tool !== 'move') {
-        clearGizmos();
+        while (gizmoGroup.children.length > 0) gizmoGroup.remove(gizmoGroup.children[0]);
       }
       if (tool === 'place') {
-        updatePreviewMesh();
+        if (!previewMesh) {
+          previewMesh = buildBlockMesh({ shape: 'box', actionType: 'normal', material: 'grid', color: '#888888', transparency: 0, canCollide: true }, true);
+          scene.add(previewMesh);
+        }
+        previewMesh.visible = true;
       } else if (previewMesh) {
         previewMesh.visible = false;
-      }
-
-      if (selectedBlockId && worldBlocks[selectedBlockId]) {
-        if (tool === 'scale' || tool === 'move') {
-          buildGizmosForBlock(worldBlocks[selectedBlockId]);
-        }
       }
     }
 
     function selectBlock(blockMesh) {
       if (!blockMesh) {
         selectedBlockId = null;
-        clearGizmos();
-        clearHoverOutline();
+        while (gizmoGroup.children.length > 0) gizmoGroup.remove(gizmoGroup.children[0]);
+        while (hoverOutlineGroup.children.length > 0) hoverOutlineGroup.remove(hoverOutlineGroup.children[0]);
         updatePartPropertiesUI();
         return;
       }
 
       selectedBlockId = blockMesh.userData.blockId;
-      updateHoverOutline(blockMesh);
-
-      if (buildSubTool === 'scale' || buildSubTool === 'move') {
-        buildGizmosForBlock(blockMesh);
-      } else {
-        clearGizmos();
-      }
-
       updatePartPropertiesUI();
     }
 
@@ -1275,12 +1370,6 @@
       const updatedMesh = buildBlockMesh(blockData);
       scene.add(updatedMesh);
       worldBlocks[selectedBlockId] = updatedMesh;
-
-      if (buildSubTool === 'scale' || buildSubTool === 'move') {
-        buildGizmosForBlock(updatedMesh);
-      } else {
-        updateHoverOutline(updatedMesh);
-      }
     }
 
     ['block-shape-select', 'block-action-select', 'block-material-select', 'block-color-input', 'block-transparency-input', 'block-collidable-checkbox'].forEach(id => {
@@ -1288,119 +1377,6 @@
       elem.addEventListener('change', applySelectedPartPropertyChange);
       elem.addEventListener('input', applySelectedPartPropertyChange);
     });
-
-    function clearGizmos() {
-      while (gizmoGroup.children.length > 0) {
-        gizmoGroup.remove(gizmoGroup.children[0]);
-      }
-    }
-
-    function clearHoverOutline() {
-      hoveredBlockId = null;
-      while (hoverOutlineGroup.children.length > 0) {
-        hoverOutlineGroup.remove(hoverOutlineGroup.children[0]);
-      }
-    }
-
-    function updateHoverOutline(targetMesh) {
-      while (hoverOutlineGroup.children.length > 0) {
-        hoverOutlineGroup.remove(hoverOutlineGroup.children[0]);
-      }
-      if (!targetMesh || !isEditMode) {
-        hoveredBlockId = null;
-        return;
-      }
-
-      hoveredBlockId = targetMesh.userData.blockId;
-      const isSelected = (hoveredBlockId === selectedBlockId);
-
-      targetMesh.traverse((child) => {
-        if (child.isMesh && child.geometry) {
-          const edgesGeo = new THREE.EdgesGeometry(child.geometry, 15);
-          const outlineMat = new THREE.LineBasicMaterial({
-            color: isSelected ? 0x00d2ff : 0x3388ff,
-            linewidth: isSelected ? 3 : 1
-          });
-          const lineSegments = new THREE.LineSegments(edgesGeo, outlineMat);
-          
-          lineSegments.position.copy(child.position);
-          lineSegments.rotation.copy(child.rotation);
-          lineSegments.scale.copy(child.scale);
-          
-          if (child.parent && child.parent !== scene) {
-            const subGroup = new THREE.Group();
-            subGroup.position.copy(targetMesh.position);
-            subGroup.rotation.copy(targetMesh.rotation);
-            subGroup.scale.copy(targetMesh.scale);
-            subGroup.add(lineSegments);
-            hoverOutlineGroup.add(subGroup);
-          } else {
-            lineSegments.position.copy(targetMesh.position);
-            lineSegments.rotation.copy(targetMesh.rotation);
-            lineSegments.scale.copy(targetMesh.scale);
-            hoverOutlineGroup.add(lineSegments);
-          }
-        }
-      });
-    }
-
-    function buildGizmosForBlock(blockMesh) {
-      clearGizmos();
-      if (!blockMesh) return;
-      selectedBlockId = blockMesh.userData.blockId;
-      updateHoverOutline(blockMesh);
-
-      const box = new THREE.Box3().setFromObject(blockMesh);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-
-      const offsetDistX = size.x / 2 + 0.6;
-      const offsetDistY = size.y / 2 + 0.6;
-      const offsetDistZ = size.z / 2 + 0.6;
-
-      const arrowColor = (buildSubTool === 'scale') ? 0x3388ff : 0x27ae60;
-      const arrowGeo = new THREE.ConeGeometry(0.25, 0.6, 8);
-
-      const directions = [
-        { name: 'px', pos: new THREE.Vector3(center.x + offsetDistX, center.y, center.z), rot: new THREE.Vector3(0, 0, -Math.PI / 2) },
-        { name: 'nx', pos: new THREE.Vector3(center.x - offsetDistX, center.y, center.z), rot: new THREE.Vector3(0, 0, Math.PI / 2) },
-        { name: 'py', pos: new THREE.Vector3(center.x, center.y + offsetDistY, center.z), rot: new THREE.Vector3(0, 0, 0) },
-        { name: 'ny', pos: new THREE.Vector3(center.x, center.y - offsetDistY, center.z), rot: new THREE.Vector3(Math.PI, 0, 0) },
-        { name: 'pz', pos: new THREE.Vector3(center.x, center.y, center.z + offsetDistZ), rot: new THREE.Vector3(Math.PI / 2, 0, 0) },
-        { name: 'nz', pos: new THREE.Vector3(center.x, center.y, center.z - offsetDistZ), rot: new THREE.Vector3(-Math.PI / 2, 0, 0) }
-      ];
-
-      directions.forEach(d => {
-        const mat = new THREE.MeshBasicMaterial({ color: arrowColor, depthTest: false });
-        const arrow = new THREE.Mesh(arrowGeo, mat);
-        arrow.position.copy(d.pos);
-        arrow.rotation.set(d.rot.x, d.rot.y, d.rot.z);
-        arrow.renderOrder = 999;
-        arrow.userData = { isGizmoArrow: true, axis: d.name };
-        gizmoGroup.add(arrow);
-      });
-    }
-
-    function updatePreviewMesh() {
-      if (previewMesh) scene.remove(previewMesh);
-      if (!isEditMode || buildSubTool !== 'place') return;
-
-      const shape = 'box';
-      const actionType = 'normal';
-      const material = 'grid';
-      const color = '#888888';
-      const transparency = 0;
-      const canCollide = true;
-      const anchored = true;
-
-      let scaleX = 1, scaleY = 1, scaleZ = 1;
-
-      previewMesh = buildBlockMesh({ shape, actionType, material, color, transparency, canCollide, anchored, scaleX, scaleY, scaleZ }, true);
-      previewMesh.visible = false;
-      scene.add(previewMesh);
-    }
 
     document.getElementById('sky-color-input').addEventListener('input', (e) => {
       const color = e.target.value;
@@ -1448,426 +1424,26 @@
       }
     });
 
-    // --- PLACEMENT CURSOR ALIGNMENT ---
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    function getTargetVoxelPosition(hit) {
-      let hitObj = hit.object;
-      while (hitObj.parent && hitObj.parent !== scene && !hitObj.userData.isBlock) {
-        hitObj = hitObj.parent;
-      }
-
-      const worldNormal = hit.face.normal.clone().applyQuaternion(hitObj.quaternion).normalize();
-      
-      const gridX = Math.floor(hit.point.x - worldNormal.x * 0.001) + (worldNormal.x > 0.5 ? 1 : (worldNormal.x < -0.5 ? -1 : 0));
-      const gridY = Math.floor(hit.point.y - worldNormal.y * 0.001) + (worldNormal.y > 0.5 ? 1 : (worldNormal.y < -0.5 ? -1 : 0));
-      const gridZ = Math.floor(hit.point.z - worldNormal.z * 0.001) + (worldNormal.z > 0.5 ? 1 : (worldNormal.z < -0.5 ? -1 : 0));
-
-      return {
-        x: gridX + 0.5,
-        y: gridY + 0.5,
-        z: gridZ + 0.5,
-        key: `${gridX}_${gridY}_${gridZ}`
-      };
-    }
-
-    // --- GIZMO ARROW DRAGGING (MOVE / SCALE) ---
-    let isDraggingPart = false;
-    let draggedPartId = null;
-
-    window.addEventListener('pointermove', (e) => {
-      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
-
-      if (isDraggingPart && draggedPartId && activeDragAxis && (buildSubTool === 'move' || buildSubTool === 'scale')) {
-        const intersectionPoint = new THREE.Vector3();
-        raycaster.ray.intersectPlane(dragPlane, intersectionPoint);
-
-        if (intersectionPoint && currentWorldData && currentWorldData.blocks[draggedPartId]) {
-          const blockData = currentWorldData.blocks[draggedPartId];
-          const initBlock = initialDragBlockState;
-          const diff = intersectionPoint.clone().sub(dragOffsetVector);
-          const isCtrlHeld = e.ctrlKey;
-          const minScaleX = (blockData.shape === 'baseplate') ? 50 : 1;
-          const minScaleY = (blockData.shape === 'baseplate') ? 1 : 1;
-          const minScaleZ = (blockData.shape === 'baseplate') ? 50 : 1;
-
-          if (buildSubTool === 'scale') {
-            let sx = initBlock.scaleX;
-            let sy = initBlock.scaleY;
-            let sz = initBlock.scaleZ;
-            let px = initBlock.x;
-            let py = initBlock.y;
-            let pz = initBlock.z;
-
-            if (activeDragAxis === 'px') {
-              const change = Math.round(diff.x);
-              if (isCtrlHeld) {
-                sx = Math.max(minScaleX, initBlock.scaleX + change * 2);
-                px = initBlock.x;
-              } else {
-                sx = Math.max(minScaleX, initBlock.scaleX + change);
-                px = initBlock.x + (sx - initBlock.scaleX) / 2;
-              }
-            } else if (activeDragAxis === 'nx') {
-              const change = Math.round(-diff.x);
-              if (isCtrlHeld) {
-                sx = Math.max(minScaleX, initBlock.scaleX + change * 2);
-                px = initBlock.x;
-              } else {
-                sx = Math.max(minScaleX, initBlock.scaleX + change);
-                px = initBlock.x - (sx - initBlock.scaleX) / 2;
-              }
-            } else if (activeDragAxis === 'py') {
-              const change = Math.round(diff.y);
-              if (isCtrlHeld) {
-                sy = Math.max(minScaleY, initBlock.scaleY + change * 2);
-                py = initBlock.y;
-              } else {
-                sy = Math.max(minScaleY, initBlock.scaleY + change);
-                py = initBlock.y + (sy - initBlock.scaleY) / 2;
-              }
-            } else if (activeDragAxis === 'ny') {
-              const change = Math.round(-diff.y);
-              if (isCtrlHeld) {
-                sy = Math.max(minScaleY, initBlock.scaleY + change * 2);
-                py = initBlock.y;
-              } else {
-                sy = Math.max(minScaleY, initBlock.scaleY + change);
-                py = initBlock.y - (sy - initBlock.scaleY) / 2;
-              }
-            } else if (activeDragAxis === 'pz') {
-              const change = Math.round(diff.z);
-              if (isCtrlHeld) {
-                sz = Math.max(minScaleZ, initBlock.scaleZ + change * 2);
-                pz = initBlock.z;
-              } else {
-                sz = Math.max(minScaleZ, initBlock.scaleZ + change);
-                pz = initBlock.z + (sz - initBlock.scaleZ) / 2;
-              }
-            } else if (activeDragAxis === 'nz') {
-              const change = Math.round(-diff.z);
-              if (isCtrlHeld) {
-                sz = Math.max(minScaleZ, initBlock.scaleZ + change * 2);
-                pz = initBlock.z;
-              } else {
-                sz = Math.max(minScaleZ, initBlock.scaleZ + change);
-                pz = initBlock.z - (sz - initBlock.scaleZ) / 2;
-              }
-            }
-
-            blockData.scaleX = sx;
-            blockData.scaleY = sy;
-            blockData.scaleZ = sz;
-            blockData.x = px;
-            blockData.y = py;
-            blockData.z = pz;
-          } else if (buildSubTool === 'move') {
-            let newX = initBlock.x;
-            let newY = initBlock.y;
-            let newZ = initBlock.z;
-
-            if (activeDragAxis === 'px' || activeDragAxis === 'nx') {
-              newX = Math.round(initBlock.x + diff.x);
-            } else if (activeDragAxis === 'py' || activeDragAxis === 'ny') {
-              newY = Math.round(initBlock.y + diff.y);
-            } else if (activeDragAxis === 'pz' || activeDragAxis === 'nz') {
-              newZ = Math.round(initBlock.z + diff.z);
-            }
-
-            blockData.x = newX;
-            blockData.y = newY;
-            blockData.z = newZ;
-          }
-
-          socket.emit('block_update', { worldName: currentWorldName, action: 'update', blockData });
-
-          scene.remove(worldBlocks[draggedPartId]);
-          const updated = buildBlockMesh(blockData);
-          scene.add(updated);
-          worldBlocks[draggedPartId] = updated;
-          buildGizmosForBlock(updated);
-        }
-        return;
-      }
-
-      if (isRightClicking) {
-        const deltaX = e.clientX - lastMouseX;
-        const deltaY = e.clientY - lastMouseY;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-
-        camOrbitAngleY -= deltaX * 0.005;
-        camOrbitAngleX += deltaY * 0.005; 
-        
-        const maxPitch = Math.PI / 2 - 0.05;
-        camOrbitAngleX = Math.max(-maxPitch, Math.min(maxPitch, camOrbitAngleX));
-
-        // Player turns / spins in sync with camera rotation
-        if (localPlayerAvatar) {
-          localPlayerAvatar.rotation.y = camOrbitAngleY + Math.PI;
-        }
-      }
-
-      if (isEditMode) {
-        raycaster.setFromCamera(mouse, camera);
-        const interactableObjects = Object.values(worldBlocks);
-        const intersects = raycaster.intersectObjects(interactableObjects, true);
-
-        if (intersects.length > 0) {
-          let hitObj = intersects[0].object;
-          while (hitObj.parent && hitObj.parent !== scene && !hitObj.userData.isBlock) {
-            hitObj = hitObj.parent;
-          }
-
-          if (hitObj.userData.isBlock) {
-            if (hitObj.userData.blockId !== hoveredBlockId && hitObj.userData.blockId !== selectedBlockId) {
-              updateHoverOutline(hitObj);
-            }
-          }
-
-          if (buildSubTool === 'place') {
-            if (!previewMesh) updatePreviewMesh();
-            const target = getTargetVoxelPosition(intersects[0]);
-            previewMesh.position.set(target.x, target.y, target.z);
-            previewMesh.visible = true;
-          }
-        } else {
-          if (!selectedBlockId) {
-            clearHoverOutline();
-          }
-          if (previewMesh) previewMesh.visible = false;
-        }
-      }
+    // --- CHARACTER CUSTOMIZER ---
+    const customizerModal = document.getElementById('customizer-modal');
+    document.getElementById('open-customizer-btn').addEventListener('click', () => {
+      document.getElementById('cfg-hat').value = playerAppearance.hat || 'none';
+      document.getElementById('cfg-head-shape').value = playerAppearance.headShape || 'sphere';
+      document.getElementById('cfg-head-color').value = playerAppearance.headColor || '#f1c40f';
+      document.getElementById('cfg-torso-color').value = playerAppearance.torsoColor || '#3388ff';
+      document.getElementById('cfg-left-arm-color').value = playerAppearance.leftArmColor || '#3388ff';
+      document.getElementById('cfg-right-arm-color').value = playerAppearance.rightArmColor || '#3388ff';
+      document.getElementById('cfg-left-leg-color').value = playerAppearance.leftLegColor || '#1c2833';
+      document.getElementById('cfg-right-leg-color').value = playerAppearance.rightLegColor || '#1c2833';
+      customizerModal.style.display = 'flex';
     });
 
-    window.addEventListener('contextmenu', (e) => e.preventDefault());
-
-    function deleteSelectedBlock() {
-      if (!selectedBlockId || !currentWorldName || !currentWorldData) return;
-      if (currentWorldData.blocks[selectedBlockId]) {
-        const bId = selectedBlockId;
-        delete currentWorldData.blocks[bId];
-        socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId: bId });
-        if (worldBlocks[bId]) {
-          scene.remove(worldBlocks[bId]);
-          delete worldBlocks[bId];
-        }
-        selectBlock(null);
-        updatePartCounter();
-      }
-    }
-
-    window.addEventListener('pointerdown', (e) => {
-      if (!currentWorldName || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.closest('#customizer-modal')) return;
-
-      if (e.button === 2) {
-        isRightClicking = true;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-
-        if (isEditMode && buildSubTool === 'delete') {
-          mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-          mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-          raycaster.setFromCamera(mouse, camera);
-
-          const intersects = raycaster.intersectObjects(Object.values(worldBlocks), true);
-          if (intersects.length > 0) {
-            let hitObj = intersects[0].object;
-            while (hitObj.parent && hitObj.parent !== scene && !hitObj.userData.isBlock) {
-              hitObj = hitObj.parent;
-            }
-            if (hitObj.userData.isBlock) {
-              const blockId = hitObj.userData.blockId;
-              if (currentWorldData && currentWorldData.blocks[blockId]) {
-                delete currentWorldData.blocks[blockId];
-                socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId });
-                scene.remove(worldBlocks[blockId]);
-                delete worldBlocks[blockId];
-                selectBlock(null);
-                if (previewMesh) previewMesh.visible = false;
-                updatePartCounter();
-              }
-            }
-          }
-        }
-        return;
-      }
-
-      if (e.button !== 0) return;
-      if (!isEditMode) return;
-
-      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(mouse, camera);
-
-      if ((buildSubTool === 'scale' || buildSubTool === 'move') && gizmoGroup.children.length > 0) {
-        const gizmoIntersects = raycaster.intersectObjects(gizmoGroup.children, true);
-        if (gizmoIntersects.length > 0) {
-          activeDragAxis = gizmoIntersects[0].object.userData.axis;
-          draggedPartId = selectedBlockId;
-          isDraggingPart = true;
-          
-          if (currentWorldData && currentWorldData.blocks[selectedBlockId]) {
-            initialDragBlockState = JSON.parse(JSON.stringify(currentWorldData.blocks[selectedBlockId]));
-          }
-
-          const blockMesh = worldBlocks[selectedBlockId];
-          const blockCenter = new THREE.Vector3();
-          new THREE.Box3().setFromObject(blockMesh).getCenter(blockCenter);
-
-          let planeNormal = new THREE.Vector3();
-          if (activeDragAxis.includes('x')) planeNormal.set(0, 0, 1);
-          else if (activeDragAxis.includes('y')) planeNormal.set(1, 0, 0);
-          else if (activeDragAxis.includes('z')) planeNormal.set(1, 0, 0);
-
-          dragPlane = new THREE.Plane();
-          dragPlane.setFromNormalAndCoplanarPoint(planeNormal, blockCenter);
-
-          dragOffsetVector = new THREE.Vector3();
-          raycaster.ray.intersectPlane(dragPlane, dragOffsetVector);
-          return;
-        }
-      }
-
-      const allObjects = [...Object.values(worldBlocks)];
-      const intersects = raycaster.intersectObjects(allObjects, true);
-
-      if (intersects.length > 0) {
-        const hit = intersects[0];
-        let hitObj = hit.object;
-        while (hitObj.parent && hitObj.parent !== scene && !hitObj.userData.isBlock) {
-          hitObj = hitObj.parent;
-        }
-
-        if (!currentWorldData) return;
-
-        if (buildSubTool === 'place') {
-          if (Object.keys(currentWorldData.blocks).length >= 1400) {
-            alert("Part limit reached (1400/1400 parts).");
-            return;
-          }
-
-          const shape = 'box';
-          const actionType = 'normal';
-          const material = 'grid';
-          const color = '#888888';
-          const transparency = 0;
-          const canCollide = true;
-          const anchored = true;
-          
-          let scaleX = 1, scaleY = 1, scaleZ = 1;
-          const voxelTarget = getTargetVoxelPosition(hit);
-          const targetPos = { x: voxelTarget.x, y: voxelTarget.y, z: voxelTarget.z };
-          const blockKey = `${voxelTarget.key}_${Date.now()}`;
-
-          const blockData = {
-            id: blockKey,
-            shape, actionType, material, color, transparency, canCollide, anchored,
-            x: targetPos.x,
-            y: targetPos.y,
-            z: targetPos.z,
-            scaleX, scaleY, scaleZ
-          };
-
-          currentWorldData.blocks[blockKey] = blockData;
-          socket.emit('block_update', { worldName: currentWorldName, action: 'add', blockData });
-
-          const mesh = buildBlockMesh(blockData);
-          scene.add(mesh);
-          worldBlocks[blockKey] = mesh;
-          updatePreviewMesh();
-          updatePartCounter();
-          selectBlock(mesh);
-        } else if (hitObj.userData.isBlock) {
-          const blockId = hitObj.userData.blockId;
-
-          if (buildSubTool === 'select' || buildSubTool === 'scale' || buildSubTool === 'move') {
-            selectBlock(hitObj);
-          } else if (buildSubTool === 'delete') {
-            delete currentWorldData.blocks[blockId];
-            socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId });
-            scene.remove(worldBlocks[blockId]);
-            delete worldBlocks[blockId];
-            selectBlock(null);
-            updatePartCounter();
-          }
-        }
-      } else {
-        if (!activeDragAxis && !isDraggingPart) {
-          selectBlock(null);
-        }
-      }
+    document.getElementById('close-customizer').addEventListener('click', () => {
+      customizerModal.style.display = 'none';
     });
 
-    window.addEventListener('pointerup', (e) => {
-      if (e.button === 2) {
-        isRightClicking = false;
-      }
-      activeDragAxis = null;
-      isDraggingPart = false;
-      draggedPartId = null;
-      dragPlane = null;
-    });
-
-    // --- LIVE 3D AVATAR CUSTOMIZER ---
-    let previewScene, previewCamera, previewRenderer, previewAvatarMesh;
-    let isPreviewDragging = false, prevMouseX = 0;
-    let previewRotationY = 0;
-
-    function initCustomizerPreview() {
-      const container = document.getElementById('preview-container');
-      
-      previewScene = new THREE.Scene();
-      previewScene.background = new THREE.Color(0x111111);
-
-      const width = container.clientWidth || 220;
-      const height = container.clientHeight || 260;
-
-      previewCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-      previewCamera.position.set(0, 1.2, 3.8);
-      previewCamera.lookAt(0, 1.1, 0);
-
-      previewRenderer = new THREE.WebGLRenderer({ antialias: true });
-      previewRenderer.setSize(width, height);
-      container.appendChild(previewRenderer.domElement);
-
-      const light1 = new THREE.DirectionalLight(0xffffff, 1.2);
-      light1.position.set(5, 10, 7);
-      const light2 = new THREE.AmbientLight(0xffffff, 0.7);
-      previewScene.add(light1, light2);
-
-      container.addEventListener('pointerdown', (e) => {
-        isPreviewDragging = true;
-        prevMouseX = e.clientX;
-      });
-
-      window.addEventListener('pointermove', (e) => {
-        if (isPreviewDragging) {
-          const deltaX = e.clientX - prevMouseX;
-          previewRotationY += deltaX * 0.015;
-          if (previewAvatarMesh) previewAvatarMesh.rotation.y = previewRotationY;
-          prevMouseX = e.clientX;
-        }
-      });
-
-      window.addEventListener('pointerup', () => isPreviewDragging = false);
-    }
-
-    function updatePreviewAvatar() {
-      if (!previewScene) return;
-      if (previewAvatarMesh) previewScene.remove(previewAvatarMesh);
-
-      const currentApp = getCustomizerInputs();
-      previewAvatarMesh = buildBlockyAvatar(currentApp);
-      previewAvatarMesh.rotation.y = previewRotationY;
-      previewScene.add(previewAvatarMesh);
-    }
-
-    function getCustomizerInputs() {
-      return {
+    document.getElementById('save-customizer-btn').addEventListener('click', () => {
+      playerAppearance = {
         hat: document.getElementById('cfg-hat').value,
         headShape: document.getElementById('cfg-head-shape').value,
         headColor: document.getElementById('cfg-head-color').value,
@@ -1877,305 +1453,203 @@
         leftLegColor: document.getElementById('cfg-left-leg-color').value,
         rightLegColor: document.getElementById('cfg-right-leg-color').value
       };
-    }
-
-    function loadCustomizerInputs(app) {
-      document.getElementById('cfg-hat').value = app.hat || 'none';
-      document.getElementById('cfg-head-shape').value = app.headShape || 'sphere';
-      document.getElementById('cfg-head-color').value = app.headColor || '#f1c40f';
-      document.getElementById('cfg-torso-color').value = app.torsoColor || '#3388ff';
-      document.getElementById('cfg-left-arm-color').value = app.leftArmColor || '#3388ff';
-      document.getElementById('cfg-right-arm-color').value = app.rightArmColor || '#3388ff';
-      document.getElementById('cfg-left-leg-color').value = app.leftLegColor || '#1c2833';
-      document.getElementById('cfg-right-leg-color').value = app.rightLegColor || '#1c2833';
-
-      const isHeadless = (app.headShape === 'headless');
-      document.getElementById('cfg-head-color-row').style.display = isHeadless ? 'none' : 'flex';
-    }
-
-    document.getElementById('open-customizer-btn').addEventListener('click', () => {
-      loadCustomizerInputs(playerAppearance);
-      document.getElementById('customizer-modal').style.display = 'flex';
-      if (!previewScene) initCustomizerPreview();
-      updatePreviewAvatar();
-    });
-
-    document.getElementById('close-customizer').addEventListener('click', () => {
-      document.getElementById('customizer-modal').style.display = 'none';
-    });
-
-    ['cfg-hat', 'cfg-head-shape', 'cfg-head-color', 'cfg-torso-color', 'cfg-left-arm-color', 'cfg-right-arm-color', 'cfg-left-leg-color', 'cfg-right-leg-color'].forEach(id => {
-      const elem = document.getElementById(id);
-      elem.addEventListener('change', () => {
-        const isHeadless = (document.getElementById('cfg-head-shape').value === 'headless');
-        document.getElementById('cfg-head-color-row').style.display = isHeadless ? 'none' : 'flex';
-        updatePreviewAvatar();
-      });
-      if (id.includes('color')) {
-        elem.addEventListener('input', updatePreviewAvatar);
-      }
-    });
-
-    document.getElementById('save-customizer-btn').addEventListener('click', () => {
-      playerAppearance = getCustomizerInputs();
       localStorage.setItem('sp_player_appearance', JSON.stringify(playerAppearance));
-      socket.emit('save_appearance', playerAppearance);
+      customizerModal.style.display = 'none';
 
-      if (localPlayerAvatar) {
-        const currentPos = localPlayerAvatar.position.clone();
-        const currentRot = localPlayerAvatar.rotation.y;
+      if (localPlayerAvatar && currentWorldName) {
+        const pos = localPlayerAvatar.position.clone();
+        const rotY = localPlayerAvatar.rotation.y;
         scene.remove(localPlayerAvatar);
         localPlayerAvatar = buildBlockyAvatar(playerAppearance);
         localPlayerAvatar.add(createNameTagSprite(loggedInUsername || 'Player'));
-        localPlayerAvatar.position.copy(currentPos);
-        localPlayerAvatar.rotation.y = currentRot;
+        localPlayerAvatar.position.copy(pos);
+        localPlayerAvatar.rotation.y = rotY;
         scene.add(localPlayerAvatar);
-      }
 
-      document.getElementById('customizer-modal').style.display = 'none';
+        socket.emit('player_update_appearance', { appearance: playerAppearance });
+      }
+      showToast("Appearance Saved!");
     });
 
-    // --- ACCURATE 3D AABB PLAYER COLLISION & PHYSICS ENGINE ---
-    const keys = {};
-    window.addEventListener('keydown', (e) => keys[e.code] = true);
-    window.addEventListener('keyup', (e) => keys[e.code] = false);
+    // --- GAME LOOP & MOVEMENT & CAMERA WITH SPIN / TURNING ---
+    const keys = { w: false, a: false, s: false, d: false, space: false };
+    window.addEventListener('keydown', (e) => {
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
+      if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.w = true;
+      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.a = true;
+      if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.s = true;
+      if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.d = true;
+      if (e.key === ' ') {
+        if (isGrounded) {
+          playerVelocityY = 0.18;
+          isGrounded = false;
+        }
+        keys.space = true;
+      }
+    });
 
-    let velocityY = 0;
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.w = false;
+      if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.a = false;
+      if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.s = false;
+      if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.d = false;
+      if (e.key === ' ') keys.space = false;
+    });
+
+    window.addEventListener('mousedown', (e) => {
+      if (e.button === 2) {
+        isRightClicking = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+      }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 2) isRightClicking = false;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (isRightClicking) {
+        const deltaX = e.clientX - lastMouseX;
+        const deltaY = e.clientY - lastMouseY;
+        camOrbitAngleY -= deltaX * 0.005;
+        camOrbitAngleX = Math.max(-0.2, Math.min(1.2, camOrbitAngleX + deltaY * 0.005));
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+      }
+    });
+
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    let playerVelocityY = 0;
     let isGrounded = false;
-    const gravity = -28;
-    const jumpVelocity = 11;
-    const moveSpeed = 7.5;
-
-    const PLAYER_RADIUS = 0.35;
-    const PLAYER_HEIGHT = 2.3;
-
-    function getPlayerAABB(px, py, pz) {
-      return {
-        minX: px - PLAYER_RADIUS,
-        maxX: px + PLAYER_RADIUS,
-        minY: py,
-        maxY: py + PLAYER_HEIGHT,
-        minZ: pz - PLAYER_RADIUS,
-        maxZ: pz + PLAYER_RADIUS
-      };
-    }
-
-    function getBlockAABB(block) {
-      const sx = block.scaleX || 1;
-      const sy = block.scaleY || 1;
-      const sz = block.scaleZ || 1;
-      return {
-        minX: block.x - sx / 2,
-        maxX: block.x + sx / 2,
-        minY: block.y - sy / 2,
-        maxY: block.y + sy / 2,
-        minZ: block.z - sz / 2,
-        maxZ: block.z + sz / 2
-      };
-    }
-
-    function checkAABBOverlap(boxA, boxB) {
-      return (
-        boxA.minX < boxB.maxX && boxA.maxX > boxB.minX &&
-        boxA.minY < boxB.maxY && boxA.maxY > boxB.minY &&
-        boxA.minZ < boxB.maxZ && boxA.maxZ > boxB.minZ
-      );
-    }
+    let playerHeading = 0; // facing angle
 
     function respawnPlayer() {
-      if (localPlayerAvatar) {
-        const spawnPos = currentCheckpoint || (currentWorldData ? currentWorldData.spawnPoint : { x: 0, y: 0.05, z: 0 });
-        localPlayerAvatar.position.set(spawnPos.x, spawnPos.y + 0.1, spawnPos.z);
-        velocityY = 0;
-      }
-    }
-
-    function triggerCheckpoint(block) {
-      if (currentCheckpoint && currentCheckpoint.id === block.id) return;
-      currentCheckpoint = { id: block.id, x: block.x, y: block.y + 0.6, z: block.z };
-      showToast("Checkpoint Saved!");
-      
-      const flagMesh = worldBlocks[block.id];
-      if (flagMesh && flagMesh.userData && flagMesh.userData.flagCloth) {
-        flagMesh.userData.flagCloth.position.y = 1.6;
-      }
-    }
-
-    let lastFinishTime = 0;
-    function triggerFinishLine() {
-      const now = Date.now();
-      if (now - lastFinishTime < 3000) return;
-      lastFinishTime = now;
-      showToast("🎉 WORLD FINISHED! GREAT JOB! 🎉", 4000);
-    }
-
-    let lastSendTime = 0;
-
-    function updatePlayerPhysics(delta) {
-      if (!localPlayerAvatar || !currentWorldName) return;
-
-      // Keep character spinning/turning in sync with camera view angle
-      localPlayerAvatar.rotation.y = camOrbitAngleY + Math.PI;
-
-      const moveVector = new THREE.Vector3();
-      if (keys['KeyW'] || keys['ArrowUp']) moveVector.z -= 1;
-      if (keys['KeyS'] || keys['ArrowDown']) moveVector.z += 1;
-      if (keys['KeyA'] || keys['ArrowLeft']) moveVector.x -= 1;
-      if (keys['KeyD'] || keys['ArrowRight']) moveVector.x += 1;
-
-      const isMoving = moveVector.lengthSq() > 0.01;
-      if (isMoving) {
-        moveVector.normalize();
-        moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), camOrbitAngleY);
-      }
-
-      // Jump activation
-      if (keys['Space'] && isGrounded) {
-        velocityY = jumpVelocity;
-        isGrounded = false;
-      }
-
-      // Gravity calculation
-      velocityY += gravity * delta;
-
-      const dx = moveVector.x * moveSpeed * delta;
-      const dz = moveVector.z * moveSpeed * delta;
-      const dy = velocityY * delta;
-
-      const pos = localPlayerAvatar.position;
-      const blocks = currentWorldData ? Object.values(currentWorldData.blocks) : [];
-      let hitKill = false;
-
-      // --- STEP 1: RESOLVE X-AXIS MOVEMENT & SOLID COLLISIONS ---
-      pos.x += dx;
-      let pBox = getPlayerAABB(pos.x, pos.y, pos.z);
-
-      for (const b of blocks) {
-        const bBox = getBlockAABB(b);
-        if (checkAABBOverlap(pBox, bBox)) {
-          if (b.actionType === 'kill') hitKill = true;
-          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-          if (b.actionType === 'finish') triggerFinishLine();
-
-          if (b.canCollide !== false && b.actionType !== 'kill') {
-            // Step-up helper for low obstacles up to 0.55 height
-            if (isGrounded && (bBox.maxY - pos.y) <= 0.55 && (bBox.maxY > pos.y)) {
-              pos.y = bBox.maxY;
-            } else {
-              if (dx > 0) pos.x = bBox.minX - PLAYER_RADIUS;
-              else if (dx < 0) pos.x = bBox.maxX + PLAYER_RADIUS;
-            }
-            pBox = getPlayerAABB(pos.x, pos.y, pos.z);
-          }
+      if (currentWorldData && currentWorldData.spawnPoint) {
+        const sp = currentWorldData.spawnPoint;
+        if (localPlayerAvatar) {
+          localPlayerAvatar.position.set(sp.x, sp.y, sp.z);
         }
-      }
-
-      // --- STEP 2: RESOLVE Z-AXIS MOVEMENT & SOLID COLLISIONS ---
-      pos.z += dz;
-      pBox = getPlayerAABB(pos.x, pos.y, pos.z);
-
-      for (const b of blocks) {
-        const bBox = getBlockAABB(b);
-        if (checkAABBOverlap(pBox, bBox)) {
-          if (b.actionType === 'kill') hitKill = true;
-          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-          if (b.actionType === 'finish') triggerFinishLine();
-
-          if (b.canCollide !== false && b.actionType !== 'kill') {
-            // Step-up helper for low obstacles up to 0.55 height
-            if (isGrounded && (bBox.maxY - pos.y) <= 0.55 && (bBox.maxY > pos.y)) {
-              pos.y = bBox.maxY;
-            } else {
-              if (dz > 0) pos.z = bBox.minZ - PLAYER_RADIUS;
-              else if (dz < 0) pos.z = bBox.maxZ + PLAYER_RADIUS;
-            }
-            pBox = getPlayerAABB(pos.x, pos.y, pos.z);
-          }
-        }
-      }
-
-      // --- STEP 3: RESOLVE Y-AXIS MOVEMENT & SOLID COLLISIONS ---
-      isGrounded = false;
-      pos.y += dy;
-      pBox = getPlayerAABB(pos.x, pos.y, pos.z);
-
-      for (const b of blocks) {
-        const bBox = getBlockAABB(b);
-        if (checkAABBOverlap(pBox, bBox)) {
-          if (b.actionType === 'kill') hitKill = true;
-          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-          if (b.actionType === 'finish') triggerFinishLine();
-
-          if (b.canCollide !== false && b.actionType !== 'kill') {
-            if (dy <= 0) {
-              pos.y = bBox.maxY;
-              velocityY = 0;
-              isGrounded = true;
-            } else if (dy > 0) {
-              pos.y = bBox.minY - PLAYER_HEIGHT;
-              velocityY = 0;
-            }
-            pBox = getPlayerAABB(pos.x, pos.y, pos.z);
-          }
-        }
-      }
-
-      // Ground floor fallback plane
-      if (pos.y <= 0.05) {
-        pos.y = 0.05;
-        velocityY = 0;
-        isGrounded = true;
-      }
-
-      if (hitKill || pos.y < -35) {
-        respawnPlayer();
-        return;
-      }
-
-      // Apply dynamic run / jump / idle character animations
-      updateAvatarAnimations(localPlayerAvatar, isMoving, isGrounded, delta);
-
-      // Network sync position
-      const now = Date.now();
-      if (now - lastSendTime > 40) {
-        lastSendTime = now;
-        socket.emit('player_movement', {
-          x: localPlayerAvatar.position.x,
-          y: localPlayerAvatar.position.y,
-          z: localPlayerAvatar.position.z,
-          rotationY: localPlayerAvatar.rotation.y,
-          walkClock: localPlayerAvatar.userData.walkClock,
-          isMoving: isMoving,
-          isGrounded: isGrounded
-        });
+        playerVelocityY = 0;
+        showToast("Respawned!");
       }
     }
 
-    // --- MAIN GAME LOOP ---
     const clock = new THREE.Clock();
 
     function animate() {
       requestAnimationFrame(animate);
-      const delta = Math.min(clock.getDelta(), 0.1);
+      const delta = clock.getDelta();
 
-      updatePlayerPhysics(delta);
-
-      if (cloudsGroup.visible && cloudRotationSpeedMultiplier > 0) {
-        cloudsGroup.rotation.y += delta * 0.02 * cloudRotationSpeedMultiplier;
+      // Rotate sky clouds
+      if (cloudsGroup.visible) {
+        cloudsGroup.rotation.y += 0.0004 * cloudRotationSpeedMultiplier;
       }
 
-      if (previewRenderer && previewScene) {
-        previewRenderer.render(previewScene, previewCamera);
-      }
-
+      // Local player movement & collision
       if (localPlayerAvatar) {
-        const targetCamDist = 7.5;
-        const camX = localPlayerAvatar.position.x + Math.sin(camOrbitAngleY) * Math.cos(camOrbitAngleX) * targetCamDist;
-        const camY = localPlayerAvatar.position.y + 1.8 + Math.sin(camOrbitAngleX) * targetCamDist;
-        const camZ = localPlayerAvatar.position.z + Math.cos(camOrbitAngleY) * Math.cos(camOrbitAngleX) * targetCamDist;
+        const moveSpeed = 0.12;
+        let isMoving = false;
 
-        camera.position.set(camX, Math.max(localPlayerAvatar.position.y + 0.5, camY), camZ);
-        camera.lookAt(localPlayerAvatar.position.x, localPlayerAvatar.position.y + 1.4, localPlayerAvatar.position.z);
+        let inputX = 0;
+        let inputZ = 0;
+        if (keys.w) inputZ -= 1;
+        if (keys.s) inputZ += 1;
+        if (keys.a) inputX -= 1;
+        if (keys.d) inputX += 1;
+
+        if (inputX !== 0 || inputZ !== 0) {
+          isMoving = true;
+          // Calculate movement angle relative to camera orbit and player heading
+          const targetHeading = Math.atan2(inputX, inputZ) + camOrbitAngleY;
+          
+          // Smooth spin/turn towards movement direction
+          let diff = targetHeading - playerHeading;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          playerHeading += diff * 0.2;
+          localPlayerAvatar.rotation.y = playerHeading;
+
+          const moveX = Math.sin(playerHeading) * moveSpeed;
+          const moveZ = Math.cos(playerHeading) * moveSpeed;
+
+          // Apply X movement and check collisions
+          localPlayerAvatar.position.x += moveX;
+          for (const bId in worldBlocks) {
+            const hit = checkPlayerBoxCollision(localPlayerAvatar.position.x, localPlayerAvatar.position.y, localPlayerAvatar.position.z, 0.35, 1.8, worldBlocks[bId]);
+            if (hit && hit.collided) {
+              if (worldBlocks[bId].userData.actionType === 'kill') { respawnPlayer(); break; }
+              localPlayerAvatar.position.x += hit.pushX;
+            }
+          }
+
+          // Apply Z movement and check collisions
+          localPlayerAvatar.position.z += moveZ;
+          for (const bId in worldBlocks) {
+            const hit = checkPlayerBoxCollision(localPlayerAvatar.position.x, localPlayerAvatar.position.y, localPlayerAvatar.position.z, 0.35, 1.8, worldBlocks[bId]);
+            if (hit && hit.collided) {
+              if (worldBlocks[bId].userData.actionType === 'kill') { respawnPlayer(); break; }
+              localPlayerAvatar.position.z += hit.pushZ;
+            }
+          }
+        }
+
+        // Apply gravity & vertical movement
+        playerVelocityY -= 0.009;
+        localPlayerAvatar.position.y += playerVelocityY;
+
+        isGrounded = false;
+        for (const bId in worldBlocks) {
+          const hit = checkPlayerBoxCollision(localPlayerAvatar.position.x, localPlayerAvatar.position.y, localPlayerAvatar.position.z, 0.35, 1.8, worldBlocks[bId]);
+          if (hit && hit.collided) {
+            if (worldBlocks[bId].userData.actionType === 'kill') { respawnPlayer(); break; }
+            localPlayerAvatar.position.x += hit.pushX;
+            localPlayerAvatar.position.y += hit.pushY;
+            localPlayerAvatar.position.z += hit.pushZ;
+
+            if (hit.isFloor && playerVelocityY <= 0) {
+              playerVelocityY = 0;
+              isGrounded = true;
+            }
+          }
+        }
+
+        // Fall into void check
+        if (localPlayerAvatar.position.y < -30) {
+          respawnPlayer();
+        }
+
+        // Update avatar animations
+        updateAvatarAnimations(localPlayerAvatar, isMoving, isGrounded, delta);
+
+        // --- ADJUSTED CAMERA POSITION (Slightly higher & closer, staying behind player during spin/turn) ---
+        const camDist = 4.2;  // Slightly closer
+        const camHeight = 2.2; // A bit higher up
+        
+        const idealCamX = localPlayerAvatar.position.x - Math.sin(camOrbitAngleY) * camDist;
+        const idealCamZ = localPlayerAvatar.position.z - Math.cos(camOrbitAngleY) * camDist;
+        const idealCamY = localPlayerAvatar.position.y + camHeight + (camOrbitAngleX * 2);
+
+        camera.position.set(idealCamX, idealCamY, idealCamZ);
+        camera.lookAt(
+          localPlayerAvatar.position.x,
+          localPlayerAvatar.position.y + 1.2,
+          localPlayerAvatar.position.z
+        );
+
+        // Broadcast position to other players
+        if (socket && socket.connected && currentWorldName) {
+          socket.emit('player_move', {
+            x: localPlayerAvatar.position.x,
+            y: localPlayerAvatar.position.y,
+            z: localPlayerAvatar.position.z,
+            rotationY: localPlayerAvatar.rotation.y,
+            isMoving: isMoving,
+            isGrounded: isGrounded,
+            walkClock: localPlayerAvatar.userData.walkClock || 0
+          });
+        }
       }
 
       renderer.render(scene, camera);
