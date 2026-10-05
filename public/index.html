@@ -364,6 +364,7 @@
     const otherPlayers = {};
 
     let isRightClicking = false;
+    let camOrbitAngleX = 0; 
     let camOrbitAngleY = 0; 
     let lastMouseX = 0;
     let lastMouseY = 0;
@@ -804,59 +805,39 @@
     }
 
     // --- ANIMATION CONTROLLER FOR RUN / JUMP / IDLE ---
+    // Exact same limb animation used by indexSingle.html.
+    function animateLimbs(avatar, isMoving) {
+      const limbs = avatar.userData.limbs;
+      if (!limbs) return;
+
+      if (isMoving) {
+        avatar.userData.walkClock = (avatar.userData.walkClock || 0) + 0.18;
+        const angle = Math.sin(avatar.userData.walkClock) * 0.65;
+        limbs.leftLeg.rotation.x = angle;
+        limbs.rightLeg.rotation.x = -angle;
+        limbs.leftArm.rotation.x = -angle;
+        limbs.rightArm.rotation.x = angle;
+      } else {
+        limbs.leftLeg.rotation.x *= 0.75;
+        limbs.rightLeg.rotation.x *= 0.75;
+        limbs.leftArm.rotation.x *= 0.75;
+        limbs.rightArm.rotation.x *= 0.75;
+      }
+    }
+
     function updateAvatarAnimations(avatarMesh, isMoving, isGrounded, delta, walkClockOverride) {
       if (!avatarMesh || !avatarMesh.userData || !avatarMesh.userData.limbs) return;
 
-      const limbs = avatarMesh.userData.limbs;
       if (walkClockOverride !== undefined) {
         avatarMesh.userData.walkClock = walkClockOverride;
-      } else if (isMoving && isGrounded) {
-        avatarMesh.userData.walkClock = (avatarMesh.userData.walkClock || 0) + delta * 14;
+        const angle = Math.sin(walkClockOverride) * 0.65;
+        const limbs = avatarMesh.userData.limbs;
+        limbs.leftLeg.rotation.x = angle;
+        limbs.rightLeg.rotation.x = -angle;
+        limbs.leftArm.rotation.x = -angle;
+        limbs.rightArm.rotation.x = angle;
       } else {
-        avatarMesh.userData.walkClock = 0;
-      }
-
-      const clockVal = avatarMesh.userData.walkClock || 0;
-
-      if (!isGrounded) {
-        limbs.leftArm.rotation.x = THREE.MathUtils.lerp(limbs.leftArm.rotation.x, -2.2, 0.2);
-        limbs.rightArm.rotation.x = THREE.MathUtils.lerp(limbs.rightArm.rotation.x, -2.2, 0.2);
-        limbs.leftArm.rotation.z = THREE.MathUtils.lerp(limbs.leftArm.rotation.z, -0.3, 0.2);
-        limbs.rightArm.rotation.z = THREE.MathUtils.lerp(limbs.rightArm.rotation.z, 0.3, 0.2);
-
-        limbs.leftLeg.rotation.x = THREE.MathUtils.lerp(limbs.leftLeg.rotation.x, -0.55, 0.2);
-        limbs.rightLeg.rotation.x = THREE.MathUtils.lerp(limbs.rightLeg.rotation.x, 0.45, 0.2);
-        limbs.leftLeg.rotation.z = THREE.MathUtils.lerp(limbs.leftLeg.rotation.z, 0.05, 0.2);
-        limbs.rightLeg.rotation.z = THREE.MathUtils.lerp(limbs.rightLeg.rotation.z, -0.05, 0.2);
-
-        if (limbs.torso) limbs.torso.rotation.x = THREE.MathUtils.lerp(limbs.torso.rotation.x, -0.1, 0.2);
-      } else if (isMoving) {
-        const swing = Math.sin(clockVal) * 0.85;
-
-        limbs.leftArm.rotation.x = swing;
-        limbs.rightArm.rotation.x = -swing;
-        limbs.leftArm.rotation.z = THREE.MathUtils.lerp(limbs.leftArm.rotation.z, -0.15, 0.2);
-        limbs.rightArm.rotation.z = THREE.MathUtils.lerp(limbs.rightArm.rotation.z, 0.15, 0.2);
-
-        limbs.leftLeg.rotation.x = -swing;
-        limbs.rightLeg.rotation.x = swing;
-        limbs.leftLeg.rotation.z = THREE.MathUtils.lerp(limbs.leftLeg.rotation.z, 0, 0.2);
-        limbs.rightLeg.rotation.z = THREE.MathUtils.lerp(limbs.rightLeg.rotation.z, 0, 0.2);
-
-        if (limbs.torso) limbs.torso.rotation.x = THREE.MathUtils.lerp(limbs.torso.rotation.x, 0.12, 0.2);
-      } else {
-        const idleSwing = Math.sin(Date.now() * 0.003) * 0.04;
-        limbs.leftArm.rotation.x = THREE.MathUtils.lerp(limbs.leftArm.rotation.x, idleSwing, 0.2);
-        limbs.rightArm.rotation.x = THREE.MathUtils.lerp(limbs.rightArm.rotation.x, -idleSwing, 0.2);
-        limbs.leftArm.rotation.z = THREE.MathUtils.lerp(limbs.leftArm.rotation.z, 0, 0.2);
-        limbs.rightArm.rotation.z = THREE.MathUtils.lerp(limbs.rightArm.rotation.z, 0, 0.2);
-
-        limbs.leftLeg.rotation.x = THREE.MathUtils.lerp(limbs.leftLeg.rotation.x, 0, 0.2);
-        limbs.rightLeg.rotation.x = THREE.MathUtils.lerp(limbs.rightLeg.rotation.x, 0, 0.2);
-        limbs.leftLeg.rotation.z = THREE.MathUtils.lerp(limbs.leftLeg.rotation.z, 0, 0.2);
-        limbs.rightLeg.rotation.z = THREE.MathUtils.lerp(limbs.rightLeg.rotation.z, 0, 0.2);
-
-        if (limbs.torso) limbs.torso.rotation.x = THREE.MathUtils.lerp(limbs.torso.rotation.x, 0, 0.2);
+        animateLimbs(avatarMesh, isMoving);
       }
     }
 
@@ -1584,11 +1565,15 @@
 
       if (isRightClicking) {
         const deltaX = e.clientX - lastMouseX;
+        const deltaY = e.clientY - lastMouseY;
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
 
-        // Turning / spinning camera & player heading together
         camOrbitAngleY -= deltaX * 0.005;
+        camOrbitAngleX += deltaY * 0.005; 
+        
+        const maxPitch = Math.PI / 2 - 0.05;
+        camOrbitAngleX = Math.max(-maxPitch, Math.min(maxPitch, camOrbitAngleX));
 
         if (localPlayerAvatar) {
           localPlayerAvatar.rotation.y = camOrbitAngleY + Math.PI;
@@ -1905,16 +1890,40 @@
     });
 
     // --- ACCURATE SHAPE-SPECIFIC COLLISION & PHYSICS ENGINE ---
+    // Keep the exact single-player input/physics tuning.
     const keys = {};
-    window.addEventListener('keydown', (e) => keys[e.code] = true);
-    window.addEventListener('keyup', (e) => keys[e.code] = false);
+    window.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      keys[key] = true;
+
+      const activeTag = document.activeElement ? document.activeElement.tagName : '';
+      if (activeTag === 'INPUT' || activeTag === 'SELECT' || activeTag === 'TEXTAREA') return;
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (isEditMode && selectedBlockId) {
+          e.preventDefault();
+          deleteSelectedBlock();
+        }
+      }
+
+      if ((e.ctrlKey || e.metaKey) && key === 'd') {
+        if (isEditMode && selectedBlockId) {
+          e.preventDefault();
+          duplicateSelectedBlock();
+        }
+      }
+    });
+    window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
 
     let velocityY = 0;
+    const gravity = -0.0055;
+    const jumpStrength = 0.235;
     let isGrounded = false;
-    const gravity = -28;
-    const jumpVelocity = 11;
-    const moveSpeed = 7.5;
-    const turnSpeed = 3.0; // radians per second for turning/spinning with A/D
+    const maxStepHeight = 0.65;
+    let targetStepY = 0;
+
+    const moveSpeed = 0.15;
+    const turnSpeed = 0.04;
 
     const PLAYER_RADIUS = 0.35;
     const PLAYER_HEIGHT = 2.3;
@@ -1952,6 +1961,7 @@
       );
     }
 
+    // Precise shape collision check and resolution against player position (px, py, pz)
     function checkPlayerShapeCollision(px, py, pz, b) {
       const shape = b.shape || 'box';
       const sx = b.scaleX || 1;
@@ -1968,6 +1978,7 @@
       if (shape === 'sphere') {
         const radius = sx * 0.5;
         const cx = b.x, cy = b.y, cz = b.z;
+        // Closest point on player AABB to sphere center
         const closestX = Math.max(pMinX, Math.min(cx, pMaxX));
         const closestY = Math.max(pMinY, Math.min(cy, pMaxY));
         const closestZ = Math.max(pMinZ, Math.min(cz, pMaxZ));
@@ -1986,7 +1997,9 @@
         const cyMin = b.y - halfH;
         const cyMax = b.y + halfH;
 
+        // Check vertical overlap first
         if (pMaxY > cyMin && pMinY < cyMax) {
+          // Check horizontal distance from cylinder center (b.x, b.z)
           const closestX = Math.max(pMinX, Math.min(b.x, pMaxX));
           const closestZ = Math.max(pMinZ, Math.min(b.z, pMaxZ));
           const dx = closestX - b.x;
@@ -1996,17 +2009,21 @@
           }
         }
       } else if (shape === 'wedge') {
+        // Wedge bounds: slope goes from low at front (z = -sz/2) to high at back (z = sz/2) or similar
         const bBox = getBlockAABB(b);
-        if (checkAABBOverlap({minX: pMinX, maxX: pMaxX, minY: pMinY, maxY: pMaxY, minZ: pMinZ, maxZ: pMaxZ}, bBox)) {
-          const localZ = (pz - b.z) / sz;
+        if (checkAABBOverlap({minX: pMinX, maxX: pMaxX, minY: pMinY, maxY: pMaxY, minZ: pMinZ, maxZ: pZ = pMaxZ}, bBox)) {
+          // Refine wedge ramp check: height increases linearly along Z
+          const localZ = (pz - b.x) / sz; // normalized local coordinate
           const rampHeightMax = b.y + sy / 2;
           const rampHeightMin = b.y - sy / 2;
+          // Ramp slope formula
           const currentRampHeight = rampHeightMin + (localZ + 0.5) * sy;
           if (py <= currentRampHeight + 0.1 && py >= rampHeightMin - 0.5) {
             return { collided: true, type: 'wedge', topY: currentRampHeight };
           }
         }
       } else {
+        // Default Box AABB
         const bBox = getBlockAABB(b);
         if (checkAABBOverlap({minX: pMinX, maxX: pMaxX, minY: pMinY, maxY: pMaxY, minZ: pMinZ, maxZ: pMaxZ}, bBox)) {
           return { collided: true, type: 'box', bBox };
@@ -2048,41 +2065,43 @@
     function updatePlayerPhysics(delta) {
       if (!localPlayerAvatar || !currentWorldName) return;
 
-      // Turning / spinning with A/D or Arrow Keys
-      if (keys['KeyA'] || keys['ArrowLeft']) {
-        camOrbitAngleY += turnSpeed * delta;
-      }
-      if (keys['KeyD'] || keys['ArrowRight']) {
-        camOrbitAngleY -= turnSpeed * delta;
+      // Exact single-player turning: A/D directly spin the player.
+      if (!isRightClicking) {
+        if (keys['a'] || keys['arrowleft']) localPlayerAvatar.rotation.y += turnSpeed;
+        if (keys['d'] || keys['arrowright']) localPlayerAvatar.rotation.y -= turnSpeed;
       }
 
-      // Keep character rotation aligned with camera angle
-      localPlayerAvatar.rotation.y = camOrbitAngleY + Math.PI;
+      let moveDir = 0;
+      if (keys['w'] || keys['arrowup']) moveDir += 1;
+      if (keys['s'] || keys['arrowdown']) moveDir -= 1;
 
-      const moveForward = (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0) - (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0);
-      const isMoving = moveForward !== 0;
+      const isMoving = moveDir !== 0;
 
-      const moveVector = new THREE.Vector3(0, 0, -moveForward);
-      if (isMoving) {
-        moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), camOrbitAngleY);
-      }
-
-      if (keys['Space'] && isGrounded) {
-        velocityY = jumpVelocity;
+      // Jump activation
+      if (keys[' '] && isGrounded) {
+        velocityY = jumpStrength;
         isGrounded = false;
+        targetStepY = 0;
       }
 
-      velocityY += gravity * delta;
+      // Exact single-player fixed-step gravity/movement.
+      if (targetStepY !== 0) {
+        const stepStep = targetStepY * 0.25;
+        localPlayerAvatar.position.y += stepStep;
+        targetStepY -= stepStep;
+        if (Math.abs(targetStepY) < 0.001) targetStepY = 0;
+      }
 
-      const dx = moveVector.x * moveSpeed * delta;
-      const dz = moveVector.z * moveSpeed * delta;
-      const dy = velocityY * delta;
+      const dx = Math.sin(localPlayerAvatar.rotation.y) * moveSpeed * moveDir;
+      const dz = Math.cos(localPlayerAvatar.rotation.y) * moveSpeed * moveDir;
+
+      const dy = velocityY;
 
       const pos = localPlayerAvatar.position;
       const blocks = currentWorldData ? Object.values(currentWorldData.blocks) : [];
       let hitKill = false;
 
-      // X-axis collision
+      // --- STEP 1: RESOLVE X-AXIS MOVEMENT ---
       pos.x += dx;
       for (const b of blocks) {
         const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
@@ -2099,7 +2118,7 @@
         }
       }
 
-      // Z-axis collision
+      // --- STEP 2: RESOLVE Z-AXIS MOVEMENT ---
       pos.z += dz;
       for (const b of blocks) {
         const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
@@ -2116,9 +2135,36 @@
         }
       }
 
-      // Y-axis collision
+      // Match the single-player step-up behavior.
+      if (isMoving && isGrounded) {
+        const blocksForGround = currentWorldData ? Object.values(currentWorldData.blocks) : [];
+        let highestGround = -Infinity;
+        for (const b of blocksForGround) {
+          if (b.canCollide === false) continue;
+          const box = getBlockAABB(b);
+          if (localPlayerAvatar.position.x >= box.minX - PLAYER_RADIUS &&
+              localPlayerAvatar.position.x <= box.maxX + PLAYER_RADIUS &&
+              localPlayerAvatar.position.z >= box.minZ - PLAYER_RADIUS &&
+              localPlayerAvatar.position.z <= box.maxZ + PLAYER_RADIUS) {
+            if (box.maxY > highestGround && box.maxY <= localPlayerAvatar.position.y + maxStepHeight + 0.1) {
+              highestGround = box.maxY;
+            }
+          }
+        }
+        if (highestGround !== -Infinity) {
+          const stepUpY = highestGround - localPlayerAvatar.position.y;
+          if (stepUpY > 0 && stepUpY <= maxStepHeight) {
+            targetStepY += stepUpY;
+            localPlayerAvatar.position.y = highestGround;
+          }
+        }
+      }
+
+      // --- STEP 3: RESOLVE Y-AXIS MOVEMENT ---
       isGrounded = false;
-      pos.y += dy;
+      // Same order as indexSingle: move by current velocity, then apply gravity.
+      pos.y += velocityY;
+      velocityY += gravity;
       for (const b of blocks) {
         const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
         if (res.collided) {
@@ -2146,37 +2192,33 @@
         }
       }
 
-      if (hitKill || pos.y < -30) {
-        respawnPlayer();
+      // Ground floor fallback plane
+      if (pos.y <= 0.05) {
+        pos.y = 0.05;
+        velocityY = 0;
+        isGrounded = true;
       }
 
-      // Update local player animations
-      updateAvatarAnimations(localPlayerAvatar, isMoving, isGrounded, delta);
+      if (hitKill || pos.y < -35) {
+        respawnPlayer();
+        return;
+      }
 
-      // --- EXACT INDEXSINGLE CAMERA SYSTEM ---
-      // The camera stays locked behind the player at a fixed distance, height, and rotation
-      const camDistance = 4.5;
-      const camHeight = 2.0;
+      // Exact single-player run animation.
+      animateLimbs(localPlayerAvatar, isMoving);
 
-      const targetCamX = pos.x + Math.sin(camOrbitAngleY) * camDistance;
-      const targetCamZ = pos.z + Math.cos(camOrbitAngleY) * camDistance;
-      const targetCamY = pos.y + camHeight;
-
-      camera.position.set(targetCamX, targetCamY, targetCamZ);
-      camera.lookAt(pos.x, pos.y + 1.2, pos.z);
-
-      // Send multiplayer update packet
+      // Network sync position
       const now = Date.now();
-      if (now - lastSendTime > 50) {
+      if (now - lastSendTime > 40) {
         lastSendTime = now;
-        socket.emit('player_move', {
-          x: pos.x,
-          y: pos.y,
-          z: pos.z,
+        socket.emit('player_movement', {
+          x: localPlayerAvatar.position.x,
+          y: localPlayerAvatar.position.y,
+          z: localPlayerAvatar.position.z,
           rotationY: localPlayerAvatar.rotation.y,
-          isMoving,
-          isGrounded,
-          walkClock: localPlayerAvatar.userData.walkClock || 0
+          walkClock: localPlayerAvatar.userData.walkClock,
+          isMoving: isMoving,
+          isGrounded: isGrounded
         });
       }
     }
@@ -2186,16 +2228,50 @@
 
     function animate() {
       requestAnimationFrame(animate);
-
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      // Rotate clouds if enabled
+      updatePlayerPhysics(delta);
+
       if (cloudsGroup.visible && cloudRotationSpeedMultiplier > 0) {
         cloudsGroup.rotation.y += delta * 0.02 * cloudRotationSpeedMultiplier;
       }
 
-      if (currentWorldName && localPlayerAvatar) {
-        updatePlayerPhysics(delta);
+      if (previewRenderer && previewScene) {
+        previewRenderer.render(previewScene, previewCamera);
+      }
+
+      if (localPlayerAvatar) {
+        // Exact single-player camera: same distance, height, rotation, smoothing,
+        // right-click orbit, and automatic re-lock behind the player.
+        const player = localPlayerAvatar;
+        const cameraDistance = 6;
+        const cameraHeight = 3.5;
+
+        if (isRightClicking) {
+          const targetCamX = player.position.x - Math.sin(camOrbitAngleY) * cameraDistance * Math.cos(camOrbitAngleX);
+          const targetCamZ = player.position.z - Math.cos(camOrbitAngleY) * cameraDistance * Math.cos(camOrbitAngleX);
+          const targetCamY = player.position.y + cameraHeight + Math.sin(camOrbitAngleX) * cameraDistance;
+
+          camera.position.x += (targetCamX - camera.position.x) * 0.2;
+          camera.position.y += (targetCamY - camera.position.y) * 0.2;
+          camera.position.z += (targetCamZ - camera.position.z) * 0.2;
+
+          const lookTarget = new THREE.Vector3(player.position.x, player.position.y + 1.2, player.position.z);
+          camera.lookAt(lookTarget);
+        } else {
+          camOrbitAngleY = player.rotation.y;
+          camOrbitAngleX = 0;
+
+          const targetCamX = player.position.x - Math.sin(player.rotation.y) * cameraDistance;
+          const targetCamZ = player.position.z - Math.cos(player.rotation.y) * cameraDistance;
+          const targetCamY = player.position.y + cameraHeight;
+
+          camera.position.x += (targetCamX - camera.position.x) * 0.1;
+          camera.position.y += (targetCamY - camera.position.y) * 0.1;
+          camera.position.z += (targetCamZ - camera.position.z) * 0.1;
+
+          camera.lookAt(player.position.x, player.position.y + 1.2, player.position.z);
+        }
       }
 
       renderer.render(scene, camera);
