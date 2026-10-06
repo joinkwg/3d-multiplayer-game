@@ -110,7 +110,9 @@ async function migrate() {
     await pool.query(`
       INSERT INTO users(username,password_hash,appearance,is_admin)
       VALUES($1,$2,$3,true)
-      ON CONFLICT(username) DO UPDATE SET is_admin=true
+      ON CONFLICT(username) DO UPDATE SET
+  password_hash = EXCLUDED.password_hash,
+  is_admin = true
     `, [adminUsername, hash, JSON.stringify(defaultAppearance)]);
   }
 }
