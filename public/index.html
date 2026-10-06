@@ -292,6 +292,7 @@
     <button class="hud-btn" id="toggle-edit-btn">Edit Mode: OFF</button>
     <button class="hud-btn" id="respawn-btn">Respawn</button>
     <button class="hud-btn" id="leave-world-btn" style="background: #e74c3c; color: white;">Leave World</button>
+    <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:8px; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
   </div>
 
   <div id="room-info-label">World: <span id="current-room-text">Default World</span></div>
@@ -932,7 +933,37 @@
       });
     });
 
-    document.getElementById('leave-world-btn').addEventListener('click', () => {
+    // --- WORLD SAVE STATUS ---
+    // Every editor write is tracked until the server acknowledges it.
+    let pendingWorldSaves = 0;
+
+    function updateSaveStatusUI() {
+      const el = document.getElementById('save-status');
+      if (!el) return;
+      if (pendingWorldSaves > 0) {
+        el.style.display = 'flex';
+        el.textContent = pendingWorldSaves === 1 ? 'Saving change...' : `Saving ${pendingWorldSaves} changes...`;
+      } else {
+        el.style.display = 'flex';
+        el.textContent = 'All changes saved';
+        clearTimeout(updateSaveStatusUI.hideTimer);
+        updateSaveStatusUI.hideTimer = setTimeout(() => {
+          if (pendingWorldSaves === 0 && el) el.style.display = 'none';
+        }, 1200);
+      }
+    }
+
+    function emitWorldSave(eventName, payload, callback) {
+      pendingWorldSaves++;
+      updateSaveStatusUI();
+      socket.emit(eventName, payload, (res) => {
+        pendingWorldSaves = Math.max(0, pendingWorldSaves - 1);
+        updateSaveStatusUI();
+        if (callback) callback(res);
+      });
+    }
+
+    function performLeaveWorld() {
       socket.emit('leave_world');
 
       if (localPlayerAvatar) { scene.remove(localPlayerAvatar); localPlayerAvatar = null; }
@@ -952,11 +983,21 @@
       document.getElementById('room-info-label').style.display = 'none';
       document.getElementById('build-toolbar').style.display = 'none';
       document.getElementById('home-screen').style.display = 'flex';
-      
+
       isEditMode = false;
       document.getElementById('toggle-edit-btn').textContent = 'Edit Mode: OFF';
       document.getElementById('toggle-edit-btn').classList.remove('active');
       renderRoomList();
+    }
+
+    document.getElementById('leave-world-btn').addEventListener('click', () => {
+      if (pendingWorldSaves > 0) {
+        const leaveAnyway = confirm(
+          `There ${pendingWorldSaves === 1 ? 'is' : 'are'} still ${pendingWorldSaves} unsaved ${pendingWorldSaves === 1 ? 'change' : 'changes'} being saved.\n\nLeaving now could lose those changes. Are you sure you want to leave?`
+        );
+        if (!leaveAnyway) return;
+      }
+      performLeaveWorld();
     });
 
     document.getElementById('respawn-btn').addEventListener('click', () => {
@@ -2018,7 +2059,7 @@
       blockData.transparency = parseFloat(document.getElementById('block-transparency-input').value) || 0;
       blockData.canCollide = document.getElementById('block-collidable-checkbox').checked;
 
-      socket.emit('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
+      emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
 
       if (worldBlocks[selectedBlockId]) {
         scene.remove(worldBlocks[selectedBlockId]);
@@ -2374,7 +2415,7 @@
             blockData.z = newZ;
           }
 
-          socket.emit('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
+          emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
 
           scene.remove(worldBlocks[draggedPartId]);
           const updated = buildBlockMesh(blockData);
@@ -2463,7 +2504,7 @@
                   return;
                 }
                 delete currentWorldData.blocks[blockId];
-                socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
+                emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
                 scene.remove(worldBlocks[blockId]);
                 delete worldBlocks[blockId];
                 selectBlock(null);
@@ -2553,7 +2594,7 @@
           };
 
           currentWorldData.blocks[blockKey] = blockData;
-          socket.emit('block_update', { worldName: currentWorldName, action: 'add', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
+          emitWorldSave('block_update', { worldName: currentWorldName, action: 'add', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
 
           const mesh = buildBlockMesh(blockData);
           scene.add(mesh);
@@ -2572,7 +2613,7 @@
               return;
             }
             delete currentWorldData.blocks[blockId];
-            socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
+            emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
             scene.remove(worldBlocks[blockId]);
             delete worldBlocks[blockId];
             selectBlock(null);
@@ -2787,7 +2828,7 @@
       // Duplicate at the exact same transform as the original.
       copy.x=Number(copy.x)||0;
       currentWorldData.blocks[id]=copy;
-      socket.emit('block_update',{worldName:currentWorldName,action:'add',blockData:copy},r=>{
+      emitWorldSave('block_update',{worldName:currentWorldName,action:'add',blockData:copy},r=>{
         if (r && !r.success) {
           delete currentWorldData.blocks[id];
           if (worldBlocks[id]) { scene.remove(worldBlocks[id]); delete worldBlocks[id]; }
@@ -3224,6 +3265,12 @@
         });
       }
     }
+
+    window.addEventListener('beforeunload', (e) => {
+      if (pendingWorldSaves <= 0) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
 
     // --- MAIN GAME LOOP ---
     const clock = new THREE.Clock();
