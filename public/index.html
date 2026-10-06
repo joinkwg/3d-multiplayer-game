@@ -2349,7 +2349,7 @@
     let draggedPartId = null;
 
     window.addEventListener('pointermove', (e) => {
-      if (pointerIsOverKWGUI(e.target) && !isDraggingPart && !isRightClicking) {
+      if (pointerIsOverKWGUI(e.target, e.clientX, e.clientY) && !isDraggingPart && !isRightClicking) {
         clearHoverOutline();
         if (previewMesh) previewMesh.visible = false;
         return;
@@ -2522,7 +2522,7 @@
     window.addEventListener('contextmenu', (e) => e.preventDefault());
 
     window.addEventListener('pointerdown', (e) => {
-      if (pointerIsOverKWGUI(e.target)) return;
+      if (pointerIsOverKWGUI(e.target, e.clientX, e.clientY)) return;
       if (!currentWorldName || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.closest('#customizer-modal')) return;
 
       if (e.button === 2) {
@@ -3398,20 +3398,35 @@
     // existing 3D canvas handlers ignore that interaction.
     let pointerStartedOnUI = false;
 
-    function pointerIsOverKWGUI(target) {
-      if (!target || !target.closest) return false;
-      // The renderer canvas itself is the world. Anything else that is an
-      // interactive control or sits inside a visible UI container counts as UI.
-      if (target === renderer.domElement) return false;
-      return !!target.closest(
-        'button,input,select,textarea,label,a,' +
-        '.panel,.modal,.modal-card,#topbar,#hud,#build-toolbar,' +
-        '#editor-panel,#chat-panel,#chat-wrap,#save-status'
-      );
+    function pointerIsOverKWGUI(target, clientX = null, clientY = null) {
+      // First use the normal event target.
+      if (target && target !== renderer.domElement && target.closest) {
+        if (target.closest(
+          'button,input,select,textarea,label,a,' +
+          '#hud,#build-toolbar,#room-info-label,#chat-container,#chat-panel,#chat-wrap,' +
+          '.modal,.modal-card,#admin-panel,#store-modal,#save-status'
+        )) return true;
+      }
+
+      // More robust check: inspect the actual visual stack under the cursor.
+      // If ANY visible HTML UI element is above the Three.js canvas, this is
+      // a UI click and the world must not receive it.
+      if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
+        const stack = document.elementsFromPoint(clientX, clientY);
+        for (const el of stack) {
+          if (el === renderer.domElement) break;
+          if (el === document.documentElement || el === document.body) continue;
+          const style = getComputedStyle(el);
+          if (style.pointerEvents === 'none' || style.visibility === 'hidden' || style.display === 'none') continue;
+          // Any real HTML element visually above the renderer counts as UI.
+          return true;
+        }
+      }
+      return false;
     }
 
     document.addEventListener('pointerdown', (e) => {
-      pointerStartedOnUI = pointerIsOverKWGUI(e.target);
+      pointerStartedOnUI = pointerIsOverKWGUI(e.target, e.clientX, e.clientY);
     }, true);
 
     document.addEventListener('pointerup', () => {
