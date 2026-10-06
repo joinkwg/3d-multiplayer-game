@@ -310,10 +310,29 @@ async function migrate() {
       PRIMARY KEY (user_id, item_id)
     );
 
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS world_likes (
+      world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (world_id, user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS world_likes_world_idx ON world_likes(world_id);
     CREATE INDEX IF NOT EXISTS chat_world_created_idx ON chat_messages(world_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS store_items_category_visible_idx ON store_items(category, is_visible, created_at DESC);
     CREATE INDEX IF NOT EXISTS user_store_items_user_idx ON user_store_items(user_id);
   `);
+
+  await pool.query('DELETE FROM auth_sessions WHERE expires_at <= NOW()');
 
   // Older multiplayer worlds could be created completely empty. The editor places
   // parts onto existing surfaces, so seed a baseplate only when a world has zero blocks.
@@ -360,8 +379,29 @@ async function worldSummary(row) {
   return {
     name: row.name,
     onlineCount: io.sockets.adapter.rooms.get(room)?.size || 0,
-    ownerUsername: row.owner_username || null
+    ownerUsername: row.owner_username || null,
+    likes: Number(row.like_count || 0),
+    likedByMe: !!row.liked_by_me,
+    createdAt: row.created_at
   };
+}
+
+function sessionTokenHash(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex');
+}
+async function createSession(userId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const hash = sessionTokenHash(token);
+  await pool.query(`INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,NOW() + INTERVAL '30 days')`, [hash,userId]);
+  return token;
+}
+async function loginSocketUser(socket, user) {
+  socket.user = user;
+  socket.user.isAdmin = !!user.is_admin;
+  socketsByUser.set(user.id, socket);
+}
+function authResponse(user, token) {
+  return {success:true,username:user.username,appearance:user.appearance,isAdmin:!!user.is_admin,coins:Number(user.coins || 0),sessionToken:token};
 }
 
 io.on('connection', (socket) => {
@@ -380,10 +420,10 @@ io.on('connection', (socket) => {
         `INSERT INTO users(username,password_hash,appearance) VALUES($1,$2,$3) RETURNING id,username,appearance,is_admin,coins`,
         [username, hash, JSON.stringify(defaultAppearance)]
       );
-      socket.user = r.rows[0];
-      socket.user.isAdmin = !!socket.user.is_admin;
-      socketsByUser.set(socket.user.id, socket);
-      cb({success:true,username:socket.user.username,appearance:socket.user.appearance,isAdmin:false,coins:Number(socket.user.coins || 100)});
+      const user = r.rows[0];
+      await loginSocketUser(socket, user);
+      const sessionToken = await createSession(user.id);
+      cb(authResponse(user, sessionToken));
     } catch (e) {
       console.error(e);
       cb({success:false,message:'Registration failed.'});
@@ -397,26 +437,77 @@ io.on('connection', (socket) => {
       if (!user || !(await bcrypt.compare(String(password || ''), user.password_hash))) {
         return cb({success:false,message:'Invalid username or password.'});
       }
-      socket.user = user;
-      socket.user.isAdmin = !!user.is_admin;
-      socketsByUser.set(user.id, socket);
-      cb({success:true,username:user.username,appearance:user.appearance,isAdmin:user.is_admin,coins:Number(user.coins || 0)});
+      await loginSocketUser(socket, user);
+      const sessionToken = await createSession(user.id);
+      cb(authResponse(user, sessionToken));
     } catch (e) {
       console.error(e);
       cb({success:false,message:'Login failed.'});
     }
   });
 
-  socket.on('get_worlds', async (cb) => {
+  socket.on('resume_session', async ({token} = {}, cb) => {
+    try {
+      const hash = sessionTokenHash(token);
+      const r = await pool.query(`
+        SELECT u.id,u.username,u.appearance,u.is_admin,u.coins
+        FROM auth_sessions s JOIN users u ON u.id=s.user_id
+        WHERE s.token_hash=$1 AND s.expires_at > NOW()
+      `,[hash]);
+      const user = r.rows[0];
+      if (!user) return cb({success:false,message:'Session expired.'});
+      await loginSocketUser(socket,user);
+      await pool.query(`UPDATE auth_sessions SET expires_at=NOW() + INTERVAL '30 days' WHERE token_hash=$1`,[hash]);
+      cb(authResponse(user, token));
+    } catch (e) { console.error(e); cb({success:false,message:'Could not restore session.'}); }
+  });
+
+  socket.on('logout', async ({token} = {}, cb) => {
+    try {
+      if (token) await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1',[sessionTokenHash(token)]);
+      if (socket.user) socketsByUser.delete(socket.user.id);
+      socket.user = null;
+      cb && cb({success:true});
+    } catch (e) { console.error(e); cb && cb({success:false}); }
+  });
+
+  socket.on('get_worlds', async (payload, cb) => {
+    if (typeof payload === 'function') { cb = payload; payload = {}; }
     if (!requireAuth(socket, cb)) return;
     try {
+      const sort = payload?.sort === 'liked' ? 'liked' : 'recent';
+      const order = sort === 'liked' ? 'like_count DESC, w.created_at DESC' : 'w.created_at DESC';
       const r = await pool.query(`
-        SELECT w.*, u.username AS owner_username
-        FROM worlds w LEFT JOIN users u ON u.id=w.owner_user_id
-        ORDER BY w.created_at ASC
-      `);
+        SELECT w.*, u.username AS owner_username,
+          COUNT(wl.user_id)::int AS like_count,
+          BOOL_OR(wl.user_id=$1) AS liked_by_me
+        FROM worlds w
+        LEFT JOIN users u ON u.id=w.owner_user_id
+        LEFT JOIN world_likes wl ON wl.world_id=w.id
+        GROUP BY w.id,u.username
+        ORDER BY ${order}
+      `,[socket.user.id]);
       cb({success:true,worlds:await Promise.all(r.rows.map(worldSummary))});
     } catch (e) { console.error(e); cb({success:false,message:'Could not load worlds.'}); }
+  });
+
+  socket.on('toggle_world_like', async ({worldName}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      const existing = await pool.query('SELECT 1 FROM world_likes WHERE world_id=$1 AND user_id=$2',[world.id,socket.user.id]);
+      let liked;
+      if (existing.rowCount) {
+        await pool.query('DELETE FROM world_likes WHERE world_id=$1 AND user_id=$2',[world.id,socket.user.id]);
+        liked=false;
+      } else {
+        await pool.query('INSERT INTO world_likes(world_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[world.id,socket.user.id]);
+        liked=true;
+      }
+      const count=await pool.query('SELECT COUNT(*)::int AS n FROM world_likes WHERE world_id=$1',[world.id]);
+      cb({success:true,liked,likes:Number(count.rows[0].n||0)});
+    } catch(e){ console.error(e); cb({success:false,message:'Could not update like.'}); }
   });
 
   socket.on('create_world', async ({name}, cb) => {
