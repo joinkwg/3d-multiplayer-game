@@ -417,6 +417,7 @@
     let cloudRotationSpeedMultiplier = 1.0;
     let currentWorldData = null;
     let isAdmin = false;
+    let canEditCurrentWorld = false;
     let chatMessagesLoaded = false;
     
     const otherPlayers = {};
@@ -586,6 +587,7 @@
     function joinSelectedWorld(roomName) {
       currentWorldName = roomName;
       currentCheckpoint = null;
+      canEditCurrentWorld = false;
 
       socket.emit('join_world', { worldName: roomName, appearance: playerAppearance }, (res) => {
         if (!res.success) {
@@ -598,6 +600,10 @@
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('room-info-label').style.display = 'block';
         document.getElementById('current-room-text').textContent = roomName;
+        canEditCurrentWorld = !!res.canEdit;
+        const editBtn = document.getElementById('toggle-edit-btn');
+        editBtn.style.display = canEditCurrentWorld ? 'block' : 'none';
+        editBtn.title = canEditCurrentWorld ? 'Edit this world' : 'Only the world owner or an admin can edit this world';
 
         loadWorldData(res.worldData, res.players, res.selfId);
         document.getElementById('world-chat').style.display = 'block';
@@ -1425,6 +1431,7 @@
     const buildToolbar = document.getElementById('build-toolbar');
 
     toggleEditBtn.addEventListener('click', () => {
+      if (!canEditCurrentWorld) { showToast('Only the world owner or an admin can edit this world.'); return; }
       isEditMode = !isEditMode;
       toggleEditBtn.textContent = isEditMode ? 'Edit Mode: ON' : 'Edit Mode: OFF';
       toggleEditBtn.classList.toggle('active', isEditMode);
@@ -1514,7 +1521,7 @@
       blockData.transparency = parseFloat(document.getElementById('block-transparency-input').value) || 0;
       blockData.canCollide = document.getElementById('block-collidable-checkbox').checked;
 
-      socket.emit('block_update', { worldName: currentWorldName, action: 'update', blockData });
+      socket.emit('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
 
       if (worldBlocks[selectedBlockId]) {
         scene.remove(worldBlocks[selectedBlockId]);
@@ -1829,7 +1836,7 @@
             blockData.z = newZ;
           }
 
-          socket.emit('block_update', { worldName: currentWorldName, action: 'update', blockData });
+          socket.emit('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
 
           scene.remove(worldBlocks[draggedPartId]);
           const updated = buildBlockMesh(blockData);
@@ -1914,7 +1921,7 @@
               const blockId = hitObj.userData.blockId;
               if (currentWorldData && currentWorldData.blocks[blockId]) {
                 delete currentWorldData.blocks[blockId];
-                socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId });
+                socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
                 scene.remove(worldBlocks[blockId]);
                 delete worldBlocks[blockId];
                 selectBlock(null);
@@ -2004,7 +2011,7 @@
           };
 
           currentWorldData.blocks[blockKey] = blockData;
-          socket.emit('block_update', { worldName: currentWorldName, action: 'add', blockData });
+          socket.emit('block_update', { worldName: currentWorldName, action: 'add', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
 
           const mesh = buildBlockMesh(blockData);
           scene.add(mesh);
@@ -2019,7 +2026,7 @@
             selectBlock(hitObj);
           } else if (buildSubTool === 'delete') {
             delete currentWorldData.blocks[blockId];
-            socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId });
+            socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
             scene.remove(worldBlocks[blockId]);
             delete worldBlocks[blockId];
             selectBlock(null);
