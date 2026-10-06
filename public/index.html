@@ -369,7 +369,8 @@
       <button id="tool-place-btn" onclick="setBuildSubTool('place')">Place</button>
       <button id="tool-scale-btn" onclick="setBuildSubTool('scale')">Scale</button>
       <button id="tool-move-btn" onclick="setBuildSubTool('move')">Move</button>
-      <button id="tool-delete-btn" onclick="setBuildSubTool('delete')" style="grid-column: span 2;">Delete</button>
+      <button id="tool-duplicate-btn" onclick="duplicateSelectedBlock()">Duplicate</button>
+      <button id="tool-delete-btn" onclick="setBuildSubTool('delete')">Delete</button>
     </div>
 
     <!-- Selected Part Properties UI -->
@@ -993,6 +994,11 @@
         chatMessagesLoaded = true;
       });
     }
+
+    const worldChatInput = document.getElementById('world-chat-input');
+    worldChatInput.addEventListener('focus', () => {
+      ['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].forEach(k => keys[k]=false);
+    });
 
     document.getElementById('world-chat-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -2706,15 +2712,50 @@
     document.getElementById('admin-store-file').addEventListener('change',updateAdminFitPreview);
     ['admin-store-size','admin-store-offset-x','admin-store-offset-y','admin-store-offset-z'].forEach(id=>document.getElementById(id).addEventListener('input',updateAdminFitPreview));
 
+    function duplicateSelectedBlock() {
+      if (!isEditMode || !selectedBlockId || !currentWorldData?.blocks?.[selectedBlockId]) {
+        showToast('Select a part first.');
+        return;
+      }
+      const original=currentWorldData.blocks[selectedBlockId];
+      if (original.id === 'baseplate' || original.shape === 'baseplate') {
+        showToast('The baseplate cannot be duplicated.');
+        return;
+      }
+      if (Object.keys(currentWorldData.blocks).length >= 1400) {
+        showToast('Part limit reached (1400/1400 parts).');
+        return;
+      }
+      const id=`duplicate_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+      const copy=JSON.parse(JSON.stringify(original));
+      copy.id=id;
+      // Offset by one stud so the duplicate is immediately visible/selectable.
+      copy.x=(Number(copy.x)||0)+1;
+      currentWorldData.blocks[id]=copy;
+      socket.emit('block_update',{worldName:currentWorldName,action:'add',blockData:copy},r=>{
+        if (r && !r.success) {
+          delete currentWorldData.blocks[id];
+          if (worldBlocks[id]) { scene.remove(worldBlocks[id]); delete worldBlocks[id]; }
+          showToast(r.message || 'Could not duplicate part.');
+          updatePartCounter();
+        }
+      });
+      const mesh=buildBlockMesh(copy);
+      scene.add(mesh);
+      worldBlocks[id]=mesh;
+      selectBlock(mesh);
+      updatePartCounter();
+      showToast('Part duplicated.');
+    }
+
     // --- ACCURATE SHAPE-SPECIFIC COLLISION & PHYSICS ENGINE ---
     // Keep the exact single-player input/physics tuning.
     const keys = {};
     window.addEventListener('keydown', (e) => {
       const key = (typeof e.key === 'string') ? e.key.toLowerCase() : '';
-      if (key) keys[key] = true;
-
       const activeTag = document.activeElement ? document.activeElement.tagName : '';
       if (activeTag === 'INPUT' || activeTag === 'SELECT' || activeTag === 'TEXTAREA') return;
+      if (key) keys[key] = true;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (isEditMode && selectedBlockId) {
@@ -2780,74 +2821,51 @@
 
     // Precise shape collision check and resolution against player position (px, py, pz)
     function checkPlayerShapeCollision(px, py, pz, b) {
-      const shape = b.shape || 'box';
-      const sx = b.scaleX || 1;
-      const sy = b.scaleY || 1;
-      const sz = b.scaleZ || 1;
-      
-      const pMinX = px - PLAYER_RADIUS;
-      const pMaxX = px + PLAYER_RADIUS;
-      const pMinY = py;
-      const pMaxY = py + PLAYER_HEIGHT;
-      const pMinZ = pz - PLAYER_RADIUS;
-      const pMaxZ = pz + PLAYER_RADIUS;
+      const shape=b.shape || 'box';
+      const sx=Math.max(0.001,Math.abs(b.scaleX || 1));
+      const sy=Math.max(0.001,Math.abs(b.scaleY || 1));
+      const sz=Math.max(0.001,Math.abs(b.scaleZ || 1));
+      const pMinX=px-PLAYER_RADIUS,pMaxX=px+PLAYER_RADIUS;
+      const pMinY=py,pMaxY=py+PLAYER_HEIGHT;
+      const pMinZ=pz-PLAYER_RADIUS,pMaxZ=pz+PLAYER_RADIUS;
 
       if (shape === 'sphere') {
-        const radius = sx * 0.5;
-        const cx = b.x, cy = b.y, cz = b.z;
-        // Closest point on player AABB to sphere center
-        const closestX = Math.max(pMinX, Math.min(cx, pMaxX));
-        const closestY = Math.max(pMinY, Math.min(cy, pMaxY));
-        const closestZ = Math.max(pMinZ, Math.min(cz, pMaxZ));
-        
-        const distX = closestX - cx;
-        const distY = closestY - cy;
-        const distZ = closestZ - cz;
-        const distSq = distX * distX + distY * distY + distZ * distZ;
-
-        if (distSq < radius * radius) {
-          return { collided: true, type: 'sphere' };
-        }
+        // The rendered sphere becomes an ellipsoid under non-uniform scaling.
+        // Transform the player's closest point into unit-sphere space.
+        const rx=sx*0.5, ry=sy*0.5, rz=sz*0.5;
+        const qx=Math.max(pMinX,Math.min(b.x,pMaxX));
+        const qy=Math.max(pMinY,Math.min(b.y,pMaxY));
+        const qz=Math.max(pMinZ,Math.min(b.z,pMaxZ));
+        const nx=(qx-b.x)/rx, ny=(qy-b.y)/ry, nz=(qz-b.z)/rz;
+        if (nx*nx+ny*ny+nz*nz < 1) return {collided:true,type:'sphere'};
       } else if (shape === 'cylinder') {
-        const radius = Math.max(sx, sz) * 0.5;
-        const halfH = sy * 0.5;
-        const cyMin = b.y - halfH;
-        const cyMax = b.y + halfH;
-
-        // Check vertical overlap first
-        if (pMaxY > cyMin && pMinY < cyMax) {
-          // Check horizontal distance from cylinder center (b.x, b.z)
-          const closestX = Math.max(pMinX, Math.min(b.x, pMaxX));
-          const closestZ = Math.max(pMinZ, Math.min(b.z, pMaxZ));
-          const dx = closestX - b.x;
-          const dz = closestZ - b.z;
-          if (dx * dx + dz * dz < radius * radius) {
-            return { collided: true, type: 'cylinder' };
-          }
+        // Match Three.js' scaled cylinder: elliptical X/Z footprint, exact Y height.
+        const rx=sx*0.5, rz=sz*0.5, halfH=sy*0.5;
+        if (pMaxY > b.y-halfH && pMinY < b.y+halfH) {
+          const qx=Math.max(pMinX,Math.min(b.x,pMaxX));
+          const qz=Math.max(pMinZ,Math.min(b.z,pMaxZ));
+          const nx=(qx-b.x)/rx, nz=(qz-b.z)/rz;
+          if (nx*nx+nz*nz < 1) return {collided:true,type:'cylinder'};
         }
       } else if (shape === 'wedge') {
-        // Wedge bounds: slope goes from low at front (z = -sz/2) to high at back (z = sz/2) or similar
-        const bBox = getBlockAABB(b);
-        if (checkAABBOverlap({minX: pMinX, maxX: pMaxX, minY: pMinY, maxY: pMaxY, minZ: pMinZ, maxZ: pZ = pMaxZ}, bBox)) {
-          // Refine wedge ramp check: height increases linearly along Z
-          const localZ = (pz - b.x) / sz; // normalized local coordinate
-          const rampHeightMax = b.y + sy / 2;
-          const rampHeightMin = b.y - sy / 2;
-          // Ramp slope formula
-          const currentRampHeight = rampHeightMin + (localZ + 0.5) * sy;
-          if (py <= currentRampHeight + 0.1 && py >= rampHeightMin - 0.5) {
-            return { collided: true, type: 'wedge', topY: currentRampHeight };
+        const bBox=getBlockAABB(b);
+        if (checkAABBOverlap({minX:pMinX,maxX:pMaxX,minY:pMinY,maxY:pMaxY,minZ:pMinZ,maxZ:pMaxZ},bBox)) {
+          // Visual wedge rises from +Z (low) toward -Z (high), matching createWedgeGeometry().
+          // Sample the player's center plus front/back edges so the capsule-sized player
+          // contacts the actual ramp instead of the wedge's invisible bounding box.
+          const sampleZ=Math.max(bBox.minZ,Math.min(bBox.maxZ,pz));
+          const t=1-((sampleZ-bBox.minZ)/sz);
+          const topY=bBox.minY + Math.max(0,Math.min(1,t))*sy;
+          if (pMinY <= topY + 0.08 && pMaxY > bBox.minY) {
+            return {collided:true,type:'wedge',topY};
           }
         }
       } else {
-        // Default Box AABB
-        const bBox = getBlockAABB(b);
-        if (checkAABBOverlap({minX: pMinX, maxX: pMaxX, minY: pMinY, maxY: pMaxY, minZ: pMinZ, maxZ: pMaxZ}, bBox)) {
-          return { collided: true, type: 'box', bBox };
-        }
+        const bBox=getBlockAABB(b);
+        if (checkAABBOverlap({minX:pMinX,maxX:pMaxX,minY:pMinY,maxY:pMaxY,minZ:pMinZ,maxZ:pMaxZ},bBox))
+          return {collided:true,type:'box',bBox};
       }
-
-      return { collided: false };
+      return {collided:false};
     }
 
     function respawnPlayer() {
