@@ -939,13 +939,22 @@
 
     function updateSaveStatusUI() {
       const el = document.getElementById('save-status');
+      const leaveBtn = document.getElementById('leave-world-btn');
       if (!el) return;
       if (pendingWorldSaves > 0) {
         el.style.display = 'flex';
         el.textContent = pendingWorldSaves === 1 ? 'Saving change...' : `Saving ${pendingWorldSaves} changes...`;
+        if (leaveBtn) {
+          leaveBtn.textContent = 'Saving...';
+          leaveBtn.style.opacity = '0.65';
+        }
       } else {
         el.style.display = 'flex';
         el.textContent = 'All changes saved';
+        if (leaveBtn) {
+          leaveBtn.textContent = 'Leave World';
+          leaveBtn.style.opacity = '1';
+        }
         clearTimeout(updateSaveStatusUI.hideTimer);
         updateSaveStatusUI.hideTimer = setTimeout(() => {
           if (pendingWorldSaves === 0 && el) el.style.display = 'none';
@@ -993,7 +1002,7 @@
     document.getElementById('leave-world-btn').addEventListener('click', () => {
       if (pendingWorldSaves > 0) {
         const leaveAnyway = confirm(
-          `There ${pendingWorldSaves === 1 ? 'is' : 'are'} still ${pendingWorldSaves} unsaved ${pendingWorldSaves === 1 ? 'change' : 'changes'} being saved.\n\nLeaving now could lose those changes. Are you sure you want to leave?`
+          `There ${pendingWorldSaves === 1 ? 'is' : 'are'} still ${pendingWorldSaves} unsaved ${pendingWorldSaves === 1 ? 'change' : 'changes'} being saved.\n\nThe server has not finished saving them yet. Leaving now could lose those changes. Are you sure you want to leave?`
         );
         if (!leaveAnyway) return;
       }
