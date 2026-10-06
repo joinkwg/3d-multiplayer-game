@@ -2506,29 +2506,59 @@
     document.querySelectorAll('.home-tab').forEach(b => b.addEventListener('click', () => switchHomeTab(b.dataset.homeTab)));
 
     function makeNoneInventoryItem(category) { return {id:null, category, name:'None', assetKind:'none'}; }
+    const BUILTIN_HATS = [
+      {id:'builtin-hat-none', category:'hat', name:'None', assetKind:'builtin', builtinValue:'none'},
+      {id:'builtin-hat-cap', category:'hat', name:'Cap', assetKind:'builtin', builtinValue:'cap'},
+      {id:'builtin-hat-tophat', category:'hat', name:'Top Hat', assetKind:'builtin', builtinValue:'tophat'},
+      {id:'builtin-hat-crown', category:'hat', name:'Crown', assetKind:'builtin', builtinValue:'crown'}
+    ];
+    const BUILTIN_HEADS = [
+      {id:'builtin-head-sphere', category:'head_shape', name:'Sphere', assetKind:'builtin', builtinValue:'sphere'},
+      {id:'builtin-head-cube', category:'head_shape', name:'Cube', assetKind:'builtin', builtinValue:'cube'},
+      {id:'builtin-head-cylinder', category:'head_shape', name:'Cylinder', assetKind:'builtin', builtinValue:'cylinder'},
+      {id:'builtin-head-headless', category:'head_shape', name:'Headless', assetKind:'builtin', builtinValue:'headless'}
+    ];
     function selectedIdForCategory(cat) {
       const slot={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'}[cat];
       return avatarDraft ? avatarDraft[slot] : null;
     }
-    function setDraftItem(cat,id) {
+    function isInventoryItemSelected(item){
+      if(!avatarDraft)return false;
+      if(item.assetKind==='builtin'){
+        if(item.category==='hat') return !avatarDraft.hatItemId && (avatarDraft.hat||'none')===item.builtinValue;
+        if(item.category==='head_shape') return !avatarDraft.headShapeItemId && (avatarDraft.headShape||'sphere')===item.builtinValue;
+      }
+      return Number(item.id||0)===Number(selectedIdForCategory(item.category)||0);
+    }
+    function setDraftInventoryItem(item) {
+      const cat=item.category;
       const slot={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'}[cat];
-      avatarDraft[slot]=id;
-      if(cat==='hat' && id) avatarDraft.hat='none';
-      if(cat==='head_shape' && id) avatarDraft.headShape='sphere';
+      if(item.assetKind==='builtin'){
+        avatarDraft[slot]=null;
+        if(cat==='hat') avatarDraft.hat=item.builtinValue;
+        if(cat==='head_shape') avatarDraft.headShape=item.builtinValue;
+      } else {
+        avatarDraft[slot]=item.id?Number(item.id):null;
+        if(cat==='hat' && item.id) avatarDraft.hat='none';
+        if(cat==='head_shape' && item.id) avatarDraft.headShape='sphere';
+      }
       renderAvatarInventory(); updateEditorAvatar();
     }
     function renderAvatarInventory() {
       const grid=document.getElementById('avatar-inventory-grid'); if(!grid)return; grid.innerHTML='';
-      const items=[makeNoneInventoryItem(avatarEditorCategory), ...ownedStoreItems.filter(i=>i.category===avatarEditorCategory)];
-      const selected=Number(selectedIdForCategory(avatarEditorCategory)||0);
+      let items=[];
+      if(avatarEditorCategory==='hat') items=[...BUILTIN_HATS,...ownedStoreItems.filter(i=>i.category==='hat')];
+      else if(avatarEditorCategory==='head_shape') items=[...BUILTIN_HEADS,...ownedStoreItems.filter(i=>i.category==='head_shape')];
+      else items=[makeNoneInventoryItem(avatarEditorCategory), ...ownedStoreItems.filter(i=>i.category===avatarEditorCategory)];
       items.forEach(item=>{
-        const card=document.createElement('button'); card.className='inventory-card'+(Number(item.id||0)===selected?' selected':'');
+        const card=document.createElement('button'); card.className='inventory-card'+(isInventoryItemSelected(item)?' selected':'');
         const thumb=document.createElement('div'); thumb.className='inventory-thumb';
         if(item.assetKind==='image'){const img=document.createElement('img');img.src=item.assetUrl;img.alt=item.name;thumb.appendChild(img);}
         else if(item.assetKind==='glb') renderMeshThumbnail(thumb,item);
+        else if(item.assetKind==='builtin') renderBuiltinThumbnail(thumb,item);
         else thumb.textContent='NONE';
         const name=document.createElement('div');name.className='inventory-name';name.textContent=item.name;
-        card.append(thumb,name); card.onclick=()=>setDraftItem(avatarEditorCategory,item.id?Number(item.id):null); grid.appendChild(card);
+        card.append(thumb,name); card.onclick=()=>setDraftInventoryItem(item); grid.appendChild(card);
       });
     }
     document.querySelectorAll('.inventory-tab').forEach(b=>b.addEventListener('click',()=>{avatarEditorCategory=b.dataset.invCategory;document.querySelectorAll('.inventory-tab').forEach(x=>x.classList.toggle('active',x===b));renderAvatarInventory();}));
@@ -2550,13 +2580,43 @@
     [['av-head-color','headColor'],['av-torso-color','torsoColor'],['av-left-arm-color','leftArmColor'],['av-right-arm-color','rightArmColor'],['av-left-leg-color','leftLegColor'],['av-right-leg-color','rightLegColor']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{if(!avatarDraft)return;avatarDraft[k]=e.target.value;updateEditorAvatar();}));
     document.getElementById('save-avatar-editor-btn').addEventListener('click',()=>{const b=document.getElementById('save-avatar-editor-btn');b.disabled=true;b.textContent='SAVING...';socket.emit('save_appearance',avatarDraft,res=>{b.disabled=false;b.textContent='SAVE APPEARANCE';if(!res||!res.success)return showToast((res&&res.message)||'Could not save appearance.');playerAppearance=res.appearance||avatarDraft;equippedCosmetics=res.cosmetics||cosmeticsForAppearance(playerAppearance);localStorage.setItem('sp_player_appearance',JSON.stringify(playerAppearance));avatarDraft=JSON.parse(JSON.stringify(playerAppearance));renderAvatarInventory();updateEditorAvatar();showToast('Appearance saved.');});});
 
-    // Small static Three.js thumbnails for GLB store/inventory cards.
-    function renderMeshThumbnail(container,item){
+    function setupThumbRenderer(container){
       const canvas=document.createElement('canvas');canvas.className='mesh-thumb-canvas';container.appendChild(canvas);
-      const r=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});const w=Math.max(container.clientWidth||150,80),h=Math.max(container.clientHeight||78,60);r.setSize(w,h,false);
-      const sc=new THREE.Scene();const cam=new THREE.PerspectiveCamera(38,w/h,.1,100);cam.position.set(0,1.2,4);cam.lookAt(0,1.15,0);sc.add(new THREE.AmbientLight(0xffffff,.9));const dl=new THREE.DirectionalLight(0xffffff,1);dl.position.set(4,7,5);sc.add(dl);
-      const app={...playerAppearance};if(item.category==='hat'){app.hat='none';app.hatItemId=item.id;}else{app.headShape='sphere';app.headShapeItemId=item.id;}const av=buildBlockyAvatar(app,{[item.category]:item});sc.add(av);
-      let frames=0;(function draw(){r.render(sc,cam);if(frames++<45)requestAnimationFrame(draw);})();
+      const w=Math.max(container.clientWidth||150,80),h=Math.max(container.clientHeight||78,60);
+      const r=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});r.setSize(w,h,false);r.setClearColor(0x000000,0);
+      const sc=new THREE.Scene();sc.add(new THREE.AmbientLight(0xffffff,1));const dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(4,7,5);sc.add(dl);
+      const cam=new THREE.PerspectiveCamera(34,w/h,.01,100);
+      return {r,sc,cam};
+    }
+    function frameThumbObject(obj,cam){
+      obj.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(obj);if(box.isEmpty())return;
+      const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
+      obj.position.sub(center);obj.updateMatrixWorld(true);
+      const maxDim=Math.max(size.x,size.y,size.z,.001);cam.position.set(0,maxDim*.12,maxDim*2.2);cam.lookAt(0,0,0);cam.near=maxDim/100;cam.far=maxDim*20;cam.updateProjectionMatrix();
+    }
+    function renderBuiltinThumbnail(container,item){
+      const {r,sc,cam}=setupThumbRenderer(container);let obj;
+      if(item.category==='hat'){
+        if(item.builtinValue==='none'){container.innerHTML='NONE';return;}
+        obj=createHatMesh(item.builtinValue,0xffff00);
+      } else {
+        const mat=new THREE.MeshLambertMaterial({color:0xffff00});
+        if(item.builtinValue==='sphere')obj=new THREE.Mesh(new THREE.SphereGeometry(.55,24,16),mat);
+        else if(item.builtinValue==='cube')obj=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mat);
+        else if(item.builtinValue==='cylinder')obj=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,1,24),mat);
+        else {container.innerHTML='HEADLESS';return;}
+      }
+      if(!obj){container.innerHTML=item.name.toUpperCase();return;}sc.add(obj);frameThumbObject(obj,cam);r.render(sc,cam);
+    }
+    // Close-up static thumbnails: GLB cosmetics only, never the full avatar.
+    function renderMeshThumbnail(container,item){
+      const {r,sc,cam}=setupThumbRenderer(container);
+      loadGLBClone(item.assetUrl).then(obj=>{
+        const meta=item.metadata||{};const box=new THREE.Box3().setFromObject(obj);const size=box.getSize(new THREE.Vector3());const maxDim=Math.max(size.x,size.y,size.z,.001);
+        obj.scale.setScalar((1/maxDim)*(Number(meta.size)||1));
+        obj.position.set(Number(meta.offsetX)||0,Number(meta.offsetY)||0,Number(meta.offsetZ)||0);
+        sc.add(obj);frameThumbObject(obj,cam);r.render(sc,cam);
+      }).catch(()=>{container.textContent=item.category==='hat'?'3D HAT':'3D HEAD';});
     }
 
     // Admin GLB live fitting preview before upload.
