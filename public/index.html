@@ -1920,6 +1920,10 @@
             if (hitObj.userData.isBlock) {
               const blockId = hitObj.userData.blockId;
               if (currentWorldData && currentWorldData.blocks[blockId]) {
+                if (blockId === 'baseplate' || currentWorldData.blocks[blockId].shape === 'baseplate') {
+                  showToast('The baseplate cannot be deleted. You can resize it instead.');
+                  return;
+                }
                 delete currentWorldData.blocks[blockId];
                 socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
                 scene.remove(worldBlocks[blockId]);
@@ -2025,6 +2029,10 @@
           if (buildSubTool === 'select' || buildSubTool === 'scale' || buildSubTool === 'move') {
             selectBlock(hitObj);
           } else if (buildSubTool === 'delete') {
+            if (blockId === 'baseplate' || currentWorldData.blocks[blockId]?.shape === 'baseplate') {
+              showToast('The baseplate cannot be deleted. You can resize it instead.');
+              return;
+            }
             delete currentWorldData.blocks[blockId];
             socket.emit('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
             scene.remove(worldBlocks[blockId]);
@@ -2476,14 +2484,9 @@
         }
       }
 
-      // Ground floor fallback plane
-      if (pos.y <= 0.05) {
-        pos.y = 0.05;
-        velocityY = 0;
-        isGrounded = true;
-      }
-
-      if (hitKill || pos.y < -35) {
+      // No invisible ground plane: if there is no collidable part below the player,
+      // gravity keeps pulling them into the void. Respawn after falling far enough.
+      if (hitKill || pos.y < -50) {
         respawnPlayer();
         return;
       }
