@@ -301,6 +301,17 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS friendships_requester_idx ON friendships(requester_id,status);
     CREATE INDEX IF NOT EXISTS friendships_addressee_idx ON friendships(addressee_id,status);
+    CREATE TABLE IF NOT EXISTS notifications (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      type VARCHAR(40) NOT NULL,
+      message VARCHAR(240) NOT NULL,
+      is_read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id,created_at DESC);
+    CREATE INDEX IF NOT EXISTS notifications_unread_idx ON notifications(user_id,is_read);
 
     CREATE TABLE IF NOT EXISTS store_items (
       id BIGSERIAL PRIMARY KEY,
@@ -523,6 +534,43 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb && cb({success:false}); }
   });
 
+  socket.on('get_notifications', async (_, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const r=await pool.query(`
+        SELECT n.id,n.type,n.message,n.is_read AS "isRead",n.created_at AS "createdAt",
+               u.username AS "actorUsername"
+        FROM notifications n
+        LEFT JOIN users u ON u.id=n.actor_user_id
+        WHERE n.user_id=$1
+        ORDER BY n.created_at DESC
+        LIMIT 50
+      `,[socket.user.id]);
+      cb({success:true,notifications:r.rows,unread:r.rows.filter(x=>!x.isRead).length});
+    } catch(e){console.error(e);cb({success:false,message:'Could not load notifications.'});}
+  });
+
+  socket.on('mark_notifications_read', async ({ids} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const clean=[...new Set((Array.isArray(ids)?ids:[]).map(Number).filter(Number.isSafeInteger))];
+      if(clean.length) await pool.query(
+        'UPDATE notifications SET is_read=TRUE WHERE user_id=$1 AND id=ANY($2::bigint[])',
+        [socket.user.id,clean]
+      );
+      else await pool.query('UPDATE notifications SET is_read=TRUE WHERE user_id=$1',[socket.user.id]);
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not update notifications.'});}
+  });
+
+  socket.on('clear_notifications', async (_, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      await pool.query('DELETE FROM notifications WHERE user_id=$1',[socket.user.id]);
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not clear notifications.'});}
+  });
+
   socket.on('get_friends', async (_, cb) => {
     if (!requireAuth(socket, cb)) return;
     try {
@@ -582,6 +630,9 @@ io.on('connection', (socket) => {
       }
       await pool.query(`INSERT INTO friendships(requester_id,addressee_id,status)
         VALUES($1,$2,'pending')`,[socket.user.id,target.id]);
+      await pool.query(`INSERT INTO notifications(user_id,actor_user_id,type,message)
+        VALUES($1,$2,'friend_request',$3)`,
+        [target.id,socket.user.id,`${socket.user.username} sent you a friend request.`]);
       cb({success:true,state:'outgoing',message:'Friend request sent.'});
     } catch(e){console.error(e);cb({success:false,message:'Could not send friend request.'});}
   });
@@ -600,6 +651,11 @@ io.on('connection', (socket) => {
             WHERE requester_id=$1 AND addressee_id=$2 AND status='pending' RETURNING requester_id`,
             [other.id,socket.user.id]);
       if(!result.rowCount)return cb({success:false,message:'Friend request is no longer available.'});
+      if(accept){
+        await pool.query(`INSERT INTO notifications(user_id,actor_user_id,type,message)
+          VALUES($1,$2,'friend_accepted',$3)`,
+          [other.id,socket.user.id,`${socket.user.username} accepted your friend request.`]);
+      }
       cb({success:true});
     } catch(e){console.error(e);cb({success:false,message:'Could not update friend request.'});}
   });
