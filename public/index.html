@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KWG 3D Online</title>
+  <!-- Avatar Editor V2.5: stable shared thumbnails + GLB inventory fix -->
   <style>
     body { margin: 0; overflow: hidden; font-family: 'Courier New', Courier, monospace, sans-serif; user-select: none; }
     
@@ -1393,6 +1394,19 @@
       }, undefined, (err) => console.warn('Cosmetic GLB failed to load:', url, err));
     }
 
+    function loadGLBClone(url) {
+      return new Promise((resolve, reject) => {
+        if (!url || !THREE.GLTFLoader) { reject(new Error('GLB loader unavailable')); return; }
+        const cached = cosmeticGLBCache.get(url);
+        if (cached) { resolve(cached.clone(true)); return; }
+        const loader = new THREE.GLTFLoader();
+        loader.load(url, (gltf) => {
+          cosmeticGLBCache.set(url, gltf.scene);
+          resolve(gltf.scene.clone(true));
+        }, undefined, reject);
+      });
+    }
+
     function attachNormalizedGLB(anchor, item, targetSize) {
       if (!item || item.assetKind !== 'glb' || !item.assetUrl) return;
       loadGLBScene(item.assetUrl, (model) => {
@@ -2553,11 +2567,11 @@
       items.forEach(item=>{
         const card=document.createElement('button'); card.className='inventory-card'+(isInventoryItemSelected(item)?' selected':'');
         const thumb=document.createElement('div'); thumb.className='inventory-thumb';
-        if(item.assetKind==='image'){const img=document.createElement('img');img.src=item.assetUrl;img.alt=item.name;thumb.appendChild(img);}
+        if(item && item.assetKind==='image'){const img=document.createElement('img');img.src=item.assetUrl||'';img.alt=item.name||'';thumb.appendChild(img);}
         else if(item.assetKind==='glb') renderMeshThumbnail(thumb,item);
         else if(item.assetKind==='builtin') renderBuiltinThumbnail(thumb,item);
         else thumb.textContent='NONE';
-        const name=document.createElement('div');name.className='inventory-name';name.textContent=item.name;
+        const name=document.createElement('div');name.className='inventory-name';name.textContent=item.name||'Unnamed Item';
         card.append(thumb,name); card.onclick=()=>setDraftInventoryItem(item); grid.appendChild(card);
       });
     }
@@ -2580,32 +2594,43 @@
     [['av-head-color','headColor'],['av-torso-color','torsoColor'],['av-left-arm-color','leftArmColor'],['av-right-arm-color','rightArmColor'],['av-left-leg-color','leftLegColor'],['av-right-leg-color','rightLegColor']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{if(!avatarDraft)return;avatarDraft[k]=e.target.value;updateEditorAvatar();}));
     document.getElementById('save-avatar-editor-btn').addEventListener('click',()=>{const b=document.getElementById('save-avatar-editor-btn');b.disabled=true;b.textContent='SAVING...';socket.emit('save_appearance',avatarDraft,res=>{b.disabled=false;b.textContent='SAVE APPEARANCE';if(!res||!res.success)return showToast((res&&res.message)||'Could not save appearance.');playerAppearance=res.appearance||avatarDraft;equippedCosmetics=res.cosmetics||cosmeticsForAppearance(playerAppearance);localStorage.setItem('sp_player_appearance',JSON.stringify(playerAppearance));avatarDraft=JSON.parse(JSON.stringify(playerAppearance));renderAvatarInventory();updateEditorAvatar();showToast('Appearance saved.');});});
 
-    // Thumbnail rendering uses a temporary WebGL context, renders ONE frame to an image,
-    // then immediately releases the context. This prevents thumbnail cards from exhausting
-    // the browser's WebGL context limit and breaking the avatar/world renderer.
-    function thumbImageFromObject(container,obj){
-      const canvas=document.createElement('canvas');
-      const w=Math.max(container.clientWidth||150,80),h=Math.max(container.clientHeight||78,60);
-      canvas.width=w; canvas.height=h;
-      const r=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,preserveDrawingBuffer:true});
-      r.setSize(w,h,false); r.setClearColor(0x000000,0);
-      const sc=new THREE.Scene(); sc.add(new THREE.AmbientLight(0xffffff,1));
-      const dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(4,7,5);sc.add(dl);
-      const cam=new THREE.PerspectiveCamera(34,w/h,.01,100);
-      sc.add(obj); obj.updateMatrixWorld(true);
-      const box=new THREE.Box3().setFromObject(obj);
-      if(!box.isEmpty()){
-        const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
-        obj.position.sub(center); obj.updateMatrixWorld(true);
-        const maxDim=Math.max(size.x,size.y,size.z,.001);
-        cam.position.set(0,maxDim*.10,maxDim*2.35);cam.lookAt(0,0,0);
-        cam.near=maxDim/100;cam.far=maxDim*20;cam.updateProjectionMatrix();
+    // Thumbnail rendering reuses ONE offscreen WebGL renderer for every card.
+    // This avoids exhausting browser WebGL contexts and keeps the avatar/world renderers stable.
+    let thumbnailRenderer = null;
+    let thumbnailCanvas = null;
+    function getThumbnailRenderer(w, h) {
+      if (!thumbnailRenderer) {
+        thumbnailCanvas = document.createElement('canvas');
+        thumbnailRenderer = new THREE.WebGLRenderer({canvas:thumbnailCanvas, antialias:true, alpha:true, preserveDrawingBuffer:true});
+        thumbnailRenderer.setClearColor(0x000000, 0);
       }
-      r.render(sc,cam);
-      const img=document.createElement('img');img.alt='';img.src=canvas.toDataURL('image/png');
-      img.style.maxWidth='100%';img.style.maxHeight='100%';
-      container.innerHTML='';container.appendChild(img);
-      r.dispose(); r.forceContextLoss?.();
+      thumbnailRenderer.setSize(w, h, false);
+      return thumbnailRenderer;
+    }
+    function thumbImageFromObject(container,obj){
+      try {
+        const w=Math.max(container.clientWidth||150,80),h=Math.max(container.clientHeight||78,60);
+        const r=getThumbnailRenderer(w,h);
+        const sc=new THREE.Scene(); sc.add(new THREE.AmbientLight(0xffffff,1));
+        const dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(4,7,5);sc.add(dl);
+        const cam=new THREE.PerspectiveCamera(34,w/h,.01,100);
+        sc.add(obj); obj.updateMatrixWorld(true);
+        const box=new THREE.Box3().setFromObject(obj);
+        if(!box.isEmpty()){
+          const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
+          obj.position.sub(center); obj.updateMatrixWorld(true);
+          const maxDim=Math.max(size.x,size.y,size.z,.001);
+          cam.position.set(0,maxDim*.10,maxDim*2.35);cam.lookAt(0,0,0);
+          cam.near=Math.max(maxDim/100,.001);cam.far=maxDim*20;cam.updateProjectionMatrix();
+        }
+        r.render(sc,cam);
+        const img=document.createElement('img');img.alt='';img.src=thumbnailCanvas.toDataURL('image/png');
+        img.style.maxWidth='100%';img.style.maxHeight='100%';
+        container.innerHTML='';container.appendChild(img);
+      } catch (err) {
+        console.warn('Thumbnail render failed:', err);
+        container.textContent='3D ITEM';
+      }
     }
     function renderBuiltinThumbnail(container,item){
       let obj;
@@ -2624,14 +2649,13 @@
     }
     // Close-up static thumbnails: GLB cosmetic only, never the full avatar.
     function renderMeshThumbnail(container,item){
+      if (!container || !item || !item.assetUrl) { if(container) container.textContent='3D ITEM'; return; }
       container.textContent='LOADING...';
       loadGLBClone(item.assetUrl).then(obj=>{
-        // Normalize only for the thumbnail. Fit metadata is for wearing on the avatar and
-        // should not make a store thumbnail tiny/off-center.
         const box=new THREE.Box3().setFromObject(obj);const size=box.getSize(new THREE.Vector3());
         const maxDim=Math.max(size.x,size.y,size.z,.001);obj.scale.setScalar(1/maxDim);
         thumbImageFromObject(container,obj);
-      }).catch(()=>{container.textContent=item.category==='hat'?'3D HAT':'3D HEAD';});
+      }).catch(err=>{console.warn('GLB thumbnail failed:',err);container.textContent=item.category==='hat'?'3D HAT':'3D HEAD';});
     }
 
     // Admin GLB live fitting preview before upload.
@@ -2645,8 +2669,8 @@
     // Keep the exact single-player input/physics tuning.
     const keys = {};
     window.addEventListener('keydown', (e) => {
-      const key = e.key.toLowerCase();
-      keys[key] = true;
+      const key = (typeof e.key === 'string') ? e.key.toLowerCase() : '';
+      if (key) keys[key] = true;
 
       const activeTag = document.activeElement ? document.activeElement.tagName : '';
       if (activeTag === 'INPUT' || activeTag === 'SELECT' || activeTag === 'TEXTAREA') return;
@@ -2665,7 +2689,7 @@
         }
       }
     });
-    window.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+    window.addEventListener('keyup', (e) => { const key = (typeof e.key === 'string') ? e.key.toLowerCase() : ''; if (key) keys[key] = false; });
 
     let velocityY = 0;
     const gravity = -0.0055;
