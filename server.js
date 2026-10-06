@@ -5,10 +5,16 @@ const express = require('express');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT || 3000);
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) throw new Error('DATABASE_URL is required.');
+
+const SUPABASE_URL = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '');
+const SUPABASE_STORE_BUCKET = String(process.env.SUPABASE_STORE_BUCKET || 'store-assets');
+const STORE_CATEGORIES = new Set(['eyes','mouth','torso_decal','hat','head_shape']);
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -17,7 +23,7 @@ const pool = new Pool({
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, { maxHttpBufferSize: 10 * 1024 * 1024 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -30,7 +36,12 @@ const defaultAppearance = {
   leftArmColor: '#0015ff',
   rightArmColor: '#0015ff',
   leftLegColor: '#000000',
-  rightLegColor: '#000000'
+  rightLegColor: '#000000',
+  eyesItemId: null,
+  mouthItemId: null,
+  torsoDecalItemId: null,
+  hatItemId: null,
+  headShapeItemId: null
 };
 
 function cleanUsername(v) {
@@ -42,6 +53,10 @@ function cleanWorldName(v) {
 function validColor(v) {
   return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
 }
+function cleanStoreItemId(v) {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
 function sanitizeAppearance(a = {}) {
   return {
     hat: ['none','black_tophat','blue_tophat','red_tophat','pink_tophat','pink_bow','blue_bow','white_bow','black_cat_ears','pink_cat_ears'].includes(a.hat) ? a.hat : defaultAppearance.hat,
@@ -51,8 +66,178 @@ function sanitizeAppearance(a = {}) {
     leftArmColor: validColor(a.leftArmColor) ? a.leftArmColor : defaultAppearance.leftArmColor,
     rightArmColor: validColor(a.rightArmColor) ? a.rightArmColor : defaultAppearance.rightArmColor,
     leftLegColor: validColor(a.leftLegColor) ? a.leftLegColor : defaultAppearance.leftLegColor,
-    rightLegColor: validColor(a.rightLegColor) ? a.rightLegColor : defaultAppearance.rightLegColor
+    rightLegColor: validColor(a.rightLegColor) ? a.rightLegColor : defaultAppearance.rightLegColor,
+    eyesItemId: cleanStoreItemId(a.eyesItemId),
+    mouthItemId: cleanStoreItemId(a.mouthItemId),
+    torsoDecalItemId: cleanStoreItemId(a.torsoDecalItemId),
+    hatItemId: cleanStoreItemId(a.hatItemId),
+    headShapeItemId: cleanStoreItemId(a.headShapeItemId)
   };
+}
+
+function rowToStoreItem(row) {
+  return {
+    id: Number(row.id),
+    category: row.category,
+    name: row.name,
+    price: Number(row.price || 0),
+    assetUrl: row.asset_url,
+    assetKind: row.asset_kind,
+    metadata: row.metadata || {},
+    isVisible: !!row.is_visible
+  };
+}
+
+async function validateAppearanceForUser(userId, rawAppearance = {}) {
+  const app = sanitizeAppearance(rawAppearance);
+  const slots = [
+    ['eyesItemId', 'eyes'],
+    ['mouthItemId', 'mouth'],
+    ['torsoDecalItemId', 'torso_decal'],
+    ['hatItemId', 'hat'],
+    ['headShapeItemId', 'head_shape']
+  ];
+  const ids = [...new Set(slots.map(([slot]) => app[slot]).filter(Boolean))];
+  if (!ids.length) return app;
+
+  const r = await pool.query(`
+    SELECT s.id, s.category
+    FROM store_items s
+    JOIN user_store_items o ON o.item_id=s.id
+    WHERE o.user_id=$1 AND s.id = ANY($2::bigint[])
+  `, [userId, ids]);
+  const owned = new Map(r.rows.map(row => [Number(row.id), row.category]));
+  for (const [slot, category] of slots) {
+    const id = app[slot];
+    if (id && owned.get(id) !== category) app[slot] = null;
+  }
+  return app;
+}
+
+async function resolveAppearanceAssets(app = {}) {
+  const slotToCategory = {
+    eyesItemId: 'eyes',
+    mouthItemId: 'mouth',
+    torsoDecalItemId: 'torso_decal',
+    hatItemId: 'hat',
+    headShapeItemId: 'head_shape'
+  };
+  const ids = [...new Set(Object.keys(slotToCategory).map(k => cleanStoreItemId(app[k])).filter(Boolean))];
+  if (!ids.length) return {};
+  const r = await pool.query(`
+    SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible
+    FROM store_items WHERE id = ANY($1::bigint[])
+  `, [ids]);
+  const byId = new Map(r.rows.map(row => [Number(row.id), rowToStoreItem(row)]));
+  const out = {};
+  for (const [slot, category] of Object.entries(slotToCategory)) {
+    const id = cleanStoreItemId(app[slot]);
+    const item = id ? byId.get(id) : null;
+    if (item && item.category === category) out[category] = item;
+  }
+  return out;
+}
+
+function storeStorageConfigured() {
+  return !!(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && SUPABASE_STORE_BUCKET);
+}
+
+function storageHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    ...extra
+  };
+}
+
+async function ensureStoreBucket() {
+  if (!storeStorageConfigured()) throw new Error('Store uploads are not configured on the server yet.');
+  const bucketId = encodeURIComponent(SUPABASE_STORE_BUCKET);
+  const check = await fetch(`${SUPABASE_URL}/storage/v1/bucket/${bucketId}`, {
+    headers: storageHeaders()
+  });
+  if (check.ok) return;
+  if (check.status !== 404) throw new Error(`Could not check store bucket (${check.status}).`);
+  const create = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
+    method: 'POST',
+    headers: storageHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ id: SUPABASE_STORE_BUCKET, name: SUPABASE_STORE_BUCKET, public: true })
+  });
+  if (!create.ok && create.status !== 409) {
+    const text = await create.text().catch(() => '');
+    throw new Error(`Could not create store bucket (${create.status}) ${text}`.trim());
+  }
+}
+
+function fileBufferFromSocket(value) {
+  if (!value) return null;
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof ArrayBuffer) return Buffer.from(value);
+  if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  if (value && value.type === 'Buffer' && Array.isArray(value.data)) return Buffer.from(value.data);
+  return null;
+}
+
+function cleanUploadMeta(category, raw = {}) {
+  const clamp = (v, min, max, fallback) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+  };
+  if (category === 'hat' || category === 'head_shape') {
+    return {
+      size: clamp(raw.size, 0.05, 10, 1),
+      offsetX: clamp(raw.offsetX, -5, 5, 0),
+      offsetY: clamp(raw.offsetY, -5, 5, 0),
+      offsetZ: clamp(raw.offsetZ, -5, 5, 0)
+    };
+  }
+  return {};
+}
+
+async function uploadStoreAsset({ category, fileName, mimeType, buffer }) {
+  await ensureStoreBucket();
+  const isImage = ['eyes','mouth','torso_decal'].includes(category);
+  const lowerName = String(fileName || '').toLowerCase();
+  let ext;
+  let contentType;
+  if (isImage) {
+    const allowed = new Map([
+      ['image/png', 'png'],
+      ['image/jpeg', 'jpg'],
+      ['image/webp', 'webp']
+    ]);
+    ext = allowed.get(String(mimeType || '').toLowerCase());
+    if (!ext) {
+      if (lowerName.endsWith('.png')) { ext = 'png'; contentType = 'image/png'; }
+      else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) { ext = 'jpg'; contentType = 'image/jpeg'; }
+      else if (lowerName.endsWith('.webp')) { ext = 'webp'; contentType = 'image/webp'; }
+    }
+    contentType = contentType || String(mimeType || '').toLowerCase();
+    if (!ext) throw new Error('Eyes, mouths, and torso decals must be PNG, JPG, or WebP images.');
+    if (buffer.length > 3 * 1024 * 1024) throw new Error('Image files must be 3 MB or smaller.');
+  } else {
+    if (!lowerName.endsWith('.glb')) throw new Error('Hat and head shape meshes must be .glb files.');
+    ext = 'glb';
+    contentType = 'model/gltf-binary';
+    if (buffer.length > 8 * 1024 * 1024) throw new Error('Mesh files must be 8 MB or smaller.');
+  }
+
+  const pathName = `${category}/${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${ext}`;
+  const encodedPath = pathName.split('/').map(encodeURIComponent).join('/');
+  const bucketId = encodeURIComponent(SUPABASE_STORE_BUCKET);
+  const upload = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucketId}/${encodedPath}`, {
+    method: 'POST',
+    headers: storageHeaders({
+      'Content-Type': contentType || 'application/octet-stream',
+      'x-upsert': 'false'
+    }),
+    body: buffer
+  });
+  if (!upload.ok) {
+    const text = await upload.text().catch(() => '');
+    throw new Error(`Asset upload failed (${upload.status}) ${text}`.trim());
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucketId}/${encodedPath}`;
 }
 
 const socketsByUser = new Map();
@@ -82,6 +267,7 @@ async function migrate() {
       password_hash TEXT NOT NULL,
       appearance JSONB NOT NULL DEFAULT '{}'::jsonb,
       is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+      coins INTEGER NOT NULL DEFAULT 100,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS worlds (
@@ -100,7 +286,33 @@ async function migrate() {
       message VARCHAR(300) NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 100;
+
+    CREATE TABLE IF NOT EXISTS store_items (
+      id BIGSERIAL PRIMARY KEY,
+      category VARCHAR(32) NOT NULL CHECK (category IN ('eyes','mouth','torso_decal','hat','head_shape')),
+      name VARCHAR(40) NOT NULL,
+      price INTEGER NOT NULL CHECK (price >= 0),
+      asset_url TEXT NOT NULL,
+      asset_kind VARCHAR(16) NOT NULL CHECK (asset_kind IN ('image','glb')),
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      is_visible BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS user_store_items (
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      item_id BIGINT NOT NULL REFERENCES store_items(id) ON DELETE CASCADE,
+      purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, item_id)
+    );
+
     CREATE INDEX IF NOT EXISTS chat_world_created_idx ON chat_messages(world_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS store_items_category_visible_idx ON store_items(category, is_visible, created_at DESC);
+    CREATE INDEX IF NOT EXISTS user_store_items_user_idx ON user_store_items(user_id);
   `);
 
   // Older multiplayer worlds could be created completely empty. The editor places
@@ -165,13 +377,13 @@ io.on('connection', (socket) => {
 
       const hash = await bcrypt.hash(password, 12);
       const r = await pool.query(
-        `INSERT INTO users(username,password_hash,appearance) VALUES($1,$2,$3) RETURNING id,username,appearance,is_admin`,
+        `INSERT INTO users(username,password_hash,appearance) VALUES($1,$2,$3) RETURNING id,username,appearance,is_admin,coins`,
         [username, hash, JSON.stringify(defaultAppearance)]
       );
       socket.user = r.rows[0];
       socket.user.isAdmin = !!socket.user.is_admin;
       socketsByUser.set(socket.user.id, socket);
-      cb({success:true,username:socket.user.username,appearance:socket.user.appearance,isAdmin:false});
+      cb({success:true,username:socket.user.username,appearance:socket.user.appearance,isAdmin:false,coins:Number(socket.user.coins || 100)});
     } catch (e) {
       console.error(e);
       cb({success:false,message:'Registration failed.'});
@@ -180,7 +392,7 @@ io.on('connection', (socket) => {
 
   socket.on('login', async ({ username, password }, cb) => {
     try {
-      const r = await pool.query('SELECT id,username,password_hash,appearance,is_admin FROM users WHERE lower(username)=lower($1)', [cleanUsername(username)]);
+      const r = await pool.query('SELECT id,username,password_hash,appearance,is_admin,coins FROM users WHERE lower(username)=lower($1)', [cleanUsername(username)]);
       const user = r.rows[0];
       if (!user || !(await bcrypt.compare(String(password || ''), user.password_hash))) {
         return cb({success:false,message:'Invalid username or password.'});
@@ -188,7 +400,7 @@ io.on('connection', (socket) => {
       socket.user = user;
       socket.user.isAdmin = !!user.is_admin;
       socketsByUser.set(user.id, socket);
-      cb({success:true,username:user.username,appearance:user.appearance,isAdmin:user.is_admin});
+      cb({success:true,username:user.username,appearance:user.appearance,isAdmin:user.is_admin,coins:Number(user.coins || 0)});
     } catch (e) {
       console.error(e);
       cb({success:false,message:'Login failed.'});
@@ -244,7 +456,9 @@ io.on('connection', (socket) => {
       socket.join(`world:${world.name}`);
       socket.data.worldName = world.name;
 
-      const app = sanitizeAppearance(appearance || socket.user.appearance || {});
+      const app = await validateAppearanceForUser(socket.user.id, socket.user.appearance || {});
+      const cosmetics = await resolveAppearanceAssets(app);
+      socket.user.appearance = app;
       const players = {};
       for (const [sid, p] of playersBySocket) {
         if (p.worldName === world.name) players[sid] = p;
@@ -253,11 +467,11 @@ io.on('connection', (socket) => {
         id: socket.id, username: socket.user.username,
         x: world.data.spawnPoint.x, y: world.data.spawnPoint.y, z: world.data.spawnPoint.z,
         rotationY: 0, walkClock: 0, isMoving:false, isGrounded:true,
-        appearance: app, worldName: world.name
+        appearance: app, cosmetics, worldName: world.name
       };
       playersBySocket.set(socket.id, p);
       socket.to(`world:${world.name}`).emit('player_joined', p);
-      cb({success:true,worldData:world.data,players,selfId:socket.id,canEdit:canEditWorld(socket, world)});
+      cb({success:true,worldData:world.data,players,selfId:socket.id,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics});
     } catch (e) { console.error(e); cb({success:false,message:'Could not join world.'}); }
   });
 
@@ -341,18 +555,173 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb && cb({success:false,message:'Could not save world settings.'}); }
   });
 
-  socket.on('save_appearance', async (appearance) => {
-    if (!requireAuth(socket)) return;
-    const app = sanitizeAppearance(appearance);
+  socket.on('save_appearance', async (appearance, cb) => {
+    if (!requireAuth(socket, cb)) return;
     try {
+      const app = await validateAppearanceForUser(socket.user.id, appearance);
+      const cosmetics = await resolveAppearanceAssets(app);
       await pool.query('UPDATE users SET appearance=$1 WHERE id=$2',[JSON.stringify(app),socket.user.id]);
       socket.user.appearance = app;
       const p = playersBySocket.get(socket.id);
       if (p) {
         p.appearance = app;
-        socket.to(`world:${p.worldName}`).emit('player_joined', p);
+        p.cosmetics = cosmetics;
+        socket.to(`world:${p.worldName}`).emit('player_appearance_updated', p);
       }
-    } catch (e) { console.error(e); }
+      cb && cb({success:true,appearance:app,cosmetics});
+    } catch (e) {
+      console.error(e);
+      cb && cb({success:false,message:'Could not save appearance.'});
+    }
+  });
+
+  socket.on('get_store', async (cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const [visible, owned, user] = await Promise.all([
+        pool.query(`
+          SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible
+          FROM store_items WHERE is_visible=true
+          ORDER BY category ASC, created_at DESC
+        `),
+        pool.query(`
+          SELECT s.id,s.category,s.name,s.price,s.asset_url,s.asset_kind,s.metadata,s.is_visible
+          FROM user_store_items o
+          JOIN store_items s ON s.id=o.item_id
+          WHERE o.user_id=$1
+          ORDER BY o.purchased_at ASC
+        `, [socket.user.id]),
+        pool.query('SELECT coins FROM users WHERE id=$1', [socket.user.id])
+      ]);
+      const coins = Number(user.rows[0]?.coins || 0);
+      socket.user.coins = coins;
+      cb({
+        success: true,
+        coins,
+        items: visible.rows.map(rowToStoreItem),
+        ownedItems: owned.rows.map(rowToStoreItem),
+        uploadConfigured: storeStorageConfigured()
+      });
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:'Could not load the store.'});
+    }
+  });
+
+  socket.on('buy_store_item', async ({itemId}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    itemId = cleanStoreItemId(itemId);
+    if (!itemId) return cb({success:false,message:'Invalid store item.'});
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const user = await client.query('SELECT coins FROM users WHERE id=$1 FOR UPDATE', [socket.user.id]);
+      const item = await client.query('SELECT id,price,is_visible FROM store_items WHERE id=$1', [itemId]);
+      if (!item.rowCount) {
+        await client.query('ROLLBACK');
+        return cb({success:false,message:'That store item no longer exists.'});
+      }
+      if (!item.rows[0].is_visible) {
+        await client.query('ROLLBACK');
+        return cb({success:false,message:'That item is not currently available.'});
+      }
+      const already = await client.query('SELECT 1 FROM user_store_items WHERE user_id=$1 AND item_id=$2', [socket.user.id,itemId]);
+      if (already.rowCount) {
+        const coins = Number(user.rows[0].coins || 0);
+        await client.query('COMMIT');
+        return cb({success:true,alreadyOwned:true,coins});
+      }
+      const price = Number(item.rows[0].price || 0);
+      const coins = Number(user.rows[0].coins || 0);
+      if (coins < price) {
+        await client.query('ROLLBACK');
+        return cb({success:false,message:`You need ${price - coins} more coin${price - coins === 1 ? '' : 's'} for that item.`});
+      }
+      const updated = await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 RETURNING coins', [price,socket.user.id]);
+      await client.query('INSERT INTO user_store_items(user_id,item_id) VALUES($1,$2)', [socket.user.id,itemId]);
+      await client.query('COMMIT');
+      const newCoins = Number(updated.rows[0].coins || 0);
+      socket.user.coins = newCoins;
+      cb({success:true,coins:newCoins});
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error(e);
+      cb({success:false,message:'Purchase failed.'});
+    } finally {
+      client.release();
+    }
+  });
+
+  socket.on('admin_store_list', async (cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const r = await pool.query(`
+        SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible
+        FROM store_items ORDER BY created_at DESC
+      `);
+      cb({success:true,items:r.rows.map(rowToStoreItem),uploadConfigured:storeStorageConfigured()});
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:'Could not load store items.'});
+    }
+  });
+
+  socket.on('admin_store_set_visible', async ({itemId,isVisible}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    itemId = cleanStoreItemId(itemId);
+    if (!itemId) return cb({success:false,message:'Invalid store item.'});
+    try {
+      const r = await pool.query(`
+        UPDATE store_items SET is_visible=$1,updated_at=NOW() WHERE id=$2 RETURNING id
+      `, [!!isVisible,itemId]);
+      if (!r.rowCount) return cb({success:false,message:'Store item not found.'});
+      cb({success:true});
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:'Could not update store visibility.'});
+    }
+  });
+
+  socket.on('admin_store_create', async (payload = {}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const category = String(payload.category || '').trim();
+      const name = String(payload.name || '').trim().slice(0, 40);
+      const price = Number(payload.price);
+      if (!STORE_CATEGORIES.has(category)) return cb({success:false,message:'Choose a valid store category.'});
+      if (!name) return cb({success:false,message:'Item name is required.'});
+      if (!Number.isInteger(price) || price < 0 || price > 100000000) return cb({success:false,message:'Price must be a whole number of coins.'});
+      const buffer = fileBufferFromSocket(payload.fileData);
+      if (!buffer || !buffer.length) return cb({success:false,message:'Choose a file to upload.'});
+      if (!storeStorageConfigured()) {
+        return cb({success:false,message:'Store uploads need SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY configured on Render first.'});
+      }
+
+      const metadata = cleanUploadMeta(category, payload.metadata || {});
+      if (category === 'hat') {
+        for (const key of ['size','offsetX','offsetY','offsetZ']) {
+          if (!Number.isFinite(Number(payload.metadata?.[key]))) {
+            return cb({success:false,message:'Hat size and X/Y/Z offsets are required.'});
+          }
+        }
+      }
+      const assetUrl = await uploadStoreAsset({
+        category,
+        fileName: payload.fileName,
+        mimeType: payload.mimeType,
+        buffer
+      });
+      const assetKind = ['eyes','mouth','torso_decal'].includes(category) ? 'image' : 'glb';
+      const r = await pool.query(`
+        INSERT INTO store_items(category,name,price,asset_url,asset_kind,metadata,is_visible,created_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+        RETURNING id,category,name,price,asset_url,asset_kind,metadata,is_visible
+      `, [category,name,price,assetUrl,assetKind,JSON.stringify(metadata),payload.isVisible !== false,socket.user.id]);
+      cb({success:true,item:rowToStoreItem(r.rows[0])});
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:e.message || 'Could not create store item.'});
+    }
   });
 
   socket.on('get_world_chat', async ({worldName}, cb) => {
@@ -394,7 +763,7 @@ io.on('connection', (socket) => {
   socket.on('admin_list', async (cb) => {
     if (!requireAdmin(socket, cb)) return;
     try {
-      const users = await pool.query('SELECT id,username,is_admin AS "isAdmin",created_at AS "createdAt" FROM users ORDER BY created_at ASC');
+      const users = await pool.query('SELECT id,username,is_admin AS "isAdmin",coins,created_at AS "createdAt" FROM users ORDER BY created_at ASC');
       const worlds = await pool.query(`
         SELECT w.id,w.name,u.username AS "ownerUsername",
                COUNT(cm.id)::int AS "chatCount"
@@ -408,6 +777,7 @@ io.on('connection', (socket) => {
         username: u.username,
         isAdmin: u.isAdmin,
         createdAt: u.createdAt,
+        coins: Number(u.coins || 0),
         online: socketsByUser.has(u.id)
       }));
       const worldRows = worlds.rows.map(w => ({
