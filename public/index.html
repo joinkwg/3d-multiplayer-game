@@ -2794,10 +2794,6 @@
     const gravity = -0.001375;
     const jumpStrength = 0.1175;
     let isGrounded = false;
-    // Curved-surface traction: remembers the surface under the player briefly so
-    // gravity doesn't make rounded parts feel like ice.
-    let groundGrip = null;
-    const CURVED_GRIP_SLOPE = 2.25;
     const maxStepHeight = 0.65;
     let targetStepY = 0;
 
@@ -2840,145 +2836,145 @@
       );
     }
 
-    // --- CHARACTER CONTACT SOLVER ---
-    // The player is treated as a vertical capsule/column. Parts return contact
-    // normals and penetration depth; movement is projected along walkable surfaces.
-    const WALKABLE_NORMAL_Y = 0.45;
-    const CONTACT_SKIN = 0.025;
+    // --- SINGLE-PLAYER COLLISION MODEL (ported to multiplayer block data) ---
+    // This intentionally mirrors the old single-player controller instead of the
+    // experimental V3.8 contact-normal/traction system.
 
-    function getShapeContact(px, py, pz, b) {
+    function getPartSurfaceYFromData(b, px, pz) {
       const shape=b.shape || 'box';
-      const sx=Math.max(.001,Math.abs(b.scaleX||1)), sy=Math.max(.001,Math.abs(b.scaleY||1)), sz=Math.max(.001,Math.abs(b.scaleZ||1));
-      const foot=py, head=py+PLAYER_HEIGHT;
+      const bx=Number(b.x)||0, by=Number(b.y)||0, bz=Number(b.z)||0;
+      const sx=Math.abs(Number(b.scaleX)||1), sy=Math.abs(Number(b.scaleY)||1), sz=Math.abs(Number(b.scaleZ)||1);
+      const hx=sx/2, hy=sy/2, hz=sz/2;
+      const lx=px-bx, lz=pz-bz;
 
-      if (shape === 'sphere') {
-        const rx=sx*.5, ry=sy*.5, rz=sz*.5;
-        // Closest point on the player's vertical center line to the ellipsoid center.
-        const cy=Math.max(foot+PLAYER_RADIUS, Math.min(b.y, head-PLAYER_RADIUS));
-        const dx=px-b.x, dy=cy-b.y, dz=pz-b.z;
-        // Expanded ellipsoid is a robust capsule-vs-ellipsoid approximation.
-        const ex=rx+PLAYER_RADIUS, ey=ry+PLAYER_RADIUS, ez=rz+PLAYER_RADIUS;
-        const q=Math.sqrt((dx*dx)/(ex*ex)+(dy*dy)/(ey*ey)+(dz*dz)/(ez*ez));
-        if (q>=1) return null;
-        let nx=dx/(ex*ex), ny=dy/(ey*ey), nz=dz/(ez*ez);
-        const nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;
-        const support=1/Math.sqrt((nx*nx)/(ex*ex)+(ny*ny)/(ey*ey)+(nz*nz)/(ez*ez));
-        const along=dx*nx+dy*ny+dz*nz;
-        return {normal:{x:nx,y:ny,z:nz},depth:Math.max(0,support-along)+CONTACT_SKIN,type:'sphere'};
-      }
-
-      if (shape === 'cylinder') {
-        const rx=sx*.5, rz=sz*.5, minY=b.y-sy*.5, maxY=b.y+sy*.5;
-        const dx=px-b.x,dz=pz-b.z;
-        const ex=rx+PLAYER_RADIUS,ez=rz+PLAYER_RADIUS;
-        const radial=Math.sqrt((dx*dx)/(ex*ex)+(dz*dz)/(ez*ez));
-        const verticalOverlap=head>minY && foot<maxY;
-        if (!verticalOverlap || radial>=1) return null;
-        const topPen=maxY-foot, bottomPen=head-minY;
-        // Top/bottom cap wins only when it is genuinely the nearest exit.
-        const sideScale=1/Math.sqrt(((dx||1e-6)**2)/(ex**4)+((dz||1e-6)**2)/(ez**4));
-        const sidePen=Math.max(0,(1-radial)*Math.min(ex,ez));
-        if (topPen>=0 && topPen<sidePen && foot>=b.y) return {normal:{x:0,y:1,z:0},depth:topPen+CONTACT_SKIN,type:'cylinder'};
-        if (bottomPen>=0 && bottomPen<sidePen && head<=b.y) return {normal:{x:0,y:-1,z:0},depth:bottomPen+CONTACT_SKIN,type:'cylinder'};
-        let nx=dx/(ex*ex),nz=dz/(ez*ez); const nl=Math.hypot(nx,nz)||1;nx/=nl;nz/=nl;
-        return {normal:{x:nx,y:0,z:nz},depth:sidePen+CONTACT_SKIN,type:'cylinder'};
-      }
-
-      if (shape === 'wedge') {
-        const box=getBlockAABB(b);
-        if (px+PLAYER_RADIUS<=box.minX || px-PLAYER_RADIUS>=box.maxX || pz+PLAYER_RADIUS<=box.minZ || pz-PLAYER_RADIUS>=box.maxZ || head<=box.minY || foot>=box.maxY) return null;
-        // Geometry rises toward -Z. Plane: y = minY + (maxZ-z)*sy/sz.
-        const slope=sy/sz;
-        const topY=box.minY+(box.maxZ-Math.max(box.minZ,Math.min(box.maxZ,pz)))*slope;
-        const nlen=Math.hypot(1,slope);
-        const normal={x:0,y:1/nlen,z:slope/nlen};
-        if (foot<=topY+CONTACT_SKIN && foot>=box.minY-PLAYER_RADIUS)
-          return {normal,depth:Math.max(0,topY-foot)+CONTACT_SKIN,type:'wedge'};
+      if (shape==='box' || shape==='baseplate' || b.actionType==='checkpoint' || b.actionType==='finish') {
+        if (Math.abs(lx)<=hx+0.2 && Math.abs(lz)<=hz+0.2) return by+hy;
         return null;
       }
-
-      const box=getBlockAABB(b);
-      const p=getPlayerAABB(px,py,pz);
-      if (!checkAABBOverlap(p,box)) return null;
-      const pens=[
-        {d:p.maxX-box.minX,n:{x:-1,y:0,z:0}}, {d:box.maxX-p.minX,n:{x:1,y:0,z:0}},
-        {d:p.maxY-box.minY,n:{x:0,y:-1,z:0}}, {d:box.maxY-p.minY,n:{x:0,y:1,z:0}},
-        {d:p.maxZ-box.minZ,n:{x:0,y:0,z:-1}}, {d:box.maxZ-p.minZ,n:{x:0,y:0,z:1}}
-      ];
-      pens.sort((a,b)=>a.d-b.d);
-      return {normal:pens[0].n,depth:pens[0].d+CONTACT_SKIN,type:'box'};
+      if (shape==='cylinder') {
+        const d2=Math.pow(lx/(hx+0.1),2)+Math.pow(lz/(hz+0.1),2);
+        return d2<=1 ? by+hy : null;
+      }
+      if (shape==='sphere') {
+        const nx=lx/hx, nz=lz/hz, d2=nx*nx+nz*nz;
+        if (d2<=1) return by+hy*Math.sqrt(Math.max(0,1-d2));
+        return null;
+      }
+      if (shape==='wedge') {
+        if (Math.abs(lx)<=hx+0.2 && lz>=-hz-0.2 && lz<=hz+0.2) {
+          const clamped=Math.max(-hz,Math.min(hz,lz));
+          return by-(hy/hz)*clamped;
+        }
+      }
+      return null;
     }
 
-    function findWalkableGround(pos, blocks, maxDrop=0.34, maxRise=0.24) {
-      let best=null;
+    function getGroundSurfaceUnderPlayerMP(px,py,pz,blocks) {
+      let highest=-Infinity, groundBlock=null;
+      const offsets=[[0,0],[0.2,0],[-0.2,0],[0,0.2],[0,-0.2]];
       for (const b of blocks) {
-        if (b.canCollide===false || b.actionType==='kill') continue;
-        const shape=b.shape || 'box';
-        let y=null, normal={x:0,y:1,z:0};
+        if (b.canCollide===false) continue;
+        for (const [ox,oz] of offsets) {
+          const y=getPartSurfaceYFromData(b,px+ox,pz+oz);
+          if (y!==null && y<=py+maxStepHeight+0.1 && y>highest) {
+            highest=y; groundBlock=b;
+          }
+        }
+      }
+      return {floorY:highest,block:groundBlock};
+    }
 
-        if (shape==='sphere') {
-          const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
-          const ry=Math.max(.001,Math.abs(b.scaleY||1)*.5);
-          const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
-          const dx=pos.x-b.x,dz=pos.z-b.z;
-          const q=(dx*dx)/(rx*rx)+(dz*dz)/(rz*rz);
-          if (q<=1) {
-            const root=Math.sqrt(Math.max(0,1-q));
-            y=b.y+ry*root;
-            // Ellipsoid surface normal from its gradient.
-            let nx=dx/(rx*rx), ny=(y-b.y)/(ry*ry), nz=dz/(rz*rz);
-            const nl=Math.hypot(nx,ny,nz)||1;
-            normal={x:nx/nl,y:ny/nl,z:nz/nl};
+    function checkPlayerIntersectingBlockData(b,pos) {
+      const shape=b.shape || 'box';
+      const bx=Number(b.x)||0, by=Number(b.y)||0, bz=Number(b.z)||0;
+      const sx=Math.abs(Number(b.scaleX)||1), sy=Math.abs(Number(b.scaleY)||1), sz=Math.abs(Number(b.scaleZ)||1);
+      const hx=sx/2,hy=sy/2,hz=sz/2, pr=0.38, ph=2.35;
+      if (pos.y+ph<by-hy || pos.y>by+hy) return false;
+      const pts=[
+        [pos.x,pos.y+0.2,pos.z],[pos.x,pos.y+ph*.5,pos.z],[pos.x,pos.y+ph-.2,pos.z],
+        [pos.x-pr,pos.y+.5,pos.z],[pos.x+pr,pos.y+.5,pos.z],
+        [pos.x,pos.y+.5,pos.z-pr],[pos.x,pos.y+.5,pos.z+pr]
+      ];
+      for (const [x,y,z] of pts) {
+        const lx=x-bx,ly=y-by,lz=z-bz;
+        let inside=false;
+        if (shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish')
+          inside=Math.abs(lx)<=hx&&Math.abs(ly)<=hy&&Math.abs(lz)<=hz;
+        else if (shape==='sphere')
+          inside=Math.pow(lx/hx,2)+Math.pow(ly/hy,2)+Math.pow(lz/hz,2)<=1;
+        else if (shape==='cylinder')
+          inside=Math.abs(ly)<=hy&&(Math.pow(lx/hx,2)+Math.pow(lz/hz,2)<=1);
+        else if (shape==='wedge')
+          inside=Math.abs(lx)<=hx&&ly>=-hy&&lz>=-hz&&lz<=hz&&ly<=-(hy/hz)*lz;
+        if (inside) return true;
+      }
+      return false;
+    }
+
+    function resolveHorizontalCollisionsMP(pos,blocks) {
+      const pr=0.42, ph=2.35, feet=pos.y, head=feet+ph;
+      for (const b of blocks) {
+        if (b.canCollide===false) continue;
+        const shape=b.shape||'box';
+        const bx=Number(b.x)||0,by=Number(b.y)||0,bz=Number(b.z)||0;
+        const sx=Math.abs(Number(b.scaleX)||1),sy=Math.abs(Number(b.scaleY)||1),sz=Math.abs(Number(b.scaleZ)||1);
+        const hx=sx/2,hy=sy/2,hz=sz/2;
+        if (by+hy<=feet+.05 || by-hy>=head) continue;
+        const lx=pos.x-bx,lz=pos.z-bz;
+
+        if (shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish') {
+          const minX=bx-hx-pr,maxX=bx+hx+pr,minZ=bz-hz-pr,maxZ=bz+hz+pr;
+          if (pos.x>minX&&pos.x<maxX&&pos.z>minZ&&pos.z<maxZ) {
+            const vals=[pos.x-minX,maxX-pos.x,pos.z-minZ,maxZ-pos.z];
+            const m=Math.min(...vals);
+            if (m===vals[0]) pos.x=minX; else if (m===vals[1]) pos.x=maxX;
+            else if (m===vals[2]) pos.z=minZ; else pos.z=maxZ;
           }
         } else if (shape==='cylinder') {
-          const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
-          const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
-          const dx=pos.x-b.x,dz=pos.z-b.z;
-          if ((dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)<=1) y=b.y+Math.abs(b.scaleY||1)*.5;
-        } else if (shape==='wedge') {
-          const box=getBlockAABB(b);
-          if (pos.x>=box.minX-PLAYER_RADIUS && pos.x<=box.maxX+PLAYER_RADIUS &&
-              pos.z>=box.minZ-PLAYER_RADIUS && pos.z<=box.maxZ+PLAYER_RADIUS) {
-            const sy=Math.max(.001,Math.abs(b.scaleY||1)),sz=Math.max(.001,Math.abs(b.scaleZ||1));
-            y=box.minY+(box.maxZ-Math.max(box.minZ,Math.min(box.maxZ,pos.z)))*(sy/sz);
-            const slope=sy/sz,nl=Math.hypot(1,slope);
-            normal={x:0,y:1/nl,z:slope/nl};
+          const dist=Math.hypot(lx,lz);
+          let radius=hx;
+          if (hx!==hz&&dist>.0001) {
+            const a=Math.atan2(lz,lx);
+            radius=(hx*hz)/Math.sqrt(Math.pow(hz*Math.cos(a),2)+Math.pow(hx*Math.sin(a),2));
           }
-        } else {
-          const box=getBlockAABB(b);
-          if (pos.x>=box.minX-PLAYER_RADIUS && pos.x<=box.maxX+PLAYER_RADIUS &&
-              pos.z>=box.minZ-PLAYER_RADIUS && pos.z<=box.maxZ+PLAYER_RADIUS) y=box.maxY;
+          const minDist=radius+pr;
+          if (dist<minDist) {
+            if (dist>.0001) { pos.x=bx+(lx/dist)*minDist; pos.z=bz+(lz/dist)*minDist; }
+            else pos.x=bx+minDist;
+          }
+        } else if (shape==='sphere') {
+          const midY=Math.max(by-hy,Math.min(by+hy,feet+ph*.5));
+          const normY=(midY-by)/hy;
+          if (Math.abs(normY)<1) {
+            const rf=Math.sqrt(Math.max(0,1-normY*normY));
+            const rx=hx*rf,rz=hz*rf,dist=Math.hypot(lx,lz);
+            let radius=rx;
+            if (rx!==rz&&dist>.0001) {
+              const a=Math.atan2(lz,lx);
+              radius=(rx*rz)/Math.sqrt(Math.pow(rz*Math.cos(a),2)+Math.pow(rx*Math.sin(a),2));
+            }
+            const minDist=radius+pr;
+            if (dist<minDist) {
+              if (dist>.0001) { pos.x=bx+(lx/dist)*minDist; pos.z=bz+(lz/dist)*minDist; }
+              else pos.x=bx+minDist;
+            }
+          }
+        } else if (shape==='wedge') {
+          if (Math.abs(lx)<hx+pr&&lz>-hz-pr&&lz<hz+pr) {
+            const localFeet=feet-by;
+            const slopeY=-(hy/hz)*Math.max(-hz,Math.min(hz,lz));
+            if (localFeet<slopeY) {
+              if (lz<-hz+.05) pos.z=bz-hz-pr;
+              else if (Math.abs(lx)>hx-.05) pos.x=lx>0?bx+hx+pr:bx-hx-pr;
+              else {
+                const denom=Math.sqrt(hy*hy+hz*hz);
+                const planeDist=(hy*lz+hz*localFeet)/denom;
+                if (planeDist<pr) pos.z+=(pr-planeDist)*(hy/denom);
+              }
+            }
+          }
         }
-
-        if (y===null || normal.y<WALKABLE_NORMAL_Y) continue;
-        const diff=y-pos.y;
-        if (diff < -maxDrop || diff > maxRise) continue;
-        if (!best || y>best.y) best={y,normal,b};
       }
-      return best;
-    }
-
-    function solveCharacterContacts(pos, blocks, allowGround=true) {
-      let grounded=false, groundNormal={x:0,y:1,z:0};
-      // Several small solver passes are much more stable than snapping per-axis.
-      for (let pass=0; pass<4; pass++) {
-        let moved=false;
-        for (const b of blocks) {
-          if (b.canCollide===false || b.actionType==='kill') continue;
-          const c=getShapeContact(pos.x,pos.y,pos.z,b);
-          if (!c || c.depth<=0) continue;
-          pos.x += c.normal.x*c.depth;
-          pos.y += c.normal.y*c.depth;
-          pos.z += c.normal.z*c.depth;
-          moved=true;
-          if (allowGround && c.normal.y>=WALKABLE_NORMAL_Y) {
-            grounded=true; groundNormal=c.normal;
-            if (velocityY<0) velocityY=0;
-          } else if (c.normal.y<-.35 && velocityY>0) velocityY=0;
-        }
-        if (!moved) break;
-      }
-      return {grounded,groundNormal};
     }
 
     function respawnPlayer() {
@@ -3042,86 +3038,86 @@
 
     function updatePlayerPhysics(delta) {
       if (!localPlayerAvatar || !currentWorldName) return;
+      const player=localPlayerAvatar;
+      const blocks=currentWorldData ? Object.values(currentWorldData.blocks) : [];
 
       if (!isRightClicking) {
-        if (keys['a'] || keys['arrowleft']) localPlayerAvatar.rotation.y += turnSpeed;
-        if (keys['d'] || keys['arrowright']) localPlayerAvatar.rotation.y -= turnSpeed;
+        if (keys['a']||keys['arrowleft']) player.rotation.y+=turnSpeed;
+        if (keys['d']||keys['arrowright']) player.rotation.y-=turnSpeed;
       }
 
       let moveDir=0;
-      if (keys['w'] || keys['arrowup']) moveDir+=1;
-      if (keys['s'] || keys['arrowdown']) moveDir-=1;
+      if (keys['w']||keys['arrowup']) moveDir+=1;
+      if (keys['s']||keys['arrowdown']) moveDir-=1;
       const isMoving=moveDir!==0;
 
-      if (keys[' '] && isGrounded) {
+      if (targetStepY!==0) {
+        const stepStep=targetStepY*.25;
+        player.position.y+=stepStep;
+        targetStepY-=stepStep;
+        if (Math.abs(targetStepY)<.001) targetStepY=0;
+      }
+
+      if (isMoving) {
+        const dx=Math.sin(player.rotation.y)*moveSpeed*moveDir;
+        const dz=Math.cos(player.rotation.y)*moveSpeed*moveDir;
+        player.position.x+=dx;
+        player.position.z+=dz;
+
+        const ground=getGroundSurfaceUnderPlayerMP(player.position.x,player.position.y,player.position.z,blocks);
+        if (ground.floorY!==-Infinity && isGrounded) {
+          const stepUp=ground.floorY-player.position.y;
+          if (stepUp>0 && stepUp<=maxStepHeight) {
+            targetStepY+=stepUp;
+            player.position.y=ground.floorY;
+          }
+        }
+        resolveHorizontalCollisionsMP(player.position,blocks);
+      }
+
+      if (keys[' ']&&isGrounded) {
         velocityY=jumpStrength;
+        isGrounded=false;
+        targetStepY=0;
+      }
+
+      player.position.y+=velocityY;
+      velocityY+=gravity;
+
+      const ground=getGroundSurfaceUnderPlayerMP(player.position.x,player.position.y,player.position.z,blocks);
+      if (ground.floorY!==-Infinity) {
+        if (velocityY<=0 && player.position.y<=ground.floorY+.08) {
+          player.position.y=ground.floorY;
+          velocityY=0;
+          isGrounded=true;
+        }
+      } else {
         isGrounded=false;
       }
 
-      const pos=localPlayerAvatar.position;
-      const blocks=currentWorldData ? Object.values(currentWorldData.blocks) : [];
-      const moveX=Math.sin(localPlayerAvatar.rotation.y)*moveSpeed*moveDir;
-      const moveZ=Math.cos(localPlayerAvatar.rotation.y)*moveSpeed*moveDir;
       let hitKill=false;
-
-      // Character-controller locomotion: while grounded, movement follows the
-      // walkable visual surface directly. Gravity is only used once we actually
-      // leave that surface. This is what removes the "butter" feeling.
-      const startedGrounded=isGrounded;
-      pos.x+=moveX; pos.z+=moveZ;
-
-      let ground=null;
-      if (startedGrounded && velocityY<=0) {
-        ground=findWalkableGround(pos,blocks,0.42,0.30);
-      }
-
-      if (ground) {
-        pos.y=ground.y;
-        velocityY=0;
-        isGrounded=true;
-        solveCharacterContacts(pos,blocks,false);
-      } else {
-        // Airborne / jumping: normal contact solver plus gravity.
-        solveCharacterContacts(pos,blocks,false);
-        pos.y+=velocityY;
-        velocityY+=gravity;
-        const verticalContacts=solveCharacterContacts(pos,blocks,true);
-        isGrounded=verticalContacts.grounded;
-
-        // Ground acquisition probe: snap only to a walkable surface just below us.
-        if (!isGrounded && velocityY<=0) {
-          const landing=findWalkableGround(pos,blocks,0.16,0.04);
-          if (landing) {
-            pos.y=landing.y;
-            velocityY=0;
-            isGrounded=true;
-          }
-        }
-      }
-
-      // Trigger parts are checked independently of physical resolution.
       for (const b of blocks) {
-        const c=getShapeContact(pos.x,pos.y,pos.z,b);
-        if (!c) continue;
+        if (!b.actionType || b.actionType==='normal') continue;
+        if (!checkPlayerIntersectingBlockData(b,player.position)) continue;
         if (b.actionType==='kill') hitKill=true;
-        if (b.actionType==='checkpoint') triggerCheckpoint(b);
-        if (b.actionType==='finish') triggerFinishLine();
+        else if (b.actionType==='checkpoint') triggerCheckpoint(b);
+        else if (b.actionType==='finish') triggerFinishLine();
       }
 
-      if (hitKill || pos.y < -50) {
+      if (hitKill || player.position.y < -30) {
         respawnPlayer();
         return;
       }
 
-      updateAvatarAnimations(localPlayerAvatar,isMoving,isGrounded,delta,undefined,velocityY);
+      updateAvatarAnimations(player,isMoving,isGrounded,delta,undefined,velocityY);
 
       const now=Date.now();
       if (now-lastSendTime>40) {
         lastSendTime=now;
         socket.emit('player_movement',{
-          x:pos.x,y:pos.y,z:pos.z,
-          rotationY:localPlayerAvatar.rotation.y,
-          walkClock:localPlayerAvatar.userData.walkClock,
+          x:player.position.x,y:player.position.y,z:player.position.z,
+          rotationY:player.rotation.y,
+          walkClock:player.userData.walkClock,
           verticalVelocity:velocityY,
           isMoving,isGrounded
         });
