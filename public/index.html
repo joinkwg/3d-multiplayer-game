@@ -2825,47 +2825,65 @@
       const sx=Math.max(0.001,Math.abs(b.scaleX || 1));
       const sy=Math.max(0.001,Math.abs(b.scaleY || 1));
       const sz=Math.max(0.001,Math.abs(b.scaleZ || 1));
-      const pMinX=px-PLAYER_RADIUS,pMaxX=px+PLAYER_RADIUS;
       const pMinY=py,pMaxY=py+PLAYER_HEIGHT;
-      const pMinZ=pz-PLAYER_RADIUS,pMaxZ=pz+PLAYER_RADIUS;
 
       if (shape === 'sphere') {
-        // The rendered sphere becomes an ellipsoid under non-uniform scaling.
-        // Transform the player's closest point into unit-sphere space.
-        const rx=sx*0.5, ry=sy*0.5, rz=sz*0.5;
-        const qx=Math.max(pMinX,Math.min(b.x,pMaxX));
-        const qy=Math.max(pMinY,Math.min(b.y,pMaxY));
-        const qz=Math.max(pMinZ,Math.min(b.z,pMaxZ));
-        const nx=(qx-b.x)/rx, ny=(qy-b.y)/ry, nz=(qz-b.z)/rz;
-        if (nx*nx+ny*ny+nz*nz < 1) return {collided:true,type:'sphere'};
+        // Treat the avatar as a vertical capsule and the rendered part as an ellipsoid.
+        // Horizontal contact uses the ellipsoid cross-section at the player's feet/center height.
+        const rx=sx*.5, ry=sy*.5, rz=sz*.5;
+        const sampleY=Math.max(pMinY,Math.min(b.y,pMaxY));
+        const ny=(sampleY-b.y)/ry;
+        if (Math.abs(ny) <= 1) {
+          const section=Math.sqrt(Math.max(0,1-ny*ny));
+          const ex=rx*section, ez=rz*section;
+          const dx=px-b.x,dz=pz-b.z;
+          const expandedX=ex+PLAYER_RADIUS, expandedZ=ez+PLAYER_RADIUS;
+          const q=(dx*dx)/(expandedX*expandedX)+(dz*dz)/(expandedZ*expandedZ);
+          if (q < 1) {
+            // Exact visible top surface under the player's horizontal center.
+            const hq=(dx*dx)/(rx*rx)+(dz*dz)/(rz*rz);
+            const topY=hq<=1 ? b.y+ry*Math.sqrt(Math.max(0,1-hq)) : null;
+            return {collided:true,type:'sphere',topY,dx,dz,rx:expandedX,rz:expandedZ};
+          }
+        }
       } else if (shape === 'cylinder') {
-        // Match Three.js' scaled cylinder: elliptical X/Z footprint, exact Y height.
-        const rx=sx*0.5, rz=sz*0.5, halfH=sy*0.5;
+        const rx=sx*.5, rz=sz*.5, halfH=sy*.5;
         if (pMaxY > b.y-halfH && pMinY < b.y+halfH) {
-          const qx=Math.max(pMinX,Math.min(b.x,pMaxX));
-          const qz=Math.max(pMinZ,Math.min(b.z,pMaxZ));
-          const nx=(qx-b.x)/rx, nz=(qz-b.z)/rz;
-          if (nx*nx+nz*nz < 1) return {collided:true,type:'cylinder'};
+          const dx=px-b.x,dz=pz-b.z;
+          const ex=rx+PLAYER_RADIUS,ez=rz+PLAYER_RADIUS;
+          if ((dx*dx)/(ex*ex)+(dz*dz)/(ez*ez) < 1)
+            return {collided:true,type:'cylinder',topY:b.y+halfH,dx,dz,rx:ex,rz:ez};
         }
       } else if (shape === 'wedge') {
         const bBox=getBlockAABB(b);
-        if (checkAABBOverlap({minX:pMinX,maxX:pMaxX,minY:pMinY,maxY:pMaxY,minZ:pMinZ,maxZ:pMaxZ},bBox)) {
-          // Visual wedge rises from +Z (low) toward -Z (high), matching createWedgeGeometry().
-          // Sample the player's center plus front/back edges so the capsule-sized player
-          // contacts the actual ramp instead of the wedge's invisible bounding box.
+        if (px+PLAYER_RADIUS>bBox.minX && px-PLAYER_RADIUS<bBox.maxX &&
+            pz+PLAYER_RADIUS>bBox.minZ && pz-PLAYER_RADIUS<bBox.maxZ &&
+            pMaxY>bBox.minY && pMinY<bBox.maxY) {
           const sampleZ=Math.max(bBox.minZ,Math.min(bBox.maxZ,pz));
           const t=1-((sampleZ-bBox.minZ)/sz);
-          const topY=bBox.minY + Math.max(0,Math.min(1,t))*sy;
-          if (pMinY <= topY + 0.08 && pMaxY > bBox.minY) {
-            return {collided:true,type:'wedge',topY};
-          }
+          const topY=bBox.minY+Math.max(0,Math.min(1,t))*sy;
+          if (pMinY <= topY+.08) return {collided:true,type:'wedge',topY};
         }
       } else {
         const bBox=getBlockAABB(b);
-        if (checkAABBOverlap({minX:pMinX,maxX:pMaxX,minY:pMinY,maxY:pMaxY,minZ:pMinZ,maxZ:pMaxZ},bBox))
-          return {collided:true,type:'box',bBox};
+        const pBox={minX:px-PLAYER_RADIUS,maxX:px+PLAYER_RADIUS,minY:pMinY,maxY:pMaxY,minZ:pz-PLAYER_RADIUS,maxZ:pz+PLAYER_RADIUS};
+        if (checkAABBOverlap(pBox,bBox)) return {collided:true,type:'box',bBox};
       }
       return {collided:false};
+    }
+
+    function resolveCurvedHorizontalCollision(pos, b, res, oldX, oldZ) {
+      // Project the player smoothly to the nearest point on the expanded visual curve,
+      // rather than teleporting them to the part's rectangular bounding box.
+      if (res.type !== 'sphere' && res.type !== 'cylinder') return false;
+      let dx=pos.x-b.x,dz=pos.z-b.z;
+      if (Math.abs(dx)+Math.abs(dz)<1e-7) { dx=oldX-b.x; dz=oldZ-b.z; }
+      if (Math.abs(dx)+Math.abs(dz)<1e-7) dx=1;
+      const rx=res.rx,rz=res.rz;
+      const denom=Math.sqrt((dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)) || 1;
+      pos.x=b.x+dx/denom;
+      pos.z=b.z+dz/denom;
+      return true;
     }
 
     function respawnPlayer() {
@@ -2936,37 +2954,31 @@
       const blocks = currentWorldData ? Object.values(currentWorldData.blocks) : [];
       let hitKill = false;
 
-      // --- STEP 1: RESOLVE X-AXIS MOVEMENT ---
+      // --- STEP 1/2: RESOLVE HORIZONTAL MOVEMENT ---
+      // Move once, then project out of curved shapes along their actual visible contour.
+      // Boxes keep classic axis resolution; curved pieces no longer snap to their AABB.
+      const oldX=pos.x, oldZ=pos.z;
       pos.x += dx;
-      for (const b of blocks) {
-        const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
-        if (res.collided) {
-          if (b.actionType === 'kill') hitKill = true;
-          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-          if (b.actionType === 'finish') triggerFinishLine();
-
-          if (b.canCollide !== false && b.actionType !== 'kill') {
-            const bBox = getBlockAABB(b);
-            if (dx > 0) pos.x = bBox.minX - PLAYER_RADIUS;
-            else if (dx < 0) pos.x = bBox.maxX + PLAYER_RADIUS;
-          }
-        }
-      }
-
-      // --- STEP 2: RESOLVE Z-AXIS MOVEMENT ---
       pos.z += dz;
       for (const b of blocks) {
-        const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
-        if (res.collided) {
-          if (b.actionType === 'kill') hitKill = true;
-          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-          if (b.actionType === 'finish') triggerFinishLine();
+        let res=checkPlayerShapeCollision(pos.x,pos.y,pos.z,b);
+        if (!res.collided) continue;
+        if (b.actionType === 'kill') hitKill=true;
+        if (b.actionType === 'checkpoint') triggerCheckpoint(b);
+        if (b.actionType === 'finish') triggerFinishLine();
+        if (b.canCollide === false || b.actionType === 'kill') continue;
 
-          if (b.canCollide !== false && b.actionType !== 'kill') {
-            const bBox = getBlockAABB(b);
-            if (dz > 0) pos.z = bBox.minZ - PLAYER_RADIUS;
-            else if (dz < 0) pos.z = bBox.maxZ + PLAYER_RADIUS;
-          }
+        if (resolveCurvedHorizontalCollision(pos,b,res,oldX,oldZ)) continue;
+
+        if (res.type === 'wedge') {
+          // Wedges are walkable ramps; vertical resolution handles the visible slope.
+          continue;
+        }
+
+        // Box collision: retain stable axis-separated behavior.
+        pos.x=oldX;
+        if (checkPlayerShapeCollision(pos.x,pos.y,pos.z,b).collided) {
+          pos.x=oldX; pos.z=oldZ;
         }
       }
 
@@ -2976,6 +2988,7 @@
         let highestGround = -Infinity;
         for (const b of blocksForGround) {
           if (b.canCollide === false) continue;
+          if ((b.shape || 'box') !== 'box' && (b.shape || 'box') !== 'baseplate') continue;
           const box = getBlockAABB(b);
           if (localPlayerAvatar.position.x >= box.minX - PLAYER_RADIUS &&
               localPlayerAvatar.position.x <= box.maxX + PLAYER_RADIUS &&
@@ -3009,19 +3022,18 @@
 
           if (b.canCollide !== false && b.actionType !== 'kill') {
             const bBox = getBlockAABB(b);
-            if (res.type === 'wedge' && res.topY !== undefined) {
+            if (dy <= 0 && res.topY !== undefined && res.topY !== null) {
+              // Land directly on the rendered ramp/sphere/cylinder surface.
               pos.y = res.topY;
               velocityY = 0;
               isGrounded = true;
-            } else {
-              if (dy <= 0) {
-                pos.y = bBox.maxY;
-                velocityY = 0;
-                isGrounded = true;
-              } else if (dy > 0) {
-                pos.y = bBox.minY - PLAYER_HEIGHT;
-                velocityY = 0;
-              }
+            } else if (dy <= 0) {
+              pos.y = bBox.maxY;
+              velocityY = 0;
+              isGrounded = true;
+            } else if (dy > 0) {
+              pos.y = bBox.minY - PLAYER_HEIGHT;
+              velocityY = 0;
             }
           }
         }
