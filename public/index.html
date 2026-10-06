@@ -2983,10 +2983,6 @@
         cloudsGroup.rotation.y += delta * 0.02 * cloudRotationSpeedMultiplier;
       }
 
-      if (previewRenderer && previewScene) {
-        previewRenderer.render(previewScene, previewCamera);
-      }
-
       if (localPlayerAvatar) {
         // Exact single-player camera: same distance, height, rotation, smoothing,
         // right-click orbit, and automatic re-lock behind the player.
