@@ -369,8 +369,7 @@
       <button id="tool-place-btn" onclick="setBuildSubTool('place')">Place</button>
       <button id="tool-scale-btn" onclick="setBuildSubTool('scale')">Scale</button>
       <button id="tool-move-btn" onclick="setBuildSubTool('move')">Move</button>
-      <button id="tool-duplicate-btn" onclick="duplicateSelectedBlock()">Duplicate</button>
-      <button id="tool-delete-btn" onclick="setBuildSubTool('delete')">Delete</button>
+      <button id="tool-delete-btn" onclick="setBuildSubTool('delete')" style="grid-column: span 2;">Delete</button>
     </div>
 
     <!-- Selected Part Properties UI -->
@@ -2729,8 +2728,8 @@
       const id=`duplicate_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
       const copy=JSON.parse(JSON.stringify(original));
       copy.id=id;
-      // Offset by one stud so the duplicate is immediately visible/selectable.
-      copy.x=(Number(copy.x)||0)+1;
+      // Duplicate at the exact same transform as the original.
+      copy.x=Number(copy.x)||0;
       currentWorldData.blocks[id]=copy;
       socket.emit('block_update',{worldName:currentWorldName,action:'add',blockData:copy},r=>{
         if (r && !r.success) {
@@ -2755,7 +2754,22 @@
       const key = (typeof e.key === 'string') ? e.key.toLowerCase() : '';
       const activeTag = document.activeElement ? document.activeElement.tagName : '';
       if (activeTag === 'INPUT' || activeTag === 'SELECT' || activeTag === 'TEXTAREA') return;
-      if (key) keys[key] = true;
+
+      // Editor shortcuts are consumed before gameplay input. Ctrl/Cmd+D must not
+      // also act like the D movement/turn key.
+      if ((e.ctrlKey || e.metaKey) && key === 'd') {
+        if (isEditMode && selectedBlockId) {
+          e.preventDefault();
+          duplicateSelectedBlock();
+        }
+        keys['d'] = false;
+        keys['control'] = false;
+        keys['meta'] = false;
+        return;
+      }
+
+      // Modifier keys themselves never participate in player movement.
+      if (key !== 'control' && key !== 'meta' && key !== 'alt' && key !== 'shift') keys[key] = true;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (isEditMode && selectedBlockId) {
@@ -2764,12 +2778,6 @@
         }
       }
 
-      if ((e.ctrlKey || e.metaKey) && key === 'd') {
-        if (isEditMode && selectedBlockId) {
-          e.preventDefault();
-          duplicateSelectedBlock();
-        }
-      }
     });
     window.addEventListener('keyup', (e) => { const key = (typeof e.key === 'string') ? e.key.toLowerCase() : ''; if (key) keys[key] = false; });
 
@@ -2780,7 +2788,7 @@
     // Curved-surface traction: remembers the surface under the player briefly so
     // gravity doesn't make rounded parts feel like ice.
     let groundGrip = null;
-    const CURVED_GRIP_SLOPE = 0.72;
+    const CURVED_GRIP_SLOPE = 2.25;
     const maxStepHeight = 0.65;
     let targetStepY = 0;
 
@@ -3017,9 +3025,11 @@
         }
       }
 
-      // Surface traction: while grounded, follow gentle visible curves/ramps instead
-      // of instantly becoming airborne. Steep sides still behave like sides, so this
-      // does not let players stick to walls or climb near-vertical sphere edges.
+      // Strong curved-surface traction. If the player started this frame standing on
+      // a visible surface, keep their feet attached to that surface while walking.
+      // A generous slope limit makes large rounded parts feel grippy instead of icy;
+      // truly near-vertical sides still release the player naturally.
+      groundGrip=null;
       if (wasGrounded && moveDir !== 0) {
         let best=null;
         for (const b of blocks) {
@@ -3030,7 +3040,8 @@
           const horizontal=Math.hypot(pos.x-oldX,pos.z-oldZ);
           if (horizontal < 1e-6) continue;
           const slope=Math.abs(y1-y0)/horizontal;
-          if (slope <= CURVED_GRIP_SLOPE && Math.abs(oldYForGrip-y0) < 0.18) {
+          const feetWereOnSurface=Math.abs(oldYForGrip-y0) < 0.32;
+          if (feetWereOnSurface && slope <= CURVED_GRIP_SLOPE) {
             if (!best || y1>best.y) best={b,y:y1};
           }
         }
@@ -3039,8 +3050,6 @@
           velocityY=0;
           isGrounded=true;
           groundGrip=best.b.id;
-        } else {
-          groundGrip=null;
         }
       }
 
@@ -3153,7 +3162,7 @@
             if (pos.x>=box.minX-PLAYER_RADIUS && pos.x<=box.maxX+PLAYER_RADIUS &&
                 pos.z>=box.minZ-PLAYER_RADIUS && pos.z<=box.maxZ+PLAYER_RADIUS) surfaceY=box.maxY;
           }
-          if (surfaceY !== null && Math.abs(pos.y-surfaceY) <= 0.045) {
+          if (surfaceY !== null && Math.abs(pos.y-surfaceY) <= 0.12) {
             pos.y=surfaceY;
             velocityY=0;
             isGrounded=true;
