@@ -431,6 +431,25 @@
       color:#a8d2ff!important;text-decoration:underline;
     }
 
+
+    /* ===== V3.18 FRIENDS ===== */
+    .friend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;margin-left:5px;background:#e94d5f;color:#fff;font-size:9px;font-weight:950;vertical-align:middle}
+    .profile-friend-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .profile-friend-actions button{width:auto!important;margin:0!important;padding:9px 14px!important}
+    .friends-shell{display:grid;gap:14px}
+    .friends-header{display:flex;align-items:end;justify-content:space-between;background:linear-gradient(110deg,#111822,#1d2a3a);border:1px solid #3c4a5e;border-left:4px solid #4b9cff;padding:22px}
+    .friends-header h1{margin:3px 0 0!important}.friends-summary{font-size:11px;font-weight:900;letter-spacing:.12em;color:#8d9cb0}
+    .friends-list{display:grid;gap:7px}
+    .friend-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;background:#0d1219;border:1px solid #2e3a4c;padding:11px}
+    .friend-main{display:flex;align-items:center;gap:10px;min-width:0}
+    .friend-dot{width:8px;height:8px;background:#647185;flex:none}.friend-dot.online{background:#39c979;box-shadow:0 0 9px rgba(57,201,121,.5)}
+    .friend-name{font-weight:900;color:#dce8f7;cursor:pointer}.friend-name:hover{color:#72b5ff;text-decoration:underline}
+    .friend-presence{font-size:10px;color:#7e8da2;margin-top:2px}
+    .friend-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+    .friend-actions button{padding:7px 9px;background:#253c5b;color:#fff;border:1px solid #4b78ad;cursor:pointer;font-weight:800;font-size:10px}
+    .friend-actions button.danger{background:#3c2228;border-color:#77404b}
+    .friends-empty{padding:12px 0;color:#6f7e92}
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -465,7 +484,7 @@
         <div><h2 style="margin:0;text-transform:uppercase;">KWG 3D Online</h2><div style="font-size:12px;color:#aaa;">Logged in as: <span id="logged-user-display" style="color:#3388ff;font-weight:bold;">User</span></div></div>
         <div style="display:flex;gap:8px;align-items:center"><span class="coin-badge">🪙 <span id="home-coin-count">100</span> COINS</span><button id="logout-btn" class="logout-btn">LOG OUT</button></div>
       </div>
-      <div class="home-tabs"><button class="home-tab active" data-home-tab="home">HOME</button><button class="home-tab" data-home-tab="profile">PROFILE</button><button class="home-tab" data-home-tab="worlds">WORLDS</button><button class="home-tab" data-home-tab="store">STORE</button><button class="home-tab" data-home-tab="avatar">AVATAR EDITOR</button><button class="home-tab admin-home-tab" data-home-tab="admin">ADMIN</button></div>
+      <div class="home-tabs"><button class="home-tab active" data-home-tab="home">HOME</button><button class="home-tab" data-home-tab="profile">PROFILE</button><button class="home-tab" data-home-tab="friends">FRIENDS <span id="friend-request-badge" class="friend-badge" style="display:none">0</span></button><button class="home-tab" data-home-tab="worlds">WORLDS</button><button class="home-tab" data-home-tab="store">STORE</button><button class="home-tab" data-home-tab="avatar">AVATAR EDITOR</button><button class="home-tab admin-home-tab" data-home-tab="admin">ADMIN</button></div>
       <div id="home-pane" class="home-pane active"><div class="home-profile-grid"><div class="home-section"><h3>YOUR AVATAR</h3><div id="home-avatar-preview" class="home-avatar-preview"></div></div><div style="display:grid;gap:14px"><div class="home-section"><h3>YOUR WORLDS</h3><div id="home-owned-worlds" class="room-list-container home-owned-worlds"></div></div><div class="home-section"><h3>YOUR INVENTORY</h3><div id="home-inventory-grid" class="home-inventory-grid"></div></div></div></div></div>
       <div id="profile-pane" class="home-pane">
         <div class="profile-shell">
@@ -477,6 +496,7 @@
               <div id="profile-status" class="profile-status offline"><span class="profile-status-dot"></span><span>OFFLINE</span></div>
               <div id="profile-joined" class="profile-joined"></div>
               <button id="profile-join-world-btn" class="submit-btn profile-join-btn" style="display:none">JOIN WORLD</button>
+              <div id="profile-friend-actions" class="profile-friend-actions"></div>
             </div>
           </div>
           <div class="profile-stats">
@@ -501,6 +521,26 @@
               <div id="profile-showcase-worlds" class="profile-showcase-worlds"></div>
             </section>
           </div>
+        </div>
+      </div>
+      <div id="friends-pane" class="home-pane">
+        <div class="friends-shell">
+          <div class="friends-header">
+            <div><div class="profile-kicker">SOCIAL</div><h1>FRIENDS</h1></div>
+            <div id="friends-summary" class="friends-summary">0 FRIENDS</div>
+          </div>
+          <section id="incoming-friends-section" class="profile-panel">
+            <div class="profile-panel-title">FRIEND REQUESTS</div>
+            <div id="incoming-friends-list" class="friends-list"></div>
+          </section>
+          <section class="profile-panel">
+            <div class="profile-panel-title">YOUR FRIENDS</div>
+            <div id="friends-list" class="friends-list"></div>
+          </section>
+          <section class="profile-panel">
+            <div class="profile-panel-title">SENT REQUESTS</div>
+            <div id="outgoing-friends-list" class="friends-list"></div>
+          </section>
         </div>
       </div>
       <div id="worlds-pane" class="home-pane">
@@ -728,7 +768,7 @@
       'get_world_templates','get_store','buy_store_item','save_appearance',
       'update_appearance','toggle_world_like','delete_own_world',
       'admin_search_users','admin_search_worlds','admin_make_world_template',
-      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user','get_profile','update_profile'
+      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user','get_profile','update_profile','get_friends','send_friend_request','respond_friend_request','cancel_friend_request','remove_friend'
     ]);
     function setKWGLoading(delta){
       kwgLoadingCount=Math.max(0,kwgLoadingCount+delta);
@@ -984,6 +1024,7 @@
 
     function finishAuthentication(res) {
       loggedInUsername = res.username;
+      setTimeout(refreshFriendBadge,100);
       isAdmin = !!res.isAdmin;
       if (res.sessionToken) { sessionToken = res.sessionToken; localStorage.setItem('kwg_session_token', sessionToken); }
       document.querySelectorAll('.admin-home-tab').forEach(el => el.style.display = isAdmin ? 'block' : 'none');
@@ -3056,6 +3097,7 @@
       if (name === 'worlds') renderRoomList();
       if (name === 'home') renderHomeOverview();
       if (name === 'profile') loadProfile(loggedInUsername);
+      if (name === 'friends') loadFriends();
       if (name === 'admin' && isAdmin) { const pane=document.getElementById('admin-pane'); const card=document.getElementById('admin-card'); if(card && card.parentElement!==pane) pane.appendChild(card); refreshAdminPanel(); }
     }
     document.querySelectorAll('.home-tab').forEach(b => b.addEventListener('click', () => switchHomeTab(b.dataset.homeTab)));
@@ -3111,7 +3153,23 @@
 
       const bio=document.getElementById('profile-bio-view');
       bio.textContent=profile.bio || (profile.isOwnProfile ? 'You have not written an About Me yet.' : 'This player has not written an About Me yet.');
-      renderProfileAvatar(profile.appearance);
+
+      const friendActions=document.getElementById('profile-friend-actions');
+      friendActions.innerHTML='';
+      const rel=profile.friendship?.state || (profile.isOwnProfile?'self':'none');
+      const addAction=(label,fn,danger=false)=>{
+        const b=document.createElement('button'); b.className='submit-btn'+(danger?' danger':'');
+        b.textContent=label; b.addEventListener('click',fn); friendActions.appendChild(b);
+      };
+      if(rel==='none') addAction('ADD FRIEND',()=>friendAction('send_friend_request',profile.username));
+      if(rel==='outgoing') addAction('CANCEL REQUEST',()=>friendAction('cancel_friend_request',profile.username),true);
+      if(rel==='incoming'){
+        addAction('ACCEPT FRIEND',()=>friendAction('respond_friend_request',profile.username,{accept:true}));
+        addAction('DECLINE',()=>friendAction('respond_friend_request',profile.username,{accept:false}),true);
+      }
+      if(rel==='friends') addAction('REMOVE FRIEND',()=>friendAction('remove_friend',profile.username),true);
+
+            renderProfileAvatar(profile.appearance);
 
       const showcase=document.getElementById('profile-showcase-worlds'); showcase.innerHTML='';
       if(!profile.showcasedWorlds?.length) showcase.innerHTML='<div style="color:#6f7e92;padding:12px 0">No showcased worlds yet.</div>';
@@ -3136,6 +3194,83 @@
           label.append(check,text); picker.appendChild(label);
         });
       }
+    }
+
+
+    function friendAction(eventName,username,extra={}) {
+      socket.emit(eventName,{username,...extra},res=>{
+        if(!res?.success){showToast(res?.message||'Friend action failed.');return;}
+        if(res.message)showToast(res.message);
+        else showToast('Friends updated.');
+        loadProfile(username);
+        refreshFriendBadge();
+      });
+    }
+
+    function friendRow(user,kind) {
+      const row=document.createElement('div'); row.className='friend-row';
+      const main=document.createElement('div'); main.className='friend-main';
+      const dot=document.createElement('span'); dot.className='friend-dot'+(user.online?' online':'');
+      const text=document.createElement('div');
+      const name=document.createElement('div'); name.className='friend-name'; name.textContent=user.username;
+      name.addEventListener('click',()=>openPlayerProfile(user.username));
+      const presence=document.createElement('div'); presence.className='friend-presence';
+      if(kind==='friend') presence.textContent=user.online?(user.currentWorld?'ONLINE · '+user.currentWorld:'ONLINE'):'OFFLINE';
+      else presence.textContent=kind==='incoming'?'WANTS TO BE FRIENDS':'REQUEST SENT';
+      text.append(name,presence); main.append(dot,text);
+
+      const actions=document.createElement('div'); actions.className='friend-actions';
+      const button=(label,fn,danger=false)=>{
+        const b=document.createElement('button'); b.textContent=label;if(danger)b.className='danger';
+        b.onclick=fn;actions.appendChild(b);
+      };
+      if(kind==='friend'){
+        if(user.currentWorld)button('JOIN',()=>joinWorld(user.currentWorld));
+        button('PROFILE',()=>openPlayerProfile(user.username));
+        button('REMOVE',()=>friendListAction('remove_friend',user.username),true);
+      } else if(kind==='incoming'){
+        button('ACCEPT',()=>friendListAction('respond_friend_request',user.username,{accept:true}));
+        button('DECLINE',()=>friendListAction('respond_friend_request',user.username,{accept:false}),true);
+      } else {
+        button('CANCEL',()=>friendListAction('cancel_friend_request',user.username),true);
+      }
+      row.append(main,actions);return row;
+    }
+
+    function friendListAction(eventName,username,extra={}) {
+      socket.emit(eventName,{username,...extra},res=>{
+        if(!res?.success){showToast(res?.message||'Friend action failed.');return;}
+        showToast(res.message||'Friends updated.'); loadFriends();
+      });
+    }
+
+    function renderFriendList(id,items,kind,emptyText) {
+      const box=document.getElementById(id);box.innerHTML='';
+      if(!items?.length){box.innerHTML=`<div class="friends-empty">${emptyText}</div>`;return;}
+      items.forEach(u=>box.appendChild(friendRow(u,kind)));
+    }
+
+    function updateFriendBadge(n) {
+      const badge=document.getElementById('friend-request-badge');
+      if(!badge)return;
+      badge.textContent=String(n||0);badge.style.display=n?'inline-flex':'none';
+    }
+
+    function loadFriends() {
+      socket.emit('get_friends',{},res=>{
+        if(!res?.success){showToast(res?.message||'Could not load friends.');return;}
+        document.getElementById('friends-summary').textContent=`${res.friends.length} FRIEND${res.friends.length===1?'':'S'}`;
+        renderFriendList('friends-list',res.friends,'friend','No friends yet. Open a player profile to send a request.');
+        renderFriendList('incoming-friends-list',res.incoming,'incoming','No incoming friend requests.');
+        renderFriendList('outgoing-friends-list',res.outgoing,'outgoing','No sent friend requests.');
+        document.getElementById('incoming-friends-section').style.display=res.incoming.length?'block':'none';
+        updateFriendBadge(res.incoming.length);
+      });
+    }
+
+    function refreshFriendBadge() {
+      if(!loggedInUsername)return;
+      socket.emit('get_friends',{},res=>{if(res?.success)updateFriendBadge(res.incoming.length);});
     }
 
     function openPlayerProfile(username) {
