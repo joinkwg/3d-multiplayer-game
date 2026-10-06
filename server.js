@@ -626,27 +626,73 @@ io.on('connection', (socket) => {
       const world = await getWorldByName(worldName);
       if (!world) return cb && cb({success:false,message:'World not found.'});
       if (!canEditWorld(socket, world)) return cb && cb({success:false,message:'Only the world owner or an admin can edit this world.'});
-      const data = world.data;
-      data.blocks = data.blocks || {};
+
+      // IMPORTANT: update only the affected block inside PostgreSQL JSONB.
+      // The old code read the entire world, changed one block, then wrote the
+      // entire world back. Rapid edits could therefore overwrite each other
+      // ("last stale snapshot wins"), making deleted parts reappear later.
       if (action === 'add' || action === 'update') {
-        if (!blockData || !blockData.id) return;
-        if (Object.keys(data.blocks).length >= 1400 && action === 'add') return;
-        data.blocks[blockData.id] = blockData;
+        if (!blockData || !blockData.id) return cb && cb({success:false,message:'Invalid block data.'});
+
+        if (action === 'add') {
+          const countResult = await pool.query(
+            `SELECT COALESCE(jsonb_object_length(COALESCE(data->'blocks','{}'::jsonb)),0) AS count
+             FROM worlds WHERE id=$1`,
+            [world.id]
+          );
+          if (Number(countResult.rows[0]?.count || 0) >= 1400) {
+            return cb && cb({success:false,message:'Part limit reached (1400/1400 parts).'});
+          }
+        }
+
+        await pool.query(
+          `UPDATE worlds
+           SET data = jsonb_set(
+             jsonb_set(COALESCE(data,'{}'::jsonb), '{blocks}',
+               COALESCE(data->'blocks','{}'::jsonb), true),
+             ARRAY['blocks',$2]::text[],
+             $3::jsonb,
+             true
+           ),
+           updated_at=NOW()
+           WHERE id=$1`,
+          [world.id, String(blockData.id), JSON.stringify(blockData)]
+        );
       } else if (action === 'delete') {
-        const target = data.blocks[blockId];
+        if (!blockId) return cb && cb({success:false,message:'Invalid block id.'});
+
+        const current = await pool.query(
+          `SELECT data->'blocks'->$2 AS block FROM worlds WHERE id=$1`,
+          [world.id, String(blockId)]
+        );
+        const target = current.rows[0]?.block;
         if (blockId === 'baseplate' || target?.shape === 'baseplate') {
           return cb && cb({success:false,message:'The baseplate cannot be deleted. You can resize it instead.'});
         }
-        delete data.blocks[blockId];
-      } else return;
 
-      await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2', [JSON.stringify(data), world.id]);
-      // The editing client already applies its own change locally.
-      // Broadcast only to OTHER players so the sender does not receive a
-      // delayed copy of its own drag and visually snap backward/forward.
+        await pool.query(
+          `UPDATE worlds
+           SET data = jsonb_set(
+             COALESCE(data,'{}'::jsonb),
+             '{blocks}',
+             COALESCE(data->'blocks','{}'::jsonb) - $2,
+             true
+           ),
+           updated_at=NOW()
+           WHERE id=$1`,
+          [world.id, String(blockId)]
+        );
+      } else {
+        return cb && cb({success:false,message:'Invalid block action.'});
+      }
+
+      // ACK only after this exact edit has been committed.
       socket.to(`world:${world.name}`).emit('block_updated', {action,blockData,blockId});
       cb && cb({success:true});
-    } catch (e) { console.error(e); cb && cb({success:false,message:'Could not save block change.'}); }
+    } catch (e) {
+      console.error(e);
+      cb && cb({success:false,message:'Could not save block change.'});
+    }
   });
 
   socket.on('world_settings_update', async ({worldName,settings}, cb) => {
