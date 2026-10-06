@@ -25,12 +25,12 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 const defaultAppearance = {
   hat: 'none',
   headShape: 'sphere',
-  headColor: '#f1c40f',
-  torsoColor: '#3388ff',
-  leftArmColor: '#3388ff',
-  rightArmColor: '#3388ff',
-  leftLegColor: '#1c2833',
-  rightLegColor: '#1c2833'
+  headColor: '#f3ff00',
+  torsoColor: '#0015ff',
+  leftArmColor: '#0015ff',
+  rightArmColor: '#0015ff',
+  leftLegColor: '#000000',
+  rightLegColor: '#000000'
 };
 
 function cleanUsername(v) {
