@@ -1263,7 +1263,9 @@
     let cloudsMaterial = new THREE.MeshLambertMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.85
+      opacity: 0.85,
+      depthTest: false,
+      depthWrite: false
     });
 
     function createBlockyCloudsSystem() {
@@ -1292,6 +1294,7 @@
           const d = 4 + Math.random() * 5;
 
           const blockMesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cloudsMaterial);
+          blockMesh.renderOrder = -100;
           blockMesh.position.set(
             (Math.random() - 0.5) * 8,
             (Math.random() - 0.5) * 1.2,
@@ -1912,6 +1915,8 @@
 
     const hoverOutlineGroup = new THREE.Group();
     scene.add(hoverOutlineGroup);
+    const selectionOutlineGroup = new THREE.Group();
+    scene.add(selectionOutlineGroup);
 
     let activeDragAxis = null; 
     let dragPlane = null;
@@ -1963,12 +1968,14 @@
         selectedBlockId = null;
         clearGizmos();
         clearHoverOutline();
+        clearSelectionOutline();
         updatePartPropertiesUI();
         return;
       }
 
       selectedBlockId = blockMesh.userData.blockId;
-      updateHoverOutline(blockMesh);
+      clearHoverOutline();
+      updateSelectionOutline(blockMesh);
 
       if (buildSubTool === 'scale' || buildSubTool === 'move') {
         buildGizmosForBlock(blockMesh);
@@ -2021,10 +2028,9 @@
       scene.add(updatedMesh);
       worldBlocks[selectedBlockId] = updatedMesh;
 
+      updateSelectionOutline(updatedMesh);
       if (buildSubTool === 'scale' || buildSubTool === 'move') {
         buildGizmosForBlock(updatedMesh);
-      } else {
-        updateHoverOutline(updatedMesh);
       }
     }
 
@@ -2040,60 +2046,71 @@
       }
     }
 
+    function clearOutlineGroup(group) {
+      while (group.children.length > 0) group.remove(group.children[0]);
+    }
+
     function clearHoverOutline() {
       hoveredBlockId = null;
-      while (hoverOutlineGroup.children.length > 0) {
-        hoverOutlineGroup.remove(hoverOutlineGroup.children[0]);
-      }
+      clearOutlineGroup(hoverOutlineGroup);
+    }
+
+    function clearSelectionOutline() {
+      clearOutlineGroup(selectionOutlineGroup);
+    }
+
+    function drawBlockOutline(targetMesh, group, color) {
+      clearOutlineGroup(group);
+      if (!targetMesh || !isEditMode) return;
+
+      targetMesh.traverse((child) => {
+        if (!child.isMesh || !child.geometry) return;
+        const edgesGeo = new THREE.EdgesGeometry(child.geometry, 15);
+        const outlineMat = new THREE.LineBasicMaterial({
+          color,
+          depthTest: false,
+          transparent: true,
+          opacity: 1
+        });
+        const lineSegments = new THREE.LineSegments(edgesGeo, outlineMat);
+        lineSegments.renderOrder = 998;
+        lineSegments.position.copy(child.position);
+        lineSegments.rotation.copy(child.rotation);
+        lineSegments.scale.copy(child.scale);
+
+        if (child.parent && child.parent !== scene) {
+          const subGroup = new THREE.Group();
+          subGroup.position.copy(targetMesh.position);
+          subGroup.rotation.copy(targetMesh.rotation);
+          subGroup.scale.copy(targetMesh.scale);
+          subGroup.add(lineSegments);
+          group.add(subGroup);
+        } else {
+          lineSegments.position.copy(targetMesh.position);
+          lineSegments.rotation.copy(targetMesh.rotation);
+          lineSegments.scale.copy(targetMesh.scale);
+          group.add(lineSegments);
+        }
+      });
+    }
+
+    function updateSelectionOutline(targetMesh) {
+      drawBlockOutline(targetMesh, selectionOutlineGroup, 0x00d2ff);
     }
 
     function updateHoverOutline(targetMesh) {
-      while (hoverOutlineGroup.children.length > 0) {
-        hoverOutlineGroup.remove(hoverOutlineGroup.children[0]);
-      }
-      if (!targetMesh || !isEditMode) {
-        hoveredBlockId = null;
-        return;
-      }
-
+      clearHoverOutline();
+      if (!targetMesh || !isEditMode) return;
       hoveredBlockId = targetMesh.userData.blockId;
-      const isSelected = (hoveredBlockId === selectedBlockId);
-
-      targetMesh.traverse((child) => {
-        if (child.isMesh && child.geometry) {
-          const edgesGeo = new THREE.EdgesGeometry(child.geometry, 15);
-          const outlineMat = new THREE.LineBasicMaterial({
-            color: isSelected ? 0x00d2ff : 0x3388ff,
-            linewidth: isSelected ? 3 : 1
-          });
-          const lineSegments = new THREE.LineSegments(edgesGeo, outlineMat);
-          
-          lineSegments.position.copy(child.position);
-          lineSegments.rotation.copy(child.rotation);
-          lineSegments.scale.copy(child.scale);
-          
-          if (child.parent && child.parent !== scene) {
-            const subGroup = new THREE.Group();
-            subGroup.position.copy(targetMesh.position);
-            subGroup.rotation.copy(targetMesh.rotation);
-            subGroup.scale.copy(targetMesh.scale);
-            subGroup.add(lineSegments);
-            hoverOutlineGroup.add(subGroup);
-          } else {
-            lineSegments.position.copy(targetMesh.position);
-            lineSegments.rotation.copy(targetMesh.rotation);
-            lineSegments.scale.copy(targetMesh.scale);
-            hoverOutlineGroup.add(lineSegments);
-          }
-        }
-      });
+      if (hoveredBlockId === selectedBlockId) return;
+      drawBlockOutline(targetMesh, hoverOutlineGroup, 0x3388ff);
     }
 
     function buildGizmosForBlock(blockMesh) {
       clearGizmos();
       if (!blockMesh) return;
       selectedBlockId = blockMesh.userData.blockId;
-      updateHoverOutline(blockMesh);
+      updateSelectionOutline(blockMesh);
 
       const box = new THREE.Box3().setFromObject(blockMesh);
       const center = new THREE.Vector3();
@@ -2123,8 +2140,17 @@
         arrow.position.copy(d.pos);
         arrow.rotation.set(d.rot.x, d.rot.y, d.rot.z);
         arrow.renderOrder = 999;
-        arrow.userData = { isGizmoArrow: true, axis: d.name };
+        arrow.userData = { isGizmoArrow: true, axis: d.name, baseGizmoScale: 1 };
         gizmoGroup.add(arrow);
+      });
+    }
+
+    function updateGizmoScreenScale() {
+      if (!camera || gizmoGroup.children.length === 0) return;
+      gizmoGroup.children.forEach((arrow) => {
+        const distance = camera.position.distanceTo(arrow.position);
+        const s = Math.max(1, Math.min(12, distance / 10));
+        arrow.scale.setScalar(s);
       });
     }
 
@@ -2367,7 +2393,9 @@
           }
 
           if (hitObj.userData.isBlock) {
-            if (hitObj.userData.blockId !== hoveredBlockId && hitObj.userData.blockId !== selectedBlockId) {
+            if (hitObj.userData.blockId === selectedBlockId) {
+              clearHoverOutline();
+            } else if (hitObj.userData.blockId !== hoveredBlockId) {
               updateHoverOutline(hitObj);
             }
           }
@@ -2379,9 +2407,7 @@
             previewMesh.visible = true;
           }
         } else {
-          if (!selectedBlockId) {
-            clearHoverOutline();
-          }
+          clearHoverOutline();
           if (previewMesh) previewMesh.visible = false;
         }
       }
@@ -3132,6 +3158,14 @@
       const delta = Math.min(clock.getDelta(), 0.1);
 
       updatePlayerPhysics(delta);
+      updateGizmoScreenScale();
+
+      if (localPlayerAvatar) {
+        // Sky-layer clouds follow the player instead of occupying fixed map space.
+        cloudsGroup.position.x = localPlayerAvatar.position.x;
+        cloudsGroup.position.z = localPlayerAvatar.position.z;
+        cloudsGroup.position.y = localPlayerAvatar.position.y;
+      }
 
       if (cloudsGroup.visible && cloudRotationSpeedMultiplier > 0) {
         cloudsGroup.rotation.y += delta * 0.02 * cloudRotationSpeedMultiplier;
