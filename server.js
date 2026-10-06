@@ -67,7 +67,7 @@ function requireAuth(socket, cb) {
 }
 function requireAdmin(socket, cb) {
   if (!requireAuth(socket, cb)) return false;
-  if (!socket.user.isAdmin) {
+  if (!(socket.user.isAdmin || socket.user.is_admin)) {
     cb && cb({ success: false, message: 'Admin access required.' });
     return false;
   }
@@ -103,6 +103,22 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS chat_world_created_idx ON chat_messages(world_id, created_at DESC);
   `);
 
+  // Older multiplayer worlds could be created completely empty. The editor places
+  // parts onto existing surfaces, so seed a baseplate only when a world has zero blocks.
+  const emptyWorlds = await pool.query(`SELECT id,data FROM worlds`);
+  for (const row of emptyWorlds.rows) {
+    const data = row.data || {};
+    data.blocks = data.blocks || {};
+    if (Object.keys(data.blocks).length === 0) {
+      data.blocks.baseplate = {
+        id:'baseplate', shape:'baseplate', actionType:'normal', material:'grid', color:'#555555',
+        transparency:0, canCollide:true, anchored:true,
+        x:0, y:-0.5, z:0, scaleX:250, scaleY:1, scaleZ:250
+      };
+      await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2', [JSON.stringify(data), row.id]);
+    }
+  }
+
   const adminUsername = cleanUsername(process.env.ADMIN_USERNAME);
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (adminUsername && adminPassword) {
@@ -120,6 +136,11 @@ async function migrate() {
 async function getWorldByName(name) {
   const r = await pool.query('SELECT * FROM worlds WHERE name=$1', [name]);
   return r.rows[0] || null;
+}
+
+function canEditWorld(socket, world) {
+  if (!socket.user || !world) return false;
+  return !!(socket.user.isAdmin || socket.user.is_admin || Number(world.owner_user_id) === Number(socket.user.id));
 }
 
 async function worldSummary(row) {
@@ -148,6 +169,7 @@ io.on('connection', (socket) => {
         [username, hash, JSON.stringify(defaultAppearance)]
       );
       socket.user = r.rows[0];
+      socket.user.isAdmin = !!socket.user.is_admin;
       socketsByUser.set(socket.user.id, socket);
       cb({success:true,username:socket.user.username,appearance:socket.user.appearance,isAdmin:false});
     } catch (e) {
@@ -164,6 +186,7 @@ io.on('connection', (socket) => {
         return cb({success:false,message:'Invalid username or password.'});
       }
       socket.user = user;
+      socket.user.isAdmin = !!user.is_admin;
       socketsByUser.set(user.id, socket);
       cb({success:true,username:user.username,appearance:user.appearance,isAdmin:user.is_admin});
     } catch (e) {
@@ -193,7 +216,13 @@ io.on('connection', (socket) => {
       if (exists.rowCount) return cb({success:false,message:'That world already exists.'});
       const data = {
         name,
-        blocks: {},
+        blocks: {
+          "baseplate": {
+            id: "baseplate", shape: "baseplate", actionType: "normal", material: "grid",
+            color: "#555555", transparency: 0, canCollide: true, anchored: true,
+            x: 0, y: -0.5, z: 0, scaleX: 250, scaleY: 1, scaleZ: 250
+          }
+        },
         spawnPoint: {x:0,y:0.05,z:0},
         skyColor:'#a0a0e0',
         cloudsEnabled:true,
@@ -228,7 +257,7 @@ io.on('connection', (socket) => {
       };
       playersBySocket.set(socket.id, p);
       socket.to(`world:${world.name}`).emit('player_joined', p);
-      cb({success:true,worldData:world.data,players,selfId:socket.id});
+      cb({success:true,worldData:world.data,players,selfId:socket.id,canEdit:canEditWorld(socket, world)});
     } catch (e) { console.error(e); cb({success:false,message:'Could not join world.'}); }
   });
 
@@ -257,12 +286,13 @@ io.on('connection', (socket) => {
     socket.to(`world:${p.worldName}`).emit('player_moved', p);
   });
 
-  socket.on('block_update', async ({worldName, action, blockData, blockId}) => {
+  socket.on('block_update', async ({worldName, action, blockData, blockId}, cb) => {
     if (!requireAuth(socket)) return;
     if (socket.data.worldName !== cleanWorldName(worldName)) return;
     try {
       const world = await getWorldByName(worldName);
-      if (!world) return;
+      if (!world) return cb && cb({success:false,message:'World not found.'});
+      if (!canEditWorld(socket, world)) return cb && cb({success:false,message:'Only the world owner or an admin can edit this world.'});
       const data = world.data;
       data.blocks = data.blocks || {};
       if (action === 'add' || action === 'update') {
@@ -275,15 +305,17 @@ io.on('connection', (socket) => {
 
       await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2', [JSON.stringify(data), world.id]);
       io.to(`world:${world.name}`).emit('block_updated', {action,blockData,blockId});
-    } catch (e) { console.error(e); }
+      cb && cb({success:true});
+    } catch (e) { console.error(e); cb && cb({success:false,message:'Could not save block change.'}); }
   });
 
-  socket.on('world_settings_update', async ({worldName,settings}) => {
+  socket.on('world_settings_update', async ({worldName,settings}, cb) => {
     if (!requireAuth(socket)) return;
     if (socket.data.worldName !== cleanWorldName(worldName) || !settings) return;
     try {
       const world = await getWorldByName(worldName);
-      if (!world) return;
+      if (!world) return cb && cb({success:false,message:'World not found.'});
+      if (!canEditWorld(socket, world)) return cb && cb({success:false,message:'Only the world owner or an admin can edit this world.'});
       const allowed = ['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint'];
       const next = {};
       for (const k of allowed) if (Object.prototype.hasOwnProperty.call(settings,k)) next[k] = settings[k];
@@ -298,7 +330,8 @@ io.on('connection', (socket) => {
       Object.assign(world.data,next);
       await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(world.data),world.id]);
       io.to(`world:${world.name}`).emit('world_settings_updated',next);
-    } catch (e) { console.error(e); }
+      cb && cb({success:true});
+    } catch (e) { console.error(e); cb && cb({success:false,message:'Could not save world settings.'}); }
   });
 
   socket.on('save_appearance', async (appearance) => {
