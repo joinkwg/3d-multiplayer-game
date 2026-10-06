@@ -585,6 +585,13 @@
       display:inline-flex!important;
     }
 
+
+    /* ===== V3.21 PROFESSIONAL AVATAR BODY + SEMANTIC COLORS ===== */
+    #avatar-editor-pane .kwg-avatar-colors{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+    #avatar-editor-pane .kwg-avatar-colors label{display:grid!important;grid-template-columns:1fr!important;gap:7px!important;text-align:center!important;letter-spacing:.08em!important}
+    #avatar-editor-pane .kwg-avatar-colors input[type="color"]{width:100%!important;height:34px!important;padding:2px!important;cursor:pointer!important}
+    @media(max-width:760px){#avatar-editor-pane .kwg-avatar-colors{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -720,7 +727,13 @@
         <div class="avatar-editor-layout">
           <div><div id="avatar-editor-preview" class="avatar-preview-large"><div class="preview-hint">Drag to rotate • releases back to front</div></div><button id="save-avatar-editor-btn" class="submit-btn">SAVE APPEARANCE</button></div>
           <div class="inventory-panel"><div class="inventory-tabs"><button class="inventory-tab active" data-inv-category="eyes">EYES</button><button class="inventory-tab" data-inv-category="mouth">MOUTHS</button><button class="inventory-tab" data-inv-category="torso_decal">SHIRTS</button><button class="inventory-tab" data-inv-category="hat">HATS</button><button class="inventory-tab" data-inv-category="head_shape">HEADS</button></div><div id="avatar-inventory-grid"></div>
-          <div class="color-grid"><label>Head <input type="color" id="av-head-color"></label><label>Torso <input type="color" id="av-torso-color"></label><label>Left Arm <input type="color" id="av-left-arm-color"></label><label>Right Arm <input type="color" id="av-right-arm-color"></label><label>Left Leg <input type="color" id="av-left-leg-color"></label><label>Right Leg <input type="color" id="av-right-leg-color"></label></div></div>
+          <div class="color-grid kwg-avatar-colors">
+<label><span>SKIN</span><input type="color" id="av-skin-color"></label>
+<label><span>SHIRT</span><input type="color" id="av-shirt-color"></label>
+<label><span>PANTS</span><input type="color" id="av-pants-color"></label>
+<label><span>SHOES</span><input type="color" id="av-shoes-color"></label>
+<label><span>HAIR</span><input type="color" id="av-hair-color"></label>
+</div></div>
         </div>
       </div>
       <div id="admin-pane" class="home-pane"></div>
@@ -2056,71 +2069,83 @@
     function buildBlockyAvatar(app, cosmetics = {}) {
       const group = new THREE.Group();
 
-      const headMat = new THREE.MeshLambertMaterial({ color: app.headColor || '#f1c40f' });
-      const torsoMat = new THREE.MeshLambertMaterial({ color: app.torsoColor || '#3388ff' });
-      const leftArmMat = new THREE.MeshLambertMaterial({ color: app.leftArmColor || '#3388ff' });
-      const rightArmMat = new THREE.MeshLambertMaterial({ color: app.rightArmColor || '#3388ff' });
-      const leftLegMat = new THREE.MeshLambertMaterial({ color: app.leftLegColor || '#1c2833' });
-      const rightLegMat = new THREE.MeshLambertMaterial({ color: app.rightLegColor || '#1c2833' });
+      // V3.21 semantic colors. Legacy fields remain fallback-compatible with existing saved accounts/server schema.
+      const skinColor = app.skinColor || app.headColor || '#d9a679';
+      const shirtColor = app.shirtColor || app.torsoColor || '#3b82d0';
+      const pantsColor = app.pantsColor || app.leftLegColor || '#263447';
+      const shoesColor = app.shoesColor || '#15191f';
+      const hairColor = app.hairColor || '#3a261b';
+      const skinMat = new THREE.MeshLambertMaterial({color:skinColor});
+      const shirtMat = new THREE.MeshLambertMaterial({color:shirtColor});
+      const pantsMat = new THREE.MeshLambertMaterial({color:pantsColor});
+      const shoeMat = new THREE.MeshLambertMaterial({color:shoesColor});
+      const hairMat = new THREE.MeshLambertMaterial({color:hairColor});
 
-      // Legs
-      const leftLegPivot = new THREE.Group(); leftLegPivot.position.set(-0.22, 0.8, 0);
-      const rightLegPivot = new THREE.Group(); rightLegPivot.position.set(0.22, 0.8, 0);
-      const legGeo = new THREE.BoxGeometry(0.38, 0.8, 0.38);
-      const leftLeg = new THREE.Mesh(legGeo, leftLegMat); leftLeg.position.set(0, -0.4, 0); leftLegPivot.add(leftLeg);
-      const rightLeg = new THREE.Mesh(legGeo, rightLegMat); rightLeg.position.set(0, -0.4, 0); rightLegPivot.add(rightLeg);
-      group.add(leftLegPivot, rightLegPivot);
+      // More polished stylized proportions: narrower waist, shoulders, hands, lower legs and shoes.
+      const leftLegPivot=new THREE.Group(); leftLegPivot.position.set(-0.205,0.82,0);
+      const rightLegPivot=new THREE.Group(); rightLegPivot.position.set(0.205,0.82,0);
+      const upperLegGeo=new THREE.BoxGeometry(0.34,0.48,0.38);
+      const lowerLegGeo=new THREE.BoxGeometry(0.31,0.34,0.34);
+      const shoeGeo=new THREE.BoxGeometry(0.34,0.18,0.48);
+      function makeLeg(pivot){
+        const upper=new THREE.Mesh(upperLegGeo,pantsMat); upper.position.set(0,-0.22,0); pivot.add(upper);
+        const lower=new THREE.Mesh(lowerLegGeo,pantsMat); lower.position.set(0,-0.62,0); pivot.add(lower);
+        const shoe=new THREE.Mesh(shoeGeo,shoeMat); shoe.position.set(0,-0.84,0.055); pivot.add(shoe);
+      }
+      makeLeg(leftLegPivot); makeLeg(rightLegPivot); group.add(leftLegPivot,rightLegPivot);
 
-      // Torso
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.9, 0.45), torsoMat);
-      torso.position.set(0, 1.25, 0); group.add(torso);
-      addImageCosmetic(group, cosmetics.torso_decal, 0.70, 0.72, 0, 1.25, 0.231);
+      // Layered torso gives the body a cleaner shoulder-to-waist silhouette.
+      const torso=new THREE.Mesh(new THREE.BoxGeometry(0.78,0.78,0.43),shirtMat);
+      torso.position.set(0,1.30,0); group.add(torso);
+      const shoulders=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.20,0.45),shirtMat);
+      shoulders.position.set(0,1.60,0); group.add(shoulders);
+      const waist=new THREE.Mesh(new THREE.BoxGeometry(0.67,0.18,0.39),pantsMat);
+      waist.position.set(0,0.86,0); group.add(waist);
+      addImageCosmetic(group,cosmetics.torso_decal,0.66,0.64,0,1.31,0.221);
 
-      // Arms
-      const leftArmPivot = new THREE.Group(); leftArmPivot.position.set(-0.63, 1.6, 0);
-      const rightArmPivot = new THREE.Group(); rightArmPivot.position.set(0.63, 1.6, 0);
-      const armGeo = new THREE.BoxGeometry(0.35, 0.85, 0.35);
-      const leftArm = new THREE.Mesh(armGeo, leftArmMat); leftArm.position.set(0, -0.38, 0); leftArmPivot.add(leftArm);
-      const rightArm = new THREE.Mesh(armGeo, rightArmMat); rightArm.position.set(0, -0.38, 0); rightArmPivot.add(rightArm);
-      group.add(leftArmPivot, rightArmPivot);
+      // Shirt sleeves + exposed forearms/hands.
+      const leftArmPivot=new THREE.Group(); leftArmPivot.position.set(-0.60,1.58,0);
+      const rightArmPivot=new THREE.Group(); rightArmPivot.position.set(0.60,1.58,0);
+      function makeArm(pivot){
+        const sleeve=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.34,0.34),shirtMat); sleeve.position.set(0,-0.14,0); pivot.add(sleeve);
+        const forearm=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.38,0.28),skinMat); forearm.position.set(0,-0.48,0); pivot.add(forearm);
+        const hand=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.20,0.30),skinMat); hand.position.set(0,-0.76,0); pivot.add(hand);
+      }
+      makeArm(leftArmPivot); makeArm(rightArmPivot); group.add(leftArmPivot,rightArmPivot);
 
-      // Head: a purchased custom GLB overrides the built-in head shape.
-      const customHead = cosmetics.head_shape;
-      const headShape = app.headShape || 'sphere';
-      const hasHead = !!customHead || headShape !== 'headless';
-      if (customHead) {
-        const anchor = new THREE.Group();
-        anchor.position.set(0, 2.02, 0);
-        group.add(anchor);
-        attachNormalizedGLB(anchor, customHead, 0.72);
-      } else if (headShape !== 'headless') {
+      // Purchased custom GLB heads still override built-in geometry.
+      const customHead=cosmetics.head_shape;
+      const headShape=app.headShape||'sphere';
+      const hasHead=!!customHead||headShape!=='headless';
+      if(customHead){
+        const anchor=new THREE.Group(); anchor.position.set(0,2.04,0); group.add(anchor); attachNormalizedGLB(anchor,customHead,0.72);
+      } else if(headShape!=='headless'){
         let headGeo;
-        if (headShape === 'sphere') headGeo = new THREE.SphereGeometry(0.38, 16, 16);
-        else if (headShape === 'cylinder') headGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.65, 16);
-        else headGeo = new THREE.BoxGeometry(0.65, 0.65, 0.65);
-        const head = new THREE.Mesh(headGeo, headMat);
-        head.position.set(0, 2.02, 0);
-        group.add(head);
+        if(headShape==='sphere') headGeo=new THREE.SphereGeometry(0.37,20,16);
+        else if(headShape==='cylinder') headGeo=new THREE.CylinderGeometry(0.34,0.35,0.64,20);
+        else headGeo=new THREE.BoxGeometry(0.63,0.63,0.63);
+        const head=new THREE.Mesh(headGeo,skinMat); head.position.set(0,2.04,0); group.add(head);
+
+        // Simple stylized hair cap so Hair Color always has a visible purpose.
+        const hair=new THREE.Mesh(
+          headShape==='sphere' ? new THREE.SphereGeometry(0.378,20,12,0,Math.PI*2,0,Math.PI*0.48) : new THREE.BoxGeometry(0.65,0.16,0.65),
+          hairMat
+        );
+        hair.position.set(0,headShape==='sphere'?2.04:2.31,0);
+        group.add(hair);
       }
 
-      // Flat facial features sit just in front of the standard head position.
-      if (hasHead) {
-        addImageCosmetic(group, cosmetics.eyes, 0.48, 0.18, 0, 2.10, 0.395);
-        addImageCosmetic(group, cosmetics.mouth, 0.30, 0.13, 0, 1.91, 0.397);
+      if(hasHead){
+        addImageCosmetic(group,cosmetics.eyes,0.47,0.17,0,2.11,0.388);
+        addImageCosmetic(group,cosmetics.mouth,0.29,0.12,0,1.93,0.390);
       }
-
-      // Purchased custom hats override the built-in accessory selector.
-      if (cosmetics.hat) {
-        const hatAnchor = new THREE.Group();
-        hatAnchor.position.set(0, 2.37, 0);
-        group.add(hatAnchor);
-        attachNormalizedGLB(hatAnchor, cosmetics.hat, 0.9);
+      if(cosmetics.hat){
+        const hatAnchor=new THREE.Group(); hatAnchor.position.set(0,2.38,0); group.add(hatAnchor); attachNormalizedGLB(hatAnchor,cosmetics.hat,0.9);
       } else {
-        const hatMesh = createHatMesh(app.hat);
-        if (hatMesh) group.add(hatMesh);
+        const hatMesh=createHatMesh(app.hat); if(hatMesh) group.add(hatMesh);
       }
 
-      group.userData.limbs = { leftArm: leftArmPivot, rightArm: rightArmPivot, leftLeg: leftLegPivot, rightLeg: rightLegPivot, torso };
+      group.userData.limbs={leftArm:leftArmPivot,rightArm:rightArmPivot,leftLeg:leftLegPivot,rightLeg:rightLegPivot,torso};
       return group;
     }
 
@@ -3605,10 +3630,12 @@
       (function loop(){requestAnimationFrame(loop);if(editorMesh){if(editorDragging)editorMesh.rotation.y=editorTargetRotation;else{editorTargetRotation*=.82;editorMesh.rotation.y*=.82;if(Math.abs(editorMesh.rotation.y)<.002){editorMesh.rotation.y=0;editorTargetRotation=0;}}}editorRenderer.render(editorScene,editorCamera)})();
     }
     function updateEditorAvatar(){if(!editorScene||!avatarDraft)return;if(editorMesh)editorScene.remove(editorMesh);editorMesh=buildBlockyAvatar(avatarDraft,cosmeticsForAppearance(avatarDraft));editorMesh.rotation.y=editorTargetRotation;editorScene.add(editorMesh);}
-    function syncEditorColors(){[['av-head-color','headColor'],['av-torso-color','torsoColor'],['av-left-arm-color','leftArmColor'],['av-right-arm-color','rightArmColor'],['av-left-leg-color','leftLegColor'],['av-right-leg-color','rightLegColor']].forEach(([id,k])=>{document.getElementById(id).value=avatarDraft[k];});}
+    function normalizeSemanticAppearance(app){app=app||{};app.skinColor=app.skinColor||app.headColor||'#d9a679';app.shirtColor=app.shirtColor||app.torsoColor||'#3b82d0';app.pantsColor=app.pantsColor||app.leftLegColor||'#263447';app.shoesColor=app.shoesColor||'#15191f';app.hairColor=app.hairColor||'#3a261b';return app;}
+    function mirrorSemanticColors(app){normalizeSemanticAppearance(app);app.headColor=app.skinColor;app.torsoColor=app.shirtColor;app.leftArmColor=app.skinColor;app.rightArmColor=app.skinColor;app.leftLegColor=app.pantsColor;app.rightLegColor=app.pantsColor;return app;}
+    function syncEditorColors(){normalizeSemanticAppearance(avatarDraft);[['av-skin-color','skinColor'],['av-shirt-color','shirtColor'],['av-pants-color','pantsColor'],['av-shoes-color','shoesColor'],['av-hair-color','hairColor']].forEach(([id,k])=>{document.getElementById(id).value=avatarDraft[k];});}
     function openAvatarEditor(){refreshStoreData(()=>{avatarDraft=JSON.parse(JSON.stringify(playerAppearance));initEditorPreview();syncEditorColors();renderAvatarInventory();updateEditorAvatar();});}
-    [['av-head-color','headColor'],['av-torso-color','torsoColor'],['av-left-arm-color','leftArmColor'],['av-right-arm-color','rightArmColor'],['av-left-leg-color','leftLegColor'],['av-right-leg-color','rightLegColor']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{if(!avatarDraft)return;avatarDraft[k]=e.target.value;updateEditorAvatar();}));
-    document.getElementById('save-avatar-editor-btn').addEventListener('click',()=>{const b=document.getElementById('save-avatar-editor-btn');b.disabled=true;b.textContent='SAVING...';socket.emit('save_appearance',avatarDraft,res=>{b.disabled=false;b.textContent='SAVE APPEARANCE';if(!res||!res.success)return showToast((res&&res.message)||'Could not save appearance.');playerAppearance=res.appearance||avatarDraft;equippedCosmetics=res.cosmetics||cosmeticsForAppearance(playerAppearance);localStorage.setItem('sp_player_appearance',JSON.stringify(playerAppearance));avatarDraft=JSON.parse(JSON.stringify(playerAppearance));renderAvatarInventory();updateEditorAvatar();showToast('Appearance saved.');});});
+    [['av-skin-color','skinColor'],['av-shirt-color','shirtColor'],['av-pants-color','pantsColor'],['av-shoes-color','shoesColor'],['av-hair-color','hairColor']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{if(!avatarDraft)return;avatarDraft[k]=e.target.value;mirrorSemanticColors(avatarDraft);updateEditorAvatar();}));
+    document.getElementById('save-avatar-editor-btn').addEventListener('click',()=>{const b=document.getElementById('save-avatar-editor-btn');b.disabled=true;b.textContent='SAVING...';mirrorSemanticColors(avatarDraft);socket.emit('save_appearance',avatarDraft,res=>{b.disabled=false;b.textContent='SAVE APPEARANCE';if(!res||!res.success)return showToast((res&&res.message)||'Could not save appearance.');playerAppearance=res.appearance||avatarDraft;equippedCosmetics=res.cosmetics||cosmeticsForAppearance(playerAppearance);localStorage.setItem('sp_player_appearance',JSON.stringify(playerAppearance));avatarDraft=JSON.parse(JSON.stringify(playerAppearance));renderAvatarInventory();updateEditorAvatar();showToast('Appearance saved.');});});
 
     // Thumbnail rendering reuses ONE offscreen WebGL renderer for every card.
     // This avoids exhausting browser WebGL contexts and keeps the avatar/world renderers stable.
