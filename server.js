@@ -290,6 +290,17 @@ async function migrate() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 100;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(300) NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS showcased_world_ids BIGINT[] NOT NULL DEFAULT '{}'::bigint[];
+    CREATE TABLE IF NOT EXISTS friendships (
+      requester_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      addressee_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (requester_id, addressee_id),
+      CHECK (requester_id <> addressee_id)
+    );
+    CREATE INDEX IF NOT EXISTS friendships_requester_idx ON friendships(requester_id,status);
+    CREATE INDEX IF NOT EXISTS friendships_addressee_idx ON friendships(addressee_id,status);
 
     CREATE TABLE IF NOT EXISTS store_items (
       id BIGSERIAL PRIMARY KEY,
@@ -512,6 +523,112 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb && cb({success:false}); }
   });
 
+  socket.on('get_friends', async (_, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const uid=socket.user.id;
+      const accepted=await pool.query(`
+        SELECT u.id,u.username,u.appearance,f.updated_at AS "friendsSince"
+        FROM friendships f
+        JOIN users u ON u.id=CASE WHEN f.requester_id=$1 THEN f.addressee_id ELSE f.requester_id END
+        WHERE f.status='accepted' AND (f.requester_id=$1 OR f.addressee_id=$1)
+        ORDER BY lower(u.username)
+      `,[uid]);
+      const incoming=await pool.query(`
+        SELECT u.username,u.appearance,f.created_at AS "requestedAt"
+        FROM friendships f JOIN users u ON u.id=f.requester_id
+        WHERE f.addressee_id=$1 AND f.status='pending'
+        ORDER BY f.created_at DESC
+      `,[uid]);
+      const outgoing=await pool.query(`
+        SELECT u.username,u.appearance,f.created_at AS "requestedAt"
+        FROM friendships f JOIN users u ON u.id=f.addressee_id
+        WHERE f.requester_id=$1 AND f.status='pending'
+        ORDER BY f.created_at DESC
+      `,[uid]);
+
+      const decorate = rows => rows.map(r=>{
+        const onlineSocket=socketsByUser.get(r.id);
+        const p=onlineSocket ? playersBySocket.get(onlineSocket.id) : null;
+        return {...r,online:!!onlineSocket,currentWorld:p?.worldName||null};
+      });
+      cb({success:true,friends:decorate(accepted.rows),incoming:incoming.rows,outgoing:outgoing.rows});
+    } catch(e){console.error(e);cb({success:false,message:'Could not load friends.'});}
+  });
+
+  socket.on('send_friend_request', async ({username} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const name=cleanUsername(username);
+      const ur=await pool.query('SELECT id,username FROM users WHERE lower(username)=lower($1)',[name]);
+      const target=ur.rows[0];
+      if(!target)return cb({success:false,message:'Player not found.'});
+      if(Number(target.id)===Number(socket.user.id))return cb({success:false,message:"You can't friend yourself."});
+
+      const existing=await pool.query(`
+        SELECT requester_id,addressee_id,status FROM friendships
+        WHERE (requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)
+        LIMIT 1
+      `,[socket.user.id,target.id]);
+      const rel=existing.rows[0];
+      if(rel?.status==='accepted')return cb({success:false,message:'You are already friends.'});
+      if(rel?.status==='pending'){
+        if(Number(rel.requester_id)===Number(target.id)){
+          await pool.query(`UPDATE friendships SET status='accepted',updated_at=NOW()
+            WHERE requester_id=$1 AND addressee_id=$2`,[target.id,socket.user.id]);
+          return cb({success:true,state:'friends',message:'Friend request accepted.'});
+        }
+        return cb({success:false,message:'Friend request already sent.'});
+      }
+      await pool.query(`INSERT INTO friendships(requester_id,addressee_id,status)
+        VALUES($1,$2,'pending')`,[socket.user.id,target.id]);
+      cb({success:true,state:'outgoing',message:'Friend request sent.'});
+    } catch(e){console.error(e);cb({success:false,message:'Could not send friend request.'});}
+  });
+
+  socket.on('respond_friend_request', async ({username,accept} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const ur=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      const other=ur.rows[0];
+      if(!other)return cb({success:false,message:'Player not found.'});
+      const result=accept
+        ? await pool.query(`UPDATE friendships SET status='accepted',updated_at=NOW()
+            WHERE requester_id=$1 AND addressee_id=$2 AND status='pending' RETURNING requester_id`,
+            [other.id,socket.user.id])
+        : await pool.query(`DELETE FROM friendships
+            WHERE requester_id=$1 AND addressee_id=$2 AND status='pending' RETURNING requester_id`,
+            [other.id,socket.user.id]);
+      if(!result.rowCount)return cb({success:false,message:'Friend request is no longer available.'});
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not update friend request.'});}
+  });
+
+  socket.on('cancel_friend_request', async ({username} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const ur=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      const other=ur.rows[0];
+      if(!other)return cb({success:false,message:'Player not found.'});
+      await pool.query(`DELETE FROM friendships WHERE requester_id=$1 AND addressee_id=$2 AND status='pending'`,
+        [socket.user.id,other.id]);
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not cancel request.'});}
+  });
+
+  socket.on('remove_friend', async ({username} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const ur=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      const other=ur.rows[0];
+      if(!other)return cb({success:false,message:'Player not found.'});
+      await pool.query(`DELETE FROM friendships
+        WHERE status='accepted' AND ((requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1))`,
+        [socket.user.id,other.id]);
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not remove friend.'});}
+  });
+
   socket.on('get_profile', async ({username} = {}, cb) => {
     if (!requireAuth(socket, cb)) return;
     try {
@@ -555,6 +672,24 @@ io.on('connection', (socket) => {
       }));
       const showcasedWorlds = showcaseIds.map(id => byId.get(id)).filter(Boolean).slice(0,3);
 
+      let friendship = {state:'none'};
+      if (u.id === socket.user.id) {
+        friendship = {state:'self'};
+      } else {
+        const fr = await pool.query(`
+          SELECT requester_id,addressee_id,status
+          FROM friendships
+          WHERE (requester_id=$1 AND addressee_id=$2)
+             OR (requester_id=$2 AND addressee_id=$1)
+          LIMIT 1
+        `,[socket.user.id,u.id]);
+        const rel=fr.rows[0];
+        if(rel?.status==='accepted') friendship={state:'friends'};
+        else if(rel?.status==='pending') friendship={
+          state:Number(rel.requester_id)===Number(socket.user.id)?'outgoing':'incoming'
+        };
+      }
+
       const onlineSocket = socketsByUser.get(u.id);
       const livePlayer = onlineSocket ? playersBySocket.get(onlineSocket.id) : null;
       cb({
@@ -567,6 +702,7 @@ io.on('connection', (socket) => {
           online:!!onlineSocket,
           currentWorld:livePlayer?.worldName || null,
           isOwnProfile:u.id === socket.user.id,
+          friendship,
           stats:{
             worlds:Number(worldCount.rows[0]?.n || 0),
             likesGiven:Number(likesGiven.rows[0]?.n || 0),
