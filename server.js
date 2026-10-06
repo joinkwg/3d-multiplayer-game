@@ -851,34 +851,52 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb({success:false,message:'Could not send message.'}); }
   });
 
-  socket.on('admin_list', async (cb) => {
+  socket.on('admin_search_users', async ({query} = {}, cb) => {
     if (!requireAdmin(socket, cb)) return;
     try {
-      const users = await pool.query('SELECT id,username,is_admin AS "isAdmin",coins,created_at AS "createdAt" FROM users ORDER BY created_at ASC');
+      const q = String(query || '').trim().slice(0, 50);
+      if (!q) return cb({success:true,users:[]});
+      const users = await pool.query(`
+        SELECT id,username,is_admin AS "isAdmin",coins,created_at AS "createdAt"
+        FROM users
+        WHERE username ILIKE $1
+        ORDER BY CASE WHEN LOWER(username)=LOWER($2) THEN 0 ELSE 1 END, username ASC
+        LIMIT 25
+      `,[`%${q}%`,q]);
+      cb({success:true,users:users.rows.map(u => ({
+        username:u.username,isAdmin:u.isAdmin,createdAt:u.createdAt,
+        coins:Number(u.coins || 0),online:socketsByUser.has(u.id)
+      }))});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not search users.'}); }
+  });
+
+  socket.on('admin_search_worlds', async ({query} = {}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const q = String(query || '').trim().slice(0, 80);
+      if (!q) return cb({success:true,worlds:[]});
       const worlds = await pool.query(`
-        SELECT w.id,w.name,u.username AS "ownerUsername",
+        WITH matches AS (
+          SELECT w.id,w.name,w.owner_user_id,w.created_at
+          FROM worlds w
+          LEFT JOIN users owner ON owner.id=w.owner_user_id
+          WHERE w.name ILIKE $1 OR owner.username ILIKE $1
+          ORDER BY CASE WHEN LOWER(w.name)=LOWER($2) THEN 0 ELSE 1 END, w.name ASC
+          LIMIT 25
+        )
+        SELECT m.id,m.name,u.username AS "ownerUsername",
                COUNT(cm.id)::int AS "chatCount"
-        FROM worlds w
-        LEFT JOIN users u ON u.id=w.owner_user_id
-        LEFT JOIN chat_messages cm ON cm.world_id=w.id
-        GROUP BY w.id,w.name,u.username,w.created_at
-        ORDER BY w.created_at ASC
-      `);
-      const userRows = users.rows.map(u => ({
-        username: u.username,
-        isAdmin: u.isAdmin,
-        createdAt: u.createdAt,
-        coins: Number(u.coins || 0),
-        online: socketsByUser.has(u.id)
-      }));
-      const worldRows = worlds.rows.map(w => ({
-        name: w.name,
-        ownerUsername: w.ownerUsername,
-        chatCount: w.chatCount,
-        onlineCount: io.sockets.adapter.rooms.get(`world:${w.name}`)?.size || 0
-      }));
-      cb({success:true,users:userRows,worlds:worldRows});
-    } catch (e) { console.error(e); cb({success:false,message:'Could not load admin data.'}); }
+        FROM matches m
+        LEFT JOIN users u ON u.id=m.owner_user_id
+        LEFT JOIN chat_messages cm ON cm.world_id=m.id
+        GROUP BY m.id,m.name,u.username,m.created_at
+        ORDER BY CASE WHEN LOWER(m.name)=LOWER($2) THEN 0 ELSE 1 END, m.name ASC
+      `,[`%${q}%`,q]);
+      cb({success:true,worlds:worlds.rows.map(w => ({
+        name:w.name,ownerUsername:w.ownerUsername,chatCount:w.chatCount,
+        onlineCount:io.sockets.adapter.rooms.get(`world:${w.name}`)?.size || 0
+      }))});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not search worlds.'}); }
   });
 
   socket.on('admin_kick_user', async ({username}, cb) => {
