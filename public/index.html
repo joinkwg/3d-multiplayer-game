@@ -212,6 +212,31 @@
     .mesh-thumb-canvas{width:100%;height:100%;display:block}.admin-fit-preview{grid-column:span 2;height:300px;background:#0b0d10;border:2px solid #444;position:relative;display:none}.admin-fit-preview-note{position:absolute;left:7px;bottom:5px;color:#aaa;font-size:10px;pointer-events:none}
     .home-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.home-toolbar select{background:#111;color:#fff;border:2px solid #555;padding:8px;font-family:inherit}.world-like-btn{background:#292d33;color:#fff;border:2px solid #666;padding:7px 10px;font-family:inherit;cursor:pointer}.world-like-btn.liked{background:#e74c3c;border-color:#fff}.home-welcome{background:#15181c;border:2px solid #3b4048;padding:18px}.home-profile-grid{display:grid;grid-template-columns:300px 1fr;gap:14px}.home-section{background:#15181c;border:2px solid #3b4048;padding:12px;min-width:0}.home-section h3{margin:0 0 10px}.home-avatar-preview{height:390px;background:#0b0d10;border:3px solid #555;display:flex;align-items:center;justify-content:center;overflow:hidden}.home-avatar-preview img{width:100%;height:100%;object-fit:contain}.home-owned-worlds{max-height:220px;overflow:auto}.home-inventory-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px;max-height:245px;overflow:auto}.home-inventory-card{background:#20242a;border:2px solid #444;padding:6px;text-align:center;min-width:0}.home-inventory-thumb{height:72px;background:#0b0d10;border:1px solid #333;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:5px}.home-inventory-thumb img{max-width:100%;max-height:100%}.home-inventory-name{font-size:10px;font-weight:bold;word-break:break-word}.home-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}.home-action{padding:18px 8px;background:#292d33;color:#fff;border:2px solid #fff;font-family:inherit;font-weight:bold;cursor:pointer}.recent-worlds{margin-top:14px}.logout-btn{background:#e74c3c;color:#fff;border:2px solid #fff;padding:8px 10px;font-family:inherit;font-weight:bold;cursor:pointer}.admin-home-tab{display:none}#admin-pane #admin-card{width:auto;max-width:none;max-height:none;overflow:visible;box-shadow:none;border:2px solid #444;padding:12px}#admin-pane #close-admin-panel{display:none}
     @media(max-width:760px){.home-profile-grid{grid-template-columns:1fr}.home-actions{grid-template-columns:1fr}#home-main-card{width:94vw}.avatar-editor-layout{grid-template-columns:1fr}.avatar-preview-large{height:330px}.admin-fit-preview{grid-column:span 1}}
+
+    /* ===== V3.13 POLISHED UI ===== */
+    :root{--kwg-panel:#242a33;--kwg-panel2:#171b21;--kwg-line:#596474;--kwg-bright:#dfe7f2;--kwg-blue:#3b8cff;--kwg-text:#f4f7fb;--kwg-muted:#9aa7b7;--kwg-shadow:#090b0e}
+    body{background:#11151a;color:var(--kwg-text)}
+    .card,.customizer-card,#admin-card,#build-toolbar,#world-chat,#room-info-label{background:linear-gradient(180deg,#272d36 0%,#20252d 100%);border-color:var(--kwg-bright);box-shadow:5px 5px 0 var(--kwg-shadow)}
+    .card h1,.card h2,.customizer-card h2,#admin-card h2{letter-spacing:.7px;text-shadow:2px 2px 0 #000}
+    .submit-btn,.hud-btn,.join-btn,.mode-grid button,#world-chat-send,.admin-action,.admin-delete,.world-like-btn{transition:background-color .12s ease,border-color .12s ease,transform .08s ease,box-shadow .08s ease,filter .12s ease}
+    .submit-btn:hover,.hud-btn:hover,.join-btn:hover,.mode-grid button:hover,#world-chat-send:hover,.admin-action:hover,.admin-delete:hover,.world-like-btn:hover{filter:brightness(1.12)}
+    .submit-btn:focus-visible,.hud-btn:focus-visible,.join-btn:focus-visible,.mode-grid button:focus-visible,#world-chat-send:focus-visible,.admin-action:focus-visible,.admin-delete:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #73adff;outline-offset:2px}
+    .room-list-container,.admin-row,.room-card{border-color:#3e4754;background:#191e25}
+    .room-card{transition:background-color .12s ease,border-color .12s ease,transform .12s ease}
+    .room-card:hover{background:#222933;border-color:#647286;transform:translateY(-1px)}
+    .room-title{color:#69b4ff;letter-spacing:.3px}.room-meta,.admin-search-note{color:var(--kwg-muted)}
+    .card input,.tool-row input,.tool-row select,.customizer-controls select,#world-chat-input,.admin-searchbar input{background:#10141a;border-color:#46515f;color:var(--kwg-text);transition:border-color .12s ease,background-color .12s ease}
+    .card input:hover,.tool-row input:hover,.tool-row select:hover,.customizer-controls select:hover,#world-chat-input:hover,.admin-searchbar input:hover{border-color:#667589}
+    #world-chat-header{background:#1b2028;border-bottom-color:#46515f;letter-spacing:.5px}
+    #world-chat-form{background:#1b2028;border-top-color:#46515f}
+    #save-status{border-radius:0!important;box-shadow:3px 3px 0 #000}
+    #kwg-loading-cog{display:none;position:fixed;z-index:10000;pointer-events:none;width:20px;height:20px;margin:10px 0 0 10px;filter:drop-shadow(1px 1px 0 #000)}
+    #kwg-loading-cog::before{content:"⚙";display:block;width:20px;height:20px;color:#fff;font:700 20px/20px "Courier New",monospace;text-align:center;animation:kwgCogSpin .75s linear infinite;text-shadow:1px 1px 0 #000}
+    body.kwg-loading #kwg-loading-cog{display:block}
+    @keyframes kwgCogSpin{to{transform:rotate(360deg)}}
+    *{scrollbar-color:#566273 #171b21;scrollbar-width:thin}
+    *::-webkit-scrollbar{width:10px;height:10px}*::-webkit-scrollbar-track{background:#171b21}*::-webkit-scrollbar-thumb{background:#566273;border:2px solid #171b21}*::-webkit-scrollbar-thumb:hover{background:#718096}
+
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -219,6 +244,7 @@
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
+  <div id="kwg-loading-cog" aria-hidden="true"></div>
 
   <!-- Game Notification Banner -->
   <div id="game-toast"></div>
@@ -464,6 +490,45 @@
   <script>
     // --- SOCKET.IO BACKEND CONNECTION ---
     const socket = (typeof io !== 'undefined') ? io() : null;
+
+    // --- V3.13 UI LOADING FEEDBACK ---
+    let kwgLoadingCount=0;
+    const kwgLoadingEvents=new Set([
+      'login','register','resume_session','get_worlds','join_world','create_world',
+      'get_world_templates','get_store','buy_store_item','save_appearance',
+      'update_appearance','toggle_world_like','delete_own_world',
+      'admin_search_users','admin_search_worlds','admin_make_world_template',
+      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user'
+    ]);
+    function setKWGLoading(delta){
+      kwgLoadingCount=Math.max(0,kwgLoadingCount+delta);
+      document.body.classList.toggle('kwg-loading',kwgLoadingCount>0);
+    }
+    document.addEventListener('pointermove',e=>{
+      const cog=document.getElementById('kwg-loading-cog');
+      if(cog){cog.style.left=`${e.clientX}px`;cog.style.top=`${e.clientY}px`;}
+    },{passive:true});
+
+    if(socket){
+      const kwgOriginalSocketEmit=socket.emit.bind(socket);
+      socket.emit=function(eventName,...args){
+        const i=args.length-1;
+        if(!kwgLoadingEvents.has(eventName)||i<0||typeof args[i]!=='function')
+          return kwgOriginalSocketEmit(eventName,...args);
+
+        setKWGLoading(1);
+        const ack=args[i];
+        let done=false;
+        const finish=(...values)=>{
+          if(!done){done=true;setKWGLoading(-1);}
+          return ack(...values);
+        };
+        const timer=setTimeout(()=>finish({success:false,message:'Request timed out.'}),15000);
+        args[i]=(...values)=>{clearTimeout(timer);return finish(...values);};
+        return kwgOriginalSocketEmit(eventName,...args);
+      };
+    }
+
 
     let currentWorldName = null;
     let loggedInUsername = null;
