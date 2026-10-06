@@ -435,6 +435,14 @@ function queueWorldSave(worldName, task) {
   return next;
 }
 
+const worldJoinReservations = new Map();
+
+function worldPlayerCount(worldName) {
+  let count = 0;
+  for (const [, p] of playersBySocket) if (p.worldName === worldName) count++;
+  return count;
+}
+
 io.on('connection', (socket) => {
   socket.on('register', async ({ username, password }, cb) => {
     try {
@@ -591,6 +599,16 @@ io.on('connection', (socket) => {
       const world = await getWorldByName(cleanWorldName(worldName));
       if (!world) return cb({success:false,message:'World not found.'});
 
+      // Hard cap: at most 20 connected players per world. Reservations prevent
+      // simultaneous joins from briefly pushing the world over the limit.
+      const alreadyHere = playersBySocket.get(socket.id)?.worldName === world.name;
+      const reserved = worldJoinReservations.get(world.name) || 0;
+      const occupied = worldPlayerCount(world.name) - (alreadyHere ? 1 : 0);
+      if (occupied + reserved >= 20) {
+        return cb({success:false,message:'This world is full (20/20 players).'});
+      }
+      worldJoinReservations.set(world.name, reserved + 1);
+
       if (socket.data.worldName) socket.leave(`world:${socket.data.worldName}`);
       socket.join(`world:${world.name}`);
       socket.data.worldName = world.name;
@@ -609,9 +627,19 @@ io.on('connection', (socket) => {
         appearance: app, cosmetics, worldName: world.name
       };
       playersBySocket.set(socket.id, p);
+      worldJoinReservations.set(world.name, Math.max(0, (worldJoinReservations.get(world.name) || 1) - 1));
+      if (worldJoinReservations.get(world.name) === 0) worldJoinReservations.delete(world.name);
       socket.to(`world:${world.name}`).emit('player_joined', p);
       cb({success:true,worldData:world.data,players,selfId:socket.id,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics});
-    } catch (e) { console.error(e); cb({success:false,message:'Could not join world.'}); }
+    } catch (e) {
+      console.error(e);
+      const key = cleanWorldName(worldName);
+      if (worldJoinReservations.has(key)) {
+        worldJoinReservations.set(key, Math.max(0, worldJoinReservations.get(key) - 1));
+        if (worldJoinReservations.get(key) === 0) worldJoinReservations.delete(key);
+      }
+      cb({success:false,message:'Could not join world.'});
+    }
   });
 
   socket.on('leave_world', () => {
