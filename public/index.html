@@ -277,6 +277,11 @@
       <span class="close-btn" id="close-create-world">X</span>
       <h3 style="margin: 0 0 10px 0; text-transform: uppercase;">Create World</h3>
       <input type="text" id="new-world-name" placeholder="World Name (e.g. MyCastle)" maxlength="20" />
+      <label style="display:block;margin-top:10px;font-size:12px;font-weight:bold;color:#aaa;">STARTING TEMPLATE</label>
+      <select id="new-world-template" style="width:100%;margin-top:5px;padding:10px;background:#1f1f1f;color:white;border:1px solid #555;border-radius:4px;">
+        <option value="blank">Blank Baseplate</option>
+      </select>
+      <div style="font-size:11px;color:#888;margin-top:5px;">Templates are starting copies. Editing your new world will not change the template.</div>
       <button id="confirm-create-world-btn" class="submit-btn">Build & Launch</button>
       <div id="create-world-error" class="error-msg"></div>
     </div>
@@ -807,6 +812,13 @@
       card.querySelector('.room-title').textContent = w.name;
       card.querySelector('.join-btn').addEventListener('click', () => joinSelectedWorld(w.name));
       card.querySelector('.world-like-btn').addEventListener('click', () => socket.emit('toggle_world_like',{worldName:w.name},res=>{ if(res?.success){ renderRoomList(); renderHomeOverview(); } }));
+      if ((w.ownerUsername || '').toLowerCase() === (loggedInUsername || '').toLowerCase()) {
+        const actions=card.lastElementChild;
+        const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE';
+        del.title='Delete your world permanently';
+        del.onclick=()=>{ if(confirm(`Permanently delete your world "${w.name}"? This cannot be undone.`)) socket.emit('delete_own_world',{worldName:w.name},res=>{ if(res?.success){renderRoomList();renderHomeOverview();} else alert(res?.message||'Could not delete world.'); }); };
+        actions.insertBefore(del, actions.querySelector('.join-btn'));
+      }
       return card;
     }
 
@@ -888,6 +900,13 @@
       document.getElementById('new-world-name').value = '';
       document.getElementById('create-world-error').textContent = '';
       document.getElementById('home-screen').style.display = 'none';
+      const templateSelect = document.getElementById('new-world-template');
+      templateSelect.innerHTML = '<option value="blank">Blank Baseplate</option>';
+      socket.emit('get_world_templates', (res) => {
+        if (res?.success) (res.templates || []).forEach(t => {
+          const opt=document.createElement('option'); opt.value=t.id; opt.textContent=t.name; templateSelect.appendChild(opt);
+        });
+      });
       createModal.style.display = 'flex';
     });
 
@@ -902,7 +921,8 @@
         document.getElementById('create-world-error').textContent = 'Please enter a world name.';
         return;
       }
-      socket.emit('create_world', { name }, (res) => {
+      const templateId = document.getElementById('new-world-template').value || 'blank';
+      socket.emit('create_world', { name, templateId }, (res) => {
         if (res.success) {
           createModal.style.display = 'none';
           joinSelectedWorld(name);
@@ -1060,6 +1080,7 @@
         const meta=document.createElement('small'); meta.style.cssText='color:#aaa;margin-left:7px;'; meta.textContent=`owner: ${w.ownerUsername || 'unknown'} • ${w.onlineCount || 0} online • ${w.chatCount || 0} messages`; info.appendChild(meta); row.appendChild(info);
         const actions=document.createElement('div'); actions.className='admin-actions';
         const clear=document.createElement('button'); clear.className='admin-action warn'; clear.textContent='CLEAR CHAT'; clear.onclick=()=>{if(confirm(`Permanently clear all chat messages in "${w.name}"?`)) adminRequest('admin_clear_world_chat',{worldName:w.name},`Chat cleared for ${w.name}.`)}; actions.appendChild(clear);
+        const templ=document.createElement('button'); templ.className='admin-action'; templ.textContent='MAKE TEMPLATE'; templ.onclick=()=>{const templateName=prompt('Template name:',w.name); if(templateName) adminRequest('admin_make_world_template',{worldName:w.name,templateName},`${w.name} is now available as the "${templateName}" template.`)}; actions.appendChild(templ);
         const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE WORLD'; del.onclick=()=>{if(confirm(`Permanently delete world "${w.name}"? This cannot be undone.`)) adminRequest('admin_delete_world',{worldName:w.name},`${w.name} was permanently deleted.`)}; actions.appendChild(del);
         row.appendChild(actions); worlds.appendChild(row);
       });
@@ -1536,17 +1557,30 @@
       }
     }
 
-    function updateAvatarAnimations(avatarMesh, isMoving, isGrounded, delta, walkClockOverride) {
+    function updateAvatarAnimations(avatarMesh, isMoving, isGrounded, delta, walkClockOverride, verticalVelocity = 0) {
       if (!avatarMesh || !avatarMesh.userData || !avatarMesh.userData.limbs) return;
+      const limbs=avatarMesh.userData.limbs;
+      const smooth=(current,target,speed=0.16)=>current+(target-current)*speed;
 
-      if (walkClockOverride !== undefined) {
+      if (!isGrounded) {
+        // Smooth airborne silhouette: arms lift while rising, then open slightly while falling.
+        const rising = verticalVelocity > 0.004;
+        const armTarget = rising ? -1.05 : -0.55;
+        const legTarget = rising ? 0.38 : -0.18;
+        limbs.leftArm.rotation.x=smooth(limbs.leftArm.rotation.x,armTarget,0.18);
+        limbs.rightArm.rotation.x=smooth(limbs.rightArm.rotation.x,armTarget,0.18);
+        limbs.leftLeg.rotation.x=smooth(limbs.leftLeg.rotation.x,legTarget,0.18);
+        limbs.rightLeg.rotation.x=smooth(limbs.rightLeg.rotation.x,-legTarget*0.45,0.18);
+        return;
+      }
+
+      if (walkClockOverride !== undefined && isMoving) {
         avatarMesh.userData.walkClock = walkClockOverride;
         const angle = Math.sin(walkClockOverride) * 0.65;
-        const limbs = avatarMesh.userData.limbs;
-        limbs.leftLeg.rotation.x = angle;
-        limbs.rightLeg.rotation.x = -angle;
-        limbs.leftArm.rotation.x = -angle;
-        limbs.rightArm.rotation.x = angle;
+        limbs.leftLeg.rotation.x = smooth(limbs.leftLeg.rotation.x, angle, 0.28);
+        limbs.rightLeg.rotation.x = smooth(limbs.rightLeg.rotation.x, -angle, 0.28);
+        limbs.leftArm.rotation.x = smooth(limbs.leftArm.rotation.x, -angle, 0.28);
+        limbs.rightArm.rotation.x = smooth(limbs.rightArm.rotation.x, angle, 0.28);
       } else {
         animateLimbs(avatarMesh, isMoving);
       }
@@ -1583,7 +1617,7 @@
       p.mesh.position.set(pData.x, pData.y, pData.z);
       p.mesh.rotation.y = pData.rotationY;
 
-      updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock);
+      updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
     });
 
     socket.on('player_left', (id) => {
@@ -2982,8 +3016,8 @@
         return;
       }
 
-      // Exact single-player run animation.
-      animateLimbs(localPlayerAvatar, isMoving);
+      // Smooth run / jump / fall animation.
+      updateAvatarAnimations(localPlayerAvatar, isMoving, isGrounded, delta, undefined, velocityY);
 
       // Network sync position
       const now = Date.now();
@@ -2995,6 +3029,7 @@
           z: localPlayerAvatar.position.z,
           rotationY: localPlayerAvatar.rotation.y,
           walkClock: localPlayerAvatar.userData.walkClock,
+          verticalVelocity: velocityY,
           isMoving: isMoving,
           isGrounded: isGrounded
         });
