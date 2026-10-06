@@ -2304,7 +2304,7 @@
         camOrbitAngleX = Math.max(-maxPitch, Math.min(maxPitch, camOrbitAngleX));
 
         if (localPlayerAvatar) {
-          localPlayerAvatar.rotation.y = camOrbitAngleY + Math.PI;
+          localPlayerAvatar.rotation.y = camOrbitAngleY;
         }
       }
 
@@ -2698,13 +2698,13 @@
     window.addEventListener('keyup', (e) => { const key = (typeof e.key === 'string') ? e.key.toLowerCase() : ''; if (key) keys[key] = false; });
 
     let velocityY = 0;
-    const gravity = -0.0055;
-    const jumpStrength = 0.235;
+    const gravity = -0.001375;
+    const jumpStrength = 0.1175;
     let isGrounded = false;
     const maxStepHeight = 0.65;
     let targetStepY = 0;
 
-    const moveSpeed = 0.15;
+    const moveSpeed = 0.09;
     const turnSpeed = 0.04;
 
     const PLAYER_RADIUS = 0.35;
