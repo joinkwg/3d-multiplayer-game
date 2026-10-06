@@ -237,6 +237,151 @@
     *{scrollbar-color:#566273 #171b21;scrollbar-width:thin}
     *::-webkit-scrollbar{width:10px;height:10px}*::-webkit-scrollbar-track{background:#171b21}*::-webkit-scrollbar-thumb{background:#566273;border:2px solid #171b21}*::-webkit-scrollbar-thumb:hover{background:#718096}
 
+  
+    /* ============================================================
+       V3.14 — KWG PROFESSIONAL GAME UI
+       A full visual/layout pass layered safely over existing markup.
+       ============================================================ */
+    :root{
+      --g-bg:#0b0e13;--g-surface:#121720;--g-surface2:#181f2a;--g-surface3:#202936;
+      --g-line:#344154;--g-line2:#52627a;--g-text:#f6f8fc;--g-muted:#9daabd;
+      --g-accent:#4b9cff;--g-accent2:#236fdb;--g-good:#39c979;--g-danger:#ef5b55;
+      --g-gold:#f2c14e;--g-shadow:rgba(0,0,0,.55);
+    }
+    html,body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif!important;background:var(--g-bg)!important}
+    body{letter-spacing:.01em}
+    body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at 50% -20%,rgba(75,156,255,.10),transparent 38%)}
+
+    /* Game-shell top navigation */
+    #topbar,#top-bar,.topbar,.nav-bar{
+      background:linear-gradient(180deg,#151b25,#0e131b)!important;
+      border-bottom:1px solid #3b4759!important;
+      box-shadow:0 8px 24px rgba(0,0,0,.38)!important;
+      min-height:58px!important;padding:8px 16px!important;
+      backdrop-filter:blur(12px);
+    }
+    #topbar button,#top-bar button,.topbar button,.nav-bar button{
+      min-height:38px!important;padding:8px 16px!important;background:transparent!important;
+      border:1px solid transparent!important;color:#b8c4d4!important;font-weight:750!important;
+      box-shadow:none!important;text-transform:none!important;letter-spacing:.02em!important;
+    }
+    #topbar button:hover,#top-bar button:hover,.topbar button:hover,.nav-bar button:hover{
+      color:#fff!important;background:#202936!important;border-color:#344154!important;
+    }
+    #topbar button.active,#top-bar button.active,.topbar button.active,.nav-bar button.active{
+      color:#fff!important;background:#223b5e!important;border-color:#4b9cff!important;
+      box-shadow:inset 0 -2px 0 #69adff!important;
+    }
+
+    /* Main menu / page composition */
+    #menu,#main-menu,.menu-screen,.screen,.page{position:relative;z-index:2}
+    .card,.customizer-card,#admin-card{
+      background:linear-gradient(180deg,rgba(27,34,45,.98),rgba(16,21,29,.98))!important;
+      border:1px solid var(--g-line)!important;border-top:2px solid #53647d!important;
+      box-shadow:0 18px 50px var(--g-shadow),inset 0 1px 0 rgba(255,255,255,.035)!important;
+      padding:28px!important;
+    }
+    .card h1,.card h2,.customizer-card h2,#admin-card h2{
+      font-weight:850!important;letter-spacing:-.02em!important;text-shadow:none!important;color:#fff!important;
+    }
+    .card h1{font-size:30px!important}
+    .card h2,.customizer-card h2,#admin-card h2{font-size:20px!important}
+    .card p,.room-meta,.admin-search-note,.muted{color:var(--g-muted)!important}
+
+    /* Inputs */
+    input,select,textarea{
+      font-family:inherit!important;background:#0d1219!important;color:#f6f8fc!important;
+      border:1px solid #344154!important;box-shadow:inset 0 1px 3px rgba(0,0,0,.45)!important;
+      min-height:38px;
+    }
+    input:hover,select:hover,textarea:hover{border-color:#53647b!important}
+    input:focus,select:focus,textarea:focus{
+      border-color:#4b9cff!important;box-shadow:0 0 0 2px rgba(75,156,255,.17),inset 0 1px 3px rgba(0,0,0,.4)!important;
+      outline:none!important;
+    }
+
+    /* Unified buttons */
+    button,.submit-btn,.join-btn,.hud-btn,.admin-action,.world-like-btn{
+      font-family:inherit!important;font-weight:800!important;letter-spacing:.01em!important;
+    }
+    .submit-btn,.join-btn{
+      background:linear-gradient(180deg,#56a6ff,#347edc)!important;border:1px solid #79b8ff!important;
+      color:#fff!important;box-shadow:0 3px 0 #174a8a,0 7px 16px rgba(0,0,0,.28)!important;
+    }
+    .submit-btn:hover,.join-btn:hover{filter:brightness(1.08)!important;transform:translateY(-1px)}
+    .submit-btn:active,.join-btn:active{transform:translateY(2px)!important;box-shadow:0 1px 0 #174a8a!important}
+    .danger,.delete-btn,.admin-delete{background:linear-gradient(180deg,#f26962,#c9423c)!important;border-color:#ff8b85!important;color:white!important}
+    button:disabled{opacity:.48!important;filter:saturate(.5)!important;cursor:not-allowed!important}
+
+    /* Worlds as game/server cards */
+    .room-list-container{background:transparent!important;border:0!important;padding:4px!important;gap:10px!important}
+    .room-card{
+      position:relative;background:linear-gradient(90deg,#171e28,#121821)!important;
+      border:1px solid #344154!important;border-left:3px solid #4b9cff!important;
+      box-shadow:0 7px 18px rgba(0,0,0,.25)!important;padding:15px 16px!important;
+    }
+    .room-card:hover{background:linear-gradient(90deg,#202b39,#171f2a)!important;border-color:#53647b!important;transform:translateY(-2px)!important}
+    .room-title{font-size:17px!important;font-weight:850!important;color:#fff!important}
+    .world-like-btn{background:#101721!important;border:1px solid #344154!important;color:#dbe5f3!important}
+
+    /* In-world HUD: compact professional overlays */
+    #hud{z-index:100!important}
+    #room-info-label{
+      background:rgba(12,16,22,.91)!important;border:1px solid #435169!important;
+      border-left:3px solid #4b9cff!important;box-shadow:0 8px 22px rgba(0,0,0,.35)!important;
+      backdrop-filter:blur(9px);padding:9px 13px!important;
+    }
+    #build-toolbar{
+      background:rgba(14,19,27,.95)!important;border:1px solid #46556b!important;
+      border-top:2px solid #637692!important;box-shadow:0 14px 36px rgba(0,0,0,.5)!important;
+      backdrop-filter:blur(10px);
+    }
+    #build-toolbar::before{
+      content:"WORLD EDITOR";display:block;color:#8796aa;font-size:10px;font-weight:900;
+      letter-spacing:.18em;padding:3px 4px 9px;border-bottom:1px solid #2e3949;margin-bottom:9px;
+    }
+    .mode-grid button{
+      background:#171f2a!important;border:1px solid #344154!important;color:#b9c5d5!important;
+      box-shadow:none!important;min-height:38px!important;
+    }
+    .mode-grid button:hover{background:#222e3d!important;color:#fff!important;border-color:#52627a!important}
+    .mode-grid button.active{background:#214b7d!important;color:#fff!important;border-color:#5aa6ff!important;box-shadow:inset 0 -2px 0 #78b7ff!important}
+
+    /* Chat feels like a proper multiplayer overlay */
+    #world-chat{
+      background:rgba(11,15,21,.91)!important;border:1px solid #3d4a5e!important;
+      box-shadow:0 14px 38px rgba(0,0,0,.48)!important;backdrop-filter:blur(9px);
+    }
+    #world-chat-header{
+      background:linear-gradient(180deg,#202936,#171e28)!important;color:#eaf0f8!important;
+      font-size:11px!important;font-weight:900!important;letter-spacing:.14em!important;
+      padding:10px 12px!important;
+    }
+    #world-chat-messages{padding:11px!important}
+    #world-chat-form{background:#10161e!important;padding:9px!important}
+    #world-chat-send{background:#347edc!important;border-color:#65aaff!important;color:white!important}
+
+    /* Admin / store / avatar areas */
+    .admin-row{background:#111720!important;border:1px solid #303c4e!important;box-shadow:0 4px 10px rgba(0,0,0,.2)!important}
+    .admin-row:hover{border-color:#4c5d75!important;background:#171f2a!important}
+    .admin-searchbar{background:#111720!important;border:1px solid #303c4e!important;padding:12px!important}
+    .customizer-tabs button,.store-tabs button{
+      background:#111720!important;border:1px solid #303c4e!important;color:#9eacbf!important;
+    }
+    .customizer-tabs button.active,.store-tabs button.active{
+      background:#223e62!important;border-color:#4b9cff!important;color:#fff!important;
+    }
+
+    /* Professional micro-interactions */
+    button{transition:transform .08s ease,filter .12s ease,background-color .12s ease,border-color .12s ease!important}
+    button:not(:disabled):active{transform:translateY(1px)}
+    #save-status{
+      background:rgba(11,15,21,.94)!important;border:1px solid #46556b!important;border-left:3px solid #39c979!important;
+      color:#dce7f4!important;font-weight:750!important;letter-spacing:.02em!important;
+      box-shadow:0 7px 18px rgba(0,0,0,.38)!important;padding:7px 10px!important;
+    }
+    ::selection{background:#347edc;color:#fff}
+
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
