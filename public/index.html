@@ -197,6 +197,16 @@
       #admin-mesh-fit-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
     }
 
+
+    /* Home tabs + Avatar Editor V2 */
+    .home-tabs{display:flex;gap:6px;margin:10px 0 12px}.home-tab{flex:1;padding:9px;background:#444;color:#fff;border:2px solid #fff;font-family:inherit;font-weight:bold;cursor:pointer}.home-tab.active{background:#3388ff}
+    .home-pane{display:none}.home-pane.active{display:block}
+    #home-main-card{width:900px;max-width:94vw;max-height:92vh;overflow:auto;text-align:left}
+    #avatar-editor-pane{min-height:540px}.avatar-editor-layout{display:grid;grid-template-columns:320px 1fr;gap:14px}.avatar-preview-large{height:470px;background:#111;border:3px solid #555;position:relative;cursor:grab;overflow:hidden}.avatar-preview-large:active{cursor:grabbing}
+    .inventory-panel{min-width:0}.inventory-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}.inventory-tab{padding:6px 8px;background:#444;color:#fff;border:2px solid #fff;font-family:inherit;font-weight:bold;cursor:pointer;font-size:11px}.inventory-tab.active{background:#3388ff}
+    #avatar-inventory-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;max-height:300px;overflow:auto}.inventory-card{background:#15181c;border:2px solid #444;padding:6px;cursor:pointer;color:#fff;font-family:inherit;text-align:center}.inventory-card.selected{border-color:#2ecc71;box-shadow:inset 0 0 0 2px #2ecc71}.inventory-thumb{height:78px;background:#0b0d10;border:1px solid #333;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:5px}.inventory-thumb img{max-width:100%;max-height:100%}.inventory-name{font-size:10px;font-weight:bold;word-break:break-word}.color-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}.color-grid label{display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:bold;text-transform:uppercase;background:#15181c;padding:6px;border:1px solid #333}.color-grid input{width:36px;height:24px}
+    .mesh-thumb-canvas{width:100%;height:100%;display:block}.admin-fit-preview{grid-column:span 2;height:300px;background:#0b0d10;border:2px solid #444;position:relative;display:none}.admin-fit-preview-note{position:absolute;left:7px;bottom:5px;color:#aaa;font-size:10px;pointer-events:none}
+    @media(max-width:760px){#home-main-card{width:94vw}.avatar-editor-layout{grid-template-columns:1fr}.avatar-preview-large{height:330px}.admin-fit-preview{grid-column:span 1}}
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -224,41 +234,32 @@
   </div>
 
   <!-- Home Page Dashboard -->
-  <div id="home-screen" class="overlay-screen" style="display: none;">
-    <div class="card" style="width: 420px;">
-      <h2 style="margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 1px;">Select World</h2>
-      <p style="font-size: 12px; color: #aaa; margin: 0 0 8px 0;">Logged in as: <span id="logged-user-display" style="color: #3388ff; font-weight: bold;">User</span></p>
-      <div style="margin-bottom:8px;"><span class="coin-badge">🪙 <span id="home-coin-count">100</span> COINS</span></div>
-      
-      <div id="room-list" class="room-list-container"></div>
-
-      <button id="open-create-world-btn" class="submit-btn secondary">+ Create New World</button>
-      <button id="open-store-btn" class="submit-btn">STORE</button>
-      <button id="open-admin-btn" class="submit-btn danger" style="display:none;">ADMIN PANEL</button>
-      <div id="home-error-msg" class="error-msg"></div>
-    </div>
-  </div>
-
-  <!-- Store Modal -->
-  <div id="store-modal" class="modal">
-    <div id="store-card" class="card" style="position:relative;">
-      <span class="close-btn" id="close-store">X</span>
-      <div class="store-topbar">
-        <div>
-          <h3 style="margin:0;text-transform:uppercase;">KWG Store</h3>
-          <div style="font-size:11px;color:#aaa;margin-top:3px;">Buy cosmetics with coins. Purchased items stay in your inventory even if they are later hidden from the store.</div>
+  <div id="home-screen" class="overlay-screen" style="display:none;">
+    <div class="card" id="home-main-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div><h2 style="margin:0;text-transform:uppercase;">KWG 3D Online</h2><div style="font-size:12px;color:#aaa;">Logged in as: <span id="logged-user-display" style="color:#3388ff;font-weight:bold;">User</span></div></div>
+        <span class="coin-badge">🪙 <span id="home-coin-count">100</span> COINS</span>
+      </div>
+      <div class="home-tabs"><button class="home-tab active" data-home-tab="worlds">WORLDS</button><button class="home-tab" data-home-tab="store">STORE</button><button class="home-tab" data-home-tab="avatar">AVATAR EDITOR</button></div>
+      <div id="worlds-pane" class="home-pane active">
+        <div id="room-list" class="room-list-container"></div>
+        <button id="open-create-world-btn" class="submit-btn secondary">+ Create New World</button>
+        <button id="open-store-btn" class="submit-btn" style="display:none;">STORE</button>
+        <button id="open-admin-btn" class="submit-btn danger" style="display:none;">ADMIN PANEL</button>
+        <div id="home-error-msg" class="error-msg"></div>
+      </div>
+      <div id="store-pane" class="home-pane">
+        <div class="store-topbar"><div><h3 style="margin:0;">KWG STORE</h3><div style="font-size:11px;color:#aaa;">Buy cosmetics with coins.</div></div><span class="coin-badge">🪙 <span id="store-coin-count">100</span></span></div>
+        <div class="store-tabs"><button class="store-tab active" data-store-category="eyes">Eyes</button><button class="store-tab" data-store-category="mouth">Mouths</button><button class="store-tab" data-store-category="torso_decal">Shirts / Decals</button><button class="store-tab" data-store-category="hat">Hats</button><button class="store-tab" data-store-category="head_shape">Head Shapes</button></div>
+        <div id="store-items-grid"></div><div id="store-message" class="error-msg"></div>
+      </div>
+      <div id="avatar-editor-pane" class="home-pane">
+        <div class="avatar-editor-layout">
+          <div><div id="avatar-editor-preview" class="avatar-preview-large"><div class="preview-hint">Drag to rotate • releases back to front</div></div><button id="save-avatar-editor-btn" class="submit-btn">SAVE APPEARANCE</button></div>
+          <div class="inventory-panel"><div class="inventory-tabs"><button class="inventory-tab active" data-inv-category="eyes">EYES</button><button class="inventory-tab" data-inv-category="mouth">MOUTHS</button><button class="inventory-tab" data-inv-category="torso_decal">SHIRTS</button><button class="inventory-tab" data-inv-category="hat">HATS</button><button class="inventory-tab" data-inv-category="head_shape">HEADS</button></div><div id="avatar-inventory-grid"></div>
+          <div class="color-grid"><label>Head <input type="color" id="av-head-color"></label><label>Torso <input type="color" id="av-torso-color"></label><label>Left Arm <input type="color" id="av-left-arm-color"></label><label>Right Arm <input type="color" id="av-right-arm-color"></label><label>Left Leg <input type="color" id="av-left-leg-color"></label><label>Right Leg <input type="color" id="av-right-leg-color"></label></div></div>
         </div>
-        <span class="coin-badge">🪙 <span id="store-coin-count">100</span></span>
       </div>
-      <div class="store-tabs">
-        <button class="store-tab active" data-store-category="eyes">Eyes</button>
-        <button class="store-tab" data-store-category="mouth">Mouths</button>
-        <button class="store-tab" data-store-category="torso_decal">Shirts / Decals</button>
-        <button class="store-tab" data-store-category="hat">Hats</button>
-        <button class="store-tab" data-store-category="head_shape">Head Shapes</button>
-      </div>
-      <div id="store-items-grid"></div>
-      <div id="store-message" class="error-msg"></div>
     </div>
   </div>
 
@@ -277,7 +278,6 @@
   <div id="hud">
     <button class="hud-btn" id="toggle-edit-btn">Edit Mode: OFF</button>
     <button class="hud-btn" id="respawn-btn">Respawn</button>
-    <button class="hud-btn" id="open-customizer-btn">Character</button>
     <button class="hud-btn" id="leave-world-btn" style="background: #e74c3c; color: white;">Leave World</button>
   </div>
 
@@ -331,6 +331,7 @@
             <label>Offset Y<input id="admin-store-offset-y" type="number" step="0.05" value="0"></label>
             <label>Offset Z<input id="admin-store-offset-z" type="number" step="0.05" value="0"></label>
           </div>
+          <div id="admin-fit-preview" class="admin-fit-preview"><div class="admin-fit-preview-note">LIVE FIT PREVIEW • drag to rotate</div></div>
           <button id="admin-store-upload-btn" class="submit-btn" type="button">UPLOAD STORE ITEM</button>
         </div>
         <div id="admin-store-items-list"></div>
@@ -442,62 +443,6 @@
     </div>
   </div>
 
-  <!-- Character Customizer Modal -->
-  <div id="customizer-modal" class="modal">
-    <div class="customizer-card">
-      <span class="close-btn" id="close-customizer">X</span>
-      <h3 style="margin: 0 0 10px 0; text-transform: uppercase;">Character Customizer</h3>
-      
-      <div class="customizer-layout">
-        <div class="customizer-preview-container" id="preview-container">
-          <div class="preview-hint">Drag to rotate</div>
-        </div>
-
-        <div class="customizer-controls">
-          <label>Hat / Accessory
-            <select id="cfg-hat">
-              <option value="none">None</option>
-              <option value="black_tophat">Black Tophat</option>
-              <option value="blue_tophat">Blue Tophat</option>
-              <option value="red_tophat">Red Tophat</option>
-              <option value="pink_tophat">Pink Tophat</option>
-              <option value="pink_bow">Pink Bow</option>
-              <option value="blue_bow">Blue Bow</option>
-              <option value="white_bow">White Bow</option>
-              <option value="black_cat_ears">Black Cat Ears</option>
-              <option value="pink_cat_ears">Pink Cat Ears</option>
-            </select>
-          </label>
-          <label>Head Shape
-            <select id="cfg-head-shape">
-              <option value="sphere">Sphere</option>
-              <option value="cube">Cube</option>
-              <option value="cylinder">Cylinder</option>
-              <option value="headless">Headless (None)</option>
-            </select>
-          </label>
-          <label id="cfg-head-color-row">Head Color <input type="color" id="cfg-head-color" value="#f1c40f"></label>
-          <label>Eyes
-            <select id="cfg-eyes"><option value="none">None</option></select>
-          </label>
-          <label>Mouth
-            <select id="cfg-mouth"><option value="none">None</option></select>
-          </label>
-          <label>Torso Decal
-            <select id="cfg-torso-decal"><option value="none">None</option></select>
-          </label>
-          <label>Torso Color <input type="color" id="cfg-torso-color" value="#3388ff"></label>
-          <label>Left Arm Color <input type="color" id="cfg-left-arm-color" value="#3388ff"></label>
-          <label>Right Arm Color <input type="color" id="cfg-right-arm-color" value="#3388ff"></label>
-          <label>Left Leg Color <input type="color" id="cfg-left-leg-color" value="#1c2833"></label>
-          <label>Right Leg Color <input type="color" id="cfg-right-leg-color" value="#1c2833"></label>
-        </div>
-      </div>
-
-      <button id="save-customizer-btn" class="submit-btn">Save Appearance</button>
-    </div>
-  </div>
-
   <script>
     // --- SOCKET.IO BACKEND CONNECTION ---
     const socket = (typeof io !== 'undefined') ? io() : null;
@@ -601,7 +546,7 @@
           img.alt = item.name;
           preview.appendChild(img);
         } else {
-          preview.textContent = item.category === 'hat' ? '3D HAT' : '3D HEAD';
+          renderMeshThumbnail(preview, item);
         }
         const name = document.createElement('div');
         name.className = 'store-item-name';
@@ -772,14 +717,7 @@
     });
 
     // --- STORE UI ---
-    document.getElementById('open-store-btn').addEventListener('click', () => {
-      setStoreMessage('Loading...');
-      document.getElementById('store-modal').style.display = 'flex';
-      refreshStoreData(() => setStoreMessage(''));
-    });
-    document.getElementById('close-store').addEventListener('click', () => {
-      document.getElementById('store-modal').style.display = 'none';
-    });
+    document.getElementById('open-store-btn').addEventListener('click', () => switchHomeTab('store'));
     document.querySelectorAll('.store-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         activeStoreCategory = btn.dataset.storeCategory;
@@ -1199,6 +1137,7 @@
       const isMesh = category === 'hat' || category === 'head_shape';
       document.getElementById('admin-mesh-fit-fields').style.display = isMesh ? 'grid' : 'none';
       document.getElementById('admin-store-file').accept = isMesh ? '.glb,model/gltf-binary' : '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp';
+      const fit=document.getElementById('admin-fit-preview'); if(fit) fit.style.display=isMesh?'block':'none';
     }
 
     document.getElementById('admin-store-category').addEventListener('change', updateAdminStoreUploadFields);
@@ -2549,174 +2488,82 @@
       dragPlane = null;
     });
 
-    // --- LIVE 3D AVATAR CUSTOMIZER ---
-    let previewScene, previewCamera, previewRenderer, previewAvatarMesh;
-    let isPreviewDragging = false, prevMouseX = 0;
-    let previewRotationY = 0;
+    // --- HOME TABS + AVATAR EDITOR V2 ---
+    let avatarEditorCategory = 'eyes';
+    let avatarDraft = null;
+    let editorScene, editorCamera, editorRenderer, editorMesh;
+    let editorDragging = false, editorLastX = 0, editorTargetRotation = 0;
 
-    function initCustomizerPreview() {
-      const container = document.getElementById('preview-container');
-      
-      previewScene = new THREE.Scene();
-      previewScene.background = new THREE.Color(0x111111);
+    function switchHomeTab(name) {
+      document.querySelectorAll('.home-tab').forEach(b => b.classList.toggle('active', b.dataset.homeTab === name));
+      document.querySelectorAll('.home-pane').forEach(p => p.classList.remove('active'));
+      const pane = document.getElementById(name + '-pane'); if (pane) pane.classList.add('active');
+      if (name === 'store') { setStoreMessage('Loading...'); refreshStoreData(() => { setStoreMessage(''); renderStoreItems(); }); }
+      if (name === 'avatar') openAvatarEditor();
+      if (name === 'worlds') renderRoomList();
+    }
+    document.querySelectorAll('.home-tab').forEach(b => b.addEventListener('click', () => switchHomeTab(b.dataset.homeTab)));
 
-      const width = container.clientWidth || 220;
-      const height = container.clientHeight || 260;
-
-      previewCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-      previewCamera.position.set(0, 1.2, 3.8);
-      previewCamera.lookAt(0, 1.1, 0);
-
-      previewRenderer = new THREE.WebGLRenderer({ antialias: true });
-      previewRenderer.setSize(width, height);
-      container.appendChild(previewRenderer.domElement);
-
-      const light1 = new THREE.DirectionalLight(0xffffff, 1.2);
-      light1.position.set(5, 10, 7);
-      const light2 = new THREE.AmbientLight(0xffffff, 0.7);
-      previewScene.add(light1, light2);
-
-      container.addEventListener('pointerdown', (e) => {
-        isPreviewDragging = true;
-        prevMouseX = e.clientX;
+    function makeNoneInventoryItem(category) { return {id:null, category, name:'None', assetKind:'none'}; }
+    function selectedIdForCategory(cat) {
+      const slot={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'}[cat];
+      return avatarDraft ? avatarDraft[slot] : null;
+    }
+    function setDraftItem(cat,id) {
+      const slot={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'}[cat];
+      avatarDraft[slot]=id;
+      if(cat==='hat' && id) avatarDraft.hat='none';
+      if(cat==='head_shape' && id) avatarDraft.headShape='sphere';
+      renderAvatarInventory(); updateEditorAvatar();
+    }
+    function renderAvatarInventory() {
+      const grid=document.getElementById('avatar-inventory-grid'); if(!grid)return; grid.innerHTML='';
+      const items=[makeNoneInventoryItem(avatarEditorCategory), ...ownedStoreItems.filter(i=>i.category===avatarEditorCategory)];
+      const selected=Number(selectedIdForCategory(avatarEditorCategory)||0);
+      items.forEach(item=>{
+        const card=document.createElement('button'); card.className='inventory-card'+(Number(item.id||0)===selected?' selected':'');
+        const thumb=document.createElement('div'); thumb.className='inventory-thumb';
+        if(item.assetKind==='image'){const img=document.createElement('img');img.src=item.assetUrl;img.alt=item.name;thumb.appendChild(img);}
+        else if(item.assetKind==='glb') renderMeshThumbnail(thumb,item);
+        else thumb.textContent='NONE';
+        const name=document.createElement('div');name.className='inventory-name';name.textContent=item.name;
+        card.append(thumb,name); card.onclick=()=>setDraftItem(avatarEditorCategory,item.id?Number(item.id):null); grid.appendChild(card);
       });
+    }
+    document.querySelectorAll('.inventory-tab').forEach(b=>b.addEventListener('click',()=>{avatarEditorCategory=b.dataset.invCategory;document.querySelectorAll('.inventory-tab').forEach(x=>x.classList.toggle('active',x===b));renderAvatarInventory();}));
 
-      window.addEventListener('pointermove', (e) => {
-        if (isPreviewDragging) {
-          const deltaX = e.clientX - prevMouseX;
-          previewRotationY += deltaX * 0.015;
-          if (previewAvatarMesh) previewAvatarMesh.rotation.y = previewRotationY;
-          prevMouseX = e.clientX;
-        }
-      });
+    function initEditorPreview(){
+      const c=document.getElementById('avatar-editor-preview'); if(editorRenderer||!c)return;
+      editorScene=new THREE.Scene();editorScene.background=new THREE.Color(0x111111);
+      editorCamera=new THREE.PerspectiveCamera(42,c.clientWidth/c.clientHeight,.1,100);editorCamera.position.set(0,1.2,4);editorCamera.lookAt(0,1.1,0);
+      editorRenderer=new THREE.WebGLRenderer({antialias:true,alpha:false});editorRenderer.setSize(c.clientWidth,c.clientHeight);c.insertBefore(editorRenderer.domElement,c.firstChild);
+      editorScene.add(new THREE.AmbientLight(0xffffff,.8));const dl=new THREE.DirectionalLight(0xffffff,1.1);dl.position.set(4,8,6);editorScene.add(dl);
+      c.addEventListener('pointerdown',e=>{editorDragging=true;editorLastX=e.clientX;c.setPointerCapture?.(e.pointerId)});
+      c.addEventListener('pointermove',e=>{if(!editorDragging)return;editorTargetRotation+=(e.clientX-editorLastX)*.015;editorLastX=e.clientX;});
+      const release=()=>editorDragging=false;c.addEventListener('pointerup',release);c.addEventListener('pointercancel',release);
+      (function loop(){requestAnimationFrame(loop);if(editorMesh){if(editorDragging)editorMesh.rotation.y=editorTargetRotation;else{editorTargetRotation*=.82;editorMesh.rotation.y*=.82;if(Math.abs(editorMesh.rotation.y)<.002){editorMesh.rotation.y=0;editorTargetRotation=0;}}}editorRenderer.render(editorScene,editorCamera)})();
+    }
+    function updateEditorAvatar(){if(!editorScene||!avatarDraft)return;if(editorMesh)editorScene.remove(editorMesh);editorMesh=buildBlockyAvatar(avatarDraft,cosmeticsForAppearance(avatarDraft));editorMesh.rotation.y=editorTargetRotation;editorScene.add(editorMesh);}
+    function syncEditorColors(){[['av-head-color','headColor'],['av-torso-color','torsoColor'],['av-left-arm-color','leftArmColor'],['av-right-arm-color','rightArmColor'],['av-left-leg-color','leftLegColor'],['av-right-leg-color','rightLegColor']].forEach(([id,k])=>{document.getElementById(id).value=avatarDraft[k];});}
+    function openAvatarEditor(){refreshStoreData(()=>{avatarDraft=JSON.parse(JSON.stringify(playerAppearance));initEditorPreview();syncEditorColors();renderAvatarInventory();updateEditorAvatar();});}
+    [['av-head-color','headColor'],['av-torso-color','torsoColor'],['av-left-arm-color','leftArmColor'],['av-right-arm-color','rightArmColor'],['av-left-leg-color','leftLegColor'],['av-right-leg-color','rightLegColor']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{if(!avatarDraft)return;avatarDraft[k]=e.target.value;updateEditorAvatar();}));
+    document.getElementById('save-avatar-editor-btn').addEventListener('click',()=>{const b=document.getElementById('save-avatar-editor-btn');b.disabled=true;b.textContent='SAVING...';socket.emit('save_appearance',avatarDraft,res=>{b.disabled=false;b.textContent='SAVE APPEARANCE';if(!res||!res.success)return showToast((res&&res.message)||'Could not save appearance.');playerAppearance=res.appearance||avatarDraft;equippedCosmetics=res.cosmetics||cosmeticsForAppearance(playerAppearance);localStorage.setItem('sp_player_appearance',JSON.stringify(playerAppearance));avatarDraft=JSON.parse(JSON.stringify(playerAppearance));renderAvatarInventory();updateEditorAvatar();showToast('Appearance saved.');});});
 
-      window.addEventListener('pointerup', () => isPreviewDragging = false);
+    // Small static Three.js thumbnails for GLB store/inventory cards.
+    function renderMeshThumbnail(container,item){
+      const canvas=document.createElement('canvas');canvas.className='mesh-thumb-canvas';container.appendChild(canvas);
+      const r=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});const w=Math.max(container.clientWidth||150,80),h=Math.max(container.clientHeight||78,60);r.setSize(w,h,false);
+      const sc=new THREE.Scene();const cam=new THREE.PerspectiveCamera(38,w/h,.1,100);cam.position.set(0,1.2,4);cam.lookAt(0,1.15,0);sc.add(new THREE.AmbientLight(0xffffff,.9));const dl=new THREE.DirectionalLight(0xffffff,1);dl.position.set(4,7,5);sc.add(dl);
+      const app={...playerAppearance};if(item.category==='hat'){app.hat='none';app.hatItemId=item.id;}else{app.headShape='sphere';app.headShapeItemId=item.id;}const av=buildBlockyAvatar(app,{[item.category]:item});sc.add(av);
+      let frames=0;(function draw(){r.render(sc,cam);if(frames++<45)requestAnimationFrame(draw);})();
     }
 
-    function updatePreviewAvatar() {
-      if (!previewScene) return;
-      if (previewAvatarMesh) previewScene.remove(previewAvatarMesh);
-
-      const currentApp = getCustomizerInputs();
-      previewAvatarMesh = buildBlockyAvatar(currentApp, cosmeticsForAppearance(currentApp));
-      previewAvatarMesh.rotation.y = previewRotationY;
-      previewScene.add(previewAvatarMesh);
-    }
-
-    function storeIdFromSelectValue(value) {
-      const text = String(value || '');
-      if (!text.startsWith('store:')) return null;
-      const id = Number(text.slice(6));
-      return Number.isInteger(id) && id > 0 ? id : null;
-    }
-
-    function updateHeadColorRowVisibility() {
-      const headValue = document.getElementById('cfg-head-shape').value;
-      const customHead = storeIdFromSelectValue(headValue);
-      const isHeadless = headValue === 'headless';
-      document.getElementById('cfg-head-color-row').style.display = (isHeadless || customHead) ? 'none' : 'flex';
-    }
-
-    function getCustomizerInputs() {
-      const hatValue = document.getElementById('cfg-hat').value;
-      const headValue = document.getElementById('cfg-head-shape').value;
-      return {
-        hat: storeIdFromSelectValue(hatValue) ? 'none' : hatValue,
-        headShape: storeIdFromSelectValue(headValue) ? 'sphere' : headValue,
-        headColor: document.getElementById('cfg-head-color').value,
-        torsoColor: document.getElementById('cfg-torso-color').value,
-        leftArmColor: document.getElementById('cfg-left-arm-color').value,
-        rightArmColor: document.getElementById('cfg-right-arm-color').value,
-        leftLegColor: document.getElementById('cfg-left-leg-color').value,
-        rightLegColor: document.getElementById('cfg-right-leg-color').value,
-        eyesItemId: storeIdFromSelectValue(document.getElementById('cfg-eyes').value),
-        mouthItemId: storeIdFromSelectValue(document.getElementById('cfg-mouth').value),
-        torsoDecalItemId: storeIdFromSelectValue(document.getElementById('cfg-torso-decal').value),
-        hatItemId: storeIdFromSelectValue(hatValue),
-        headShapeItemId: storeIdFromSelectValue(headValue)
-      };
-    }
-
-    function setSelectIfPresent(select, value, fallback) {
-      if ([...select.options].some(o => o.value === value)) select.value = value;
-      else select.value = fallback;
-    }
-
-    function loadCustomizerInputs(app) {
-      refreshCustomizerStoreOptions();
-      const hat = document.getElementById('cfg-hat');
-      const head = document.getElementById('cfg-head-shape');
-      const eyes = document.getElementById('cfg-eyes');
-      const mouth = document.getElementById('cfg-mouth');
-      const decal = document.getElementById('cfg-torso-decal');
-
-      setSelectIfPresent(hat, app.hatItemId ? `store:${app.hatItemId}` : (app.hat || 'none'), 'none');
-      setSelectIfPresent(head, app.headShapeItemId ? `store:${app.headShapeItemId}` : (app.headShape || 'sphere'), 'sphere');
-      setSelectIfPresent(eyes, app.eyesItemId ? `store:${app.eyesItemId}` : 'none', 'none');
-      setSelectIfPresent(mouth, app.mouthItemId ? `store:${app.mouthItemId}` : 'none', 'none');
-      setSelectIfPresent(decal, app.torsoDecalItemId ? `store:${app.torsoDecalItemId}` : 'none', 'none');
-
-      document.getElementById('cfg-head-color').value = app.headColor || '#f1c40f';
-      document.getElementById('cfg-torso-color').value = app.torsoColor || '#3388ff';
-      document.getElementById('cfg-left-arm-color').value = app.leftArmColor || '#3388ff';
-      document.getElementById('cfg-right-arm-color').value = app.rightArmColor || '#3388ff';
-      document.getElementById('cfg-left-leg-color').value = app.leftLegColor || '#1c2833';
-      document.getElementById('cfg-right-leg-color').value = app.rightLegColor || '#1c2833';
-      updateHeadColorRowVisibility();
-    }
-
-    document.getElementById('open-customizer-btn').addEventListener('click', () => {
-      loadCustomizerInputs(playerAppearance);
-      document.getElementById('customizer-modal').style.display = 'flex';
-      if (!previewScene) initCustomizerPreview();
-      updatePreviewAvatar();
-    });
-
-    document.getElementById('close-customizer').addEventListener('click', () => {
-      document.getElementById('customizer-modal').style.display = 'none';
-    });
-
-    ['cfg-hat', 'cfg-head-shape', 'cfg-eyes', 'cfg-mouth', 'cfg-torso-decal', 'cfg-head-color', 'cfg-torso-color', 'cfg-left-arm-color', 'cfg-right-arm-color', 'cfg-left-leg-color', 'cfg-right-leg-color'].forEach(id => {
-      const elem = document.getElementById(id);
-      elem.addEventListener('change', () => {
-        updateHeadColorRowVisibility();
-        updatePreviewAvatar();
-      });
-      if (id.includes('color')) elem.addEventListener('input', updatePreviewAvatar);
-    });
-
-    document.getElementById('save-customizer-btn').addEventListener('click', () => {
-      const saveBtn = document.getElementById('save-customizer-btn');
-      const requestedAppearance = getCustomizerInputs();
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving...';
-      socket.emit('save_appearance', requestedAppearance, (res) => {
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Save Appearance';
-        if (!res || !res.success) {
-          alert((res && res.message) || 'Could not save your appearance.');
-          return;
-        }
-
-        playerAppearance = res.appearance || requestedAppearance;
-        equippedCosmetics = res.cosmetics || cosmeticsForAppearance(playerAppearance);
-        localStorage.setItem('sp_player_appearance', JSON.stringify(playerAppearance));
-
-        if (localPlayerAvatar) {
-          const currentPos = localPlayerAvatar.position.clone();
-          const currentRot = localPlayerAvatar.rotation.y;
-          scene.remove(localPlayerAvatar);
-          localPlayerAvatar = buildBlockyAvatar(playerAppearance, equippedCosmetics);
-          localPlayerAvatar.add(createNameTagSprite(loggedInUsername || 'Player'));
-          localPlayerAvatar.position.copy(currentPos);
-          localPlayerAvatar.rotation.y = currentRot;
-          scene.add(localPlayerAvatar);
-        }
-
-        document.getElementById('customizer-modal').style.display = 'none';
-        showToast('Appearance saved.');
-      });
-    });
+    // Admin GLB live fitting preview before upload.
+    let fitScene,fitCamera,fitRenderer,fitAvatar,fitObjectUrl=null,fitDragging=false,fitLastX=0,fitRot=0;
+    function initAdminFitPreview(){const c=document.getElementById('admin-fit-preview');if(fitRenderer||!c)return;fitScene=new THREE.Scene();fitScene.background=new THREE.Color(0x0b0d10);fitCamera=new THREE.PerspectiveCamera(42,c.clientWidth/c.clientHeight,.1,100);fitCamera.position.set(0,1.2,4);fitCamera.lookAt(0,1.15,0);fitRenderer=new THREE.WebGLRenderer({antialias:true});fitRenderer.setSize(c.clientWidth,c.clientHeight);c.insertBefore(fitRenderer.domElement,c.firstChild);fitScene.add(new THREE.AmbientLight(0xffffff,.85));const l=new THREE.DirectionalLight(0xffffff,1.1);l.position.set(4,8,6);fitScene.add(l);c.addEventListener('pointerdown',e=>{fitDragging=true;fitLastX=e.clientX});window.addEventListener('pointermove',e=>{if(fitDragging){fitRot+=(e.clientX-fitLastX)*.015;fitLastX=e.clientX;if(fitAvatar)fitAvatar.rotation.y=fitRot;}});window.addEventListener('pointerup',()=>fitDragging=false);(function loop(){requestAnimationFrame(loop);fitRenderer.render(fitScene,fitCamera)})();}
+    function updateAdminFitPreview(){const cat=document.getElementById('admin-store-category').value,file=document.getElementById('admin-store-file').files[0],box=document.getElementById('admin-fit-preview');const mesh=cat==='hat'||cat==='head_shape';box.style.display=mesh?'block':'none';if(!mesh)return;initAdminFitPreview();if(fitAvatar)fitScene.remove(fitAvatar);const base={...playerAppearance,hat:'none',hatItemId:null,headShape:'sphere',headShapeItemId:null};fitAvatar=buildBlockyAvatar(base,{});fitAvatar.rotation.y=fitRot;fitScene.add(fitAvatar);if(!file)return;if(fitObjectUrl)URL.revokeObjectURL(fitObjectUrl);fitObjectUrl=URL.createObjectURL(file);const item={assetKind:'glb',assetUrl:fitObjectUrl,category:cat,metadata:{size:Number(document.getElementById('admin-store-size').value)||1,offsetX:Number(document.getElementById('admin-store-offset-x').value)||0,offsetY:Number(document.getElementById('admin-store-offset-y').value)||0,offsetZ:Number(document.getElementById('admin-store-offset-z').value)||0}};fitScene.remove(fitAvatar);fitAvatar=buildBlockyAvatar(base,{[cat]:item});fitAvatar.rotation.y=fitRot;fitScene.add(fitAvatar);}
+    document.getElementById('admin-store-file').addEventListener('change',updateAdminFitPreview);
+    ['admin-store-size','admin-store-offset-x','admin-store-offset-y','admin-store-offset-z'].forEach(id=>document.getElementById(id).addEventListener('input',updateAdminFitPreview));
 
     // --- ACCURATE SHAPE-SPECIFIC COLLISION & PHYSICS ENGINE ---
     // Keep the exact single-player input/physics tuning.
