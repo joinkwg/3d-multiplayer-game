@@ -3009,32 +3009,88 @@
       }
 
       // --- STEP 3: RESOLVE Y-AXIS MOVEMENT ---
+      // Vertical collision is swept from the previous feet/head position.
+      // This is critical for curved parts: touching a sphere/cylinder SIDE must not
+      // teleport the player onto its top.
       isGrounded = false;
-      // Same order as indexSingle: move by current velocity, then apply gravity.
+      const oldY = pos.y;
       pos.y += velocityY;
       velocityY += gravity;
+
       for (const b of blocks) {
+        if (b.canCollide === false) continue;
         const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
         if (res.collided) {
-          if (b.actionType === 'kill') hitKill = true;
+          if (b.actionType === 'kill') { hitKill = true; continue; }
           if (b.actionType === 'checkpoint') triggerCheckpoint(b);
           if (b.actionType === 'finish') triggerFinishLine();
 
-          if (b.canCollide !== false && b.actionType !== 'kill') {
-            const bBox = getBlockAABB(b);
-            if (dy <= 0 && res.topY !== undefined && res.topY !== null) {
-              // Land directly on the rendered ramp/sphere/cylinder surface.
-              pos.y = res.topY;
-              velocityY = 0;
-              isGrounded = true;
-            } else if (dy <= 0) {
-              pos.y = bBox.maxY;
-              velocityY = 0;
-              isGrounded = true;
-            } else if (dy > 0) {
-              pos.y = bBox.minY - PLAYER_HEIGHT;
-              velocityY = 0;
+          const bBox=getBlockAABB(b);
+          const falling=dy <= 0;
+          const oldFeet=oldY;
+          const newFeet=pos.y;
+          const oldHead=oldY+PLAYER_HEIGHT;
+          const newHead=pos.y+PLAYER_HEIGHT;
+
+          if (falling) {
+            let surfaceY = bBox.maxY;
+            if (res.topY !== undefined && res.topY !== null) surfaceY=res.topY;
+
+            // Land only if this frame actually crossed the visible top surface.
+            // Side contact alone does not qualify as a landing.
+            if (oldFeet >= surfaceY-0.035 && newFeet <= surfaceY+0.035) {
+              pos.y=surfaceY;
+              velocityY=0;
+              isGrounded=true;
             }
+          } else {
+            const underside=bBox.minY;
+            // Likewise, only stop an upward jump when the head crosses the underside.
+            if (oldHead <= underside+0.035 && newHead >= underside-0.035) {
+              pos.y=underside-PLAYER_HEIGHT;
+              velocityY=0;
+            }
+          }
+        }
+      }
+
+      // Ground support for curved surfaces. This keeps gravity from causing tiny
+      // penetrate/correct cycles while standing still on a sphere, cylinder or ramp.
+      if (!isGrounded && velocityY <= 0) {
+        for (const b of blocks) {
+          if (b.canCollide === false || b.actionType === 'kill') continue;
+          const shape=b.shape || 'box';
+          let surfaceY=null;
+          if (shape === 'sphere') {
+            const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
+            const ry=Math.max(.001,Math.abs(b.scaleY||1)*.5);
+            const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
+            const dx=pos.x-b.x,dz=pos.z-b.z;
+            const q=(dx*dx)/(rx*rx)+(dz*dz)/(rz*rz);
+            if (q<=1) surfaceY=b.y+ry*Math.sqrt(Math.max(0,1-q));
+          } else if (shape === 'cylinder') {
+            const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
+            const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
+            const dx=pos.x-b.x,dz=pos.z-b.z;
+            if ((dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)<=1) surfaceY=b.y+Math.abs(b.scaleY||1)*.5;
+          } else if (shape === 'wedge') {
+            const box=getBlockAABB(b);
+            if (pos.x>=box.minX-PLAYER_RADIUS && pos.x<=box.maxX+PLAYER_RADIUS &&
+                pos.z>=box.minZ-PLAYER_RADIUS && pos.z<=box.maxZ+PLAYER_RADIUS) {
+              const sz=Math.max(.001,Math.abs(b.scaleZ||1));
+              const t=1-((Math.max(box.minZ,Math.min(box.maxZ,pos.z))-box.minZ)/sz);
+              surfaceY=box.minY+Math.max(0,Math.min(1,t))*Math.abs(b.scaleY||1);
+            }
+          } else {
+            const box=getBlockAABB(b);
+            if (pos.x>=box.minX-PLAYER_RADIUS && pos.x<=box.maxX+PLAYER_RADIUS &&
+                pos.z>=box.minZ-PLAYER_RADIUS && pos.z<=box.maxZ+PLAYER_RADIUS) surfaceY=box.maxY;
+          }
+          if (surfaceY !== null && Math.abs(pos.y-surfaceY) <= 0.045) {
+            pos.y=surfaceY;
+            velocityY=0;
+            isGrounded=true;
+            break;
           }
         }
       }
