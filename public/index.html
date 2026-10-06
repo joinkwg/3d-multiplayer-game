@@ -501,6 +501,28 @@
     .notification-open{background:#223a59;border:1px solid #41658d;color:#fff;padding:6px 8px;font-size:9px;font-weight:900;cursor:pointer}
     .notifications-empty{padding:30px 18px;text-align:center;color:#718096}
 
+
+    /* ===== V3.19.2 MODERN DASHBOARD CHROME ===== */
+    .kwg-dashboard-header{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:4px 2px 15px;border-bottom:1px solid #273446}
+    .kwg-brand-block h2{margin:0!important;text-transform:uppercase;font-size:20px!important;letter-spacing:.02em!important}
+    .kwg-userline{font-size:10px;color:#74849a;margin-top:4px;text-transform:uppercase;letter-spacing:.09em;font-weight:800}
+    .kwg-userline #logged-user-display{color:#79b8ff!important;font-weight:950!important}
+    .kwg-account-tools{display:flex;align-items:center;gap:7px}
+    .kwg-coin-pill{display:inline-flex!important;align-items:center!important;gap:7px!important;height:36px!important;box-sizing:border-box!important;background:#141d29!important;color:#e9c95a!important;border:1px solid #39485d!important;border-left:3px solid #d9b944!important;padding:0 11px!important;box-shadow:none!important;font-size:12px!important;letter-spacing:.04em!important}
+    .kwg-tool-icon{font-size:9px;color:#f0cd54}
+    .kwg-icon-tool{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:36px!important;height:36px!important;padding:0!important;background:#141d29!important;color:#9eabbc!important;border:1px solid #39485d!important;box-shadow:none!important;font-size:18px!important;line-height:1!important}
+    .kwg-icon-tool:hover{background:#342129!important;color:#ff8591!important;border-color:#70404a!important}
+    .kwg-icon-nav{display:flex!important;align-items:center!important;gap:5px!important;margin:12px 0 16px!important;padding:5px!important;background:#0c121a!important;border:1px solid #263244!important;overflow:visible!important;flex-wrap:wrap!important}
+    .kwg-icon-nav .home-tab{position:relative!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;width:42px!important;height:40px!important;min-width:42px!important;padding:0!important;margin:0!important;background:transparent!important;color:#7e8da2!important;border:1px solid transparent!important;box-shadow:none!important}
+    .kwg-icon-nav .home-tab:hover{background:#172333!important;color:#cfe4ff!important;border-color:#30445e!important}
+    .kwg-icon-nav .home-tab.active{background:#1b2c41!important;color:#7dbaff!important;border-color:#41668e!important;box-shadow:inset 0 -2px 0 #4b9cff!important}
+    .kwg-icon-nav .nav-glyph{display:block;font-size:18px;line-height:1;font-family:Arial,sans-serif}
+    .kwg-icon-nav .nav-label{position:absolute;z-index:20;left:50%;top:calc(100% + 8px);transform:translateX(-50%) translateY(-2px);pointer-events:none;opacity:0;background:#0b1017;color:#dce8f7;border:1px solid #3b4a5e;padding:5px 7px;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;transition:opacity .12s ease,transform .12s ease;box-shadow:0 5px 14px rgba(0,0,0,.35)}
+    .kwg-icon-nav .home-tab:hover .nav-label{opacity:1;transform:translateX(-50%) translateY(0)}
+    .kwg-icon-nav .nav-badge{position:absolute!important;right:-5px!important;top:-5px!important;margin:0!important;z-index:5!important}
+    .kwg-icon-nav .notifications-tab{gap:0!important}
+    @media(max-width:620px){.kwg-dashboard-header{align-items:flex-start}.kwg-brand-block h2{font-size:17px!important}.kwg-icon-nav{gap:3px!important}.kwg-icon-nav .home-tab{width:38px!important;min-width:38px!important}}
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -531,11 +553,23 @@
   <!-- Home Page Dashboard -->
   <div id="home-screen" class="overlay-screen" style="display:none;">
     <div class="card" id="home-main-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-        <div><h2 style="margin:0;text-transform:uppercase;">KWG 3D Online</h2><div style="font-size:12px;color:#aaa;">Logged in as: <span id="logged-user-display" style="color:#3388ff;font-weight:bold;">User</span></div></div>
-        <div style="display:flex;gap:8px;align-items:center"><span class="coin-badge">🪙 <span id="home-coin-count">100</span> COINS</span><button id="logout-btn" class="logout-btn">LOG OUT</button></div>
+      <div class="kwg-dashboard-header">
+        <div class="kwg-brand-block"><h2>KWG 3D Online</h2><div class="kwg-userline">Logged in as <span id="logged-user-display">User</span></div></div>
+        <div class="kwg-account-tools">
+          <div class="coin-badge kwg-coin-pill" title="Your coins" aria-label="Coins"><span class="kwg-tool-icon">◆</span><span id="home-coin-count">100</span></div>
+          <button id="logout-btn" class="logout-btn kwg-icon-tool" title="Log out" aria-label="Log out"><span aria-hidden="true">↪</span></button>
+        </div>
       </div>
-      <div class="home-tabs"><button id="notifications-btn" class="home-tab notifications-tab" type="button">🔔 <span>NOTIFICATIONS</span> <span id="notification-badge" class="friend-badge" style="display:none">0</span></button><button class="home-tab active" data-home-tab="home">HOME</button><button class="home-tab" data-home-tab="profile">PROFILE</button><button class="home-tab" data-home-tab="friends">FRIENDS <span id="friend-request-badge" class="friend-badge" style="display:none">0</span></button><button class="home-tab" data-home-tab="worlds">WORLDS</button><button class="home-tab" data-home-tab="store">STORE</button><button class="home-tab" data-home-tab="avatar">AVATAR EDITOR</button><button class="home-tab admin-home-tab" data-home-tab="admin">ADMIN</button></div>
+      <div class="home-tabs kwg-icon-nav">
+        <button class="home-tab active" data-home-tab="home" title="Home" aria-label="Home"><span class="nav-glyph">⌂</span><span class="nav-label">Home</span></button>
+        <button class="home-tab" data-home-tab="profile" title="Profile" aria-label="Profile"><span class="nav-glyph">●</span><span class="nav-label">Profile</span></button>
+        <button class="home-tab" data-home-tab="friends" title="Friends" aria-label="Friends"><span class="nav-glyph">♟</span><span class="nav-label">Friends</span><span id="friend-request-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
+        <button class="home-tab" data-home-tab="worlds" title="Worlds" aria-label="Worlds"><span class="nav-glyph">◆</span><span class="nav-label">Worlds</span></button>
+        <button class="home-tab" data-home-tab="store" title="Store" aria-label="Store"><span class="nav-glyph">▣</span><span class="nav-label">Store</span></button>
+        <button class="home-tab" data-home-tab="avatar" title="Avatar Editor" aria-label="Avatar Editor"><span class="nav-glyph">♙</span><span class="nav-label">Avatar</span></button>
+        <button id="notifications-btn" class="home-tab notifications-tab" type="button" title="Notifications" aria-label="Notifications"><span class="nav-glyph">●</span><span class="nav-label">Notifications</span><span id="notification-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
+        <button class="home-tab admin-home-tab" data-home-tab="admin" title="Admin" aria-label="Admin"><span class="nav-glyph">⚙</span><span class="nav-label">Admin</span></button>
+      </div>
       <div id="home-pane" class="home-pane active"><div class="home-profile-grid"><div class="home-section"><h3>YOUR AVATAR</h3><div id="home-avatar-preview" class="home-avatar-preview"></div></div><div style="display:grid;gap:14px"><div class="home-section"><h3>YOUR WORLDS</h3><div id="home-owned-worlds" class="room-list-container home-owned-worlds"></div></div><div class="home-section"><h3>YOUR INVENTORY</h3><div id="home-inventory-grid" class="home-inventory-grid"></div></div></div></div></div>
       <div id="notifications-panel" class="notifications-panel" style="display:none">
         <div class="notifications-head">
