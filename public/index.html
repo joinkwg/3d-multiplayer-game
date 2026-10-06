@@ -539,6 +539,43 @@
       fill:currentColor;stroke:none;
     }
 
+
+    /* ===== V3.20 HOME / STORE / AVATAR UI REFRESH ===== */
+    .kwg-page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:3px 0 14px;padding:18px 19px;background:linear-gradient(110deg,#111822,#1b2838);border:1px solid #344256;border-left:4px solid #4b9cff;box-shadow:0 8px 24px rgba(0,0,0,.24)}
+    .kwg-page-heading h2{margin:3px 0 0!important;font-size:23px!important;letter-spacing:-.02em!important}
+    .kwg-page-heading p{margin:5px 0 0;color:#8291a5;font-size:11px}
+    #home-pane .home-profile-grid{gap:12px!important}
+    #home-pane .home-section{background:#111720!important;border:1px solid #303d50!important;padding:15px!important;box-shadow:0 7px 18px rgba(0,0,0,.2)!important}
+    #home-pane .home-section h3{margin:0 0 11px!important;padding-bottom:9px!important;border-bottom:1px solid #293547!important;color:#aebdd0!important;font-size:10px!important;letter-spacing:.15em!important}
+    #home-pane .home-avatar-preview{background:radial-gradient(circle at 50% 35%,#24364b,#0b1017 72%)!important;border:1px solid #35445a!important}
+    #home-pane .home-inventory-card,#home-pane .room-card{background:#0d131b!important;border:1px solid #2d3a4c!important;box-shadow:none!important}
+    #store-pane .store-topbar{margin-bottom:12px!important}
+    #store-pane .kwg-store-balance{display:inline-flex!important;align-items:center!important;gap:7px!important;background:#121b27!important;color:#e9c95a!important;border:1px solid #3a485b!important;border-left:3px solid #d9b944!important;box-shadow:none!important;padding:9px 12px!important;font-size:13px!important}
+    #store-pane .store-tabs{display:flex!important;gap:4px!important;padding:5px!important;margin:0 0 12px!important;background:#0c121a!important;border:1px solid #293547!important}
+    #store-pane .store-tab{padding:9px 12px!important;background:transparent!important;color:#8291a5!important;border:1px solid transparent!important;font-size:10px!important;letter-spacing:.07em!important;box-shadow:none!important}
+    #store-pane .store-tab:hover{background:#172333!important;color:#d9e9fc!important;border-color:#30445e!important}
+    #store-pane .store-tab.active{background:#1b2c41!important;color:#79b8ff!important;border-color:#41668e!important;box-shadow:inset 0 -2px 0 #4b9cff!important}
+    #store-items-grid{gap:9px!important}
+    #store-items-grid .store-item-card{background:#111720!important;border:1px solid #303d50!important;padding:11px!important;box-shadow:0 5px 15px rgba(0,0,0,.2)!important}
+    #store-items-grid .store-item-card:hover{border-color:#4b6e98!important;transform:translateY(-1px)}
+    #store-items-grid .store-item-card button{border:1px solid #41658d!important;background:#203754!important;box-shadow:none!important}
+    #avatar-editor-pane .avatar-editor-layout{gap:12px!important}
+    #avatar-editor-pane .avatar-preview-large{background:radial-gradient(circle at 50% 35%,#24364b,#0b1017 72%)!important;border:1px solid #35445a!important;box-shadow:0 8px 24px rgba(0,0,0,.25)!important}
+    #avatar-editor-pane .inventory-panel{background:#111720!important;border:1px solid #303d50!important;padding:12px!important}
+    #avatar-editor-pane .inventory-tabs{display:flex!important;gap:4px!important;padding:5px!important;background:#0c121a!important;border:1px solid #293547!important;margin-bottom:10px!important}
+    #avatar-editor-pane .inventory-tab{padding:8px 10px!important;background:transparent!important;color:#8291a5!important;border:1px solid transparent!important;font-size:10px!important;letter-spacing:.06em!important;box-shadow:none!important}
+    #avatar-editor-pane .inventory-tab:hover{background:#172333!important;color:#d9e9fc!important;border-color:#30445e!important}
+    #avatar-editor-pane .inventory-tab.active{background:#1b2c41!important;color:#79b8ff!important;border-color:#41668e!important;box-shadow:inset 0 -2px 0 #4b9cff!important}
+    #avatar-inventory-grid .inventory-card{background:#0d131b!important;border:1px solid #2d3a4c!important;box-shadow:none!important}
+    #avatar-inventory-grid .inventory-card:hover{border-color:#4b6e98!important}
+    #avatar-editor-pane .color-grid{margin-top:12px!important;padding-top:12px!important;border-top:1px solid #293547!important;gap:7px!important}
+    #avatar-editor-pane .color-grid label{background:#0d131b!important;border:1px solid #2d3a4c!important;padding:8px!important;color:#9eacbe!important;font-size:10px!important;font-weight:850!important}
+    #avatar-editor-pane input[type="color"]{border:1px solid #46566b!important;background:#151e29!important}
+    #save-avatar-editor-btn{margin-top:9px!important;background:#255b93!important;border:1px solid #4c87c2!important;box-shadow:none!important}
+    /* Admin navigation is opt-in after authenticated admin state is known. */
+    .admin-home-tab{display:none!important}
+    body.kwg-admin-authenticated .admin-home-tab{display:inline-flex!important}
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -584,9 +621,9 @@
         <button class="home-tab" data-home-tab="store" title="Store" aria-label="Store"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 9h14l-1 11H6z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></svg></span><span class="nav-label">Store</span></button>
         <button class="home-tab" data-home-tab="avatar" title="Avatar Editor" aria-label="Avatar Editor"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.5"/><path d="M7 11.5h10l1.5 9H5.5z"/><path d="M8 14 4 17M16 14l4 3"/></svg></span><span class="nav-label">Avatar</span></button>
         <button id="notifications-btn" class="home-tab notifications-tab" type="button" title="Notifications" aria-label="Notifications"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 17h12l-1.5-2.2V10a4.5 4.5 0 0 0-9 0v4.8z"/><path d="M10 19.5a2.2 2.2 0 0 0 4 0"/></svg></span><span class="nav-label">Notifications</span><span id="notification-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
-        <button class="home-tab admin-home-tab" data-home-tab="admin" title="Admin" aria-label="Admin"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14 5.1l2.9-.3.7 2.8 2.5 1.5-1.1 2.7 1.1 2.7-2.5 1.5-.7 2.8-2.9-.3L12 21l-2-2.1-2.9.3-.7-2.8-2.5-1.5L5 12.2 3.9 9.5 6.4 8l.7-2.8 2.9.3z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="nav-label">Admin</span></button>
+        <button class="home-tab admin-home-tab" data-home-tab="admin" title="Admin" aria-label="Admin" style="display:none"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14 5.1l2.9-.3.7 2.8 2.5 1.5-1.1 2.7 1.1 2.7-2.5 1.5-.7 2.8-2.9-.3L12 21l-2-2.1-2.9.3-.7-2.8-2.5-1.5L5 12.2 3.9 9.5 6.4 8l.7-2.8 2.9.3z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="nav-label">Admin</span></button>
       </div>
-      <div id="home-pane" class="home-pane active"><div class="home-profile-grid"><div class="home-section"><h3>YOUR AVATAR</h3><div id="home-avatar-preview" class="home-avatar-preview"></div></div><div style="display:grid;gap:14px"><div class="home-section"><h3>YOUR WORLDS</h3><div id="home-owned-worlds" class="room-list-container home-owned-worlds"></div></div><div class="home-section"><h3>YOUR INVENTORY</h3><div id="home-inventory-grid" class="home-inventory-grid"></div></div></div></div></div>
+      <div id="home-pane" class="home-pane active"><div class="kwg-page-heading"><div><div class="profile-kicker">DASHBOARD</div><h2>HOME</h2><p>Your worlds, avatar, and collection at a glance.</p></div></div><div class="home-profile-grid"><div class="home-section"><h3>YOUR AVATAR</h3><div id="home-avatar-preview" class="home-avatar-preview"></div></div><div style="display:grid;gap:14px"><div class="home-section"><h3>YOUR WORLDS</h3><div id="home-owned-worlds" class="room-list-container home-owned-worlds"></div></div><div class="home-section"><h3>YOUR INVENTORY</h3><div id="home-inventory-grid" class="home-inventory-grid"></div></div></div></div></div>
       <div id="notifications-panel" class="notifications-panel" style="display:none">
         <div class="notifications-head">
           <div><div class="profile-kicker">SOCIAL</div><h2>NOTIFICATIONS</h2></div>
@@ -665,11 +702,12 @@
         <div id="home-error-msg" class="error-msg"></div>
       </div>
       <div id="store-pane" class="home-pane">
-        <div class="store-topbar"><div><h3 style="margin:0;">KWG STORE</h3><div style="font-size:11px;color:#aaa;">Buy cosmetics with coins.</div></div><span class="coin-badge">🪙 <span id="store-coin-count">100</span></span></div>
+        <div class="kwg-page-heading store-topbar"><div><div class="profile-kicker">COSMETICS</div><h2>STORE</h2><p>Build your collection with coins.</p></div><span class="coin-badge kwg-store-balance"><span class="kwg-tool-icon">◆</span><span id="store-coin-count">100</span></span></div>
         <div class="store-tabs"><button class="store-tab active" data-store-category="eyes">Eyes</button><button class="store-tab" data-store-category="mouth">Mouths</button><button class="store-tab" data-store-category="torso_decal">Shirts / Decals</button><button class="store-tab" data-store-category="hat">Hats</button><button class="store-tab" data-store-category="head_shape">Head Shapes</button></div>
         <div id="store-items-grid"></div><div id="store-message" class="error-msg"></div>
       </div>
       <div id="avatar-editor-pane" class="home-pane">
+        <div class="kwg-page-heading"><div><div class="profile-kicker">CUSTOMIZE</div><h2>AVATAR EDITOR</h2><p>Equip cosmetics and tune your character colors.</p></div></div>
         <div class="avatar-editor-layout">
           <div><div id="avatar-editor-preview" class="avatar-preview-large"><div class="preview-hint">Drag to rotate • releases back to front</div></div><button id="save-avatar-editor-btn" class="submit-btn">SAVE APPEARANCE</button></div>
           <div class="inventory-panel"><div class="inventory-tabs"><button class="inventory-tab active" data-inv-category="eyes">EYES</button><button class="inventory-tab" data-inv-category="mouth">MOUTHS</button><button class="inventory-tab" data-inv-category="torso_decal">SHIRTS</button><button class="inventory-tab" data-inv-category="hat">HATS</button><button class="inventory-tab" data-inv-category="head_shape">HEADS</button></div><div id="avatar-inventory-grid"></div>
@@ -1140,8 +1178,9 @@
       setTimeout(refreshFriendBadge,100);
       setTimeout(refreshNotifications,150);
       isAdmin = !!res.isAdmin;
+      document.body.classList.toggle('kwg-admin-authenticated', isAdmin);
       if (res.sessionToken) { sessionToken = res.sessionToken; localStorage.setItem('kwg_session_token', sessionToken); }
-      document.querySelectorAll('.admin-home-tab').forEach(el => el.style.display = isAdmin ? 'block' : 'none');
+      document.querySelectorAll('.admin-home-tab').forEach(el => el.style.display = isAdmin ? 'inline-flex' : 'none');
       if (res.appearance) playerAppearance = res.appearance;
       coinBalance = Number(res.coins ?? 100);
       updateCoinDisplays();
