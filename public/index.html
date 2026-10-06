@@ -3083,6 +3083,58 @@
       return null;
     }
 
+    function resolveCeilingCollisionMP(pos, oldFeetY, blocks) {
+      if (velocityY <= 0) return;
+
+      const ph = 2.35;
+      const oldHeadY = oldFeetY + ph;
+      const newHeadY = pos.y + ph;
+      let lowestCeiling = Infinity;
+
+      for (const b of blocks) {
+        if (b.canCollide === false) continue;
+
+        const shape = b.shape || 'box';
+        const bx = Number(b.x) || 0, by = Number(b.y) || 0, bz = Number(b.z) || 0;
+        const sx = Math.abs(Number(b.scaleX) || 1), sy = Math.abs(Number(b.scaleY) || 1), sz = Math.abs(Number(b.scaleZ) || 1);
+        const hx = sx / 2, hy = sy / 2, hz = sz / 2;
+        const lx = pos.x - bx, lz = pos.z - bz;
+
+        let undersideY = null;
+
+        // Boxes/baseplates/flags have a flat underside.
+        if (shape === 'box' || shape === 'baseplate' || b.actionType === 'checkpoint' || b.actionType === 'finish') {
+          if (Math.abs(lx) <= hx + 0.38 && Math.abs(lz) <= hz + 0.38) undersideY = by - hy;
+        } else if (shape === 'cylinder') {
+          const d2 = Math.pow(lx / (hx + 0.38), 2) + Math.pow(lz / (hz + 0.38), 2);
+          if (d2 <= 1) undersideY = by - hy;
+        } else if (shape === 'sphere') {
+          // Bottom surface of the scaled sphere/ellipsoid at the player's X/Z.
+          const nx = lx / (hx + 0.38);
+          const nz = lz / (hz + 0.38);
+          const d2 = nx * nx + nz * nz;
+          if (d2 <= 1) undersideY = by - hy * Math.sqrt(Math.max(0, 1 - d2));
+        } else if (shape === 'wedge') {
+          // Wedges have a flat bottom even though their walkable top is sloped.
+          if (Math.abs(lx) <= hx + 0.38 && lz >= -hz - 0.38 && lz <= hz + 0.38) undersideY = by - hy;
+        }
+
+        // Swept head test prevents tunneling through thin ceilings.
+        if (undersideY !== null &&
+            oldHeadY <= undersideY + 0.02 &&
+            newHeadY >= undersideY - 0.02 &&
+            undersideY < lowestCeiling) {
+          lowestCeiling = undersideY;
+        }
+      }
+
+      if (lowestCeiling !== Infinity) {
+        pos.y = lowestCeiling - ph - 0.02;
+        velocityY = 0;
+        targetStepY = 0;
+      }
+    }
+
     function updatePlayerPhysics(delta) {
       if (!localPlayerAvatar || !currentWorldName) return;
       const player=localPlayerAvatar;
@@ -3128,8 +3180,10 @@
         targetStepY=0;
       }
 
-      player.position.y+=velocityY;
-      velocityY+=gravity;
+      const oldFeetY = player.position.y;
+      player.position.y += velocityY;
+      resolveCeilingCollisionMP(player.position, oldFeetY, blocks);
+      velocityY += gravity;
 
       const ground=getGroundSurfaceUnderPlayerMP(player.position.x,player.position.y,player.position.z,blocks);
       if (ground.floorY!==-Infinity) {
