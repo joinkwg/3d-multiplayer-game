@@ -310,6 +310,16 @@ async function migrate() {
       PRIMARY KEY (user_id, item_id)
     );
 
+    CREATE TABLE IF NOT EXISTS world_templates (
+      id BIGSERIAL PRIMARY KEY,
+      name VARCHAR(40) UNIQUE NOT NULL,
+      source_world_id BIGINT REFERENCES worlds(id) ON DELETE SET NULL,
+      data JSONB NOT NULL,
+      created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS auth_sessions (
       token_hash TEXT PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -510,28 +520,45 @@ io.on('connection', (socket) => {
     } catch(e){ console.error(e); cb({success:false,message:'Could not update like.'}); }
   });
 
-  socket.on('create_world', async ({name}, cb) => {
+  socket.on('get_world_templates', async (cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const r = await pool.query('SELECT id,name,created_at FROM world_templates ORDER BY name ASC');
+      cb({success:true,templates:r.rows});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not load world templates.'}); }
+  });
+
+  socket.on('create_world', async ({name, templateId}, cb) => {
     if (!requireAuth(socket, cb)) return;
     name = cleanWorldName(name);
     if (!/^[A-Za-z0-9 _-]{1,20}$/.test(name)) return cb({success:false,message:'World name contains invalid characters.'});
     try {
       const exists = await pool.query('SELECT id FROM worlds WHERE lower(name)=lower($1)', [name]);
       if (exists.rowCount) return cb({success:false,message:'That world already exists.'});
-      const data = {
-        name,
-        blocks: {
-          "baseplate": {
-            id: "baseplate", shape: "baseplate", actionType: "normal", material: "grid",
-            color: "#555555", transparency: 0, canCollide: true, anchored: true,
-            x: 0, y: -0.5, z: 0, scaleX: 250, scaleY: 1, scaleZ: 250
-          }
-        },
-        spawnPoint: {x:0,y:0.05,z:0},
-        skyColor:'#a0a0e0',
-        cloudsEnabled:true,
-        cloudSpeed:1.0,
-        cloudColor:'#ffffff'
-      };
+
+      let data;
+      if (templateId && String(templateId) !== 'blank') {
+        const t = await pool.query('SELECT data FROM world_templates WHERE id=$1',[Number(templateId)]);
+        if (!t.rowCount) return cb({success:false,message:'That template no longer exists.'});
+        data = JSON.parse(JSON.stringify(t.rows[0].data));
+        data.name = name;
+      } else {
+        data = {
+          name,
+          blocks: {
+            "baseplate": {
+              id: "baseplate", shape: "baseplate", actionType: "normal", material: "grid",
+              color: "#555555", transparency: 0, canCollide: true, anchored: true,
+              x: 0, y: -0.5, z: 0, scaleX: 250, scaleY: 1, scaleZ: 250
+            }
+          },
+          spawnPoint: {x:0,y:0.05,z:0},
+          skyColor:'#a0a0e0',
+          cloudsEnabled:true,
+          cloudSpeed:1.0,
+          cloudColor:'#ffffff'
+        };
+      }
       await pool.query('INSERT INTO worlds(name,owner_user_id,data) VALUES($1,$2,$3)', [name,socket.user.id,JSON.stringify(data)]);
       cb({success:true});
     } catch (e) { console.error(e); cb({success:false,message:'Could not create world.'}); }
@@ -586,6 +613,7 @@ io.on('connection', (socket) => {
     p.z = Math.max(-10000, Math.min(10000, data.z));
     p.rotationY = data.rotationY;
     p.walkClock = data.walkClock;
+    p.verticalVelocity = (typeof data.verticalVelocity === 'number' && Number.isFinite(data.verticalVelocity)) ? data.verticalVelocity : 0;
     p.isMoving = !!data.isMoving;
     p.isGrounded = data.isGrounded !== false;
     socket.to(`world:${p.worldName}`).emit('player_moved', p);
@@ -938,6 +966,41 @@ io.on('connection', (socket) => {
       await pool.query('DELETE FROM users WHERE id=$1',[target.rows[0].id]);
       cb({success:true});
     } catch (e) { console.error(e); cb({success:false,message:'Could not delete account.'}); }
+  });
+
+  socket.on('delete_own_world', async ({worldName}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      if (Number(world.owner_user_id) !== Number(socket.user.id)) return cb({success:false,message:'You can only delete worlds you own.'});
+      const room = `world:${world.name}`;
+      for (const [sid,p] of playersBySocket) {
+        if (p.worldName === world.name) {
+          const target = io.sockets.sockets.get(sid);
+          if (target) { target.emit('world_deleted',{worldName:world.name}); target.leave(room); target.data.worldName=null; }
+          playersBySocket.delete(sid);
+        }
+      }
+      await pool.query('DELETE FROM worlds WHERE id=$1',[world.id]);
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not delete world.'}); }
+  });
+
+  socket.on('admin_make_world_template', async ({worldName,templateName}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      const name = String(templateName || world.name).trim().slice(0,40);
+      if (!name) return cb({success:false,message:'Template name is required.'});
+      await pool.query(`
+        INSERT INTO world_templates(name,source_world_id,data,created_by)
+        VALUES($1,$2,$3,$4)
+        ON CONFLICT(name) DO UPDATE SET source_world_id=EXCLUDED.source_world_id,data=EXCLUDED.data,created_by=EXCLUDED.created_by,updated_at=NOW()
+      `,[name,world.id,JSON.stringify(world.data),socket.user.id]);
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not create template.'}); }
   });
 
   socket.on('admin_delete_world', async ({worldName}, cb) => {
