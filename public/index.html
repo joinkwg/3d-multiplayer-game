@@ -2349,6 +2349,11 @@
     let draggedPartId = null;
 
     window.addEventListener('pointermove', (e) => {
+      if (pointerIsOverKWGUI(e.target) && !isDraggingPart && !isRightClicking) {
+        clearHoverOutline();
+        if (previewMesh) previewMesh.visible = false;
+        return;
+      }
       mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
@@ -2454,8 +2459,8 @@
             blockData.z = newZ;
           }
 
-          emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
-
+          // Update the part visually while dragging, but do NOT save on every
+          // pointer movement. The final changed state is saved once on release.
           scene.remove(worldBlocks[draggedPartId]);
           const updated = buildBlockMesh(blockData);
           scene.add(updated);
@@ -2517,6 +2522,7 @@
     window.addEventListener('contextmenu', (e) => e.preventDefault());
 
     window.addEventListener('pointerdown', (e) => {
+      if (pointerIsOverKWGUI(e.target)) return;
       if (!currentWorldName || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.closest('#customizer-modal')) return;
 
       if (e.button === 2) {
@@ -2670,9 +2676,25 @@
       if (e.button === 2) {
         isRightClicking = false;
       }
+
+      // Move/scale saves once per completed drag, and only when something
+      // actually changed. Clicking an arrow without moving creates zero saves.
+      if (isDraggingPart && draggedPartId && initialDragBlockState &&
+          currentWorldData && currentWorldData.blocks[draggedPartId]) {
+        const finalBlock = currentWorldData.blocks[draggedPartId];
+        if (JSON.stringify(finalBlock) !== JSON.stringify(initialDragBlockState)) {
+          emitWorldSave(
+            'block_update',
+            { worldName: currentWorldName, action: 'update', blockData: finalBlock },
+            (r) => { if (r && !r.success) showToast('Could not save changes'); }
+          );
+        }
+      }
+
       activeDragAxis = null;
       isDraggingPart = false;
       draggedPartId = null;
+      initialDragBlockState = null;
       dragPlane = null;
     });
 
