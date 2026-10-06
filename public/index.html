@@ -2580,42 +2580,57 @@
     [['av-head-color','headColor'],['av-torso-color','torsoColor'],['av-left-arm-color','leftArmColor'],['av-right-arm-color','rightArmColor'],['av-left-leg-color','leftLegColor'],['av-right-leg-color','rightLegColor']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{if(!avatarDraft)return;avatarDraft[k]=e.target.value;updateEditorAvatar();}));
     document.getElementById('save-avatar-editor-btn').addEventListener('click',()=>{const b=document.getElementById('save-avatar-editor-btn');b.disabled=true;b.textContent='SAVING...';socket.emit('save_appearance',avatarDraft,res=>{b.disabled=false;b.textContent='SAVE APPEARANCE';if(!res||!res.success)return showToast((res&&res.message)||'Could not save appearance.');playerAppearance=res.appearance||avatarDraft;equippedCosmetics=res.cosmetics||cosmeticsForAppearance(playerAppearance);localStorage.setItem('sp_player_appearance',JSON.stringify(playerAppearance));avatarDraft=JSON.parse(JSON.stringify(playerAppearance));renderAvatarInventory();updateEditorAvatar();showToast('Appearance saved.');});});
 
-    function setupThumbRenderer(container){
-      const canvas=document.createElement('canvas');canvas.className='mesh-thumb-canvas';container.appendChild(canvas);
+    // Thumbnail rendering uses a temporary WebGL context, renders ONE frame to an image,
+    // then immediately releases the context. This prevents thumbnail cards from exhausting
+    // the browser's WebGL context limit and breaking the avatar/world renderer.
+    function thumbImageFromObject(container,obj){
+      const canvas=document.createElement('canvas');
       const w=Math.max(container.clientWidth||150,80),h=Math.max(container.clientHeight||78,60);
-      const r=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});r.setSize(w,h,false);r.setClearColor(0x000000,0);
-      const sc=new THREE.Scene();sc.add(new THREE.AmbientLight(0xffffff,1));const dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(4,7,5);sc.add(dl);
+      canvas.width=w; canvas.height=h;
+      const r=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,preserveDrawingBuffer:true});
+      r.setSize(w,h,false); r.setClearColor(0x000000,0);
+      const sc=new THREE.Scene(); sc.add(new THREE.AmbientLight(0xffffff,1));
+      const dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(4,7,5);sc.add(dl);
       const cam=new THREE.PerspectiveCamera(34,w/h,.01,100);
-      return {r,sc,cam};
-    }
-    function frameThumbObject(obj,cam){
-      obj.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(obj);if(box.isEmpty())return;
-      const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
-      obj.position.sub(center);obj.updateMatrixWorld(true);
-      const maxDim=Math.max(size.x,size.y,size.z,.001);cam.position.set(0,maxDim*.12,maxDim*2.2);cam.lookAt(0,0,0);cam.near=maxDim/100;cam.far=maxDim*20;cam.updateProjectionMatrix();
+      sc.add(obj); obj.updateMatrixWorld(true);
+      const box=new THREE.Box3().setFromObject(obj);
+      if(!box.isEmpty()){
+        const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
+        obj.position.sub(center); obj.updateMatrixWorld(true);
+        const maxDim=Math.max(size.x,size.y,size.z,.001);
+        cam.position.set(0,maxDim*.10,maxDim*2.35);cam.lookAt(0,0,0);
+        cam.near=maxDim/100;cam.far=maxDim*20;cam.updateProjectionMatrix();
+      }
+      r.render(sc,cam);
+      const img=document.createElement('img');img.alt='';img.src=canvas.toDataURL('image/png');
+      img.style.maxWidth='100%';img.style.maxHeight='100%';
+      container.innerHTML='';container.appendChild(img);
+      r.dispose(); r.forceContextLoss?.();
     }
     function renderBuiltinThumbnail(container,item){
-      const {r,sc,cam}=setupThumbRenderer(container);let obj;
+      let obj;
       if(item.category==='hat'){
-        if(item.builtinValue==='none'){container.innerHTML='NONE';return;}
+        if(item.builtinValue==='none'){container.textContent='NONE';return;}
         obj=createHatMesh(item.builtinValue,0xffff00);
       } else {
         const mat=new THREE.MeshLambertMaterial({color:0xffff00});
         if(item.builtinValue==='sphere')obj=new THREE.Mesh(new THREE.SphereGeometry(.55,24,16),mat);
         else if(item.builtinValue==='cube')obj=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mat);
         else if(item.builtinValue==='cylinder')obj=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,1,24),mat);
-        else {container.innerHTML='HEADLESS';return;}
+        else {container.textContent='HEADLESS';return;}
       }
-      if(!obj){container.innerHTML=item.name.toUpperCase();return;}sc.add(obj);frameThumbObject(obj,cam);r.render(sc,cam);
+      if(!obj){container.textContent=item.name.toUpperCase();return;}
+      thumbImageFromObject(container,obj);
     }
-    // Close-up static thumbnails: GLB cosmetics only, never the full avatar.
+    // Close-up static thumbnails: GLB cosmetic only, never the full avatar.
     function renderMeshThumbnail(container,item){
-      const {r,sc,cam}=setupThumbRenderer(container);
+      container.textContent='LOADING...';
       loadGLBClone(item.assetUrl).then(obj=>{
-        const meta=item.metadata||{};const box=new THREE.Box3().setFromObject(obj);const size=box.getSize(new THREE.Vector3());const maxDim=Math.max(size.x,size.y,size.z,.001);
-        obj.scale.setScalar((1/maxDim)*(Number(meta.size)||1));
-        obj.position.set(Number(meta.offsetX)||0,Number(meta.offsetY)||0,Number(meta.offsetZ)||0);
-        sc.add(obj);frameThumbObject(obj,cam);r.render(sc,cam);
+        // Normalize only for the thumbnail. Fit metadata is for wearing on the avatar and
+        // should not make a store thumbnail tiny/off-center.
+        const box=new THREE.Box3().setFromObject(obj);const size=box.getSize(new THREE.Vector3());
+        const maxDim=Math.max(size.x,size.y,size.z,.001);obj.scale.setScalar(1/maxDim);
+        thumbImageFromObject(container,obj);
       }).catch(()=>{container.textContent=item.category==='hat'?'3D HAT':'3D HEAD';});
     }
 
