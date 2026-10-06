@@ -2777,6 +2777,10 @@
     const gravity = -0.001375;
     const jumpStrength = 0.1175;
     let isGrounded = false;
+    // Curved-surface traction: remembers the surface under the player briefly so
+    // gravity doesn't make rounded parts feel like ice.
+    let groundGrip = null;
+    const CURVED_GRIP_SLOPE = 0.72;
     const maxStepHeight = 0.65;
     let targetStepY = 0;
 
@@ -2915,6 +2919,36 @@
 
     let lastSendTime = 0;
 
+    function getVisualSurfaceY(b, x, z) {
+      const shape=b.shape || 'box';
+      if (shape === 'sphere') {
+        const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
+        const ry=Math.max(.001,Math.abs(b.scaleY||1)*.5);
+        const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
+        const dx=x-b.x,dz=z-b.z;
+        const q=(dx*dx)/(rx*rx)+(dz*dz)/(rz*rz);
+        if (q>1) return null;
+        return b.y+ry*Math.sqrt(Math.max(0,1-q));
+      }
+      if (shape === 'cylinder') {
+        const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
+        const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
+        const dx=x-b.x,dz=z-b.z;
+        if ((dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)>1) return null;
+        return b.y+Math.abs(b.scaleY||1)*.5;
+      }
+      if (shape === 'wedge') {
+        const box=getBlockAABB(b);
+        if (x<box.minX-PLAYER_RADIUS || x>box.maxX+PLAYER_RADIUS || z<box.minZ-PLAYER_RADIUS || z>box.maxZ+PLAYER_RADIUS) return null;
+        const sz=Math.max(.001,Math.abs(b.scaleZ||1));
+        const t=1-((Math.max(box.minZ,Math.min(box.maxZ,z))-box.minZ)/sz);
+        return box.minY+Math.max(0,Math.min(1,t))*Math.abs(b.scaleY||1);
+      }
+      const box=getBlockAABB(b);
+      if (x>=box.minX-PLAYER_RADIUS && x<=box.maxX+PLAYER_RADIUS && z>=box.minZ-PLAYER_RADIUS && z<=box.maxZ+PLAYER_RADIUS) return box.maxY;
+      return null;
+    }
+
     function updatePlayerPhysics(delta) {
       if (!localPlayerAvatar || !currentWorldName) return;
 
@@ -2952,12 +2986,13 @@
 
       const pos = localPlayerAvatar.position;
       const blocks = currentWorldData ? Object.values(currentWorldData.blocks) : [];
+      const wasGrounded = isGrounded;
       let hitKill = false;
 
       // --- STEP 1/2: RESOLVE HORIZONTAL MOVEMENT ---
       // Move once, then project out of curved shapes along their actual visible contour.
       // Boxes keep classic axis resolution; curved pieces no longer snap to their AABB.
-      const oldX=pos.x, oldZ=pos.z;
+      const oldX=pos.x, oldZ=pos.z, oldYForGrip=pos.y;
       pos.x += dx;
       pos.z += dz;
       for (const b of blocks) {
@@ -2979,6 +3014,33 @@
         pos.x=oldX;
         if (checkPlayerShapeCollision(pos.x,pos.y,pos.z,b).collided) {
           pos.x=oldX; pos.z=oldZ;
+        }
+      }
+
+      // Surface traction: while grounded, follow gentle visible curves/ramps instead
+      // of instantly becoming airborne. Steep sides still behave like sides, so this
+      // does not let players stick to walls or climb near-vertical sphere edges.
+      if (wasGrounded && moveDir !== 0) {
+        let best=null;
+        for (const b of blocks) {
+          if (b.canCollide === false || b.actionType === 'kill') continue;
+          const y0=getVisualSurfaceY(b,oldX,oldZ);
+          const y1=getVisualSurfaceY(b,pos.x,pos.z);
+          if (y0===null || y1===null) continue;
+          const horizontal=Math.hypot(pos.x-oldX,pos.z-oldZ);
+          if (horizontal < 1e-6) continue;
+          const slope=Math.abs(y1-y0)/horizontal;
+          if (slope <= CURVED_GRIP_SLOPE && Math.abs(oldYForGrip-y0) < 0.18) {
+            if (!best || y1>best.y) best={b,y:y1};
+          }
+        }
+        if (best) {
+          pos.y=best.y;
+          velocityY=0;
+          isGrounded=true;
+          groundGrip=best.b.id;
+        } else {
+          groundGrip=null;
         }
       }
 
@@ -3012,10 +3074,15 @@
       // Vertical collision is swept from the previous feet/head position.
       // This is critical for curved parts: touching a sphere/cylinder SIDE must not
       // teleport the player onto its top.
-      isGrounded = false;
+      const grippedThisFrame = isGrounded && wasGrounded && groundGrip !== null;
+      isGrounded = grippedThisFrame;
       const oldY = pos.y;
-      pos.y += velocityY;
-      velocityY += gravity;
+      if (!grippedThisFrame) {
+        pos.y += velocityY;
+        velocityY += gravity;
+      } else {
+        velocityY = 0;
+      }
 
       for (const b of blocks) {
         if (b.canCollide === false) continue;
