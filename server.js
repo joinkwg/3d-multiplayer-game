@@ -300,6 +300,10 @@ io.on('connection', (socket) => {
         if (Object.keys(data.blocks).length >= 1400 && action === 'add') return;
         data.blocks[blockData.id] = blockData;
       } else if (action === 'delete') {
+        const target = data.blocks[blockId];
+        if (blockId === 'baseplate' || target?.shape === 'baseplate') {
+          return cb && cb({success:false,message:'The baseplate cannot be deleted. You can resize it instead.'});
+        }
         delete data.blocks[blockId];
       } else return;
 
