@@ -354,14 +354,55 @@ io.on('connection', (socket) => {
   socket.on('admin_list', async (cb) => {
     if (!requireAdmin(socket, cb)) return;
     try {
-      const users = await pool.query('SELECT username,is_admin AS "isAdmin",created_at AS "createdAt" FROM users ORDER BY created_at ASC');
+      const users = await pool.query('SELECT id,username,is_admin AS "isAdmin",created_at AS "createdAt" FROM users ORDER BY created_at ASC');
       const worlds = await pool.query(`
-        SELECT w.name,u.username AS "ownerUsername"
-        FROM worlds w LEFT JOIN users u ON u.id=w.owner_user_id
+        SELECT w.id,w.name,u.username AS "ownerUsername",
+               COUNT(cm.id)::int AS "chatCount"
+        FROM worlds w
+        LEFT JOIN users u ON u.id=w.owner_user_id
+        LEFT JOIN chat_messages cm ON cm.world_id=w.id
+        GROUP BY w.id,w.name,u.username,w.created_at
         ORDER BY w.created_at ASC
       `);
-      cb({success:true,users:users.rows,worlds:worlds.rows});
+      const userRows = users.rows.map(u => ({
+        username: u.username,
+        isAdmin: u.isAdmin,
+        createdAt: u.createdAt,
+        online: socketsByUser.has(u.id)
+      }));
+      const worldRows = worlds.rows.map(w => ({
+        name: w.name,
+        ownerUsername: w.ownerUsername,
+        chatCount: w.chatCount,
+        onlineCount: io.sockets.adapter.rooms.get(`world:${w.name}`)?.size || 0
+      }));
+      cb({success:true,users:userRows,worlds:worldRows});
     } catch (e) { console.error(e); cb({success:false,message:'Could not load admin data.'}); }
+  });
+
+  socket.on('admin_kick_user', async ({username}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const target = await pool.query('SELECT id,is_admin FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      if (!target.rowCount) return cb({success:false,message:'User not found.'});
+      if (target.rows[0].is_admin) return cb({success:false,message:'Admin accounts cannot be kicked from this panel.'});
+      const targetSocket = socketsByUser.get(target.rows[0].id);
+      if (!targetSocket) return cb({success:false,message:'That user is not currently online.'});
+      targetSocket.emit('admin_kicked');
+      targetSocket.disconnect(true);
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not kick user.'}); }
+  });
+
+  socket.on('admin_clear_world_chat', async ({worldName}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      await pool.query('DELETE FROM chat_messages WHERE world_id=$1',[world.id]);
+      io.to(`world:${world.name}`).emit('world_chat_cleared', {worldName:world.name});
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not clear world chat.'}); }
   });
 
   socket.on('admin_delete_user', async ({username}, cb) => {
