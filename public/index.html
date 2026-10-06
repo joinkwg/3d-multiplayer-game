@@ -264,6 +264,7 @@
           <div class="color-grid"><label>Head <input type="color" id="av-head-color"></label><label>Torso <input type="color" id="av-torso-color"></label><label>Left Arm <input type="color" id="av-left-arm-color"></label><label>Right Arm <input type="color" id="av-right-arm-color"></label><label>Left Leg <input type="color" id="av-left-leg-color"></label><label>Right Leg <input type="color" id="av-right-leg-color"></label></div></div>
         </div>
       </div>
+      <div id="admin-pane" class="home-pane"></div>
     </div>
   </div>
 
@@ -677,7 +678,7 @@
       loggedInUsername = res.username;
       isAdmin = !!res.isAdmin;
       if (res.sessionToken) { sessionToken = res.sessionToken; localStorage.setItem('kwg_session_token', sessionToken); }
-      document.querySelectorAll('.admin-home-tab').forEach(el => el.style.display = isAdmin ? '' : 'none');
+      document.querySelectorAll('.admin-home-tab').forEach(el => el.style.display = isAdmin ? 'block' : 'none');
       if (res.appearance) playerAppearance = res.appearance;
       coinBalance = Number(res.coins ?? 100);
       updateCoinDisplays();
