@@ -167,6 +167,9 @@
     .admin-actions { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; }
     .admin-status-online { color:#2ecc71; }
     .admin-status-offline { color:#888; }
+    .admin-searchbar { display:flex; gap:6px; margin-bottom:8px; }
+    .admin-searchbar input { flex:1; min-width:0; padding:8px; background:#111; color:#fff; border:2px solid #555; font-family:inherit; }
+    .admin-search-note { color:#888; font-size:10px; margin:0 0 8px; }
 
     /* Store */
     #store-modal { z-index: 230; }
@@ -304,14 +307,18 @@
     <div id="admin-card">
       <span class="close-btn" id="close-admin-panel">X</span>
       <h3 style="margin:0;text-transform:uppercase;">Admin Management</h3>
-      <button id="admin-refresh-btn" class="admin-action" style="margin:10px 0 0 0;">REFRESH</button>
+      <button id="admin-refresh-btn" class="admin-action" style="margin:10px 0 0 0;">REFRESH SEARCHES</button>
       <div class="admin-section">
-        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">ACCOUNTS</div>
-        <div id="admin-users-list"></div>
+        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">SEARCH ACCOUNTS</div>
+        <div class="admin-searchbar"><input id="admin-user-search" maxlength="50" autocomplete="off" placeholder="Username..." /><button id="admin-user-search-btn" class="admin-action">SEARCH</button></div>
+        <div class="admin-search-note">Up to 25 matching accounts are loaded at a time.</div>
+        <div id="admin-users-list"><div class="admin-search-note">Type a username to search.</div></div>
       </div>
       <div class="admin-section">
-        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">WORLDS</div>
-        <div id="admin-worlds-list"></div>
+        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">SEARCH WORLDS</div>
+        <div class="admin-searchbar"><input id="admin-world-search" maxlength="80" autocomplete="off" placeholder="World name or owner..." /><button id="admin-world-search-btn" class="admin-action">SEARCH</button></div>
+        <div class="admin-search-note">Up to 25 matching worlds are loaded at a time.</div>
+        <div id="admin-worlds-list"><div class="admin-search-note">Type a world name or owner to search.</div></div>
       </div>
       <div class="admin-section">
         <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">STORE ITEMS</div>
@@ -1027,101 +1034,57 @@
       });
     }
 
+    function renderAdminUsers(rows) {
+      const users = document.getElementById('admin-users-list');
+      users.innerHTML = '';
+      if (!rows.length) { users.innerHTML = '<div class="admin-search-note">No matching accounts.</div>'; return; }
+      rows.forEach(u => {
+        const row = document.createElement('div'); row.className = 'admin-row';
+        const info = document.createElement('span'); const name = document.createElement('b'); name.textContent = u.username; info.appendChild(name);
+        const meta = document.createElement('small'); meta.style.marginLeft = '7px'; meta.className = u.online ? 'admin-status-online' : 'admin-status-offline';
+        meta.textContent = `${u.isAdmin ? 'ADMIN' : 'USER'} • ${u.online ? 'ONLINE' : 'OFFLINE'} • 🪙 ${u.coins ?? 0}`; info.appendChild(meta); row.appendChild(info);
+        const actions = document.createElement('div'); actions.className = 'admin-actions';
+        if (!u.isAdmin) {
+          if (u.online) { const kick=document.createElement('button'); kick.className='admin-action warn'; kick.textContent='KICK'; kick.onclick=()=>{if(confirm(`Kick "${u.username}" from the game?`)) adminRequest('admin_kick_user',{username:u.username},`${u.username} was kicked.`)}; actions.appendChild(kick); }
+          const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE ACCOUNT'; del.onclick=()=>{if(confirm(`Permanently delete account "${u.username}"? This cannot be undone.`)) adminRequest('admin_delete_user',{username:u.username},`${u.username} was permanently deleted.`)}; actions.appendChild(del);
+        }
+        row.appendChild(actions); users.appendChild(row);
+      });
+    }
+
+    function renderAdminWorlds(rows) {
+      const worlds = document.getElementById('admin-worlds-list'); worlds.innerHTML='';
+      if (!rows.length) { worlds.innerHTML = '<div class="admin-search-note">No matching worlds.</div>'; return; }
+      rows.forEach(w => {
+        const row=document.createElement('div'); row.className='admin-row'; const info=document.createElement('span'); const name=document.createElement('b'); name.textContent=w.name; info.appendChild(name);
+        const meta=document.createElement('small'); meta.style.cssText='color:#aaa;margin-left:7px;'; meta.textContent=`owner: ${w.ownerUsername || 'unknown'} • ${w.onlineCount || 0} online • ${w.chatCount || 0} messages`; info.appendChild(meta); row.appendChild(info);
+        const actions=document.createElement('div'); actions.className='admin-actions';
+        const clear=document.createElement('button'); clear.className='admin-action warn'; clear.textContent='CLEAR CHAT'; clear.onclick=()=>{if(confirm(`Permanently clear all chat messages in "${w.name}"?`)) adminRequest('admin_clear_world_chat',{worldName:w.name},`Chat cleared for ${w.name}.`)}; actions.appendChild(clear);
+        const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE WORLD'; del.onclick=()=>{if(confirm(`Permanently delete world "${w.name}"? This cannot be undone.`)) adminRequest('admin_delete_world',{worldName:w.name},`${w.name} was permanently deleted.`)}; actions.appendChild(del);
+        row.appendChild(actions); worlds.appendChild(row);
+      });
+    }
+
+    function searchAdminUsers() {
+      if (!isAdmin) return;
+      const query=document.getElementById('admin-user-search').value.trim();
+      if (!query) { document.getElementById('admin-users-list').innerHTML='<div class="admin-search-note">Type a username to search.</div>'; return; }
+      document.getElementById('admin-users-list').innerHTML='<div class="admin-search-note">Searching...</div>';
+      socket.emit('admin_search_users',{query},res=>{ if(!res||!res.success){setAdminMessage((res&&res.message)||'User search failed.',true);return;} renderAdminUsers(res.users||[]); });
+    }
+
+    function searchAdminWorlds() {
+      if (!isAdmin) return;
+      const query=document.getElementById('admin-world-search').value.trim();
+      if (!query) { document.getElementById('admin-worlds-list').innerHTML='<div class="admin-search-note">Type a world name or owner to search.</div>'; return; }
+      document.getElementById('admin-worlds-list').innerHTML='<div class="admin-search-note">Searching...</div>';
+      socket.emit('admin_search_worlds',{query},res=>{ if(!res||!res.success){setAdminMessage((res&&res.message)||'World search failed.',true);return;} renderAdminWorlds(res.worlds||[]); });
+    }
+
     function refreshAdminPanel(clearMessage = true) {
       if (!isAdmin) return;
-      if (clearMessage) setAdminMessage('Loading...');
-      socket.emit('admin_list', (res) => {
-        if (!res || !res.success) {
-          setAdminMessage((res && res.message) || 'Admin access denied.', true);
-          return;
-        }
-        const users = document.getElementById('admin-users-list');
-        const worlds = document.getElementById('admin-worlds-list');
-        users.innerHTML = '';
-        worlds.innerHTML = '';
-
-        (res.users || []).forEach(u => {
-          const row = document.createElement('div');
-          row.className = 'admin-row';
-          const info = document.createElement('span');
-          const name = document.createElement('b');
-          name.textContent = u.username;
-          info.appendChild(name);
-          const meta = document.createElement('small');
-          meta.style.marginLeft = '7px';
-          meta.className = u.online ? 'admin-status-online' : 'admin-status-offline';
-          meta.textContent = `${u.isAdmin ? 'ADMIN' : 'USER'} • ${u.online ? 'ONLINE' : 'OFFLINE'} • 🪙 ${u.coins ?? 0}`;
-          info.appendChild(meta);
-          row.appendChild(info);
-
-          const actions = document.createElement('div');
-          actions.className = 'admin-actions';
-          if (!u.isAdmin) {
-            if (u.online) {
-              const kick = document.createElement('button');
-              kick.className = 'admin-action warn';
-              kick.textContent = 'KICK';
-              kick.onclick = () => {
-                if (confirm(`Kick "${u.username}" from the game?`)) {
-                  adminRequest('admin_kick_user', { username: u.username }, `${u.username} was kicked.`);
-                }
-              };
-              actions.appendChild(kick);
-            }
-            const del = document.createElement('button');
-            del.className = 'admin-delete';
-            del.textContent = 'DELETE ACCOUNT';
-            del.onclick = () => {
-              if (confirm(`Permanently delete account "${u.username}"? This cannot be undone.`)) {
-                adminRequest('admin_delete_user', { username: u.username }, `${u.username} was permanently deleted.`);
-              }
-            };
-            actions.appendChild(del);
-          }
-          row.appendChild(actions);
-          users.appendChild(row);
-        });
-
-        (res.worlds || []).forEach(w => {
-          const row = document.createElement('div');
-          row.className = 'admin-row';
-          const info = document.createElement('span');
-          const name = document.createElement('b');
-          name.textContent = w.name;
-          info.appendChild(name);
-          const meta = document.createElement('small');
-          meta.style.cssText = 'color:#aaa;margin-left:7px;';
-          meta.textContent = `owner: ${w.ownerUsername || 'unknown'} • ${w.onlineCount || 0} online • ${w.chatCount || 0} messages`;
-          info.appendChild(meta);
-          row.appendChild(info);
-
-          const actions = document.createElement('div');
-          actions.className = 'admin-actions';
-          const clear = document.createElement('button');
-          clear.className = 'admin-action warn';
-          clear.textContent = 'CLEAR CHAT';
-          clear.onclick = () => {
-            if (confirm(`Permanently clear all chat messages in "${w.name}"?`)) {
-              adminRequest('admin_clear_world_chat', { worldName: w.name }, `Chat cleared for ${w.name}.`);
-            }
-          };
-          actions.appendChild(clear);
-
-          const del = document.createElement('button');
-          del.className = 'admin-delete';
-          del.textContent = 'DELETE WORLD';
-          del.onclick = () => {
-            if (confirm(`Permanently delete world "${w.name}"? This cannot be undone.`)) {
-              adminRequest('admin_delete_world', { worldName: w.name }, `${w.name} was permanently deleted.`);
-            }
-          };
-          actions.appendChild(del);
-          row.appendChild(actions);
-          worlds.appendChild(row);
-        });
-        refreshAdminStoreItems();
-        if (clearMessage) setAdminMessage('');
-      });
+      if (clearMessage) setAdminMessage('');
+      searchAdminUsers(); searchAdminWorlds(); refreshAdminStoreItems();
     }
 
     function refreshAdminStoreItems() {
@@ -1233,6 +1196,10 @@
       switchHomeTab('admin');
     });
     document.getElementById('admin-refresh-btn').addEventListener('click', () => refreshAdminPanel());
+    document.getElementById('admin-user-search-btn').addEventListener('click', searchAdminUsers);
+    document.getElementById('admin-world-search-btn').addEventListener('click', searchAdminWorlds);
+    document.getElementById('admin-user-search').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchAdminUsers(); } });
+    document.getElementById('admin-world-search').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchAdminWorlds(); } });
     document.getElementById('close-admin-panel').addEventListener('click', () => {
       switchHomeTab('home');
     });
