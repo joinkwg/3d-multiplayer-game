@@ -603,6 +603,9 @@
     .kwg-style-btn.active{background:#1f3c5d;color:#82bdff;border-color:#4b84bd;box-shadow:inset 0 -2px 0 #4b9cff}
     @media(max-width:760px){.kwg-body-style-panel{grid-template-columns:1fr}.kwg-style-buttons{flex-wrap:wrap}}
 
+
+/* V3.23 avatar editor */
+#avatar-editor-pane .kwg-avatar-tabs{display:grid!important;grid-template-columns:repeat(5,1fr)!important}#avatar-editor-pane .kwg-avatar-tabs .inventory-tab{text-align:center!important;padding:9px 4px!important}.avatar-native-options{grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin-bottom:8px}.kwg-native-card,.kwg-native-color{min-height:68px;background:#0d131b;color:#aebdd0;border:1px solid #2d3a4c;padding:10px;font-family:inherit;font-weight:900;font-size:10px;cursor:pointer}.kwg-native-card.selected{background:#1b2c41;color:#79b8ff;border-color:#4b84bd;box-shadow:inset 0 -2px 0 #4b9cff}.kwg-native-color{display:grid;gap:7px;cursor:default}.kwg-native-color input{width:100%;height:32px;background:#151e29;border:1px solid #46566b;cursor:pointer}@media(max-width:760px){#avatar-editor-pane .kwg-avatar-tabs{grid-template-columns:repeat(2,1fr)!important}}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -738,12 +741,12 @@
         <div class="avatar-editor-layout">
           <div><div id="avatar-editor-preview" class="avatar-preview-large"><div class="preview-hint">Drag to rotate • releases back to front</div></div><button id="save-avatar-editor-btn" class="submit-btn">SAVE APPEARANCE</button></div>
           <div class="inventory-panel">
-          <div class="kwg-body-style-panel">
+          <div class="kwg-body-style-panel" style="display:none">
             <div class="kwg-style-group"><div class="kwg-style-title">SHIRT TYPE</div><div class="kwg-style-buttons"><button type="button" class="kwg-style-btn" data-shirt-style="short">SHORT SLEEVE</button><button type="button" class="kwg-style-btn" data-shirt-style="long">LONG SLEEVE</button></div></div>
             <div class="kwg-style-group"><div class="kwg-style-title">BOTTOM TYPE</div><div class="kwg-style-buttons"><button type="button" class="kwg-style-btn" data-bottom-style="pants">PANTS</button><button type="button" class="kwg-style-btn" data-bottom-style="shorts">SHORTS</button><button type="button" class="kwg-style-btn" data-bottom-style="skirt">SKIRT</button></div></div>
           </div>
-          <div class="inventory-tabs"><button class="inventory-tab active" data-inv-category="eyes">EYES</button><button class="inventory-tab" data-inv-category="mouth">MOUTHS</button><button class="inventory-tab" data-inv-category="torso_decal">SHIRTS</button><button class="inventory-tab" data-inv-category="hat">HATS</button><button class="inventory-tab" data-inv-category="head_shape">HEADS</button></div><div id="avatar-inventory-grid"></div>
-          <div class="color-grid kwg-avatar-colors">
+          <div class="inventory-tabs kwg-avatar-tabs"><button class="inventory-tab active" data-inv-category="hat">HATS</button><button class="inventory-tab" data-inv-category="hair">HAIR</button><button class="inventory-tab" data-inv-category="head_shape">HEADS</button><button class="inventory-tab" data-inv-category="eyes">EYES</button><button class="inventory-tab" data-inv-category="mouth">MOUTHS</button><button class="inventory-tab" data-inv-category="skin">SKIN</button><button class="inventory-tab" data-inv-category="shirts">SHIRTS</button><button class="inventory-tab" data-inv-category="pants">PANTS</button><button class="inventory-tab" data-inv-category="shoes">SHOES</button><button class="inventory-tab" data-inv-category="torso_decal">SHIRT DESIGN</button></div><div id="avatar-native-options" class="avatar-native-options" style="display:none"></div><div id="avatar-inventory-grid"></div>
+          <div class="color-grid kwg-avatar-colors" style="display:none">
 <label><span>SKIN</span><input type="color" id="av-skin-color"></label>
 <label><span>SHIRT</span><input type="color" id="av-shirt-color"></label>
 <label><span>PANTS</span><input type="color" id="av-pants-color"></label>
@@ -2082,24 +2085,9 @@
       });
     }
 
-    function addBuiltinFace(group, app, hasHead, customEyes, customMouth) {
-      if(!hasHead)return;
-      const dark=new THREE.MeshBasicMaterial({color:0x1b2028});
-      const white=new THREE.MeshBasicMaterial({color:0xf5f7fa});
-      const z=0.389;
-      const eyeStyle=customEyes ? 'none' : (app.builtinEyes||'none');
-      const mouthStyle=customMouth ? 'none' : (app.builtinMouth||'none');
-      const addBox=(w,h,x,y,mat=dark)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.025),mat);m.position.set(x,y,z);group.add(m);};
-      if(eyeStyle==='classic'){addBox(.09,.11,-.13,2.11);addBox(.09,.11,.13,2.11);}
-      else if(eyeStyle==='friendly'){addBox(.10,.08,-.13,2.11);addBox(.10,.08,.13,2.11);addBox(.025,.025,-.13,2.11,white);addBox(.025,.025,.13,2.11,white);}
-      else if(eyeStyle==='cool'){addBox(.18,.045,-.12,2.12);addBox(.18,.045,.12,2.12);}
-      else if(eyeStyle==='happy'){addBox(.12,.035,-.13,2.10);addBox(.12,.035,.13,2.10);}
-      if(mouthStyle==='smile'){addBox(.22,.035,0,1.94);addBox(.035,.05,-.105,1.965);addBox(.035,.05,.105,1.965);}
-      else if(mouthStyle==='grin'){addBox(.25,.10,0,1.95,white);addBox(.25,.025,0,1.90,dark);}
-      else if(mouthStyle==='neutral'){addBox(.20,.035,0,1.94);}
-      else if(mouthStyle==='surprised'){const m=new THREE.Mesh(new THREE.RingGeometry(.045,.085,16),dark);m.position.set(0,1.94,z);group.add(m);}
-    }
-
+    function makeFaceTexture(kind,style){const cv=document.createElement('canvas');cv.width=256;cv.height=128;const x=cv.getContext('2d');x.clearRect(0,0,256,128);x.strokeStyle='#171b21';x.fillStyle='#171b21';x.lineWidth=14;x.lineCap='round';x.lineJoin='round';if(kind==='eyes'){if(style==='classic'){x.fillRect(58,38,22,30);x.fillRect(176,38,22,30)}else if(style==='friendly'){x.beginPath();x.arc(68,52,16,0,Math.PI*2);x.arc(188,52,16,0,Math.PI*2);x.fill();x.fillStyle='#fff';x.beginPath();x.arc(73,46,5,0,Math.PI*2);x.arc(193,46,5,0,Math.PI*2);x.fill()}else if(style==='cool'){x.beginPath();x.moveTo(45,58);x.lineTo(91,48);x.moveTo(165,48);x.lineTo(211,58);x.stroke()}else if(style==='happy'){x.beginPath();x.arc(68,62,22,Math.PI,Math.PI*2);x.arc(188,62,22,Math.PI,Math.PI*2);x.stroke()}}else{if(style==='smile'){x.beginPath();x.arc(128,35,50,.2,Math.PI-.2);x.stroke()}else if(style==='grin'){x.fillStyle='#fff';x.fillRect(76,42,104,42);x.strokeRect(76,42,104,42)}else if(style==='neutral'){x.beginPath();x.moveTo(84,62);x.lineTo(172,62);x.stroke()}else if(style==='surprised'){x.beginPath();x.arc(128,63,25,0,Math.PI*2);x.stroke()}}const t=new THREE.CanvasTexture(cv);t.needsUpdate=true;return t}
+    function addBuiltinFace(group,app,hasHead,customEyes,customMouth){if(!hasHead)return;const add=(kind,style,w,h,y,z)=>{if(!style||style==='none')return;const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:makeFaceTexture(kind,style),transparent:true,depthWrite:false,alphaTest:.08}));p.position.set(0,y,z);group.add(p)};if(!customEyes)add('eyes',app.builtinEyes||'none',.50,.25,2.105,.386);if(!customMouth)add('mouth',app.builtinMouth||'none',.34,.17,1.935,.388)}
+    function addBuiltinHair(group,app,headShape,customHead){if(customHead||headShape==='headless')return;const s=app.hairStyle||'classic';if(s==='none')return;const mat=new THREE.MeshLambertMaterial({color:app.hairColor||'#3a261b'});const add=(g,x,y,z)=>{const m=new THREE.Mesh(g,mat);m.position.set(x,y,z);group.add(m)};if(s==='classic')add(new THREE.SphereGeometry(.382,20,12,0,Math.PI*2,0,Math.PI*.30),0,2.07,0);else if(s==='sidepart'){add(new THREE.BoxGeometry(.64,.13,.63),0,2.34,0);add(new THREE.BoxGeometry(.14,.18,.60),-.25,2.26,0)}else if(s==='spiky'){add(new THREE.BoxGeometry(.62,.10,.60),0,2.32,0);[-.22,0,.22].forEach(x=>add(new THREE.ConeGeometry(.10,.24,4),x,2.48,0))}else if(s==='bob'){add(new THREE.BoxGeometry(.64,.12,.61),0,2.34,0);add(new THREE.BoxGeometry(.12,.34,.58),-.28,2.21,0);add(new THREE.BoxGeometry(.12,.34,.58),.28,2.21,0)}else if(s==='mohawk')add(new THREE.BoxGeometry(.13,.32,.62),0,2.48,0);else if(s==='flattop')add(new THREE.BoxGeometry(.58,.20,.56),0,2.41,0);else if(s==='ponytail'){add(new THREE.BoxGeometry(.62,.11,.60),0,2.34,0);add(new THREE.SphereGeometry(.14,12,10),0,2.20,-.41);add(new THREE.BoxGeometry(.15,.38,.15),0,1.99,-.42)}}
     function buildBlockyAvatar(app, cosmetics = {}) {
       const group = new THREE.Group();
 
@@ -2166,13 +2154,7 @@
         else headGeo=new THREE.BoxGeometry(0.63,0.63,0.63);
         const head=new THREE.Mesh(headGeo,skinMat); head.position.set(0,2.04,0); group.add(head);
 
-        // Simple stylized hair cap so Hair Color always has a visible purpose.
-        const hair=new THREE.Mesh(
-          headShape==='sphere' ? new THREE.SphereGeometry(0.378,20,12,0,Math.PI*2,0,Math.PI*0.48) : new THREE.BoxGeometry(0.65,0.16,0.65),
-          hairMat
-        );
-        hair.position.set(0,headShape==='sphere'?2.04:2.31,0);
-        group.add(hair);
+        addBuiltinHair(group,app,headShape,false);
       }
 
       if(hasHead){
@@ -3628,6 +3610,7 @@
       {id:'builtin-mouth-neutral',category:'mouth',name:'Neutral',assetKind:'builtin',builtinValue:'neutral'},
       {id:'builtin-mouth-surprised',category:'mouth',name:'Surprised',assetKind:'builtin',builtinValue:'surprised'}
     ];
+    const BUILTIN_HAIR=[{value:'none',name:'None'},{value:'classic',name:'Classic'},{value:'sidepart',name:'Side Part'},{value:'spiky',name:'Spiky'},{value:'bob',name:'Bob'},{value:'mohawk',name:'Mohawk'},{value:'flattop',name:'Flat Top'},{value:'ponytail',name:'Ponytail'}];
     function selectedIdForCategory(cat) {
       const slot={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'}[cat];
       return avatarDraft ? avatarDraft[slot] : null;
@@ -3658,8 +3641,9 @@
       }
       renderAvatarInventory(); updateEditorAvatar();
     }
+    function renderNativeAvatarOptions(){const host=document.getElementById('avatar-native-options'),grid=document.getElementById('avatar-inventory-grid'),cat=avatarEditorCategory,native=['hair','skin','shirts','pants','shoes'].includes(cat);host.style.display=native?'grid':'none';grid.style.display=native?'none':'grid';host.innerHTML='';if(!native)return false;const button=(label,active,fn)=>{const b=document.createElement('button');b.className='kwg-native-card'+(active?' selected':'');b.textContent=label;b.onclick=fn;host.appendChild(b)};const picker=(label,key,fallback,mirror=false)=>{const w=document.createElement('label');w.className='kwg-native-color';w.innerHTML='<span>'+label+'</span><input type="color" value="'+(avatarDraft[key]||fallback)+'">';w.querySelector('input').oninput=e=>{avatarDraft[key]=e.target.value;if(mirror)mirrorSemanticColors(avatarDraft);updateEditorAvatar()};host.appendChild(w)};if(cat==='hair'){BUILTIN_HAIR.forEach(h=>button(h.name,(avatarDraft.hairStyle||'classic')===h.value,()=>{avatarDraft.hairStyle=h.value;renderNativeAvatarOptions();updateEditorAvatar()}));picker('HAIR COLOR','hairColor','#3a261b')}else if(cat==='skin')picker('SKIN COLOR','skinColor',avatarDraft.headColor||'#d9a679',true);else if(cat==='shirts'){['short','long'].forEach(v=>button(v==='short'?'Short Sleeve':'Long Sleeve',(avatarDraft.shirtStyle||'short')===v,()=>{avatarDraft.shirtStyle=v;renderNativeAvatarOptions();updateEditorAvatar()}));picker('SHIRT COLOR','shirtColor','#3b82d0',true)}else if(cat==='pants'){['pants','shorts','skirt'].forEach(v=>button(v[0].toUpperCase()+v.slice(1),(avatarDraft.bottomStyle||'pants')===v,()=>{avatarDraft.bottomStyle=v;renderNativeAvatarOptions();updateEditorAvatar()}));picker('PANTS COLOR','pantsColor','#263447',true)}else if(cat==='shoes')picker('SHOE COLOR','shoesColor','#15191f');return true}
     function renderAvatarInventory() {
-      const grid=document.getElementById('avatar-inventory-grid'); if(!grid)return; grid.innerHTML='';
+      const grid=document.getElementById('avatar-inventory-grid'); if(!grid)return; grid.innerHTML=''; if(renderNativeAvatarOptions())return;
       let items=[];
       if(avatarEditorCategory==='hat') items=[...BUILTIN_HATS,...ownedStoreItems.filter(i=>i.category==='hat')];
       else if(avatarEditorCategory==='head_shape') items=[...BUILTIN_HEADS,...ownedStoreItems.filter(i=>i.category==='head_shape')];
