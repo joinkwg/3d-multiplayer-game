@@ -304,7 +304,10 @@ io.on('connection', (socket) => {
       } else return;
 
       await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2', [JSON.stringify(data), world.id]);
-      io.to(`world:${world.name}`).emit('block_updated', {action,blockData,blockId});
+      // The editing client already applies its own change locally.
+      // Broadcast only to OTHER players so the sender does not receive a
+      // delayed copy of its own drag and visually snap backward/forward.
+      socket.to(`world:${world.name}`).emit('block_updated', {action,blockData,blockId});
       cb && cb({success:true});
     } catch (e) { console.error(e); cb && cb({success:false,message:'Could not save block change.'}); }
   });
