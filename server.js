@@ -288,6 +288,8 @@ async function migrate() {
     );
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 100;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(300) NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS showcased_world_ids BIGINT[] NOT NULL DEFAULT '{}'::bigint[];
 
     CREATE TABLE IF NOT EXISTS store_items (
       id BIGSERIAL PRIMARY KEY,
@@ -508,6 +510,100 @@ io.on('connection', (socket) => {
       socket.user = null;
       cb && cb({success:true});
     } catch (e) { console.error(e); cb && cb({success:false}); }
+  });
+
+  socket.on('get_profile', async ({username} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const name = cleanUsername(username || socket.user.username);
+      const ur = await pool.query(`
+        SELECT id,username,appearance,bio,showcased_world_ids,
+               created_at AS "createdAt"
+        FROM users WHERE lower(username)=lower($1)
+      `,[name]);
+      const u = ur.rows[0];
+      if (!u) return cb({success:false,message:'Player not found.'});
+
+      const [worldCount, likesGiven, inventoryCount, ownedWorlds] = await Promise.all([
+        pool.query('SELECT COUNT(*)::int AS n FROM worlds WHERE owner_user_id=$1',[u.id]),
+        pool.query('SELECT COUNT(*)::int AS n FROM world_likes WHERE user_id=$1',[u.id]),
+        pool.query('SELECT COUNT(*)::int AS n FROM user_store_items WHERE user_id=$1',[u.id]),
+        pool.query(`
+          SELECT w.name,w.created_at AS "createdAt",
+                 COUNT(wl.user_id)::int AS "likeCount"
+          FROM worlds w
+          LEFT JOIN world_likes wl ON wl.world_id=w.id
+          WHERE w.owner_user_id=$1
+          GROUP BY w.id
+          ORDER BY w.created_at DESC
+        `,[u.id])
+      ]);
+
+      const showcaseIds = (u.showcased_world_ids || []).map(Number);
+      const byId = new Map();
+      const ownedWithIds = await pool.query(`
+        SELECT w.id,w.name,w.created_at AS "createdAt",
+               COUNT(wl.user_id)::int AS "likeCount"
+        FROM worlds w
+        LEFT JOIN world_likes wl ON wl.world_id=w.id
+        WHERE w.owner_user_id=$1
+        GROUP BY w.id
+        ORDER BY w.created_at DESC
+      `,[u.id]);
+      ownedWithIds.rows.forEach(w => byId.set(Number(w.id), {
+        id:Number(w.id), name:w.name, createdAt:w.createdAt, likeCount:Number(w.likeCount||0)
+      }));
+      const showcasedWorlds = showcaseIds.map(id => byId.get(id)).filter(Boolean).slice(0,3);
+
+      const onlineSocket = socketsByUser.get(u.id);
+      const livePlayer = onlineSocket ? playersBySocket.get(onlineSocket.id) : null;
+      cb({
+        success:true,
+        profile:{
+          username:u.username,
+          bio:u.bio || '',
+          createdAt:u.createdAt,
+          appearance:u.appearance || {},
+          online:!!onlineSocket,
+          currentWorld:livePlayer?.worldName || null,
+          isOwnProfile:u.id === socket.user.id,
+          stats:{
+            worlds:Number(worldCount.rows[0]?.n || 0),
+            likesGiven:Number(likesGiven.rows[0]?.n || 0),
+            inventory:Number(inventoryCount.rows[0]?.n || 0)
+          },
+          showcasedWorlds,
+          ownedWorlds: u.id === socket.user.id ? ownedWithIds.rows.map(w => ({
+            id:Number(w.id),name:w.name,createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
+          })) : []
+        }
+      });
+    } catch (e) { console.error(e); cb({success:false,message:'Could not load profile.'}); }
+  });
+
+  socket.on('update_profile', async ({bio,showcaseWorldIds} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      bio = String(bio || '').trim().slice(0,300);
+      const ids = [...new Set((Array.isArray(showcaseWorldIds) ? showcaseWorldIds : [])
+        .map(Number).filter(Number.isSafeInteger))].slice(0,3);
+
+      if (ids.length) {
+        const owned = await pool.query(
+          'SELECT id FROM worlds WHERE owner_user_id=$1 AND id = ANY($2::bigint[])',
+          [socket.user.id, ids]
+        );
+        const allowed = new Set(owned.rows.map(r => Number(r.id)));
+        if (ids.some(id => !allowed.has(id)))
+          return cb({success:false,message:'You can only showcase worlds you own.'});
+      }
+
+      await pool.query(
+        'UPDATE users SET bio=$1,showcased_world_ids=$2::bigint[] WHERE id=$3',
+        [bio, ids, socket.user.id]
+      );
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not save profile.'}); }
   });
 
   socket.on('get_worlds', async (payload, cb) => {
