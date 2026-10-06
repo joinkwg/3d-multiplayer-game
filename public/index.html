@@ -2497,7 +2497,8 @@
     function switchHomeTab(name) {
       document.querySelectorAll('.home-tab').forEach(b => b.classList.toggle('active', b.dataset.homeTab === name));
       document.querySelectorAll('.home-pane').forEach(p => p.classList.remove('active'));
-      const pane = document.getElementById(name + '-pane'); if (pane) pane.classList.add('active');
+      const paneId = name === 'avatar' ? 'avatar-editor-pane' : name + '-pane';
+      const pane = document.getElementById(paneId); if (pane) pane.classList.add('active');
       if (name === 'store') { setStoreMessage('Loading...'); refreshStoreData(() => { setStoreMessage(''); renderStoreItems(); }); }
       if (name === 'avatar') openAvatarEditor();
       if (name === 'worlds') renderRoomList();
