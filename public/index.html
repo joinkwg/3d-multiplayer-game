@@ -2068,7 +2068,7 @@
       blockData.transparency = parseFloat(document.getElementById('block-transparency-input').value) || 0;
       blockData.canCollide = document.getElementById('block-collidable-checkbox').checked;
 
-      emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
+      emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
 
       if (worldBlocks[selectedBlockId]) {
         scene.remove(worldBlocks[selectedBlockId]);
@@ -2424,7 +2424,7 @@
             blockData.z = newZ;
           }
 
-          emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
+          emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
 
           scene.remove(worldBlocks[draggedPartId]);
           const updated = buildBlockMesh(blockData);
@@ -2513,7 +2513,7 @@
                   return;
                 }
                 delete currentWorldData.blocks[blockId];
-                emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
+                emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
                 scene.remove(worldBlocks[blockId]);
                 delete worldBlocks[blockId];
                 selectBlock(null);
@@ -2603,7 +2603,7 @@
           };
 
           currentWorldData.blocks[blockKey] = blockData;
-          emitWorldSave('block_update', { worldName: currentWorldName, action: 'add', blockData }, (r) => { if (r && !r.success) showToast(r.message); });
+          emitWorldSave('block_update', { worldName: currentWorldName, action: 'add', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
 
           const mesh = buildBlockMesh(blockData);
           scene.add(mesh);
@@ -2622,7 +2622,7 @@
               return;
             }
             delete currentWorldData.blocks[blockId];
-            emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast(r.message); });
+            emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
             scene.remove(worldBlocks[blockId]);
             delete worldBlocks[blockId];
             selectBlock(null);
