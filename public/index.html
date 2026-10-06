@@ -161,6 +161,11 @@
     .admin-section { margin-top:14px; border-top:2px solid #444; padding-top:10px; }
     .admin-row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px; background:#15181c; border:2px solid #333; margin-bottom:5px; }
     .admin-delete { background:#e74c3c; color:#fff; border:2px solid #fff; padding:5px 9px; cursor:pointer; font-weight:bold; font-family:inherit; }
+    .admin-action { background:#3388ff; color:#fff; border:2px solid #fff; padding:5px 9px; cursor:pointer; font-weight:bold; font-family:inherit; margin-left:5px; }
+    .admin-action.warn { background:#e67e22; }
+    .admin-actions { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; }
+    .admin-status-online { color:#2ecc71; }
+    .admin-status-offline { color:#888; }
 
   </style>
 
@@ -238,6 +243,7 @@
     <div id="admin-card">
       <span class="close-btn" id="close-admin-panel">X</span>
       <h3 style="margin:0;text-transform:uppercase;">Admin Management</h3>
+      <button id="admin-refresh-btn" class="admin-action" style="margin:10px 0 0 0;">REFRESH</button>
       <div class="admin-section">
         <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">ACCOUNTS</div>
         <div id="admin-users-list"></div>
@@ -710,6 +716,17 @@
       window.location.reload();
     });
 
+    socket.on('admin_kicked', () => {
+      alert('You were kicked from the game by an administrator.');
+      window.location.reload();
+    });
+
+    socket.on('world_chat_cleared', ({worldName}) => {
+      if (worldName !== currentWorldName) return;
+      document.getElementById('world-chat-messages').innerHTML = '';
+      showToast('World chat was cleared by an administrator.');
+    });
+
     socket.on('world_deleted', ({worldName}) => {
       if (worldName !== currentWorldName) return;
       alert('This world was permanently deleted by an administrator.');
@@ -717,11 +734,31 @@
     });
 
     // --- ADMIN MANAGEMENT ---
-    function refreshAdminPanel() {
+    function setAdminMessage(message, isError = false) {
+      const el = document.getElementById('admin-error');
+      el.style.color = isError ? '#e74c3c' : '#2ecc71';
+      el.textContent = message || '';
+    }
+
+    function adminRequest(eventName, payload, successMessage) {
+      setAdminMessage('Working...');
+      socket.emit(eventName, payload, (res) => {
+        if (!res || !res.success) {
+          setAdminMessage((res && res.message) || 'Admin action failed.', true);
+          return;
+        }
+        setAdminMessage(successMessage || 'Done.');
+        refreshAdminPanel(false);
+        renderRoomList();
+      });
+    }
+
+    function refreshAdminPanel(clearMessage = true) {
       if (!isAdmin) return;
+      if (clearMessage) setAdminMessage('Loading...');
       socket.emit('admin_list', (res) => {
         if (!res || !res.success) {
-          document.getElementById('admin-error').textContent = (res && res.message) || 'Admin access denied.';
+          setAdminMessage((res && res.message) || 'Admin access denied.', true);
           return;
         }
         const users = document.getElementById('admin-users-list');
@@ -732,56 +769,92 @@
         (res.users || []).forEach(u => {
           const row = document.createElement('div');
           row.className = 'admin-row';
-          const role = u.isAdmin ? 'ADMIN' : 'USER';
-          row.innerHTML = `<span><b>${escapeChatText(u.username)}</b> <small style="color:#aaa;">${role}</small></span>`;
+          const info = document.createElement('span');
+          const name = document.createElement('b');
+          name.textContent = u.username;
+          info.appendChild(name);
+          const meta = document.createElement('small');
+          meta.style.marginLeft = '7px';
+          meta.className = u.online ? 'admin-status-online' : 'admin-status-offline';
+          meta.textContent = `${u.isAdmin ? 'ADMIN' : 'USER'} • ${u.online ? 'ONLINE' : 'OFFLINE'}`;
+          info.appendChild(meta);
+          row.appendChild(info);
+
+          const actions = document.createElement('div');
+          actions.className = 'admin-actions';
           if (!u.isAdmin) {
-            const btn = document.createElement('button');
-            btn.className = 'admin-delete';
-            btn.textContent = 'DELETE ACCOUNT';
-            btn.onclick = () => {
-              if (confirm(`Permanently delete account "${u.username}"?`)) {
-                socket.emit('admin_delete_user', { username: u.username }, (r) => {
-                  if (!r.success) document.getElementById('admin-error').textContent = r.message;
-                  else refreshAdminPanel();
-                });
+            if (u.online) {
+              const kick = document.createElement('button');
+              kick.className = 'admin-action warn';
+              kick.textContent = 'KICK';
+              kick.onclick = () => {
+                if (confirm(`Kick "${u.username}" from the game?`)) {
+                  adminRequest('admin_kick_user', { username: u.username }, `${u.username} was kicked.`);
+                }
+              };
+              actions.appendChild(kick);
+            }
+            const del = document.createElement('button');
+            del.className = 'admin-delete';
+            del.textContent = 'DELETE ACCOUNT';
+            del.onclick = () => {
+              if (confirm(`Permanently delete account "${u.username}"? This cannot be undone.`)) {
+                adminRequest('admin_delete_user', { username: u.username }, `${u.username} was permanently deleted.`);
               }
             };
-            row.appendChild(btn);
+            actions.appendChild(del);
           }
+          row.appendChild(actions);
           users.appendChild(row);
         });
 
         (res.worlds || []).forEach(w => {
           const row = document.createElement('div');
           row.className = 'admin-row';
-          row.innerHTML = `<span><b>${escapeChatText(w.name)}</b><small style="color:#aaa;"> owner: ${escapeChatText(w.ownerUsername || 'unknown')}</small></span>`;
-          const btn = document.createElement('button');
-          btn.className = 'admin-delete';
-          btn.textContent = 'DELETE WORLD';
-          btn.onclick = () => {
-            if (confirm(`Permanently delete world "${w.name}"?`)) {
-              socket.emit('admin_delete_world', { worldName: w.name }, (r) => {
-                if (!r.success) document.getElementById('admin-error').textContent = r.message;
-                else {
-                  if (currentWorldName === w.name) document.getElementById('leave-world-btn').click();
-                  refreshAdminPanel();
-                  renderRoomList();
-                }
-              });
+          const info = document.createElement('span');
+          const name = document.createElement('b');
+          name.textContent = w.name;
+          info.appendChild(name);
+          const meta = document.createElement('small');
+          meta.style.cssText = 'color:#aaa;margin-left:7px;';
+          meta.textContent = `owner: ${w.ownerUsername || 'unknown'} • ${w.onlineCount || 0} online • ${w.chatCount || 0} messages`;
+          info.appendChild(meta);
+          row.appendChild(info);
+
+          const actions = document.createElement('div');
+          actions.className = 'admin-actions';
+          const clear = document.createElement('button');
+          clear.className = 'admin-action warn';
+          clear.textContent = 'CLEAR CHAT';
+          clear.onclick = () => {
+            if (confirm(`Permanently clear all chat messages in "${w.name}"?`)) {
+              adminRequest('admin_clear_world_chat', { worldName: w.name }, `Chat cleared for ${w.name}.`);
             }
           };
-          row.appendChild(btn);
+          actions.appendChild(clear);
+
+          const del = document.createElement('button');
+          del.className = 'admin-delete';
+          del.textContent = 'DELETE WORLD';
+          del.onclick = () => {
+            if (confirm(`Permanently delete world "${w.name}"? This cannot be undone.`)) {
+              adminRequest('admin_delete_world', { worldName: w.name }, `${w.name} was permanently deleted.`);
+            }
+          };
+          actions.appendChild(del);
+          row.appendChild(actions);
           worlds.appendChild(row);
         });
+        if (clearMessage) setAdminMessage('');
       });
     }
 
     document.getElementById('open-admin-btn').addEventListener('click', () => {
       if (!isAdmin) return;
-      document.getElementById('admin-error').textContent = '';
       document.getElementById('admin-panel').style.display = 'flex';
       refreshAdminPanel();
     });
+    document.getElementById('admin-refresh-btn').addEventListener('click', () => refreshAdminPanel());
     document.getElementById('close-admin-panel').addEventListener('click', () => {
       document.getElementById('admin-panel').style.display = 'none';
     });
