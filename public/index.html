@@ -450,6 +450,41 @@
     .friend-actions button.danger{background:#3c2228;border-color:#77404b}
     .friends-empty{padding:12px 0;color:#6f7e92}
 
+
+    /* ===== V3.18.1 PROFILE ACTION ROW FIX ===== */
+    .profile-action-row{
+      display:flex!important;
+      align-items:center!important;
+      flex-wrap:wrap!important;
+      gap:8px!important;
+      margin-top:16px!important;
+      width:100%!important;
+    }
+    .profile-action-row .profile-join-btn{
+      display:none;
+      margin:0!important;
+      width:auto!important;
+      flex:0 0 auto!important;
+    }
+    .profile-action-row .profile-friend-actions{
+      display:flex!important;
+      align-items:center!important;
+      flex-wrap:wrap!important;
+      gap:8px!important;
+      margin:0!important;
+      width:auto!important;
+      flex:0 0 auto!important;
+    }
+    .profile-action-row .profile-friend-actions:empty{display:none!important}
+    .profile-action-row .profile-friend-actions button{
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      width:auto!important;
+      margin:0!important;
+      flex:0 0 auto!important;
+    }
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -495,8 +530,10 @@
               <h1 id="profile-username">PLAYER</h1>
               <div id="profile-status" class="profile-status offline"><span class="profile-status-dot"></span><span>OFFLINE</span></div>
               <div id="profile-joined" class="profile-joined"></div>
-              <button id="profile-join-world-btn" class="submit-btn profile-join-btn" style="display:none">JOIN WORLD</button>
-              <div id="profile-friend-actions" class="profile-friend-actions"></div>
+              <div class="profile-action-row">
+                <button id="profile-join-world-btn" class="submit-btn profile-join-btn" style="display:none">JOIN WORLD</button>
+                <div id="profile-friend-actions" class="profile-friend-actions"></div>
+              </div>
             </div>
           </div>
           <div class="profile-stats">
