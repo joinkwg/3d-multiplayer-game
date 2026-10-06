@@ -1772,35 +1772,17 @@
         // the material pattern with it.
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(1, 1);
+        // Safe UV tiling (no custom shader). This keeps the renderer valid.
+        // Full per-face fixed-density mapping will be added separately after physics is verified.
+        const tileU = Math.max(1, Math.abs(blockData.scaleX || 1));
+        const tileV = Math.max(1, Math.abs(blockData.scaleZ || 1));
+        tex.repeat.set(tileU, tileV);
         matOptions.map = tex;
       }
 
       if (blockData.actionType === 'kill') matOptions.emissive = 0x550000;
 
       const mat = new THREE.MeshLambertMaterial(matOptions);
-      if (mapTexture) {
-        mat.onBeforeCompile = (shader) => {
-          shader.vertexShader = shader.vertexShader
-            .replace('#include <common>', '#include <common>\nvarying vec3 kwgWorldSurface;')
-            .replace('#include <uv_vertex>', '#include <uv_vertex>\nkwgWorldSurface = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-          shader.fragmentShader = shader.fragmentShader
-            .replace('#include <common>', '#include <common>\nvarying vec3 kwgWorldSurface;')
-            .replace('#include <map_fragment>', `
-#ifdef USE_MAP
-  vec3 n = normalize(vNormal);
-  vec3 an = abs(n);
-  vec2 kwgUV;
-  if (an.y >= an.x && an.y >= an.z) kwgUV = kwgWorldSurface.xz;
-  else if (an.x >= an.z) kwgUV = kwgWorldSurface.zy;
-  else kwgUV = kwgWorldSurface.xy;
-  vec4 sampledDiffuseColor = texture2D(map, kwgUV);
-  diffuseColor *= sampledDiffuseColor;
-#endif
-`);
-        };
-        mat.customProgramCacheKey = () => 'kwg-fixed-world-material-v1';
-      }
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(blockData.x || 0, blockData.y || 0, blockData.z || 0);
       mesh.scale.set(blockData.scaleX || 1, blockData.scaleY || 1, blockData.scaleZ || 1);
