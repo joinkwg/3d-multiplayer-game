@@ -230,8 +230,8 @@
     #world-chat-header{background:#1b2028;border-bottom-color:#46515f;letter-spacing:.5px}
     #world-chat-form{background:#1b2028;border-top-color:#46515f}
     #save-status{border-radius:0!important;box-shadow:3px 3px 0 #000}
-    #kwg-loading-cog{display:none;position:fixed;z-index:10000;pointer-events:none;width:20px;height:20px;margin:10px 0 0 10px;filter:drop-shadow(1px 1px 0 #000)}
-    #kwg-loading-cog::before{content:"⚙";display:block;width:20px;height:20px;color:#fff;font:700 20px/20px "Courier New",monospace;text-align:center;animation:kwgCogSpin .75s linear infinite;text-shadow:1px 1px 0 #000}
+    #kwg-loading-cog{display:none;position:fixed;z-index:10000;pointer-events:none;width:40px;height:40px;margin:12px 0 0 12px;filter:drop-shadow(1px 1px 0 #000)}
+    #kwg-loading-cog::before{content:"⚙";display:block;width:40px;height:40px;color:#fff;font:700 40px/40px "Courier New",monospace;text-align:center;animation:kwgCogSpin .75s linear infinite;text-shadow:1px 1px 0 #000}
     body.kwg-loading #kwg-loading-cog{display:block}
     @keyframes kwgCogSpin{to{transform:rotate(360deg)}}
     *{scrollbar-color:#566273 #171b21;scrollbar-width:thin}
@@ -381,6 +381,11 @@
       box-shadow:0 7px 18px rgba(0,0,0,.38)!important;padding:7px 10px!important;
     }
     ::selection{background:#347edc;color:#fff}
+
+  
+    .chat-line.chat-pending{opacity:.42;font-style:italic}
+    .chat-line.chat-pending .chat-time::before{content:"SENDING ";font-size:9px;letter-spacing:.08em;color:#9daabd}
+    .chat-line.chat-failed{opacity:.7;color:#ef7770}
 
   </style>
 
@@ -1102,6 +1107,7 @@
 
         loadWorldData(res.worldData, res.players, res.selfId);
         document.getElementById('world-chat').style.display = 'block';
+        startWorldIdleWatch();
         loadWorldChat();
       });
     }
@@ -1182,7 +1188,39 @@
       });
     }
 
+    // --- 10 MINUTE IN-WORLD IDLE TIMEOUT ---
+    const WORLD_IDLE_LIMIT_MS = 10 * 60 * 1000;
+    let worldLastActivityAt = Date.now();
+    let worldIdleTimer = null;
+
+    function noteWorldActivity() {
+      if (!currentWorldName) return;
+      worldLastActivityAt = Date.now();
+    }
+
+    ['pointerdown','pointermove','keydown','wheel','touchstart'].forEach(type => {
+      window.addEventListener(type, noteWorldActivity, {passive:true});
+    });
+
+    function startWorldIdleWatch() {
+      worldLastActivityAt = Date.now();
+      clearInterval(worldIdleTimer);
+      worldIdleTimer = setInterval(() => {
+        if (!currentWorldName) return;
+        if (Date.now() - worldLastActivityAt >= WORLD_IDLE_LIMIT_MS) {
+          clearInterval(worldIdleTimer);
+          worldIdleTimer = null;
+          performLeaveWorld();
+          setTimeout(() => {
+            alert('You were disconnected from the world because you were idle for 10 minutes.');
+          }, 50);
+        }
+      }, 5000);
+    }
+
     function performLeaveWorld() {
+      clearInterval(worldIdleTimer);
+      worldIdleTimer = null;
       socket.emit('leave_world');
 
       if (localPlayerAvatar) { scene.remove(localPlayerAvatar); localPlayerAvatar = null; }
@@ -1264,9 +1302,23 @@
       const input = document.getElementById('world-chat-input');
       const message = input.value.trim();
       if (!message || !currentWorldName) return;
+
+      // Optimistic chat: show the message immediately in grey while the server
+      // is saving/sending it, similar to modern chat apps.
+      const box = document.getElementById('world-chat-messages');
+      const pending = document.createElement('div');
+      pending.className = 'chat-line chat-pending';
+      pending.innerHTML = `<span class="chat-name">${escapeChatText((currentUser && currentUser.username) || 'You')}:</span> ${escapeChatText(message)}<span class="chat-time"></span>`;
+      box.appendChild(pending);
+      box.scrollTop = box.scrollHeight;
+      input.value = '';
+
       socket.emit('send_world_chat', { worldName: currentWorldName, message }, (res) => {
-        if (res && res.success) input.value = '';
-        else if (res && res.message) showToast(res.message);
+        if (pending.parentNode) pending.remove();
+        if (!res || !res.success) {
+          input.value = message;
+          showToast((res && res.message) || 'Could not send message.');
+        }
       });
     });
 
