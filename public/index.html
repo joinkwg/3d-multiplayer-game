@@ -1737,68 +1737,16 @@
       return group;
     }
 
-    // Build UVs from the part's FINAL dimensions instead of scaling old UVs.
-    // One UV unit = one world stud, so material features keep the same size.
-    function makeFixedUVBoxGeometry(sx, sy, sz) {
-      const g=new THREE.BoxGeometry(sx,sy,sz);
-      const p=g.attributes.position, n=g.attributes.normal, uv=g.attributes.uv;
-      for(let i=0;i<p.count;i++){
-        const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
-        const ax=Math.abs(n.getX(i)), ay=Math.abs(n.getY(i)), az=Math.abs(n.getZ(i));
-        if(ax>=ay && ax>=az) uv.setXY(i,z,y);
-        else if(ay>=az) uv.setXY(i,x,z);
-        else uv.setXY(i,x,y);
-      }
-      uv.needsUpdate=true; return g;
-    }
-    function makeFixedUVSphereGeometry(sx, sy, sz) {
-      const g=new THREE.SphereGeometry(.5,24,16);
-      const p=g.attributes.position, uv=g.attributes.uv;
-      // Arc-length-scaled UVs: circumference and vertical arc both tile by world size.
-      for(let i=0;i<p.count;i++){
-        const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
-        const theta=Math.atan2(z,x), phi=Math.asin(Math.max(-1,Math.min(1,y/.5)));
-        uv.setXY(i,(theta/(Math.PI*2)+.5)*(Math.PI*Math.max(sx,sz)),(phi/Math.PI+.5)*(Math.PI*sy*.5));
-      }
-      uv.needsUpdate=true; return g;
-    }
-    function makeFixedUVCylinderGeometry(sx, sy, sz) {
-      const g=new THREE.CylinderGeometry(.5,.5,1,24,1,false);
-      const p=g.attributes.position,n=g.attributes.normal,uv=g.attributes.uv;
-      const rAvg=(sx+sz)*.25;
-      for(let i=0;i<p.count;i++){
-        const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
-        if(Math.abs(n.getY(i))>.8) uv.setXY(i,x*sx,z*sz);
-        else uv.setXY(i,(Math.atan2(z,x)/(Math.PI*2)+.5)*(Math.PI*2*rAvg),(y+.5)*sy);
-      }
-      uv.needsUpdate=true; return g;
-    }
-    function makeFixedUVWedgeGeometry(sx, sy, sz) {
-      const g=createWedgeGeometry();
-      const p=g.attributes.position,n=g.attributes.normal,uv=g.attributes.uv;
-      for(let i=0;i<p.count;i++){
-        const x=p.getX(i)*sx,y=p.getY(i)*sy,z=p.getZ(i)*sz;
-        const ax=Math.abs(n.getX(i)),ay=Math.abs(n.getY(i)),az=Math.abs(n.getZ(i));
-        if(ax>=ay && ax>=az) uv.setXY(i,z,y);
-        else if(ay>=az) uv.setXY(i,x,z);
-        else uv.setXY(i,x,y);
-      }
-      uv.needsUpdate=true; return g;
-    }
-
     function buildBlockMesh(blockData, isPreview = false) {
       if (blockData.actionType === 'checkpoint' || blockData.actionType === 'finish') {
         return createFlagMesh(blockData, isPreview);
       }
 
-      const sx=Math.max(.001,Math.abs(blockData.scaleX||1));
-      const sy=Math.max(.001,Math.abs(blockData.scaleY||1));
-      const sz=Math.max(.001,Math.abs(blockData.scaleZ||1));
       let geo;
-      if (blockData.shape === 'sphere') geo = makeFixedUVSphereGeometry(sx,sy,sz);
-      else if (blockData.shape === 'cylinder') geo = makeFixedUVCylinderGeometry(sx,sy,sz);
-      else if (blockData.shape === 'wedge') geo = makeFixedUVWedgeGeometry(sx,sy,sz);
-      else geo = makeFixedUVBoxGeometry(sx,sy,sz);
+      if (blockData.shape === 'sphere') geo = new THREE.SphereGeometry(0.5, 16, 16);
+      else if (blockData.shape === 'cylinder') geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
+      else if (blockData.shape === 'wedge') geo = createWedgeGeometry();
+      else geo = new THREE.BoxGeometry(1, 1, 1);
 
       const mapTexture = getMaterialTexture(blockData.material || 'grid');
       const isUncollidable = blockData.canCollide === false;
@@ -1826,7 +1774,9 @@
         tex.wrapT = THREE.RepeatWrapping;
         // Safe UV tiling (no custom shader). This keeps the renderer valid.
         // Full per-face fixed-density mapping will be added separately after physics is verified.
-        tex.repeat.set(1,1);
+        const tileU = Math.max(1, Math.abs(blockData.scaleX || 1));
+        const tileV = Math.max(1, Math.abs(blockData.scaleZ || 1));
+        tex.repeat.set(tileU, tileV);
         matOptions.map = tex;
       }
 
@@ -1835,9 +1785,7 @@
       const mat = new THREE.MeshLambertMaterial(matOptions);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(blockData.x || 0, blockData.y || 0, blockData.z || 0);
-      // Geometry already has final dimensions. This prevents transform scaling from
-      // stretching its UVs/material pattern.
-      mesh.scale.set(1,1,1);
+      mesh.scale.set(blockData.scaleX || 1, blockData.scaleY || 1, blockData.scaleZ || 1);
 
       mesh.userData = { 
         isBlock: !isPreview, 
@@ -2895,7 +2843,7 @@
     // --- CHARACTER CONTACT SOLVER ---
     // The player is treated as a vertical capsule/column. Parts return contact
     // normals and penetration depth; movement is projected along walkable surfaces.
-    const WALKABLE_NORMAL_Y = 0.55;
+    const WALKABLE_NORMAL_Y = 0.45;
     const CONTACT_SKIN = 0.025;
 
     function getShapeContact(px, py, pz, b) {
@@ -2959,6 +2907,55 @@
       ];
       pens.sort((a,b)=>a.d-b.d);
       return {normal:pens[0].n,depth:pens[0].d+CONTACT_SKIN,type:'box'};
+    }
+
+    function findWalkableGround(pos, blocks, maxDrop=0.34, maxRise=0.24) {
+      let best=null;
+      for (const b of blocks) {
+        if (b.canCollide===false || b.actionType==='kill') continue;
+        const shape=b.shape || 'box';
+        let y=null, normal={x:0,y:1,z:0};
+
+        if (shape==='sphere') {
+          const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
+          const ry=Math.max(.001,Math.abs(b.scaleY||1)*.5);
+          const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
+          const dx=pos.x-b.x,dz=pos.z-b.z;
+          const q=(dx*dx)/(rx*rx)+(dz*dz)/(rz*rz);
+          if (q<=1) {
+            const root=Math.sqrt(Math.max(0,1-q));
+            y=b.y+ry*root;
+            // Ellipsoid surface normal from its gradient.
+            let nx=dx/(rx*rx), ny=(y-b.y)/(ry*ry), nz=dz/(rz*rz);
+            const nl=Math.hypot(nx,ny,nz)||1;
+            normal={x:nx/nl,y:ny/nl,z:nz/nl};
+          }
+        } else if (shape==='cylinder') {
+          const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
+          const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
+          const dx=pos.x-b.x,dz=pos.z-b.z;
+          if ((dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)<=1) y=b.y+Math.abs(b.scaleY||1)*.5;
+        } else if (shape==='wedge') {
+          const box=getBlockAABB(b);
+          if (pos.x>=box.minX-PLAYER_RADIUS && pos.x<=box.maxX+PLAYER_RADIUS &&
+              pos.z>=box.minZ-PLAYER_RADIUS && pos.z<=box.maxZ+PLAYER_RADIUS) {
+            const sy=Math.max(.001,Math.abs(b.scaleY||1)),sz=Math.max(.001,Math.abs(b.scaleZ||1));
+            y=box.minY+(box.maxZ-Math.max(box.minZ,Math.min(box.maxZ,pos.z)))*(sy/sz);
+            const slope=sy/sz,nl=Math.hypot(1,slope);
+            normal={x:0,y:1/nl,z:slope/nl};
+          }
+        } else {
+          const box=getBlockAABB(b);
+          if (pos.x>=box.minX-PLAYER_RADIUS && pos.x<=box.maxX+PLAYER_RADIUS &&
+              pos.z>=box.minZ-PLAYER_RADIUS && pos.z<=box.maxZ+PLAYER_RADIUS) y=box.maxY;
+        }
+
+        if (y===null || normal.y<WALKABLE_NORMAL_Y) continue;
+        const diff=y-pos.y;
+        if (diff < -maxDrop || diff > maxRise) continue;
+        if (!best || y>best.y) best={y,normal,b};
+      }
+      return best;
     }
 
     function solveCharacterContacts(pos, blocks, allowGround=true) {
@@ -3043,103 +3040,91 @@
       return null;
     }
 
-    function findWalkableFloor(blocks,x,z,feetY,maxUp,maxDown) {
-      let best=null;
-      for(const b of blocks){
-        if(b.canCollide===false || b.actionType==='kill') continue;
-        const shape=b.shape||'box';
-        let y=null,n={x:0,y:1,z:0};
-        if(shape==='sphere'){
-          const rx=Math.abs(b.scaleX||1)*.5,ry=Math.abs(b.scaleY||1)*.5,rz=Math.abs(b.scaleZ||1)*.5;
-          const dx=x-b.x,dz=z-b.z,q=dx*dx/(rx*rx)+dz*dz/(rz*rz);
-          if(q<=1){
-            y=b.y+ry*Math.sqrt(Math.max(0,1-q));
-            const nx=dx/(rx*rx), ny=(y-b.y)/(ry*ry), nz=dz/(rz*rz),L=Math.hypot(nx,ny,nz)||1;
-            n={x:nx/L,y:ny/L,z:nz/L};
-          }
-        } else if(shape==='cylinder'){
-          const rx=Math.abs(b.scaleX||1)*.5,rz=Math.abs(b.scaleZ||1)*.5,dx=x-b.x,dz=z-b.z;
-          if(dx*dx/(rx*rx)+dz*dz/(rz*rz)<=1){y=b.y+Math.abs(b.scaleY||1)*.5;n={x:0,y:1,z:0};}
-        } else if(shape==='wedge'){
-          const box=getBlockAABB(b);
-          if(x>=box.minX-PLAYER_RADIUS&&x<=box.maxX+PLAYER_RADIUS&&z>=box.minZ-PLAYER_RADIUS&&z<=box.maxZ+PLAYER_RADIUS){
-            const sy=Math.abs(b.scaleY||1),sz=Math.max(.001,Math.abs(b.scaleZ||1));
-            y=box.minY+(box.maxZ-Math.max(box.minZ,Math.min(box.maxZ,z)))*(sy/sz);
-            const L=Math.hypot(1,sy/sz); n={x:0,y:1/L,z:(sy/sz)/L};
-          }
-        } else {
-          const box=getBlockAABB(b);
-          if(x>=box.minX-PLAYER_RADIUS&&x<=box.maxX+PLAYER_RADIUS&&z>=box.minZ-PLAYER_RADIUS&&z<=box.maxZ+PLAYER_RADIUS)y=box.maxY;
-        }
-        if(y===null||n.y<WALKABLE_NORMAL_Y)continue;
-        const d=y-feetY;
-        if(d<=maxUp&&d>=-maxDown&&(!best||y>best.y))best={y,n,b};
-      }
-      return best;
-    }
-
     function updatePlayerPhysics(delta) {
-      if(!localPlayerAvatar||!currentWorldName)return;
-      if(!isRightClicking){
-        if(keys['a']||keys['arrowleft'])localPlayerAvatar.rotation.y+=turnSpeed;
-        if(keys['d']||keys['arrowright'])localPlayerAvatar.rotation.y-=turnSpeed;
-      }
-      let moveDir=0;if(keys['w']||keys['arrowup'])moveDir++;if(keys['s']||keys['arrowdown'])moveDir--;
-      const isMoving=moveDir!==0, pos=localPlayerAvatar.position;
-      const blocks=currentWorldData?Object.values(currentWorldData.blocks):[];
+      if (!localPlayerAvatar || !currentWorldName) return;
 
-      if(keys[' ']&&isGrounded){velocityY=jumpStrength;isGrounded=false;}
-
-      const wasGrounded=isGrounded;
-      const oldX=pos.x,oldZ=pos.z,oldY=pos.y;
-      pos.x+=Math.sin(localPlayerAvatar.rotation.y)*moveSpeed*moveDir;
-      pos.z+=Math.cos(localPlayerAvatar.rotation.y)*moveSpeed*moveDir;
-
-      // Roblox-like character floor following: when already grounded, walking onto a
-      // walkable curved/sloped surface moves the character along that surface rather
-      // than letting gravity make them ski down it.
-      if(wasGrounded&&velocityY<=0){
-        const floor=findWalkableFloor(blocks,pos.x,pos.z,oldY,Math.max(maxStepHeight,.8),.65);
-        if(floor){
-          pos.y=floor.y;velocityY=0;isGrounded=true;
-        }else{
-          isGrounded=false;
-        }
+      if (!isRightClicking) {
+        if (keys['a'] || keys['arrowleft']) localPlayerAvatar.rotation.y += turnSpeed;
+        if (keys['d'] || keys['arrowright']) localPlayerAvatar.rotation.y -= turnSpeed;
       }
 
-      // Resolve side contacts after floor following.
-      const horizontal=solveCharacterContacts(pos,blocks,true);
-      if(horizontal.grounded&&velocityY<=0)isGrounded=true;
+      let moveDir=0;
+      if (keys['w'] || keys['arrowup']) moveDir+=1;
+      if (keys['s'] || keys['arrowdown']) moveDir-=1;
+      const isMoving=moveDir!==0;
 
-      if(!isGrounded){
+      if (keys[' '] && isGrounded) {
+        velocityY=jumpStrength;
+        isGrounded=false;
+      }
+
+      const pos=localPlayerAvatar.position;
+      const blocks=currentWorldData ? Object.values(currentWorldData.blocks) : [];
+      const moveX=Math.sin(localPlayerAvatar.rotation.y)*moveSpeed*moveDir;
+      const moveZ=Math.cos(localPlayerAvatar.rotation.y)*moveSpeed*moveDir;
+      let hitKill=false;
+
+      // Character-controller locomotion: while grounded, movement follows the
+      // walkable visual surface directly. Gravity is only used once we actually
+      // leave that surface. This is what removes the "butter" feeling.
+      const startedGrounded=isGrounded;
+      pos.x+=moveX; pos.z+=moveZ;
+
+      let ground=null;
+      if (startedGrounded && velocityY<=0) {
+        ground=findWalkableGround(pos,blocks,0.42,0.30);
+      }
+
+      if (ground) {
+        pos.y=ground.y;
+        velocityY=0;
+        isGrounded=true;
+        solveCharacterContacts(pos,blocks,false);
+      } else {
+        // Airborne / jumping: normal contact solver plus gravity.
+        solveCharacterContacts(pos,blocks,false);
         pos.y+=velocityY;
         velocityY+=gravity;
-        const vertical=solveCharacterContacts(pos,blocks,true);
-        isGrounded=vertical.grounded;
-      }else velocityY=0;
+        const verticalContacts=solveCharacterContacts(pos,blocks,true);
+        isGrounded=verticalContacts.grounded;
 
-      // A short floor snap bridges tiny frame-to-frame gaps, but only to walkable normals.
-      if(!isGrounded&&velocityY<=0){
-        const floor=findWalkableFloor(blocks,pos.x,pos.z,pos.y,.08,.32);
-        if(floor){pos.y=floor.y;velocityY=0;isGrounded=true;}
+        // Ground acquisition probe: snap only to a walkable surface just below us.
+        if (!isGrounded && velocityY<=0) {
+          const landing=findWalkableGround(pos,blocks,0.16,0.04);
+          if (landing) {
+            pos.y=landing.y;
+            velocityY=0;
+            isGrounded=true;
+          }
+        }
       }
 
-      let hitKill=false;
-      for(const b of blocks){
-        const contact=getShapeContact(pos.x,pos.y,pos.z,b);
-        if(!contact)continue;
-        if(b.actionType==='kill')hitKill=true;
-        if(b.actionType==='checkpoint')triggerCheckpoint(b);
-        if(b.actionType==='finish')triggerFinishLine();
+      // Trigger parts are checked independently of physical resolution.
+      for (const b of blocks) {
+        const c=getShapeContact(pos.x,pos.y,pos.z,b);
+        if (!c) continue;
+        if (b.actionType==='kill') hitKill=true;
+        if (b.actionType==='checkpoint') triggerCheckpoint(b);
+        if (b.actionType==='finish') triggerFinishLine();
       }
-      if(hitKill||pos.y<-50){respawnPlayer();return;}
+
+      if (hitKill || pos.y < -50) {
+        respawnPlayer();
+        return;
+      }
 
       updateAvatarAnimations(localPlayerAvatar,isMoving,isGrounded,delta,undefined,velocityY);
+
       const now=Date.now();
-      if(now-lastSendTime>40){
+      if (now-lastSendTime>40) {
         lastSendTime=now;
-        socket.emit('player_movement',{x:pos.x,y:pos.y,z:pos.z,rotationY:localPlayerAvatar.rotation.y,
-          walkClock:localPlayerAvatar.userData.walkClock,verticalVelocity:velocityY,isMoving,isGrounded});
+        socket.emit('player_movement',{
+          x:pos.x,y:pos.y,z:pos.z,
+          rotationY:localPlayerAvatar.rotation.y,
+          walkClock:localPlayerAvatar.userData.walkClock,
+          verticalVelocity:velocityY,
+          isMoving,isGrounded
+        });
       }
     }
 
