@@ -485,6 +485,22 @@
       flex:0 0 auto!important;
     }
 
+
+    /* ===== V3.19 NOTIFICATIONS ===== */
+    .notifications-tab{display:inline-flex!important;align-items:center!important;gap:5px!important}
+    .notifications-panel{position:absolute;z-index:90;top:72px;right:18px;width:min(430px,calc(100vw - 36px));max-height:min(620px,calc(100vh - 100px));overflow:hidden;background:#0e141d;border:1px solid #42516a;border-top:3px solid #4b9cff;box-shadow:0 20px 55px rgba(0,0,0,.58)}
+    .notifications-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px;border-bottom:1px solid #293649;background:#151e2a}
+    .notifications-head h2{font-size:17px!important;margin:2px 0 0!important}
+    .notifications-head-actions{display:flex;gap:6px}
+    .notifications-head-actions button{background:#202d3d;border:1px solid #3c4c62;color:#cbd8e8;padding:7px 8px;font-size:9px;font-weight:900;cursor:pointer}
+    .notifications-list{overflow:auto;max-height:520px}
+    .notification-row{display:grid;grid-template-columns:8px 1fr auto;gap:10px;align-items:start;padding:13px 14px;border-bottom:1px solid #222e3e;background:#101721}
+    .notification-row.unread{background:#162336}
+    .notification-dot{width:8px;height:8px;margin-top:5px;background:#526177}.notification-row.unread .notification-dot{background:#4b9cff;box-shadow:0 0 9px rgba(75,156,255,.55)}
+    .notification-message{font-size:12px;line-height:1.45;color:#dce5f0}.notification-time{font-size:9px;color:#738298;margin-top:4px}
+    .notification-open{background:#223a59;border:1px solid #41658d;color:#fff;padding:6px 8px;font-size:9px;font-weight:900;cursor:pointer}
+    .notifications-empty{padding:30px 18px;text-align:center;color:#718096}
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -519,8 +535,18 @@
         <div><h2 style="margin:0;text-transform:uppercase;">KWG 3D Online</h2><div style="font-size:12px;color:#aaa;">Logged in as: <span id="logged-user-display" style="color:#3388ff;font-weight:bold;">User</span></div></div>
         <div style="display:flex;gap:8px;align-items:center"><span class="coin-badge">🪙 <span id="home-coin-count">100</span> COINS</span><button id="logout-btn" class="logout-btn">LOG OUT</button></div>
       </div>
-      <div class="home-tabs"><button class="home-tab active" data-home-tab="home">HOME</button><button class="home-tab" data-home-tab="profile">PROFILE</button><button class="home-tab" data-home-tab="friends">FRIENDS <span id="friend-request-badge" class="friend-badge" style="display:none">0</span></button><button class="home-tab" data-home-tab="worlds">WORLDS</button><button class="home-tab" data-home-tab="store">STORE</button><button class="home-tab" data-home-tab="avatar">AVATAR EDITOR</button><button class="home-tab admin-home-tab" data-home-tab="admin">ADMIN</button></div>
+      <div class="home-tabs"><button id="notifications-btn" class="home-tab notifications-tab" type="button">🔔 <span>NOTIFICATIONS</span> <span id="notification-badge" class="friend-badge" style="display:none">0</span></button><button class="home-tab active" data-home-tab="home">HOME</button><button class="home-tab" data-home-tab="profile">PROFILE</button><button class="home-tab" data-home-tab="friends">FRIENDS <span id="friend-request-badge" class="friend-badge" style="display:none">0</span></button><button class="home-tab" data-home-tab="worlds">WORLDS</button><button class="home-tab" data-home-tab="store">STORE</button><button class="home-tab" data-home-tab="avatar">AVATAR EDITOR</button><button class="home-tab admin-home-tab" data-home-tab="admin">ADMIN</button></div>
       <div id="home-pane" class="home-pane active"><div class="home-profile-grid"><div class="home-section"><h3>YOUR AVATAR</h3><div id="home-avatar-preview" class="home-avatar-preview"></div></div><div style="display:grid;gap:14px"><div class="home-section"><h3>YOUR WORLDS</h3><div id="home-owned-worlds" class="room-list-container home-owned-worlds"></div></div><div class="home-section"><h3>YOUR INVENTORY</h3><div id="home-inventory-grid" class="home-inventory-grid"></div></div></div></div></div>
+      <div id="notifications-panel" class="notifications-panel" style="display:none">
+        <div class="notifications-head">
+          <div><div class="profile-kicker">SOCIAL</div><h2>NOTIFICATIONS</h2></div>
+          <div class="notifications-head-actions">
+            <button id="notifications-read-btn" type="button">MARK ALL READ</button>
+            <button id="notifications-clear-btn" type="button">CLEAR</button>
+          </div>
+        </div>
+        <div id="notifications-list" class="notifications-list"></div>
+      </div>
       <div id="profile-pane" class="home-pane">
         <div class="profile-shell">
           <div class="profile-hero">
@@ -805,7 +831,7 @@
       'get_world_templates','get_store','buy_store_item','save_appearance',
       'update_appearance','toggle_world_like','delete_own_world',
       'admin_search_users','admin_search_worlds','admin_make_world_template',
-      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user','get_profile','update_profile','get_friends','send_friend_request','respond_friend_request','cancel_friend_request','remove_friend'
+      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user','get_profile','update_profile','get_friends','send_friend_request','respond_friend_request','cancel_friend_request','remove_friend,'get_notifications','mark_notifications_read','clear_notifications'
     ]);
     function setKWGLoading(delta){
       kwgLoadingCount=Math.max(0,kwgLoadingCount+delta);
@@ -1062,6 +1088,7 @@
     function finishAuthentication(res) {
       loggedInUsername = res.username;
       setTimeout(refreshFriendBadge,100);
+      setTimeout(refreshNotifications,150);
       isAdmin = !!res.isAdmin;
       if (res.sessionToken) { sessionToken = res.sessionToken; localStorage.setItem('kwg_session_token', sessionToken); }
       document.querySelectorAll('.admin-home-tab').forEach(el => el.style.display = isAdmin ? 'block' : 'none');
@@ -3234,6 +3261,74 @@
     }
 
 
+
+    let kwgNotifications=[];
+
+    function timeAgo(value){
+      const ms=Date.now()-new Date(value).getTime();
+      if(!Number.isFinite(ms))return '';
+      const m=Math.max(0,Math.floor(ms/60000));
+      if(m<1)return 'JUST NOW';
+      if(m<60)return `${m}M AGO`;
+      const h=Math.floor(m/60);if(h<24)return `${h}H AGO`;
+      const d=Math.floor(h/24);if(d<7)return `${d}D AGO`;
+      return new Date(value).toLocaleDateString();
+    }
+
+    function updateNotificationBadge(n){
+      const b=document.getElementById('notification-badge');
+      if(!b)return;b.textContent=String(n||0);b.style.display=n?'inline-flex':'none';
+    }
+
+    function renderNotifications(){
+      const box=document.getElementById('notifications-list');box.innerHTML='';
+      if(!kwgNotifications.length){box.innerHTML='<div class="notifications-empty">You have no notifications yet.</div>';return;}
+      kwgNotifications.forEach(n=>{
+        const row=document.createElement('div');row.className='notification-row'+(n.isRead?'':' unread');
+        const dot=document.createElement('span');dot.className='notification-dot';
+        const body=document.createElement('div');
+        const msg=document.createElement('div');msg.className='notification-message';msg.textContent=n.message;
+        const tm=document.createElement('div');tm.className='notification-time';tm.textContent=timeAgo(n.createdAt);
+        body.append(msg,tm);row.append(dot,body);
+        if(n.actorUsername){
+          const open=document.createElement('button');open.className='notification-open';open.textContent='PROFILE';
+          open.onclick=()=>{
+            document.getElementById('notifications-panel').style.display='none';
+            if(!n.isRead) socket.emit('mark_notifications_read',{ids:[Number(n.id)]},()=>refreshNotifications());
+            openPlayerProfile(n.actorUsername);
+          };
+          row.append(open);
+        }
+        box.appendChild(row);
+      });
+    }
+
+    function refreshNotifications(){
+      if(!loggedInUsername)return;
+      socket.emit('get_notifications',{},res=>{
+        if(!res?.success)return;
+        kwgNotifications=res.notifications||[];
+        updateNotificationBadge(res.unread||0);renderNotifications();
+      });
+    }
+
+    function toggleNotifications(){
+      const panel=document.getElementById('notifications-panel');
+      const opening=panel.style.display==='none';
+      panel.style.display=opening?'block':'none';
+      if(opening)refreshNotifications();
+    }
+
+    document.getElementById('notifications-btn').addEventListener('click',e=>{e.stopPropagation();toggleNotifications();});
+    document.getElementById('notifications-panel').addEventListener('click',e=>e.stopPropagation());
+    document.addEventListener('click',()=>{document.getElementById('notifications-panel').style.display='none';});
+    document.getElementById('notifications-read-btn').addEventListener('click',()=>{
+      socket.emit('mark_notifications_read',{},res=>{if(res?.success)refreshNotifications();});
+    });
+    document.getElementById('notifications-clear-btn').addEventListener('click',()=>{
+      socket.emit('clear_notifications',{},res=>{if(res?.success)refreshNotifications();});
+    });
+
     function friendAction(eventName,username,extra={}) {
       socket.emit(eventName,{username,...extra},res=>{
         if(!res?.success){showToast(res?.message||'Friend action failed.');return;}
@@ -4096,6 +4191,8 @@
       if(currentWorldName) performLeaveWorld();
       setTimeout(()=>openPlayerProfile(username),50);
     });
+
+    setInterval(()=>{if(loggedInUsername)refreshNotifications();},20000);
 
   </script>
 </body>
