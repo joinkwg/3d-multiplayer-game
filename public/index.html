@@ -1981,6 +1981,7 @@
       toggleEditBtn.textContent = isEditMode ? 'Edit Mode: ON' : 'Edit Mode: OFF';
       toggleEditBtn.classList.toggle('active', isEditMode);
       buildToolbar.style.display = isEditMode ? 'block' : 'none';
+      updateEditorCursor();
       if (!isEditMode) {
         selectBlock(null);
         if (previewMesh) previewMesh.visible = false;
@@ -1989,8 +1990,37 @@
       }
     });
 
+    // Editor cursors are generated locally as tiny SVGs, so no uploaded icon files are needed.
+    // They intentionally use a chunky white/black style to match KWG's blocky UI.
+    const editorCursorSvgs = {
+      select: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M10 4h5v10h2V9h4v5h2v-3h4v11l-6 7H11l-6-8v-6h4l3 5V4z" fill="white" stroke="black" stroke-width="2" stroke-linejoin="miter"/></svg>`,
+      place: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M13 3h6v10h10v6H19v10h-6V19H3v-6h10z" fill="white" stroke="black" stroke-width="2"/></svg>`,
+      move: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 2l6 7h-4v5h5V10l7 6-7 6v-4h-5v5h4l-6 7-6-7h4v-5H9v4l-7-6 7-6v4h5V9h-4z" fill="white" stroke="black" stroke-width="1.8" stroke-linejoin="miter"/></svg>`,
+      scale: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M4 13V4h9l-3 3 5 5-3 3-5-5-3 3zm24 6v9h-9l3-3-5-5 3-3 5 5z" fill="white" stroke="black" stroke-width="2" stroke-linejoin="miter"/></svg>`,
+      delete: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M9 9h14l-1 19H10L9 9zm-3-5h7V2h6v2h7v4H6z" fill="white" stroke="black" stroke-width="2" stroke-linejoin="miter"/><path d="M14 13v10M18 13v10" stroke="black" stroke-width="2"/></svg>`
+    };
+
+    function svgCursor(svg, hotX = 16, hotY = 16) {
+      return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${hotX} ${hotY}, auto`;
+    }
+
+    const editorCursors = {
+      select: svgCursor(editorCursorSvgs.select, 10, 4),
+      place: svgCursor(editorCursorSvgs.place),
+      scale: svgCursor(editorCursorSvgs.scale),
+      move: svgCursor(editorCursorSvgs.move),
+      delete: svgCursor(editorCursorSvgs.delete)
+    };
+
+    function updateEditorCursor() {
+      renderer.domElement.style.cursor = isEditMode
+        ? (editorCursors[buildSubTool] || 'default')
+        : 'default';
+    }
+
     function setBuildSubTool(tool) {
       buildSubTool = tool;
+      updateEditorCursor();
       ['select', 'place', 'scale', 'move', 'delete'].forEach(t => {
         const btn = document.getElementById(`tool-${t}-btn`);
         if (btn) btn.classList.toggle('active', t === tool);
