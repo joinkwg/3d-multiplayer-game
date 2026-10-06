@@ -1767,13 +1767,40 @@
       if (mapTexture) {
         const tex = mapTexture.clone();
         tex.needsUpdate = true;
-        tex.repeat.set(blockData.scaleX || 1, blockData.scaleZ || 1);
+        // Fixed material density. UVs are generated from the scaled world-space
+        // surface position in the shader, so stretching a part never stretches
+        // the material pattern with it.
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(1, 1);
         matOptions.map = tex;
       }
 
       if (blockData.actionType === 'kill') matOptions.emissive = 0x550000;
 
       const mat = new THREE.MeshLambertMaterial(matOptions);
+      if (mapTexture) {
+        mat.onBeforeCompile = (shader) => {
+          shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nvarying vec3 kwgWorldSurface;')
+            .replace('#include <uv_vertex>', '#include <uv_vertex>\nkwgWorldSurface = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+          shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', '#include <common>\nvarying vec3 kwgWorldSurface;')
+            .replace('#include <map_fragment>', `
+#ifdef USE_MAP
+  vec3 n = normalize(vNormal);
+  vec3 an = abs(n);
+  vec2 kwgUV;
+  if (an.y >= an.x && an.y >= an.z) kwgUV = kwgWorldSurface.xz;
+  else if (an.x >= an.z) kwgUV = kwgWorldSurface.zy;
+  else kwgUV = kwgWorldSurface.xy;
+  vec4 sampledDiffuseColor = texture2D(map, kwgUV);
+  diffuseColor *= sampledDiffuseColor;
+#endif
+`);
+        };
+        mat.customProgramCacheKey = () => 'kwg-fixed-world-material-v1';
+      }
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(blockData.x || 0, blockData.y || 0, blockData.z || 0);
       mesh.scale.set(blockData.scaleX || 1, blockData.scaleY || 1, blockData.scaleZ || 1);
@@ -2831,71 +2858,96 @@
       );
     }
 
-    // Precise shape collision check and resolution against player position (px, py, pz)
-    function checkPlayerShapeCollision(px, py, pz, b) {
+    // --- CHARACTER CONTACT SOLVER ---
+    // The player is treated as a vertical capsule/column. Parts return contact
+    // normals and penetration depth; movement is projected along walkable surfaces.
+    const WALKABLE_NORMAL_Y = 0.28;
+    const CONTACT_SKIN = 0.025;
+
+    function getShapeContact(px, py, pz, b) {
       const shape=b.shape || 'box';
-      const sx=Math.max(0.001,Math.abs(b.scaleX || 1));
-      const sy=Math.max(0.001,Math.abs(b.scaleY || 1));
-      const sz=Math.max(0.001,Math.abs(b.scaleZ || 1));
-      const pMinY=py,pMaxY=py+PLAYER_HEIGHT;
+      const sx=Math.max(.001,Math.abs(b.scaleX||1)), sy=Math.max(.001,Math.abs(b.scaleY||1)), sz=Math.max(.001,Math.abs(b.scaleZ||1));
+      const foot=py, head=py+PLAYER_HEIGHT;
 
       if (shape === 'sphere') {
-        // Treat the avatar as a vertical capsule and the rendered part as an ellipsoid.
-        // Horizontal contact uses the ellipsoid cross-section at the player's feet/center height.
         const rx=sx*.5, ry=sy*.5, rz=sz*.5;
-        const sampleY=Math.max(pMinY,Math.min(b.y,pMaxY));
-        const ny=(sampleY-b.y)/ry;
-        if (Math.abs(ny) <= 1) {
-          const section=Math.sqrt(Math.max(0,1-ny*ny));
-          const ex=rx*section, ez=rz*section;
-          const dx=px-b.x,dz=pz-b.z;
-          const expandedX=ex+PLAYER_RADIUS, expandedZ=ez+PLAYER_RADIUS;
-          const q=(dx*dx)/(expandedX*expandedX)+(dz*dz)/(expandedZ*expandedZ);
-          if (q < 1) {
-            // Exact visible top surface under the player's horizontal center.
-            const hq=(dx*dx)/(rx*rx)+(dz*dz)/(rz*rz);
-            const topY=hq<=1 ? b.y+ry*Math.sqrt(Math.max(0,1-hq)) : null;
-            return {collided:true,type:'sphere',topY,dx,dz,rx:expandedX,rz:expandedZ};
-          }
-        }
-      } else if (shape === 'cylinder') {
-        const rx=sx*.5, rz=sz*.5, halfH=sy*.5;
-        if (pMaxY > b.y-halfH && pMinY < b.y+halfH) {
-          const dx=px-b.x,dz=pz-b.z;
-          const ex=rx+PLAYER_RADIUS,ez=rz+PLAYER_RADIUS;
-          if ((dx*dx)/(ex*ex)+(dz*dz)/(ez*ez) < 1)
-            return {collided:true,type:'cylinder',topY:b.y+halfH,dx,dz,rx:ex,rz:ez};
-        }
-      } else if (shape === 'wedge') {
-        const bBox=getBlockAABB(b);
-        if (px+PLAYER_RADIUS>bBox.minX && px-PLAYER_RADIUS<bBox.maxX &&
-            pz+PLAYER_RADIUS>bBox.minZ && pz-PLAYER_RADIUS<bBox.maxZ &&
-            pMaxY>bBox.minY && pMinY<bBox.maxY) {
-          const sampleZ=Math.max(bBox.minZ,Math.min(bBox.maxZ,pz));
-          const t=1-((sampleZ-bBox.minZ)/sz);
-          const topY=bBox.minY+Math.max(0,Math.min(1,t))*sy;
-          if (pMinY <= topY+.08) return {collided:true,type:'wedge',topY};
-        }
-      } else {
-        const bBox=getBlockAABB(b);
-        const pBox={minX:px-PLAYER_RADIUS,maxX:px+PLAYER_RADIUS,minY:pMinY,maxY:pMaxY,minZ:pz-PLAYER_RADIUS,maxZ:pz+PLAYER_RADIUS};
-        if (checkAABBOverlap(pBox,bBox)) return {collided:true,type:'box',bBox};
+        // Closest point on the player's vertical center line to the ellipsoid center.
+        const cy=Math.max(foot+PLAYER_RADIUS, Math.min(b.y, head-PLAYER_RADIUS));
+        const dx=px-b.x, dy=cy-b.y, dz=pz-b.z;
+        // Expanded ellipsoid is a robust capsule-vs-ellipsoid approximation.
+        const ex=rx+PLAYER_RADIUS, ey=ry+PLAYER_RADIUS, ez=rz+PLAYER_RADIUS;
+        const q=Math.sqrt((dx*dx)/(ex*ex)+(dy*dy)/(ey*ey)+(dz*dz)/(ez*ez));
+        if (q>=1) return null;
+        let nx=dx/(ex*ex), ny=dy/(ey*ey), nz=dz/(ez*ez);
+        const nl=Math.hypot(nx,ny,nz)||1; nx/=nl;ny/=nl;nz/=nl;
+        const support=1/Math.sqrt((nx*nx)/(ex*ex)+(ny*ny)/(ey*ey)+(nz*nz)/(ez*ez));
+        const along=dx*nx+dy*ny+dz*nz;
+        return {normal:{x:nx,y:ny,z:nz},depth:Math.max(0,support-along)+CONTACT_SKIN,type:'sphere'};
       }
-      return {collided:false};
+
+      if (shape === 'cylinder') {
+        const rx=sx*.5, rz=sz*.5, minY=b.y-sy*.5, maxY=b.y+sy*.5;
+        const dx=px-b.x,dz=pz-b.z;
+        const ex=rx+PLAYER_RADIUS,ez=rz+PLAYER_RADIUS;
+        const radial=Math.sqrt((dx*dx)/(ex*ex)+(dz*dz)/(ez*ez));
+        const verticalOverlap=head>minY && foot<maxY;
+        if (!verticalOverlap || radial>=1) return null;
+        const topPen=maxY-foot, bottomPen=head-minY;
+        // Top/bottom cap wins only when it is genuinely the nearest exit.
+        const sideScale=1/Math.sqrt(((dx||1e-6)**2)/(ex**4)+((dz||1e-6)**2)/(ez**4));
+        const sidePen=Math.max(0,(1-radial)*Math.min(ex,ez));
+        if (topPen>=0 && topPen<sidePen && foot>=b.y) return {normal:{x:0,y:1,z:0},depth:topPen+CONTACT_SKIN,type:'cylinder'};
+        if (bottomPen>=0 && bottomPen<sidePen && head<=b.y) return {normal:{x:0,y:-1,z:0},depth:bottomPen+CONTACT_SKIN,type:'cylinder'};
+        let nx=dx/(ex*ex),nz=dz/(ez*ez); const nl=Math.hypot(nx,nz)||1;nx/=nl;nz/=nl;
+        return {normal:{x:nx,y:0,z:nz},depth:sidePen+CONTACT_SKIN,type:'cylinder'};
+      }
+
+      if (shape === 'wedge') {
+        const box=getBlockAABB(b);
+        if (px+PLAYER_RADIUS<=box.minX || px-PLAYER_RADIUS>=box.maxX || pz+PLAYER_RADIUS<=box.minZ || pz-PLAYER_RADIUS>=box.maxZ || head<=box.minY || foot>=box.maxY) return null;
+        // Geometry rises toward -Z. Plane: y = minY + (maxZ-z)*sy/sz.
+        const slope=sy/sz;
+        const topY=box.minY+(box.maxZ-Math.max(box.minZ,Math.min(box.maxZ,pz)))*slope;
+        const nlen=Math.hypot(1,slope);
+        const normal={x:0,y:1/nlen,z:slope/nlen};
+        if (foot<=topY+CONTACT_SKIN && foot>=box.minY-PLAYER_RADIUS)
+          return {normal,depth:Math.max(0,topY-foot)+CONTACT_SKIN,type:'wedge'};
+        return null;
+      }
+
+      const box=getBlockAABB(b);
+      const p=getPlayerAABB(px,py,pz);
+      if (!checkAABBOverlap(p,box)) return null;
+      const pens=[
+        {d:p.maxX-box.minX,n:{x:-1,y:0,z:0}}, {d:box.maxX-p.minX,n:{x:1,y:0,z:0}},
+        {d:p.maxY-box.minY,n:{x:0,y:-1,z:0}}, {d:box.maxY-p.minY,n:{x:0,y:1,z:0}},
+        {d:p.maxZ-box.minZ,n:{x:0,y:0,z:-1}}, {d:box.maxZ-p.minZ,n:{x:0,y:0,z:1}}
+      ];
+      pens.sort((a,b)=>a.d-b.d);
+      return {normal:pens[0].n,depth:pens[0].d+CONTACT_SKIN,type:'box'};
     }
 
-    function resolveCurvedHorizontalCollision(pos, b, res, oldX, oldZ) {
-      // Project the player smoothly to the nearest point on the expanded visual curve,
-      // rather than teleporting them to the part's rectangular bounding box.
-      if (res.type !== 'sphere' && res.type !== 'cylinder') return false;
-      let dx=pos.x-b.x,dz=pos.z-b.z;
-      if (Math.abs(dx)+Math.abs(dz)<1e-7) { dx=oldX-b.x; dz=oldZ-b.z; }
-      if (Math.abs(dx)+Math.abs(dz)<1e-7) dx=1;
-      const rx=res.rx,rz=res.rz;
-      const denom=Math.sqrt((dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)) || 1;
-      pos.x=b.x+dx/denom;
-      pos.z=b.z+dz/denom;
-      return true;
+    function solveCharacterContacts(pos, blocks, allowGround=true) {
+      let grounded=false, groundNormal={x:0,y:1,z:0};
+      // Several small solver passes are much more stable than snapping per-axis.
+      for (let pass=0; pass<4; pass++) {
+        let moved=false;
+        for (const b of blocks) {
+          if (b.canCollide===false || b.actionType==='kill') continue;
+          const c=getShapeContact(pos.x,pos.y,pos.z,b);
+          if (!c || c.depth<=0) continue;
+          pos.x += c.normal.x*c.depth;
+          pos.y += c.normal.y*c.depth;
+          pos.z += c.normal.z*c.depth;
+          moved=true;
+          if (allowGround && c.normal.y>=WALKABLE_NORMAL_Y) {
+            grounded=true; groundNormal=c.normal;
+            if (velocityY<0) velocityY=0;
+          } else if (c.normal.y<-.35 && velocityY>0) velocityY=0;
+        }
+        if (!moved) break;
+      }
+      return {grounded,groundNormal};
     }
 
     function respawnPlayer() {
@@ -2960,240 +3012,77 @@
     function updatePlayerPhysics(delta) {
       if (!localPlayerAvatar || !currentWorldName) return;
 
-      // Exact single-player turning: A/D directly spin the player.
       if (!isRightClicking) {
         if (keys['a'] || keys['arrowleft']) localPlayerAvatar.rotation.y += turnSpeed;
         if (keys['d'] || keys['arrowright']) localPlayerAvatar.rotation.y -= turnSpeed;
       }
 
-      let moveDir = 0;
-      if (keys['w'] || keys['arrowup']) moveDir += 1;
-      if (keys['s'] || keys['arrowdown']) moveDir -= 1;
+      let moveDir=0;
+      if (keys['w'] || keys['arrowup']) moveDir+=1;
+      if (keys['s'] || keys['arrowdown']) moveDir-=1;
+      const isMoving=moveDir!==0;
 
-      const isMoving = moveDir !== 0;
-
-      // Jump activation
       if (keys[' '] && isGrounded) {
-        velocityY = jumpStrength;
-        isGrounded = false;
-        targetStepY = 0;
+        velocityY=jumpStrength;
+        isGrounded=false;
       }
 
-      // Exact single-player fixed-step gravity/movement.
-      if (targetStepY !== 0) {
-        const stepStep = targetStepY * 0.25;
-        localPlayerAvatar.position.y += stepStep;
-        targetStepY -= stepStep;
-        if (Math.abs(targetStepY) < 0.001) targetStepY = 0;
-      }
+      const pos=localPlayerAvatar.position;
+      const blocks=currentWorldData ? Object.values(currentWorldData.blocks) : [];
+      const moveX=Math.sin(localPlayerAvatar.rotation.y)*moveSpeed*moveDir;
+      const moveZ=Math.cos(localPlayerAvatar.rotation.y)*moveSpeed*moveDir;
+      let hitKill=false;
 
-      const dx = Math.sin(localPlayerAvatar.rotation.y) * moveSpeed * moveDir;
-      const dz = Math.cos(localPlayerAvatar.rotation.y) * moveSpeed * moveDir;
+      // Move horizontally, then resolve penetration using contact normals.
+      pos.x+=moveX; pos.z+=moveZ;
+      let contacts=solveCharacterContacts(pos,blocks,true);
 
-      const dy = velocityY;
+      // Gravity/vertical movement. Ground contacts cancel only the velocity going
+      // into the surface; they do not create artificial sliding acceleration.
+      pos.y+=velocityY;
+      velocityY+=gravity;
+      const verticalContacts=solveCharacterContacts(pos,blocks,true);
+      isGrounded=contacts.grounded || verticalContacts.grounded;
 
-      const pos = localPlayerAvatar.position;
-      const blocks = currentWorldData ? Object.values(currentWorldData.blocks) : [];
-      const wasGrounded = isGrounded;
-      let hitKill = false;
-
-      // --- STEP 1/2: RESOLVE HORIZONTAL MOVEMENT ---
-      // Move once, then project out of curved shapes along their actual visible contour.
-      // Boxes keep classic axis resolution; curved pieces no longer snap to their AABB.
-      const oldX=pos.x, oldZ=pos.z, oldYForGrip=pos.y;
-      pos.x += dx;
-      pos.z += dz;
-      for (const b of blocks) {
-        let res=checkPlayerShapeCollision(pos.x,pos.y,pos.z,b);
-        if (!res.collided) continue;
-        if (b.actionType === 'kill') hitKill=true;
-        if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-        if (b.actionType === 'finish') triggerFinishLine();
-        if (b.canCollide === false || b.actionType === 'kill') continue;
-
-        if (resolveCurvedHorizontalCollision(pos,b,res,oldX,oldZ)) continue;
-
-        if (res.type === 'wedge') {
-          // Wedges are walkable ramps; vertical resolution handles the visible slope.
-          continue;
-        }
-
-        // Box collision: retain stable axis-separated behavior.
-        pos.x=oldX;
-        if (checkPlayerShapeCollision(pos.x,pos.y,pos.z,b).collided) {
-          pos.x=oldX; pos.z=oldZ;
-        }
-      }
-
-      // Strong curved-surface traction. If the player started this frame standing on
-      // a visible surface, keep their feet attached to that surface while walking.
-      // A generous slope limit makes large rounded parts feel grippy instead of icy;
-      // truly near-vertical sides still release the player naturally.
-      groundGrip=null;
-      if (wasGrounded && moveDir !== 0) {
-        let best=null;
-        for (const b of blocks) {
-          if (b.canCollide === false || b.actionType === 'kill') continue;
-          const y0=getVisualSurfaceY(b,oldX,oldZ);
-          const y1=getVisualSurfaceY(b,pos.x,pos.z);
-          if (y0===null || y1===null) continue;
-          const horizontal=Math.hypot(pos.x-oldX,pos.z-oldZ);
-          if (horizontal < 1e-6) continue;
-          const slope=Math.abs(y1-y0)/horizontal;
-          const feetWereOnSurface=Math.abs(oldYForGrip-y0) < 0.32;
-          if (feetWereOnSurface && slope <= CURVED_GRIP_SLOPE) {
-            if (!best || y1>best.y) best={b,y:y1};
-          }
-        }
-        if (best) {
-          pos.y=best.y;
-          velocityY=0;
+      // Small ground probe keeps feet attached to walkable curved surfaces without
+      // "glue". It follows geometry only when the surface normal is walkable.
+      if (!isGrounded && velocityY<=0) {
+        const originalY=pos.y;
+        pos.y-=0.10;
+        const probe=solveCharacterContacts(pos,blocks,true);
+        if (probe.grounded) {
           isGrounded=true;
-          groundGrip=best.b.id;
+          velocityY=0;
+        } else {
+          pos.y=originalY;
         }
       }
 
-      // Match the single-player step-up behavior.
-      if (isMoving && isGrounded) {
-        const blocksForGround = currentWorldData ? Object.values(currentWorldData.blocks) : [];
-        let highestGround = -Infinity;
-        for (const b of blocksForGround) {
-          if (b.canCollide === false) continue;
-          if ((b.shape || 'box') !== 'box' && (b.shape || 'box') !== 'baseplate') continue;
-          const box = getBlockAABB(b);
-          if (localPlayerAvatar.position.x >= box.minX - PLAYER_RADIUS &&
-              localPlayerAvatar.position.x <= box.maxX + PLAYER_RADIUS &&
-              localPlayerAvatar.position.z >= box.minZ - PLAYER_RADIUS &&
-              localPlayerAvatar.position.z <= box.maxZ + PLAYER_RADIUS) {
-            if (box.maxY > highestGround && box.maxY <= localPlayerAvatar.position.y + maxStepHeight + 0.1) {
-              highestGround = box.maxY;
-            }
-          }
-        }
-        if (highestGround !== -Infinity) {
-          const stepUpY = highestGround - localPlayerAvatar.position.y;
-          if (stepUpY > 0 && stepUpY <= maxStepHeight) {
-            targetStepY += stepUpY;
-            localPlayerAvatar.position.y = highestGround;
-          }
-        }
-      }
-
-      // --- STEP 3: RESOLVE Y-AXIS MOVEMENT ---
-      // Vertical collision is swept from the previous feet/head position.
-      // This is critical for curved parts: touching a sphere/cylinder SIDE must not
-      // teleport the player onto its top.
-      const grippedThisFrame = isGrounded && wasGrounded && groundGrip !== null;
-      isGrounded = grippedThisFrame;
-      const oldY = pos.y;
-      if (!grippedThisFrame) {
-        pos.y += velocityY;
-        velocityY += gravity;
-      } else {
-        velocityY = 0;
-      }
-
+      // Trigger parts are checked independently of physical resolution.
       for (const b of blocks) {
-        if (b.canCollide === false) continue;
-        const res = checkPlayerShapeCollision(pos.x, pos.y, pos.z, b);
-        if (res.collided) {
-          if (b.actionType === 'kill') { hitKill = true; continue; }
-          if (b.actionType === 'checkpoint') triggerCheckpoint(b);
-          if (b.actionType === 'finish') triggerFinishLine();
-
-          const bBox=getBlockAABB(b);
-          const falling=dy <= 0;
-          const oldFeet=oldY;
-          const newFeet=pos.y;
-          const oldHead=oldY+PLAYER_HEIGHT;
-          const newHead=pos.y+PLAYER_HEIGHT;
-
-          if (falling) {
-            let surfaceY = bBox.maxY;
-            if (res.topY !== undefined && res.topY !== null) surfaceY=res.topY;
-
-            // Land only if this frame actually crossed the visible top surface.
-            // Side contact alone does not qualify as a landing.
-            if (oldFeet >= surfaceY-0.035 && newFeet <= surfaceY+0.035) {
-              pos.y=surfaceY;
-              velocityY=0;
-              isGrounded=true;
-            }
-          } else {
-            const underside=bBox.minY;
-            // Likewise, only stop an upward jump when the head crosses the underside.
-            if (oldHead <= underside+0.035 && newHead >= underside-0.035) {
-              pos.y=underside-PLAYER_HEIGHT;
-              velocityY=0;
-            }
-          }
-        }
+        const c=getShapeContact(pos.x,pos.y,pos.z,b);
+        if (!c) continue;
+        if (b.actionType==='kill') hitKill=true;
+        if (b.actionType==='checkpoint') triggerCheckpoint(b);
+        if (b.actionType==='finish') triggerFinishLine();
       }
 
-      // Ground support for curved surfaces. This keeps gravity from causing tiny
-      // penetrate/correct cycles while standing still on a sphere, cylinder or ramp.
-      if (!isGrounded && velocityY <= 0) {
-        for (const b of blocks) {
-          if (b.canCollide === false || b.actionType === 'kill') continue;
-          const shape=b.shape || 'box';
-          let surfaceY=null;
-          if (shape === 'sphere') {
-            const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
-            const ry=Math.max(.001,Math.abs(b.scaleY||1)*.5);
-            const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
-            const dx=pos.x-b.x,dz=pos.z-b.z;
-            const q=(dx*dx)/(rx*rx)+(dz*dz)/(rz*rz);
-            if (q<=1) surfaceY=b.y+ry*Math.sqrt(Math.max(0,1-q));
-          } else if (shape === 'cylinder') {
-            const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
-            const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
-            const dx=pos.x-b.x,dz=pos.z-b.z;
-            if ((dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)<=1) surfaceY=b.y+Math.abs(b.scaleY||1)*.5;
-          } else if (shape === 'wedge') {
-            const box=getBlockAABB(b);
-            if (pos.x>=box.minX-PLAYER_RADIUS && pos.x<=box.maxX+PLAYER_RADIUS &&
-                pos.z>=box.minZ-PLAYER_RADIUS && pos.z<=box.maxZ+PLAYER_RADIUS) {
-              const sz=Math.max(.001,Math.abs(b.scaleZ||1));
-              const t=1-((Math.max(box.minZ,Math.min(box.maxZ,pos.z))-box.minZ)/sz);
-              surfaceY=box.minY+Math.max(0,Math.min(1,t))*Math.abs(b.scaleY||1);
-            }
-          } else {
-            const box=getBlockAABB(b);
-            if (pos.x>=box.minX-PLAYER_RADIUS && pos.x<=box.maxX+PLAYER_RADIUS &&
-                pos.z>=box.minZ-PLAYER_RADIUS && pos.z<=box.maxZ+PLAYER_RADIUS) surfaceY=box.maxY;
-          }
-          if (surfaceY !== null && Math.abs(pos.y-surfaceY) <= 0.12) {
-            pos.y=surfaceY;
-            velocityY=0;
-            isGrounded=true;
-            break;
-          }
-        }
-      }
-
-      // No invisible ground plane: if there is no collidable part below the player,
-      // gravity keeps pulling them into the void. Respawn after falling far enough.
       if (hitKill || pos.y < -50) {
         respawnPlayer();
         return;
       }
 
-      // Smooth run / jump / fall animation.
-      updateAvatarAnimations(localPlayerAvatar, isMoving, isGrounded, delta, undefined, velocityY);
+      updateAvatarAnimations(localPlayerAvatar,isMoving,isGrounded,delta,undefined,velocityY);
 
-      // Network sync position
-      const now = Date.now();
-      if (now - lastSendTime > 40) {
-        lastSendTime = now;
-        socket.emit('player_movement', {
-          x: localPlayerAvatar.position.x,
-          y: localPlayerAvatar.position.y,
-          z: localPlayerAvatar.position.z,
-          rotationY: localPlayerAvatar.rotation.y,
-          walkClock: localPlayerAvatar.userData.walkClock,
-          verticalVelocity: velocityY,
-          isMoving: isMoving,
-          isGrounded: isGrounded
+      const now=Date.now();
+      if (now-lastSendTime>40) {
+        lastSendTime=now;
+        socket.emit('player_movement',{
+          x:pos.x,y:pos.y,z:pos.z,
+          rotationY:localPlayerAvatar.rotation.y,
+          walkClock:localPlayerAvatar.userData.walkClock,
+          verticalVelocity:velocityY,
+          isMoving,isGrounded
         });
       }
     }
