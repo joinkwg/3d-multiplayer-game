@@ -421,6 +421,16 @@
     .profile-world-card button{padding:7px 10px;background:#253c5b;color:#fff;border:1px solid #4b78ad;cursor:pointer}
     @media(max-width:720px){.profile-hero{grid-template-columns:1fr}.profile-avatar-preview{height:210px;border-right:0;border-bottom:1px solid #344154}.profile-grid{grid-template-columns:1fr}}
 
+
+    /* ===== V3.17 CLICKABLE PLAYER NAMES ===== */
+    .chat-name.kwg-profile-link,.kwg-profile-link{
+      cursor:pointer!important;color:#72b5ff!important;text-decoration:none;
+      font-weight:850!important;
+    }
+    .chat-name.kwg-profile-link:hover,.kwg-profile-link:hover{
+      color:#a8d2ff!important;text-decoration:underline;
+    }
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -3128,6 +3138,13 @@
       }
     }
 
+    function openPlayerProfile(username) {
+      username=String(username||'').trim();
+      if(!username)return;
+      switchHomeTab('profile');
+      loadProfile(username);
+    }
+
     function loadProfile(username) {
       if(!username)return;
       socket.emit('get_profile',{username},res=>{
@@ -3877,6 +3894,36 @@
         document.activeElement.blur();
       }
     }, true);
+
+    // V3.17: decorate player names in world chat and open public profiles.
+    function decorateChatProfileLinks(root=document) {
+      root.querySelectorAll?.('#world-chat-messages .chat-line').forEach(line=>{
+        const nameEl=line.querySelector('.chat-name');
+        if(!nameEl || nameEl.classList.contains('kwg-profile-link'))return;
+        const raw=(nameEl.textContent||'').replace(/:\s*$/,'').trim();
+        if(!raw)return;
+        nameEl.classList.add('kwg-profile-link');
+        nameEl.dataset.profileUsername=raw;
+        nameEl.title=`View ${raw}'s profile`;
+      });
+    }
+
+    const kwgChatMessages=document.getElementById('world-chat-messages');
+    if(kwgChatMessages){
+      decorateChatProfileLinks(kwgChatMessages);
+      new MutationObserver(()=>decorateChatProfileLinks(kwgChatMessages))
+        .observe(kwgChatMessages,{childList:true,subtree:true});
+    }
+
+    document.addEventListener('click',e=>{
+      const link=e.target.closest?.('.kwg-profile-link[data-profile-username]');
+      if(!link)return;
+      e.preventDefault();
+      e.stopPropagation();
+      const username=link.dataset.profileUsername;
+      if(currentWorldName) performLeaveWorld();
+      setTimeout(()=>openPlayerProfile(username),50);
+    });
 
   </script>
 </body>
