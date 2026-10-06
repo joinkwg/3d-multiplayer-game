@@ -3370,6 +3370,47 @@
     }
 
     animate();
+    // ---- V3.12.1 UI input shielding ----
+    // Never let pointer actions that begin on game UI fall through to the 3D world.
+    function isGameUIElement(target) {
+      if (!target || !target.closest) return false;
+      return !!target.closest(
+        'button, input, select, textarea, label, a, ' +
+        '.panel, .modal, .modal-card, #topbar, #hud, #build-toolbar, ' +
+        '#editor-panel, #chat-panel, #chat-wrap, #save-status'
+      );
+    }
+
+    // Capture pointer/mouse events at the document level. World handlers attached
+    // lower in the DOM never see clicks that started on UI.
+    ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick'].forEach(type => {
+      document.addEventListener(type, (e) => {
+        if (isGameUIElement(e.target)) {
+          e.stopPropagation();
+        }
+      }, true);
+    });
+
+    // Prevent wheel scrolling over UI from also affecting the world/camera.
+    document.addEventListener('wheel', (e) => {
+      if (isGameUIElement(e.target)) e.stopPropagation();
+    }, {capture:true, passive:true});
+
+    // Buttons should perform their action, then immediately give keyboard focus
+    // back so Space cannot "press" the last clicked button again.
+    document.addEventListener('click', (e) => {
+      const button = e.target?.closest?.('button');
+      if (button) button.blur();
+    }, true);
+
+    // Extra protection: if a button somehow still owns focus, Space is reserved
+    // for gameplay rather than re-activating that button.
+    document.addEventListener('keydown', (e) => {
+      if ((e.code === 'Space' || e.key === ' ') && document.activeElement?.tagName === 'BUTTON') {
+        document.activeElement.blur();
+      }
+    }, true);
+
   </script>
 </body>
 </html>
