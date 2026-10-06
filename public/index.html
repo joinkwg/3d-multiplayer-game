@@ -167,9 +167,40 @@
     .admin-status-online { color:#2ecc71; }
     .admin-status-offline { color:#888; }
 
+    /* Store */
+    #store-modal { z-index: 230; }
+    #store-card { width: 760px; max-width: 92vw; max-height: 88vh; overflow-y: auto; text-align: left; }
+    .store-topbar { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:10px; }
+    .coin-badge { display:inline-block; background:#f1c40f; color:#111; border:3px solid #fff; padding:6px 10px; font-weight:bold; box-shadow:2px 2px 0 #000; }
+    .store-tabs { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
+    .store-tab { padding:7px 10px; background:#444; color:#fff; border:2px solid #fff; cursor:pointer; font-family:inherit; font-weight:bold; text-transform:uppercase; }
+    .store-tab.active { background:#3388ff; }
+    #store-items-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; }
+    .store-item-card { background:#15181c; border:2px solid #444; padding:10px; min-height:150px; display:flex; flex-direction:column; gap:7px; }
+    .store-item-preview { height:82px; background:#0b0d10; border:2px solid #333; display:flex; align-items:center; justify-content:center; overflow:hidden; font-weight:bold; color:#888; }
+    .store-item-preview img { max-width:100%; max-height:100%; image-rendering:auto; }
+    .store-item-name { font-weight:bold; color:#5bc0de; text-transform:uppercase; }
+    .store-item-price { color:#f1c40f; font-weight:bold; }
+    .store-buy-btn { margin-top:auto; padding:7px; background:#27ae60; color:#fff; border:2px solid #fff; cursor:pointer; font-family:inherit; font-weight:bold; }
+    .store-buy-btn:disabled { background:#555; color:#aaa; cursor:not-allowed; }
+    .admin-store-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; background:#15181c; border:2px solid #333; padding:10px; margin-bottom:10px; }
+    .admin-store-form label { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:bold; text-transform:uppercase; }
+    .admin-store-form input, .admin-store-form select { background:#111; color:#fff; border:2px solid #555; padding:7px; font-family:inherit; }
+    #admin-mesh-fit-fields { grid-column:span 2; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
+    #admin-store-upload-btn { grid-column:span 2; margin-top:0; }
+    #admin-store-config-note { grid-column:span 2; color:#aaa; font-size:11px; }
+    @media (max-width: 650px) {
+      .customizer-layout { flex-direction:column; }
+      .customizer-preview-container { width:100%; box-sizing:border-box; }
+      .admin-store-form { grid-template-columns:1fr; }
+      #admin-mesh-fit-fields, #admin-store-upload-btn, #admin-store-config-note { grid-column:span 1; }
+      #admin-mesh-fit-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -196,13 +227,38 @@
   <div id="home-screen" class="overlay-screen" style="display: none;">
     <div class="card" style="width: 420px;">
       <h2 style="margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 1px;">Select World</h2>
-      <p style="font-size: 12px; color: #aaa; margin: 0 0 12px 0;">Logged in as: <span id="logged-user-display" style="color: #3388ff; font-weight: bold;">User</span></p>
+      <p style="font-size: 12px; color: #aaa; margin: 0 0 8px 0;">Logged in as: <span id="logged-user-display" style="color: #3388ff; font-weight: bold;">User</span></p>
+      <div style="margin-bottom:8px;"><span class="coin-badge">🪙 <span id="home-coin-count">100</span> COINS</span></div>
       
       <div id="room-list" class="room-list-container"></div>
 
       <button id="open-create-world-btn" class="submit-btn secondary">+ Create New World</button>
+      <button id="open-store-btn" class="submit-btn">STORE</button>
       <button id="open-admin-btn" class="submit-btn danger" style="display:none;">ADMIN PANEL</button>
       <div id="home-error-msg" class="error-msg"></div>
+    </div>
+  </div>
+
+  <!-- Store Modal -->
+  <div id="store-modal" class="modal">
+    <div id="store-card" class="card" style="position:relative;">
+      <span class="close-btn" id="close-store">X</span>
+      <div class="store-topbar">
+        <div>
+          <h3 style="margin:0;text-transform:uppercase;">KWG Store</h3>
+          <div style="font-size:11px;color:#aaa;margin-top:3px;">Buy cosmetics with coins. Purchased items stay in your inventory even if they are later hidden from the store.</div>
+        </div>
+        <span class="coin-badge">🪙 <span id="store-coin-count">100</span></span>
+      </div>
+      <div class="store-tabs">
+        <button class="store-tab active" data-store-category="eyes">Eyes</button>
+        <button class="store-tab" data-store-category="mouth">Mouths</button>
+        <button class="store-tab" data-store-category="torso_decal">Shirts / Decals</button>
+        <button class="store-tab" data-store-category="hat">Hats</button>
+        <button class="store-tab" data-store-category="head_shape">Head Shapes</button>
+      </div>
+      <div id="store-items-grid"></div>
+      <div id="store-message" class="error-msg"></div>
     </div>
   </div>
 
@@ -251,6 +307,33 @@
       <div class="admin-section">
         <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">WORLDS</div>
         <div id="admin-worlds-list"></div>
+      </div>
+      <div class="admin-section">
+        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">STORE ITEMS</div>
+        <div class="admin-store-form">
+          <label>Category
+            <select id="admin-store-category">
+              <option value="eyes">Eyes (image)</option>
+              <option value="mouth">Mouth (image)</option>
+              <option value="torso_decal">Shirt / Torso Decal (image)</option>
+              <option value="hat">Hat (GLB mesh)</option>
+              <option value="head_shape">Head Shape (GLB mesh)</option>
+            </select>
+          </label>
+          <label>Item Name<input id="admin-store-name" maxlength="40" placeholder="Cool Sunglasses"></label>
+          <label>Price (coins)<input id="admin-store-price" type="number" min="0" step="1" value="25"></label>
+          <label>Asset File<input id="admin-store-file" type="file" accept=".png,.jpg,.jpeg,.webp"></label>
+          <label style="flex-direction:row;align-items:center;gap:8px;">Available Now<input id="admin-store-visible" type="checkbox" checked style="width:18px;height:18px;"></label>
+          <div id="admin-store-config-note">Uploads use Supabase Storage. The service-role key stays on the server and is never sent to players.</div>
+          <div id="admin-mesh-fit-fields" style="display:none;">
+            <label>Size<input id="admin-store-size" type="number" step="0.05" value="1"></label>
+            <label>Offset X<input id="admin-store-offset-x" type="number" step="0.05" value="0"></label>
+            <label>Offset Y<input id="admin-store-offset-y" type="number" step="0.05" value="0"></label>
+            <label>Offset Z<input id="admin-store-offset-z" type="number" step="0.05" value="0"></label>
+          </div>
+          <button id="admin-store-upload-btn" class="submit-btn" type="button">UPLOAD STORE ITEM</button>
+        </div>
+        <div id="admin-store-items-list"></div>
       </div>
       <div id="admin-error" class="error-msg"></div>
     </div>
@@ -394,6 +477,15 @@
             </select>
           </label>
           <label id="cfg-head-color-row">Head Color <input type="color" id="cfg-head-color" value="#f1c40f"></label>
+          <label>Eyes
+            <select id="cfg-eyes"><option value="none">None</option></select>
+          </label>
+          <label>Mouth
+            <select id="cfg-mouth"><option value="none">None</option></select>
+          </label>
+          <label>Torso Decal
+            <select id="cfg-torso-decal"><option value="none">None</option></select>
+          </label>
           <label>Torso Color <input type="color" id="cfg-torso-color" value="#3388ff"></label>
           <label>Left Arm Color <input type="color" id="cfg-left-arm-color" value="#3388ff"></label>
           <label>Right Arm Color <input type="color" id="cfg-right-arm-color" value="#3388ff"></label>
@@ -419,6 +511,11 @@
     let isAdmin = false;
     let canEditCurrentWorld = false;
     let chatMessagesLoaded = false;
+    let coinBalance = 100;
+    let storeItems = [];
+    let ownedStoreItems = [];
+    let activeStoreCategory = 'eyes';
+    let equippedCosmetics = {};
     
     const otherPlayers = {};
 
@@ -440,6 +537,173 @@
       }, duration);
     }
 
+    function updateCoinDisplays() {
+      const home = document.getElementById('home-coin-count');
+      const store = document.getElementById('store-coin-count');
+      if (home) home.textContent = String(coinBalance);
+      if (store) store.textContent = String(coinBalance);
+    }
+
+    function storeCategoryLabel(category) {
+      return ({ eyes:'Eyes', mouth:'Mouths', torso_decal:'Shirts / Decals', hat:'Hats', head_shape:'Head Shapes' })[category] || category;
+    }
+
+    function ownedStoreIdSet() {
+      return new Set(ownedStoreItems.map(item => Number(item.id)));
+    }
+
+    function itemById(id) {
+      id = Number(id);
+      return ownedStoreItems.find(item => Number(item.id) === id) || storeItems.find(item => Number(item.id) === id) || null;
+    }
+
+    function cosmeticsForAppearance(app = {}) {
+      const result = {};
+      const slots = [
+        ['eyesItemId','eyes'], ['mouthItemId','mouth'], ['torsoDecalItemId','torso_decal'],
+        ['hatItemId','hat'], ['headShapeItemId','head_shape']
+      ];
+      for (const [slot, category] of slots) {
+        const item = itemById(app[slot]);
+        if (item && item.category === category) result[category] = item;
+      }
+      return result;
+    }
+
+    function setStoreMessage(message, isError = false) {
+      const el = document.getElementById('store-message');
+      if (!el) return;
+      el.style.color = isError ? '#e74c3c' : '#2ecc71';
+      el.textContent = message || '';
+    }
+
+    function renderStoreItems() {
+      const grid = document.getElementById('store-items-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+      const owned = ownedStoreIdSet();
+      const items = storeItems.filter(item => item.category === activeStoreCategory);
+      if (!items.length) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'grid-column:1/-1;color:#aaa;padding:20px;text-align:center;border:2px dashed #444;';
+        empty.textContent = `No ${storeCategoryLabel(activeStoreCategory).toLowerCase()} are available right now.`;
+        grid.appendChild(empty);
+        return;
+      }
+      for (const item of items) {
+        const card = document.createElement('div');
+        card.className = 'store-item-card';
+        const preview = document.createElement('div');
+        preview.className = 'store-item-preview';
+        if (item.assetKind === 'image') {
+          const img = document.createElement('img');
+          img.src = item.assetUrl;
+          img.alt = item.name;
+          preview.appendChild(img);
+        } else {
+          preview.textContent = item.category === 'hat' ? '3D HAT' : '3D HEAD';
+        }
+        const name = document.createElement('div');
+        name.className = 'store-item-name';
+        name.textContent = item.name;
+        const price = document.createElement('div');
+        price.className = 'store-item-price';
+        price.textContent = Number(item.price) === 0 ? 'FREE' : `🪙 ${item.price}`;
+        const button = document.createElement('button');
+        button.className = 'store-buy-btn';
+        if (owned.has(Number(item.id))) {
+          button.textContent = 'OWNED';
+          button.disabled = true;
+        } else {
+          button.textContent = Number(item.price) === 0 ? 'GET' : 'BUY';
+          button.disabled = coinBalance < Number(item.price || 0);
+          button.addEventListener('click', () => {
+            setStoreMessage('Purchasing...');
+            button.disabled = true;
+            socket.emit('buy_store_item', { itemId: item.id }, (res) => {
+              if (!res || !res.success) {
+                setStoreMessage((res && res.message) || 'Purchase failed.', true);
+                button.disabled = false;
+                return;
+              }
+              coinBalance = Number(res.coins ?? coinBalance);
+              updateCoinDisplays();
+              setStoreMessage(res.alreadyOwned ? 'You already own that item.' : `${item.name} added to your inventory!`);
+              refreshStoreData();
+            });
+          });
+        }
+        card.append(preview,name,price,button);
+        grid.appendChild(card);
+      }
+    }
+
+    function refreshCustomizerStoreOptions() {
+      const configs = [
+        ['cfg-eyes','eyes','None'],
+        ['cfg-mouth','mouth','None'],
+        ['cfg-torso-decal','torso_decal','None']
+      ];
+      for (const [id, category, noneLabel] of configs) {
+        const select = document.getElementById(id);
+        if (!select) continue;
+        const previous = select.value;
+        select.innerHTML = '';
+        const none = document.createElement('option');
+        none.value = 'none';
+        none.textContent = noneLabel;
+        select.appendChild(none);
+        ownedStoreItems.filter(item => item.category === category).forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = `store:${item.id}`;
+          opt.textContent = item.name;
+          select.appendChild(opt);
+        });
+        if ([...select.options].some(o => o.value === previous)) select.value = previous;
+      }
+
+      const hat = document.getElementById('cfg-hat');
+      if (hat) {
+        [...hat.querySelectorAll('option[data-store-item]')].forEach(o => o.remove());
+        ownedStoreItems.filter(item => item.category === 'hat').forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = `store:${item.id}`;
+          opt.textContent = `${item.name} (Owned)`;
+          opt.dataset.storeItem = '1';
+          hat.appendChild(opt);
+        });
+      }
+      const head = document.getElementById('cfg-head-shape');
+      if (head) {
+        [...head.querySelectorAll('option[data-store-item]')].forEach(o => o.remove());
+        ownedStoreItems.filter(item => item.category === 'head_shape').forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = `store:${item.id}`;
+          opt.textContent = `${item.name} (Owned)`;
+          opt.dataset.storeItem = '1';
+          head.appendChild(opt);
+        });
+      }
+    }
+
+    function refreshStoreData(done) {
+      if (!loggedInUsername) return;
+      socket.emit('get_store', (res) => {
+        if (!res || !res.success) {
+          setStoreMessage((res && res.message) || 'Could not load the store.', true);
+          if (done) done(res);
+          return;
+        }
+        coinBalance = Number(res.coins || 0);
+        storeItems = Array.isArray(res.items) ? res.items : [];
+        ownedStoreItems = Array.isArray(res.ownedItems) ? res.ownedItems : [];
+        updateCoinDisplays();
+        refreshCustomizerStoreOptions();
+        renderStoreItems();
+        if (done) done(res);
+      });
+    }
+
     let playerAppearance = JSON.parse(localStorage.getItem('sp_player_appearance')) || {
       hat: 'none',
       headShape: 'sphere',
@@ -448,7 +712,12 @@
       leftArmColor: '#3388ff',
       rightArmColor: '#3388ff',
       leftLegColor: '#1c2833',
-      rightLegColor: '#1c2833'
+      rightLegColor: '#1c2833',
+      eyesItemId: null,
+      mouthItemId: null,
+      torsoDecalItemId: null,
+      hatItemId: null,
+      headShapeItemId: null
     };
 
     // --- AUTHENTICATION LISTENERS ---
@@ -465,6 +734,9 @@
           isAdmin = !!res.isAdmin;
           document.getElementById('open-admin-btn').style.display = isAdmin ? 'block' : 'none';
           if (res.appearance) playerAppearance = res.appearance;
+          coinBalance = Number(res.coins ?? 100);
+          updateCoinDisplays();
+          refreshStoreData();
           document.getElementById('auth-screen').style.display = 'none';
           document.getElementById('home-screen').style.display = 'flex';
           document.getElementById('logged-user-display').textContent = loggedInUsername;
@@ -485,6 +757,10 @@
           loggedInUsername = res.username;
           isAdmin = !!res.isAdmin;
           document.getElementById('open-admin-btn').style.display = isAdmin ? 'block' : 'none';
+          if (res.appearance) playerAppearance = res.appearance;
+          coinBalance = Number(res.coins ?? 100);
+          updateCoinDisplays();
+          refreshStoreData();
           document.getElementById('auth-screen').style.display = 'none';
           document.getElementById('home-screen').style.display = 'flex';
           document.getElementById('logged-user-display').textContent = loggedInUsername;
@@ -492,6 +768,23 @@
         } else {
           authErrorMsg.textContent = res.message;
         }
+      });
+    });
+
+    // --- STORE UI ---
+    document.getElementById('open-store-btn').addEventListener('click', () => {
+      setStoreMessage('Loading...');
+      document.getElementById('store-modal').style.display = 'flex';
+      refreshStoreData(() => setStoreMessage(''));
+    });
+    document.getElementById('close-store').addEventListener('click', () => {
+      document.getElementById('store-modal').style.display = 'none';
+    });
+    document.querySelectorAll('.store-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeStoreCategory = btn.dataset.storeCategory;
+        document.querySelectorAll('.store-tab').forEach(b => b.classList.toggle('active', b === btn));
+        renderStoreItems();
       });
     });
 
@@ -601,6 +894,8 @@
         document.getElementById('room-info-label').style.display = 'block';
         document.getElementById('current-room-text').textContent = roomName;
         canEditCurrentWorld = !!res.canEdit;
+        if (res.selfAppearance) playerAppearance = res.selfAppearance;
+        equippedCosmetics = res.selfCosmetics || cosmeticsForAppearance(playerAppearance);
         const editBtn = document.getElementById('toggle-edit-btn');
         editBtn.style.display = canEditCurrentWorld ? 'block' : 'none';
         editBtn.title = canEditCurrentWorld ? 'Edit this world' : 'Only the world owner or an admin can edit this world';
@@ -755,6 +1050,7 @@
         }
         setAdminMessage(successMessage || 'Done.');
         refreshAdminPanel(false);
+        refreshStoreData();
         renderRoomList();
       });
     }
@@ -782,7 +1078,7 @@
           const meta = document.createElement('small');
           meta.style.marginLeft = '7px';
           meta.className = u.online ? 'admin-status-online' : 'admin-status-offline';
-          meta.textContent = `${u.isAdmin ? 'ADMIN' : 'USER'} • ${u.online ? 'ONLINE' : 'OFFLINE'}`;
+          meta.textContent = `${u.isAdmin ? 'ADMIN' : 'USER'} • ${u.online ? 'ONLINE' : 'OFFLINE'} • 🪙 ${u.coins ?? 0}`;
           info.appendChild(meta);
           row.appendChild(info);
 
@@ -851,9 +1147,113 @@
           row.appendChild(actions);
           worlds.appendChild(row);
         });
+        refreshAdminStoreItems();
         if (clearMessage) setAdminMessage('');
       });
     }
+
+    function refreshAdminStoreItems() {
+      if (!isAdmin) return;
+      socket.emit('admin_store_list', (res) => {
+        const list = document.getElementById('admin-store-items-list');
+        const note = document.getElementById('admin-store-config-note');
+        if (!res || !res.success) {
+          list.innerHTML = '<div style="color:#e74c3c;">Could not load store items.</div>';
+          return;
+        }
+        note.textContent = res.uploadConfigured
+          ? 'Supabase Storage uploads are configured.'
+          : 'Uploads are not configured yet. We will add SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY on Render when we test uploads.';
+        list.innerHTML = '';
+        if (!(res.items || []).length) {
+          list.innerHTML = '<div style="color:#888;padding:8px;">No uploaded store items yet.</div>';
+          return;
+        }
+        (res.items || []).forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'admin-row';
+          const info = document.createElement('span');
+          const name = document.createElement('b');
+          name.textContent = item.name;
+          const meta = document.createElement('small');
+          meta.style.cssText = 'color:#aaa;margin-left:7px;';
+          meta.textContent = `${storeCategoryLabel(item.category)} • 🪙 ${item.price} • ${item.isVisible ? 'VISIBLE' : 'HIDDEN'}`;
+          info.append(name,meta);
+          const actions = document.createElement('div');
+          actions.className = 'admin-actions';
+          const toggle = document.createElement('button');
+          toggle.className = item.isVisible ? 'admin-action warn' : 'admin-action';
+          toggle.textContent = item.isVisible ? 'HIDE' : 'SHOW';
+          toggle.addEventListener('click', () => {
+            adminRequest('admin_store_set_visible', {itemId:item.id,isVisible:!item.isVisible}, `${item.name} is now ${item.isVisible ? 'hidden' : 'visible'}.`);
+          });
+          actions.appendChild(toggle);
+          row.append(info,actions);
+          list.appendChild(row);
+        });
+      });
+    }
+
+    function updateAdminStoreUploadFields() {
+      const category = document.getElementById('admin-store-category').value;
+      const isMesh = category === 'hat' || category === 'head_shape';
+      document.getElementById('admin-mesh-fit-fields').style.display = isMesh ? 'grid' : 'none';
+      document.getElementById('admin-store-file').accept = isMesh ? '.glb,model/gltf-binary' : '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp';
+    }
+
+    document.getElementById('admin-store-category').addEventListener('change', updateAdminStoreUploadFields);
+    updateAdminStoreUploadFields();
+
+    document.getElementById('admin-store-upload-btn').addEventListener('click', async () => {
+      const button = document.getElementById('admin-store-upload-btn');
+      const category = document.getElementById('admin-store-category').value;
+      const name = document.getElementById('admin-store-name').value.trim();
+      const price = Number(document.getElementById('admin-store-price').value);
+      const file = document.getElementById('admin-store-file').files[0];
+      const isVisible = document.getElementById('admin-store-visible').checked;
+      if (!name) return setAdminMessage('Enter an item name.', true);
+      if (!Number.isInteger(price) || price < 0) return setAdminMessage('Price must be a whole number of coins.', true);
+      if (!file) return setAdminMessage('Choose an asset file.', true);
+      const isImage = ['eyes','mouth','torso_decal'].includes(category);
+      if (file.size > (isImage ? 3 : 8) * 1024 * 1024) return setAdminMessage(`${isImage ? 'Images' : 'Meshes'} are too large.`, true);
+
+      const metadata = {
+        size: Number(document.getElementById('admin-store-size').value),
+        offsetX: Number(document.getElementById('admin-store-offset-x').value),
+        offsetY: Number(document.getElementById('admin-store-offset-y').value),
+        offsetZ: Number(document.getElementById('admin-store-offset-z').value)
+      };
+      if (category === 'hat' && !['size','offsetX','offsetY','offsetZ'].every(k => Number.isFinite(metadata[k]))) {
+        return setAdminMessage('Hat size and all three offsets are required.', true);
+      }
+
+      button.disabled = true;
+      button.textContent = 'UPLOADING...';
+      setAdminMessage('Uploading store asset...');
+      try {
+        const fileData = await file.arrayBuffer();
+        socket.emit('admin_store_create', {
+          category,name,price,isVisible,metadata,
+          fileName:file.name,mimeType:file.type,fileData
+        }, (res) => {
+          button.disabled = false;
+          button.textContent = 'UPLOAD STORE ITEM';
+          if (!res || !res.success) {
+            setAdminMessage((res && res.message) || 'Upload failed.', true);
+            return;
+          }
+          document.getElementById('admin-store-name').value = '';
+          document.getElementById('admin-store-file').value = '';
+          setAdminMessage(`${res.item.name} was added to the store.`);
+          refreshAdminStoreItems();
+          refreshStoreData();
+        });
+      } catch (err) {
+        button.disabled = false;
+        button.textContent = 'UPLOAD STORE ITEM';
+        setAdminMessage('Could not read that file.', true);
+      }
+    });
 
     document.getElementById('open-admin-btn').addEventListener('click', () => {
       if (!isAdmin) return;
@@ -1005,8 +1405,80 @@
       return group;
     }
 
-    // --- AVATAR BUILDER ---
-    function buildBlockyAvatar(app) {
+    // --- AVATAR BUILDER + STORE COSMETICS ---
+    const cosmeticTextureCache = new Map();
+    const cosmeticGLBCache = new Map();
+
+    function loadCosmeticTexture(url, onLoad) {
+      if (!url) return;
+      if (cosmeticTextureCache.has(url)) {
+        onLoad(cosmeticTextureCache.get(url));
+        return;
+      }
+      const loader = new THREE.TextureLoader();
+      loader.setCrossOrigin('anonymous');
+      loader.load(url, (texture) => {
+        cosmeticTextureCache.set(url, texture);
+        onLoad(texture);
+      }, undefined, (err) => console.warn('Cosmetic texture failed to load:', url, err));
+    }
+
+    function addImageCosmetic(parent, item, width, height, x, y, z) {
+      if (!item || item.assetKind !== 'image' || !item.assetUrl) return;
+      loadCosmeticTexture(item.assetUrl, (texture) => {
+        const mat = new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          alphaTest: 0.02,
+          depthWrite: false,
+          side: THREE.DoubleSide
+        });
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
+        plane.position.set(x, y, z);
+        plane.renderOrder = 5;
+        parent.add(plane);
+      });
+    }
+
+    function loadGLBScene(url, onLoad) {
+      if (!url || !THREE.GLTFLoader) return;
+      const cached = cosmeticGLBCache.get(url);
+      if (cached) {
+        onLoad(cached.clone(true));
+        return;
+      }
+      const loader = new THREE.GLTFLoader();
+      loader.load(url, (gltf) => {
+        cosmeticGLBCache.set(url, gltf.scene);
+        onLoad(gltf.scene.clone(true));
+      }, undefined, (err) => console.warn('Cosmetic GLB failed to load:', url, err));
+    }
+
+    function attachNormalizedGLB(anchor, item, targetSize) {
+      if (!item || item.assetKind !== 'glb' || !item.assetUrl) return;
+      loadGLBScene(item.assetUrl, (model) => {
+        const meta = item.metadata || {};
+        model.updateMatrixWorld(true);
+        let box = new THREE.Box3().setFromObject(model);
+        const sourceSize = new THREE.Vector3();
+        box.getSize(sourceSize);
+        const maxDim = Math.max(sourceSize.x, sourceSize.y, sourceSize.z, 0.0001);
+        const userSize = Number.isFinite(Number(meta.size)) ? Number(meta.size) : 1;
+        model.scale.multiplyScalar((targetSize / maxDim) * userSize);
+        model.updateMatrixWorld(true);
+
+        box = new THREE.Box3().setFromObject(model);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        model.position.sub(center);
+        model.position.x += Number(meta.offsetX) || 0;
+        model.position.y += Number(meta.offsetY) || 0;
+        model.position.z += Number(meta.offsetZ) || 0;
+        anchor.add(model);
+      });
+    }
+
+    function buildBlockyAvatar(app, cosmetics = {}) {
       const group = new THREE.Group();
 
       const headMat = new THREE.MeshLambertMaterial({ color: app.headColor || '#f1c40f' });
@@ -1020,7 +1492,6 @@
       const leftLegPivot = new THREE.Group(); leftLegPivot.position.set(-0.22, 0.8, 0);
       const rightLegPivot = new THREE.Group(); rightLegPivot.position.set(0.22, 0.8, 0);
       const legGeo = new THREE.BoxGeometry(0.38, 0.8, 0.38);
-      
       const leftLeg = new THREE.Mesh(legGeo, leftLegMat); leftLeg.position.set(0, -0.4, 0); leftLegPivot.add(leftLeg);
       const rightLeg = new THREE.Mesh(legGeo, rightLegMat); rightLeg.position.set(0, -0.4, 0); rightLegPivot.add(rightLeg);
       group.add(leftLegPivot, rightLegPivot);
@@ -1028,31 +1499,51 @@
       // Torso
       const torso = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.9, 0.45), torsoMat);
       torso.position.set(0, 1.25, 0); group.add(torso);
+      addImageCosmetic(group, cosmetics.torso_decal, 0.70, 0.72, 0, 1.25, 0.231);
 
       // Arms
       const leftArmPivot = new THREE.Group(); leftArmPivot.position.set(-0.63, 1.6, 0);
       const rightArmPivot = new THREE.Group(); rightArmPivot.position.set(0.63, 1.6, 0);
       const armGeo = new THREE.BoxGeometry(0.35, 0.85, 0.35);
-
       const leftArm = new THREE.Mesh(armGeo, leftArmMat); leftArm.position.set(0, -0.38, 0); leftArmPivot.add(leftArm);
       const rightArm = new THREE.Mesh(armGeo, rightArmMat); rightArm.position.set(0, -0.38, 0); rightArmPivot.add(rightArm);
       group.add(leftArmPivot, rightArmPivot);
 
-      // Head
+      // Head: a purchased custom GLB overrides the built-in head shape.
+      const customHead = cosmetics.head_shape;
       const headShape = app.headShape || 'sphere';
-      if (headShape !== 'headless') {
+      const hasHead = !!customHead || headShape !== 'headless';
+      if (customHead) {
+        const anchor = new THREE.Group();
+        anchor.position.set(0, 2.02, 0);
+        group.add(anchor);
+        attachNormalizedGLB(anchor, customHead, 0.72);
+      } else if (headShape !== 'headless') {
         let headGeo;
         if (headShape === 'sphere') headGeo = new THREE.SphereGeometry(0.38, 16, 16);
         else if (headShape === 'cylinder') headGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.65, 16);
         else headGeo = new THREE.BoxGeometry(0.65, 0.65, 0.65);
-
         const head = new THREE.Mesh(headGeo, headMat);
         head.position.set(0, 2.02, 0);
         group.add(head);
       }
 
-      const hatMesh = createHatMesh(app.hat);
-      if (hatMesh) group.add(hatMesh);
+      // Flat facial features sit just in front of the standard head position.
+      if (hasHead) {
+        addImageCosmetic(group, cosmetics.eyes, 0.48, 0.18, 0, 2.10, 0.395);
+        addImageCosmetic(group, cosmetics.mouth, 0.30, 0.13, 0, 1.91, 0.397);
+      }
+
+      // Purchased custom hats override the built-in accessory selector.
+      if (cosmetics.hat) {
+        const hatAnchor = new THREE.Group();
+        hatAnchor.position.set(0, 2.37, 0);
+        group.add(hatAnchor);
+        attachNormalizedGLB(hatAnchor, cosmetics.hat, 0.9);
+      } else {
+        const hatMesh = createHatMesh(app.hat);
+        if (hatMesh) group.add(hatMesh);
+      }
 
       group.userData.limbs = { leftArm: leftArmPivot, rightArm: rightArmPivot, leftLeg: leftLegPivot, rightLeg: rightLegPivot, torso };
       return group;
@@ -1112,7 +1603,7 @@
     // --- MULTIPLAYER PLAYER SYNC ---
     socket.on('player_joined', (pData) => {
       if (pData.id === socket.id) return;
-      const mesh = buildBlockyAvatar(pData.appearance || {});
+      const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
       mesh.add(createNameTagSprite(pData.username || 'Player'));
       mesh.position.set(pData.x, pData.y, pData.z);
       scene.add(mesh);
@@ -1125,7 +1616,7 @@
       const currentPos = p.mesh.position.clone();
       const currentRot = p.mesh.rotation.y;
       scene.remove(p.mesh);
-      const mesh = buildBlockyAvatar(pData.appearance || {});
+      const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
       mesh.add(createNameTagSprite(pData.username || p.username || 'Player'));
       mesh.position.copy(currentPos);
       mesh.rotation.y = currentRot;
@@ -1347,7 +1838,7 @@
 
       spawnMarker.position.set(world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z);
 
-      localPlayerAvatar = buildBlockyAvatar(playerAppearance);
+      localPlayerAvatar = buildBlockyAvatar(playerAppearance, equippedCosmetics);
       localPlayerAvatar.add(createNameTagSprite(loggedInUsername || 'Player'));
       localPlayerAvatar.position.set(world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z);
       localPlayerAvatar.userData.walkClock = 0;
@@ -1356,7 +1847,7 @@
       for (const pId in initialPlayers) {
         if (pId !== selfId) {
           const pData = initialPlayers[pId];
-          const mesh = buildBlockyAvatar(pData.appearance || {});
+          const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
           mesh.add(createNameTagSprite(pData.username || 'Player'));
           mesh.position.set(pData.x, pData.y, pData.z);
           scene.add(mesh);
@@ -2107,36 +2598,71 @@
       if (previewAvatarMesh) previewScene.remove(previewAvatarMesh);
 
       const currentApp = getCustomizerInputs();
-      previewAvatarMesh = buildBlockyAvatar(currentApp);
+      previewAvatarMesh = buildBlockyAvatar(currentApp, cosmeticsForAppearance(currentApp));
       previewAvatarMesh.rotation.y = previewRotationY;
       previewScene.add(previewAvatarMesh);
     }
 
+    function storeIdFromSelectValue(value) {
+      const text = String(value || '');
+      if (!text.startsWith('store:')) return null;
+      const id = Number(text.slice(6));
+      return Number.isInteger(id) && id > 0 ? id : null;
+    }
+
+    function updateHeadColorRowVisibility() {
+      const headValue = document.getElementById('cfg-head-shape').value;
+      const customHead = storeIdFromSelectValue(headValue);
+      const isHeadless = headValue === 'headless';
+      document.getElementById('cfg-head-color-row').style.display = (isHeadless || customHead) ? 'none' : 'flex';
+    }
+
     function getCustomizerInputs() {
+      const hatValue = document.getElementById('cfg-hat').value;
+      const headValue = document.getElementById('cfg-head-shape').value;
       return {
-        hat: document.getElementById('cfg-hat').value,
-        headShape: document.getElementById('cfg-head-shape').value,
+        hat: storeIdFromSelectValue(hatValue) ? 'none' : hatValue,
+        headShape: storeIdFromSelectValue(headValue) ? 'sphere' : headValue,
         headColor: document.getElementById('cfg-head-color').value,
         torsoColor: document.getElementById('cfg-torso-color').value,
         leftArmColor: document.getElementById('cfg-left-arm-color').value,
         rightArmColor: document.getElementById('cfg-right-arm-color').value,
         leftLegColor: document.getElementById('cfg-left-leg-color').value,
-        rightLegColor: document.getElementById('cfg-right-leg-color').value
+        rightLegColor: document.getElementById('cfg-right-leg-color').value,
+        eyesItemId: storeIdFromSelectValue(document.getElementById('cfg-eyes').value),
+        mouthItemId: storeIdFromSelectValue(document.getElementById('cfg-mouth').value),
+        torsoDecalItemId: storeIdFromSelectValue(document.getElementById('cfg-torso-decal').value),
+        hatItemId: storeIdFromSelectValue(hatValue),
+        headShapeItemId: storeIdFromSelectValue(headValue)
       };
     }
 
+    function setSelectIfPresent(select, value, fallback) {
+      if ([...select.options].some(o => o.value === value)) select.value = value;
+      else select.value = fallback;
+    }
+
     function loadCustomizerInputs(app) {
-      document.getElementById('cfg-hat').value = app.hat || 'none';
-      document.getElementById('cfg-head-shape').value = app.headShape || 'sphere';
+      refreshCustomizerStoreOptions();
+      const hat = document.getElementById('cfg-hat');
+      const head = document.getElementById('cfg-head-shape');
+      const eyes = document.getElementById('cfg-eyes');
+      const mouth = document.getElementById('cfg-mouth');
+      const decal = document.getElementById('cfg-torso-decal');
+
+      setSelectIfPresent(hat, app.hatItemId ? `store:${app.hatItemId}` : (app.hat || 'none'), 'none');
+      setSelectIfPresent(head, app.headShapeItemId ? `store:${app.headShapeItemId}` : (app.headShape || 'sphere'), 'sphere');
+      setSelectIfPresent(eyes, app.eyesItemId ? `store:${app.eyesItemId}` : 'none', 'none');
+      setSelectIfPresent(mouth, app.mouthItemId ? `store:${app.mouthItemId}` : 'none', 'none');
+      setSelectIfPresent(decal, app.torsoDecalItemId ? `store:${app.torsoDecalItemId}` : 'none', 'none');
+
       document.getElementById('cfg-head-color').value = app.headColor || '#f1c40f';
       document.getElementById('cfg-torso-color').value = app.torsoColor || '#3388ff';
       document.getElementById('cfg-left-arm-color').value = app.leftArmColor || '#3388ff';
       document.getElementById('cfg-right-arm-color').value = app.rightArmColor || '#3388ff';
       document.getElementById('cfg-left-leg-color').value = app.leftLegColor || '#1c2833';
       document.getElementById('cfg-right-leg-color').value = app.rightLegColor || '#1c2833';
-
-      const isHeadless = (app.headShape === 'headless');
-      document.getElementById('cfg-head-color-row').style.display = isHeadless ? 'none' : 'flex';
+      updateHeadColorRowVisibility();
     }
 
     document.getElementById('open-customizer-btn').addEventListener('click', () => {
@@ -2150,35 +2676,46 @@
       document.getElementById('customizer-modal').style.display = 'none';
     });
 
-    ['cfg-hat', 'cfg-head-shape', 'cfg-head-color', 'cfg-torso-color', 'cfg-left-arm-color', 'cfg-right-arm-color', 'cfg-left-leg-color', 'cfg-right-leg-color'].forEach(id => {
+    ['cfg-hat', 'cfg-head-shape', 'cfg-eyes', 'cfg-mouth', 'cfg-torso-decal', 'cfg-head-color', 'cfg-torso-color', 'cfg-left-arm-color', 'cfg-right-arm-color', 'cfg-left-leg-color', 'cfg-right-leg-color'].forEach(id => {
       const elem = document.getElementById(id);
       elem.addEventListener('change', () => {
-        const isHeadless = (document.getElementById('cfg-head-shape').value === 'headless');
-        document.getElementById('cfg-head-color-row').style.display = isHeadless ? 'none' : 'flex';
+        updateHeadColorRowVisibility();
         updatePreviewAvatar();
       });
-      if (id.includes('color')) {
-        elem.addEventListener('input', updatePreviewAvatar);
-      }
+      if (id.includes('color')) elem.addEventListener('input', updatePreviewAvatar);
     });
 
     document.getElementById('save-customizer-btn').addEventListener('click', () => {
-      playerAppearance = getCustomizerInputs();
-      localStorage.setItem('sp_player_appearance', JSON.stringify(playerAppearance));
-      socket.emit('save_appearance', playerAppearance);
+      const saveBtn = document.getElementById('save-customizer-btn');
+      const requestedAppearance = getCustomizerInputs();
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      socket.emit('save_appearance', requestedAppearance, (res) => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Appearance';
+        if (!res || !res.success) {
+          alert((res && res.message) || 'Could not save your appearance.');
+          return;
+        }
 
-      if (localPlayerAvatar) {
-        const currentPos = localPlayerAvatar.position.clone();
-        const currentRot = localPlayerAvatar.rotation.y;
-        scene.remove(localPlayerAvatar);
-        localPlayerAvatar = buildBlockyAvatar(playerAppearance);
-        localPlayerAvatar.add(createNameTagSprite(loggedInUsername || 'Player'));
-        localPlayerAvatar.position.copy(currentPos);
-        localPlayerAvatar.rotation.y = currentRot;
-        scene.add(localPlayerAvatar);
-      }
+        playerAppearance = res.appearance || requestedAppearance;
+        equippedCosmetics = res.cosmetics || cosmeticsForAppearance(playerAppearance);
+        localStorage.setItem('sp_player_appearance', JSON.stringify(playerAppearance));
 
-      document.getElementById('customizer-modal').style.display = 'none';
+        if (localPlayerAvatar) {
+          const currentPos = localPlayerAvatar.position.clone();
+          const currentRot = localPlayerAvatar.rotation.y;
+          scene.remove(localPlayerAvatar);
+          localPlayerAvatar = buildBlockyAvatar(playerAppearance, equippedCosmetics);
+          localPlayerAvatar.add(createNameTagSprite(loggedInUsername || 'Player'));
+          localPlayerAvatar.position.copy(currentPos);
+          localPlayerAvatar.rotation.y = currentRot;
+          scene.add(localPlayerAvatar);
+        }
+
+        document.getElementById('customizer-modal').style.display = 'none';
+        showToast('Appearance saved.');
+      });
     });
 
     // --- ACCURATE SHAPE-SPECIFIC COLLISION & PHYSICS ENGINE ---
