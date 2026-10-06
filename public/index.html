@@ -1308,7 +1308,7 @@
       const box = document.getElementById('world-chat-messages');
       const pending = document.createElement('div');
       pending.className = 'chat-line chat-pending';
-      pending.innerHTML = `<span class="chat-name">${escapeChatText((currentUser && currentUser.username) || 'You')}:</span> ${escapeChatText(message)}<span class="chat-time"></span>`;
+      pending.innerHTML = `<span class="chat-name">${escapeChatText((authState && authState.username) || 'You')}:</span> ${escapeChatText(message)}<span class="chat-time"></span>`;
       box.appendChild(pending);
       box.scrollTop = box.scrollHeight;
       input.value = '';
