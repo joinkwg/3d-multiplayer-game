@@ -387,7 +387,41 @@
     .chat-line.chat-pending .chat-time::before{content:"SENDING ";font-size:9px;letter-spacing:.08em;color:#9daabd}
     .chat-line.chat-failed{opacity:.7;color:#ef7770}
 
-  </style>
+  
+    /* ===== V3.16 PLAYER PROFILES ===== */
+    .profile-shell{display:grid;gap:14px}
+    .profile-hero{display:grid;grid-template-columns:230px 1fr;min-height:230px;background:linear-gradient(110deg,#111822,#1d2a3a);border:1px solid #3c4a5e;border-left:4px solid #4b9cff;box-shadow:0 12px 30px rgba(0,0,0,.35);overflow:hidden}
+    .profile-avatar-preview{background:radial-gradient(circle at 50% 35%,#25374d,#0b1017 72%);display:flex;align-items:center;justify-content:center;min-height:230px;border-right:1px solid #344154;overflow:hidden}
+    .profile-avatar-preview img{width:100%;height:100%;object-fit:contain}
+    .profile-avatar-placeholder{color:#607087;font-weight:900;letter-spacing:.15em}
+    .profile-identity{padding:28px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center}
+    .profile-kicker,.profile-panel-title{font-size:10px;font-weight:900;letter-spacing:.18em;color:#8392a7}
+    #profile-username{font-size:34px!important;margin:6px 0 9px!important;letter-spacing:-.03em!important}
+    .profile-status{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:900;letter-spacing:.08em;color:#8e9bad}
+    .profile-status-dot{width:8px;height:8px;background:#697687;box-shadow:0 0 0 2px rgba(105,118,135,.15)}
+    .profile-status.online{color:#5fdd92}.profile-status.online .profile-status-dot{background:#39c979;box-shadow:0 0 10px rgba(57,201,121,.55)}
+    .profile-joined{color:#8795a8;font-size:12px;margin-top:8px}
+    .profile-join-btn{margin-top:16px!important;width:auto!important;padding-left:22px!important;padding-right:22px!important}
+    .profile-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .profile-stat{background:#111720;border:1px solid #303d50;padding:15px;text-align:center;box-shadow:0 5px 15px rgba(0,0,0,.22)}
+    .profile-stat strong{display:block;font-size:24px;color:#fff}.profile-stat span{font-size:9px;font-weight:900;letter-spacing:.14em;color:#7f8ea3}
+    .profile-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:14px}
+    .profile-panel{background:#111720;border:1px solid #303d50;padding:18px;min-height:180px}
+    .profile-panel-title{padding-bottom:10px;border-bottom:1px solid #293547;margin-bottom:12px}
+    .profile-bio{white-space:pre-wrap;line-height:1.55;color:#d8e0eb;min-height:70px}
+    #profile-bio-input{width:100%;height:105px;resize:vertical;padding:10px;box-sizing:border-box}
+    .profile-edit-note{text-align:right;color:#748399;font-size:10px;margin:4px 0 12px}
+    .profile-showcase-editor-title{margin-top:8px}.profile-showcase-editor-title span{color:#5f6d80;font-size:8px}
+    .profile-showcase-picker{display:grid;gap:6px;max-height:150px;overflow:auto;margin-bottom:12px}
+    .profile-showcase-choice{display:flex;gap:9px;align-items:center;background:#0d1219;border:1px solid #2e3a4c;padding:8px;cursor:pointer}
+    .profile-showcase-choice input{min-height:auto}
+    .profile-showcase-worlds{display:grid;gap:8px}
+    .profile-world-card{background:linear-gradient(90deg,#17202b,#111720);border:1px solid #344154;border-left:3px solid #4b9cff;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .profile-world-name{font-weight:850}.profile-world-meta{font-size:10px;color:#8795a8;margin-top:3px}
+    .profile-world-card button{padding:7px 10px;background:#253c5b;color:#fff;border:1px solid #4b78ad;cursor:pointer}
+    @media(max-width:720px){.profile-hero{grid-template-columns:1fr}.profile-avatar-preview{height:210px;border-right:0;border-bottom:1px solid #344154}.profile-grid{grid-template-columns:1fr}}
+
+</style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -421,8 +455,44 @@
         <div><h2 style="margin:0;text-transform:uppercase;">KWG 3D Online</h2><div style="font-size:12px;color:#aaa;">Logged in as: <span id="logged-user-display" style="color:#3388ff;font-weight:bold;">User</span></div></div>
         <div style="display:flex;gap:8px;align-items:center"><span class="coin-badge">🪙 <span id="home-coin-count">100</span> COINS</span><button id="logout-btn" class="logout-btn">LOG OUT</button></div>
       </div>
-      <div class="home-tabs"><button class="home-tab active" data-home-tab="home">HOME</button><button class="home-tab" data-home-tab="worlds">WORLDS</button><button class="home-tab" data-home-tab="store">STORE</button><button class="home-tab" data-home-tab="avatar">AVATAR EDITOR</button><button class="home-tab admin-home-tab" data-home-tab="admin">ADMIN</button></div>
+      <div class="home-tabs"><button class="home-tab active" data-home-tab="home">HOME</button><button class="home-tab" data-home-tab="profile">PROFILE</button><button class="home-tab" data-home-tab="worlds">WORLDS</button><button class="home-tab" data-home-tab="store">STORE</button><button class="home-tab" data-home-tab="avatar">AVATAR EDITOR</button><button class="home-tab admin-home-tab" data-home-tab="admin">ADMIN</button></div>
       <div id="home-pane" class="home-pane active"><div class="home-profile-grid"><div class="home-section"><h3>YOUR AVATAR</h3><div id="home-avatar-preview" class="home-avatar-preview"></div></div><div style="display:grid;gap:14px"><div class="home-section"><h3>YOUR WORLDS</h3><div id="home-owned-worlds" class="room-list-container home-owned-worlds"></div></div><div class="home-section"><h3>YOUR INVENTORY</h3><div id="home-inventory-grid" class="home-inventory-grid"></div></div></div></div></div>
+      <div id="profile-pane" class="home-pane">
+        <div class="profile-shell">
+          <div class="profile-hero">
+            <div id="profile-avatar-preview" class="profile-avatar-preview"><div class="profile-avatar-placeholder">AVATAR</div></div>
+            <div class="profile-identity">
+              <div class="profile-kicker">PLAYER PROFILE</div>
+              <h1 id="profile-username">PLAYER</h1>
+              <div id="profile-status" class="profile-status offline"><span class="profile-status-dot"></span><span>OFFLINE</span></div>
+              <div id="profile-joined" class="profile-joined"></div>
+              <button id="profile-join-world-btn" class="submit-btn profile-join-btn" style="display:none">JOIN WORLD</button>
+            </div>
+          </div>
+          <div class="profile-stats">
+            <div class="profile-stat"><strong id="profile-stat-worlds">0</strong><span>WORLDS</span></div>
+            <div class="profile-stat"><strong id="profile-stat-likes">0</strong><span>LIKES GIVEN</span></div>
+            <div class="profile-stat"><strong id="profile-stat-items">0</strong><span>ITEMS OWNED</span></div>
+          </div>
+          <div class="profile-grid">
+            <section class="profile-panel">
+              <div class="profile-panel-title">ABOUT</div>
+              <div id="profile-bio-view" class="profile-bio"></div>
+              <div id="profile-edit-area" style="display:none">
+                <textarea id="profile-bio-input" maxlength="300" placeholder="Tell other players about yourself..."></textarea>
+                <div class="profile-edit-note"><span id="profile-bio-count">0</span>/300</div>
+                <div class="profile-panel-title profile-showcase-editor-title">CHOOSE SHOWCASE WORLDS <span>(UP TO 3)</span></div>
+                <div id="profile-showcase-picker" class="profile-showcase-picker"></div>
+                <button id="profile-save-btn" class="submit-btn">SAVE PROFILE</button>
+              </div>
+            </section>
+            <section class="profile-panel">
+              <div class="profile-panel-title">SHOWCASED WORLDS</div>
+              <div id="profile-showcase-worlds" class="profile-showcase-worlds"></div>
+            </section>
+          </div>
+        </div>
+      </div>
       <div id="worlds-pane" class="home-pane">
         <div class="home-toolbar"><strong>SORT:</strong><select id="world-sort"><option value="recent">Most Recent</option><option value="liked">Most Liked</option></select></div>
         <div id="room-list" class="room-list-container"></div>
@@ -648,7 +718,7 @@
       'get_world_templates','get_store','buy_store_item','save_appearance',
       'update_appearance','toggle_world_like','delete_own_world',
       'admin_search_users','admin_search_worlds','admin_make_world_template',
-      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user'
+      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user','get_profile','update_profile'
     ]);
     function setKWGLoading(delta){
       kwgLoadingCount=Math.max(0,kwgLoadingCount+delta);
@@ -2975,11 +3045,109 @@
       if (name === 'avatar') openAvatarEditor();
       if (name === 'worlds') renderRoomList();
       if (name === 'home') renderHomeOverview();
+      if (name === 'profile') loadProfile(loggedInUsername);
       if (name === 'admin' && isAdmin) { const pane=document.getElementById('admin-pane'); const card=document.getElementById('admin-card'); if(card && card.parentElement!==pane) pane.appendChild(card); refreshAdminPanel(); }
     }
     document.querySelectorAll('.home-tab').forEach(b => b.addEventListener('click', () => switchHomeTab(b.dataset.homeTab)));
 
-    function makeNoneInventoryItem(category) { return {id:null, category, name:'None', assetKind:'none'}; }
+
+    let viewedProfile = null;
+
+    function formatProfileDate(value) {
+      if (!value) return '';
+      try { return new Date(value).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}); }
+      catch { return ''; }
+    }
+
+    function renderProfileAvatar(appearance) {
+      const box=document.getElementById('profile-avatar-preview');
+      if(!box)return;
+      box.innerHTML='<div class="profile-avatar-placeholder">LOADING AVATAR...</div>';
+      const draw=()=>{
+        try{
+          const avatar=buildBlockyAvatar(appearance || {},cosmeticsForAppearance(appearance || {}));
+          thumbImageFromObject(box,avatar);
+        }catch(e){console.warn('Profile avatar preview failed:',e);box.innerHTML='<div class="profile-avatar-placeholder">AVATAR UNAVAILABLE</div>';}
+      };
+      draw(); setTimeout(draw,700);
+    }
+
+    function renderProfileWorldCard(world) {
+      const row=document.createElement('div'); row.className='profile-world-card';
+      const info=document.createElement('div');
+      info.innerHTML=`<div class="profile-world-name">${escapeChatText(world.name)}</div><div class="profile-world-meta">♥ ${Number(world.likeCount||0)} LIKES</div>`;
+      const btn=document.createElement('button'); btn.textContent='VIEW';
+      btn.addEventListener('click',()=>{switchHomeTab('worlds');});
+      row.append(info,btn); return row;
+    }
+
+    function renderProfile(profile) {
+      viewedProfile=profile;
+      document.getElementById('profile-username').textContent=profile.username;
+      document.getElementById('profile-joined').textContent='JOINED '+formatProfileDate(profile.createdAt).toUpperCase();
+      document.getElementById('profile-stat-worlds').textContent=profile.stats?.worlds ?? 0;
+      document.getElementById('profile-stat-likes').textContent=profile.stats?.likesGiven ?? 0;
+      document.getElementById('profile-stat-items').textContent=profile.stats?.inventory ?? 0;
+
+      const status=document.getElementById('profile-status');
+      status.classList.toggle('online',!!profile.online);
+      status.innerHTML=`<span class="profile-status-dot"></span><span>${profile.online ? (profile.currentWorld ? 'ONLINE · '+escapeChatText(profile.currentWorld) : 'ONLINE') : 'OFFLINE'}</span>`;
+
+      const join=document.getElementById('profile-join-world-btn');
+      if(profile.currentWorld && profile.currentWorld!==currentWorldName){
+        join.style.display='block'; join.textContent='JOIN '+profile.currentWorld;
+        join.onclick=()=>joinWorld(profile.currentWorld);
+      }else join.style.display='none';
+
+      const bio=document.getElementById('profile-bio-view');
+      bio.textContent=profile.bio || (profile.isOwnProfile ? 'You have not written an About Me yet.' : 'This player has not written an About Me yet.');
+      renderProfileAvatar(profile.appearance);
+
+      const showcase=document.getElementById('profile-showcase-worlds'); showcase.innerHTML='';
+      if(!profile.showcasedWorlds?.length) showcase.innerHTML='<div style="color:#6f7e92;padding:12px 0">No showcased worlds yet.</div>';
+      else profile.showcasedWorlds.forEach(w=>showcase.appendChild(renderProfileWorldCard(w)));
+
+      const edit=document.getElementById('profile-edit-area');
+      edit.style.display=profile.isOwnProfile?'block':'none';
+      if(profile.isOwnProfile){
+        const input=document.getElementById('profile-bio-input'); input.value=profile.bio||'';
+        document.getElementById('profile-bio-count').textContent=input.value.length;
+        const selected=new Set((profile.showcasedWorlds||[]).map(w=>Number(w.id)));
+        const picker=document.getElementById('profile-showcase-picker'); picker.innerHTML='';
+        if(!profile.ownedWorlds?.length) picker.innerHTML='<div style="color:#6f7e92">Create a world to showcase it here.</div>';
+        else profile.ownedWorlds.forEach(w=>{
+          const label=document.createElement('label'); label.className='profile-showcase-choice';
+          const check=document.createElement('input'); check.type='checkbox'; check.value=w.id; check.checked=selected.has(Number(w.id));
+          check.addEventListener('change',()=>{
+            const checked=[...picker.querySelectorAll('input:checked')];
+            if(checked.length>3){check.checked=false;showToast('You can showcase up to 3 worlds.');}
+          });
+          const text=document.createElement('span'); text.textContent=w.name;
+          label.append(check,text); picker.appendChild(label);
+        });
+      }
+    }
+
+    function loadProfile(username) {
+      if(!username)return;
+      socket.emit('get_profile',{username},res=>{
+        if(!res?.success){showToast(res?.message||'Could not load profile.');return;}
+        renderProfile(res.profile);
+      });
+    }
+
+    document.getElementById('profile-bio-input').addEventListener('input',e=>{
+      document.getElementById('profile-bio-count').textContent=e.target.value.length;
+    });
+    document.getElementById('profile-save-btn').addEventListener('click',()=>{
+      const ids=[...document.querySelectorAll('#profile-showcase-picker input:checked')].map(x=>Number(x.value));
+      socket.emit('update_profile',{bio:document.getElementById('profile-bio-input').value,showcaseWorldIds:ids},res=>{
+        if(!res?.success){showToast(res?.message||'Could not save profile.');return;}
+        showToast('Profile saved.'); loadProfile(loggedInUsername);
+      });
+    });
+
+        function makeNoneInventoryItem(category) { return {id:null, category, name:'None', assetKind:'none'}; }
     const BUILTIN_HATS = [
       {id:'builtin-hat-none', category:'hat', name:'None', assetKind:'builtin', builtinValue:'none'},
       {id:'builtin-hat-tophat', category:'hat', name:'Black Top Hat', assetKind:'builtin', builtinValue:'tophat'},
