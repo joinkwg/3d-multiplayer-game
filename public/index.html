@@ -612,6 +612,8 @@
 .kwg-shirt-design-heading{grid-column:1/-1;font-size:11px;letter-spacing:.12em;font-weight:900;color:#9bb1c9;border-top:1px solid #314057;padding-top:13px;margin-top:6px}
 .kwg-shirt-design-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:9px}
 .kwg-shirt-design-grid .inventory-card{min-width:0}
+
+.kwg-icon-tools{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:5px!important}.kwg-icon-tools button{display:flex!important;justify-content:center;align-items:center;padding:7px 2px!important;min-width:0;aspect-ratio:1}.kwg-icon-tools svg{width:21px;height:21px;pointer-events:none}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -862,12 +864,13 @@
       <span id="part-counter" style="font-size: 11px; font-weight: bold; color: #5bc0de;">0/1400 Parts</span>
     </div>
 
-    <div class="mode-grid">
-      <button id="tool-select-btn" class="active" onclick="setBuildSubTool('select')">Select</button>
-      <button id="tool-place-btn" onclick="setBuildSubTool('place')">Place</button>
-      <button id="tool-scale-btn" onclick="setBuildSubTool('scale')">Scale</button>
-      <button id="tool-move-btn" onclick="setBuildSubTool('move')">Move</button>
-      <button id="tool-delete-btn" onclick="setBuildSubTool('delete')" style="grid-column: span 2;">Delete</button>
+    <div class="mode-grid kwg-icon-tools">
+<button id="tool-select-btn" title="Select" aria-label="Select" onclick="setBuildSubTool('select')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-7 1-3 7z"/></svg></button>
+<button id="tool-place-btn" title="Place" aria-label="Place" onclick="setBuildSubTool('place')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M4 12h16"/></svg></button>
+<button id="tool-move-btn" title="Move" aria-label="Move" onclick="setBuildSubTool('move')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4"/></svg></button>
+<button id="tool-scale-btn" title="Scale" aria-label="Scale" onclick="setBuildSubTool('scale')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10V4h6M20 14v6h-6M4 4l7 7M20 20l-7-7"/></svg></button>
+<button id="tool-rotate-btn" title="Rotate" aria-label="Rotate" onclick="setBuildSubTool('rotate')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7"/></svg></button>
+<button id="tool-delete-btn" title="Remove" aria-label="Remove" onclick="setBuildSubTool('delete')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7"/></svg></button>
     </div>
 
     <!-- Selected Part Properties UI -->
@@ -2588,7 +2591,7 @@
 
     // --- EDIT MODE CONTROLS & GIZMOS & SELECTION OUTLINES ---
     let isEditMode = false;
-    let buildSubTool = 'select';
+    let buildSubTool = null;
     let previewMesh = null;
     let selectedBlockId = null;
     let hoveredBlockId = null;
@@ -2652,9 +2655,10 @@
     }
 
     function setBuildSubTool(tool) {
-      buildSubTool = tool;
+      buildSubTool = buildSubTool === tool ? null : tool;
+      tool = buildSubTool;
       updateEditorCursor();
-      ['select', 'place', 'scale', 'move', 'delete'].forEach(t => {
+      ['select', 'place', 'scale', 'move', 'rotate', 'delete'].forEach(t => {
         const btn = document.getElementById(`tool-${t}-btn`);
         if (btn) btn.classList.toggle('active', t === tool);
       });
@@ -3178,7 +3182,7 @@
               const blockId = hitObj.userData.blockId;
               if (currentWorldData && currentWorldData.blocks[blockId]) {
                 if (blockId === 'baseplate' || currentWorldData.blocks[blockId].shape === 'baseplate') {
-                  showToast('The baseplate cannot be deleted. You can resize it instead.');
+                  showToast('The baseplate cannot be removed. You can resize it instead.');
                   return;
                 }
                 delete currentWorldData.blocks[blockId];
@@ -3283,11 +3287,11 @@
         } else if (hitObj.userData.isBlock) {
           const blockId = hitObj.userData.blockId;
 
-          if (buildSubTool === 'select' || buildSubTool === 'scale' || buildSubTool === 'move') {
+          if (buildSubTool === 'select' || buildSubTool === 'scale' || buildSubTool === 'move' || buildSubTool === 'rotate') {
             selectBlock(hitObj);
           } else if (buildSubTool === 'delete') {
             if (blockId === 'baseplate' || currentWorldData.blocks[blockId]?.shape === 'baseplate') {
-              showToast('The baseplate cannot be deleted. You can resize it instead.');
+              showToast('The baseplate cannot be removed. You can resize it instead.');
               return;
             }
             delete currentWorldData.blocks[blockId];
