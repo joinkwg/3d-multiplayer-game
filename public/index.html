@@ -865,7 +865,7 @@
     </div>
 
     <div class="mode-grid kwg-icon-tools">
-<button id="tool-select-btn" title="Select" aria-label="Select" onclick="setBuildSubTool('select')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-7 1-3 7z"/></svg></button>
+<button id="tool-select-btn" title="Select • drag empty space to box-select • Shift-click to add" aria-label="Select" onclick="setBuildSubTool('select')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-7 1-3 7z"/></svg></button>
 <button id="tool-place-btn" title="Place" aria-label="Place" onclick="setBuildSubTool('place')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M4 12h16"/></svg></button>
 <button id="tool-move-btn" title="Move" aria-label="Move" onclick="setBuildSubTool('move')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4"/></svg></button>
 <button id="tool-scale-btn" title="Scale" aria-label="Scale" onclick="setBuildSubTool('scale')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10V4h6M20 14v6h-6M4 4l7 7M20 20l-7-7"/></svg></button>
@@ -873,6 +873,7 @@
 <button id="tool-delete-btn" title="Remove" aria-label="Remove" onclick="setBuildSubTool('delete')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7"/></svg></button>
     </div>
 
+    <div style="font-size:10px;color:#9db5ca;text-align:center;margin:5px 0">Select: drag empty space to box-select · Shift-click to add · Rotate: drag orange ring (15° steps)</div>
     <!-- Selected Part Properties UI -->
     <div id="part-properties-container">
       <div style="border-top: 2px solid #444; margin: 8px 0 10px 0; padding-top: 8px;">
@@ -2474,6 +2475,7 @@
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(blockData.x || 0, blockData.y || 0, blockData.z || 0);
       mesh.scale.set(blockData.scaleX || 1, blockData.scaleY || 1, blockData.scaleZ || 1);
+      mesh.rotation.y = Number(blockData.rotationY) || 0;
 
       mesh.userData = { 
         isBlock: !isPreview, 
@@ -2594,6 +2596,69 @@
     let buildSubTool = null;
     let previewMesh = null;
     let selectedBlockId = null;
+    const selectedBlockIds = new Set();
+    let marqueeStart = null;
+    let groupDragStart = null;
+    const marquee = document.createElement('div');
+    marquee.style.cssText = 'position:fixed;display:none;pointer-events:none;z-index:2000;border:1px solid #44c8ff;background:rgba(40,150,255,.15);box-shadow:0 0 0 1px #163b5d inset;';
+    document.body.appendChild(marquee);
+    function selectionCenter() {
+      const box = new THREE.Box3();
+      selectedBlockIds.forEach(id => { if(worldBlocks[id]) box.expandByObject(worldBlocks[id]); });
+      return box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
+    }
+    function refreshGroupSelection() {
+      clearSelectionOutline();
+      selectedBlockIds.forEach(id => {
+        const mesh = worldBlocks[id]; if (!mesh) return;
+        const tmp = new THREE.Group();
+        drawBlockOutline(mesh,tmp,0x00d2ff);
+        while(tmp.children.length) selectionOutlineGroup.add(tmp.children[0]);
+      });
+      const count = selectedBlockIds.size;
+      const msg = document.getElementById('no-selection-msg');
+      if(msg && count > 1) { msg.textContent = count + ' parts selected'; msg.style.display = 'block'; }
+      if(count > 1) document.getElementById('selected-part-fields').style.display='none';
+    }
+    function setGroupSelection(ids) {
+      selectedBlockIds.clear();
+      ids.filter(id => worldBlocks[id] && id !== 'baseplate').forEach(id=>selectedBlockIds.add(id));
+      selectedBlockId = selectedBlockIds.size ? selectedBlockIds.values().next().value : null;
+      updatePartPropertiesUI(); refreshGroupSelection();
+      if(selectedBlockId && ['move','scale','rotate'].includes(buildSubTool)) buildGizmosForBlock(worldBlocks[selectedBlockId]);
+      else clearGizmos();
+    }
+    function updateMarquee(x,y) {
+      if(!marqueeStart)return;
+      const a=marqueeStart;
+      marquee.style.display='block'; marquee.style.left=Math.min(a.x,x)+'px';marquee.style.top=Math.min(a.y,y)+'px';
+      marquee.style.width=Math.abs(x-a.x)+'px';marquee.style.height=Math.abs(y-a.y)+'px';
+    }
+    function finishMarquee(x,y) {
+      if(!marqueeStart)return;
+      const a=marqueeStart;marqueeStart=null;marquee.style.display='none';
+      if(Math.hypot(x-a.x,y-a.y)<7)return;
+      const left=Math.min(a.x,x),right=Math.max(a.x,x),top=Math.min(a.y,y),bottom=Math.max(a.y,y);
+      const ids=[];const v=new THREE.Vector3();
+      Object.entries(worldBlocks).forEach(([id,mesh])=>{
+        if(id==='baseplate')return;
+        const box=new THREE.Box3().setFromObject(mesh), corners=[];
+        for(const xx of [box.min.x,box.max.x])for(const yy of [box.min.y,box.max.y])for(const zz of [box.min.z,box.max.z]){
+          v.set(xx,yy,zz).project(camera);corners.push({x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,z:v.z});
+        }
+        if(corners.some(c=>c.z>=-1&&c.z<=1&&c.x>=left&&c.x<=right&&c.y>=top&&c.y<=bottom))ids.push(id);
+      });
+      setGroupSelection(ids);
+    }
+    function redrawEditedPart(id) {
+      if(worldBlocks[id])scene.remove(worldBlocks[id]);
+      const mesh=buildBlockMesh(currentWorldData.blocks[id]);scene.add(mesh);worldBlocks[id]=mesh;
+    }
+    function saveEditedParts(ids, before) {
+      ids.forEach(id=>{const b=currentWorldData?.blocks[id];if(b && JSON.stringify(b)!==JSON.stringify(before[id]))
+        emitWorldSave('block_update',{worldName:currentWorldName,action:'update',blockData:b},r=>{if(r&&!r.success)showToast('Could not save changes');});});
+    }
+
     let hoveredBlockId = null;
     const gizmoGroup = new THREE.Group();
     scene.add(gizmoGroup);
@@ -2663,7 +2728,7 @@
         if (btn) btn.classList.toggle('active', t === tool);
       });
 
-      if (tool !== 'scale' && tool !== 'move') {
+      if (tool !== 'scale' && tool !== 'move' && tool !== 'rotate') {
         clearGizmos();
       }
       if (tool === 'place') {
@@ -2673,7 +2738,7 @@
       }
 
       if (selectedBlockId && worldBlocks[selectedBlockId]) {
-        if (tool === 'scale' || tool === 'move') {
+        if (tool === 'scale' || tool === 'move' || tool === 'rotate') {
           buildGizmosForBlock(worldBlocks[selectedBlockId]);
         }
       }
@@ -2682,6 +2747,7 @@
     function selectBlock(blockMesh) {
       if (!blockMesh) {
         selectedBlockId = null;
+        selectedBlockIds.clear();
         clearGizmos();
         clearHoverOutline();
         clearSelectionOutline();
@@ -2690,10 +2756,11 @@
       }
 
       selectedBlockId = blockMesh.userData.blockId;
+      selectedBlockIds.clear(); selectedBlockIds.add(selectedBlockId);
       clearHoverOutline();
       updateSelectionOutline(blockMesh);
 
-      if (buildSubTool === 'scale' || buildSubTool === 'move') {
+      if (buildSubTool === 'scale' || buildSubTool === 'move' || buildSubTool === 'rotate') {
         buildGizmosForBlock(blockMesh);
       } else {
         clearGizmos();
@@ -2826,9 +2893,10 @@
       clearGizmos();
       if (!blockMesh) return;
       selectedBlockId = blockMesh.userData.blockId;
-      updateSelectionOutline(blockMesh);
+      refreshGroupSelection();
 
       const box = new THREE.Box3().setFromObject(blockMesh);
+      if(selectedBlockIds.size>1){box.makeEmpty();selectedBlockIds.forEach(id=>{if(worldBlocks[id])box.expandByObject(worldBlocks[id]);});}
       const center = new THREE.Vector3();
       box.getCenter(center);
       const size = new THREE.Vector3();
@@ -2850,6 +2918,13 @@
         { name: 'nz', pos: new THREE.Vector3(center.x, center.y, center.z - offsetDistZ), rot: new THREE.Vector3(-Math.PI / 2, 0, 0) }
       ];
 
+      if(buildSubTool === 'rotate') {
+        const radius=Math.max(size.x,size.z)/2+1.1;
+        const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.09,8,64),new THREE.MeshBasicMaterial({color:0xffb347,depthTest:false}));
+        ring.rotation.x=Math.PI/2;ring.position.copy(center);ring.renderOrder=999;
+        ring.userData={isGizmoArrow:true,axis:'ry',baseGizmoScale:1};gizmoGroup.add(ring);
+        return;
+      }
       directions.forEach(d => {
         const mat = new THREE.MeshBasicMaterial({ color: arrowColor, depthTest: false });
         const arrow = new THREE.Mesh(arrowGeo, mat);
@@ -2866,6 +2941,8 @@
 
       const selectedMesh = worldBlocks[selectedBlockId];
       const box = new THREE.Box3().setFromObject(selectedMesh);
+      if(selectedBlockIds.size>1){box.makeEmpty();selectedBlockIds.forEach(id=>{if(worldBlocks[id])box.expandByObject(worldBlocks[id]);});}
+      if(buildSubTool==='rotate')return;
       const center = new THREE.Vector3();
       const size = new THREE.Vector3();
       box.getCenter(center);
@@ -2995,6 +3072,20 @@
       mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
 
+      if(marqueeStart){updateMarquee(e.clientX,e.clientY);return;}
+      if(isDraggingPart && groupDragStart && buildSubTool==='rotate') {
+        const angle=Math.round((e.clientX-groupDragStart.x)/18)*Math.PI/12;
+        const center=groupDragStart.center;
+        groupDragStart.ids.forEach(id=>{
+          const orig=groupDragStart.before[id], b=currentWorldData.blocks[id];if(!b)return;
+          const dx=orig.x-center.x,dz=orig.z-center.z;
+          b.x=Math.round((center.x+dx*Math.cos(angle)-dz*Math.sin(angle))*100)/100;
+          b.z=Math.round((center.z+dx*Math.sin(angle)+dz*Math.cos(angle))*100)/100;
+          b.rotationY=(orig.rotationY||0)+angle;
+          redrawEditedPart(id);
+        });
+        refreshGroupSelection();return;
+      }
       if (isDraggingPart && draggedPartId && activeDragAxis && (buildSubTool === 'move' || buildSubTool === 'scale')) {
         const intersectionPoint = new THREE.Vector3();
         raycaster.ray.intersectPlane(dragPlane, intersectionPoint);
@@ -3102,6 +3193,18 @@
           const updated = buildBlockMesh(blockData);
           scene.add(updated);
           worldBlocks[draggedPartId] = updated;
+          if(groupDragStart && groupDragStart.ids.length>1){
+            const origin=groupDragStart.before[draggedPartId];
+            const sx=(blockData.scaleX||1)/(origin.scaleX||1),sy=(blockData.scaleY||1)/(origin.scaleY||1),sz=(blockData.scaleZ||1)/(origin.scaleZ||1);
+            const dx=blockData.x-origin.x,dy=blockData.y-origin.y,dz=blockData.z-origin.z;
+            groupDragStart.ids.forEach(id=>{
+              if(id===draggedPartId)return;
+              const b=currentWorldData.blocks[id], o=groupDragStart.before[id];if(!b)return;
+              if(buildSubTool==='move'){b.x=o.x+dx;b.y=o.y+dy;b.z=o.z+dz;}
+              else {b.scaleX=Math.max(1,Math.round((o.scaleX||1)*sx));b.scaleY=Math.max(1,Math.round((o.scaleY||1)*sy));b.scaleZ=Math.max(1,Math.round((o.scaleZ||1)*sz));}
+              redrawEditedPart(id);
+            });
+          }
           buildGizmosForBlock(updated);
         }
         return;
@@ -3206,10 +3309,12 @@
       mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
 
-      if ((buildSubTool === 'scale' || buildSubTool === 'move') && gizmoGroup.children.length > 0) {
+      if ((buildSubTool === 'scale' || buildSubTool === 'move' || buildSubTool === 'rotate') && gizmoGroup.children.length > 0) {
         const gizmoIntersects = raycaster.intersectObjects(gizmoGroup.children, true);
         if (gizmoIntersects.length > 0) {
           activeDragAxis = gizmoIntersects[0].object.userData.axis;
+          groupDragStart={x:e.clientX,center:selectionCenter(),ids:[...selectedBlockIds],before:{}};
+          groupDragStart.ids.forEach(id=>groupDragStart.before[id]=JSON.parse(JSON.stringify(currentWorldData.blocks[id])));
           draggedPartId = selectedBlockId;
           isDraggingPart = true;
           
@@ -3288,7 +3393,8 @@
           const blockId = hitObj.userData.blockId;
 
           if (buildSubTool === 'select' || buildSubTool === 'scale' || buildSubTool === 'move' || buildSubTool === 'rotate') {
-            selectBlock(hitObj);
+            if(e.shiftKey){const ids=new Set(selectedBlockIds);ids.has(blockId)?ids.delete(blockId):ids.add(blockId);setGroupSelection([...ids]);}
+            else if(!selectedBlockIds.has(blockId)||selectedBlockIds.size===0)selectBlock(hitObj);
           } else if (buildSubTool === 'delete') {
             if (blockId === 'baseplate' || currentWorldData.blocks[blockId]?.shape === 'baseplate') {
               showToast('The baseplate cannot be removed. You can resize it instead.');
@@ -3303,6 +3409,7 @@
           }
         }
       } else {
+        if(buildSubTool==='select'){marqueeStart={x:e.clientX,y:e.clientY};return;}
         if (!activeDragAxis && !isDraggingPart) {
           selectBlock(null);
         }
@@ -3314,9 +3421,12 @@
         isRightClicking = false;
       }
 
+      if(marqueeStart)finishMarquee(e.clientX,e.clientY);
+      const savedGroupDrag=!!groupDragStart;
+      if(groupDragStart){saveEditedParts(groupDragStart.ids,groupDragStart.before);groupDragStart=null;refreshGroupSelection();}
       // Move/scale saves once per completed drag, and only when something
       // actually changed. Clicking an arrow without moving creates zero saves.
-      if (isDraggingPart && draggedPartId && initialDragBlockState &&
+      if (isDraggingPart && !savedGroupDrag && draggedPartId && initialDragBlockState &&
           currentWorldData && currentWorldData.blocks[draggedPartId]) {
         const finalBlock = currentWorldData.blocks[draggedPartId];
         if (JSON.stringify(finalBlock) !== JSON.stringify(initialDragBlockState)) {
