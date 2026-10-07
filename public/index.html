@@ -606,6 +606,7 @@
 
 /* V3.23 avatar editor */
 #avatar-editor-pane .kwg-avatar-tabs{display:grid!important;grid-template-columns:repeat(5,1fr)!important}#avatar-editor-pane .kwg-avatar-tabs .inventory-tab{text-align:center!important;padding:9px 4px!important}.avatar-native-options{grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin-bottom:8px}.kwg-native-card,.kwg-native-color{min-height:68px;background:#0d131b;color:#aebdd0;border:1px solid #2d3a4c;padding:10px;font-family:inherit;font-weight:900;font-size:10px;cursor:pointer}.kwg-native-card.selected{background:#1b2c41;color:#79b8ff;border-color:#4b84bd;box-shadow:inset 0 -2px 0 #4b9cff}.kwg-native-color{display:grid;gap:7px;cursor:default}.kwg-native-color input{width:100%;height:32px;background:#151e29;border:1px solid #46566b;cursor:pointer}@media(max-width:760px){#avatar-editor-pane .kwg-avatar-tabs{grid-template-columns:repeat(2,1fr)!important}}
+.kwg-hair-swatch{display:block;width:44px;height:26px;margin:0 auto 9px;border-radius:55% 55% 15% 15%;border:2px solid rgba(255,255,255,.25)}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -2086,7 +2087,35 @@
     }
 
     function makeFaceTexture(kind,style){const cv=document.createElement('canvas');cv.width=256;cv.height=128;const x=cv.getContext('2d');x.clearRect(0,0,256,128);x.strokeStyle='#171b21';x.fillStyle='#171b21';x.lineWidth=14;x.lineCap='round';x.lineJoin='round';if(kind==='eyes'){if(style==='classic'){x.fillRect(58,38,22,30);x.fillRect(176,38,22,30)}else if(style==='friendly'){x.beginPath();x.arc(68,52,16,0,Math.PI*2);x.arc(188,52,16,0,Math.PI*2);x.fill();x.fillStyle='#fff';x.beginPath();x.arc(73,46,5,0,Math.PI*2);x.arc(193,46,5,0,Math.PI*2);x.fill()}else if(style==='cool'){x.beginPath();x.moveTo(45,58);x.lineTo(91,48);x.moveTo(165,48);x.lineTo(211,58);x.stroke()}else if(style==='happy'){x.beginPath();x.arc(68,62,22,Math.PI,Math.PI*2);x.arc(188,62,22,Math.PI,Math.PI*2);x.stroke()}}else{if(style==='smile'){x.beginPath();x.arc(128,35,50,.2,Math.PI-.2);x.stroke()}else if(style==='grin'){x.fillStyle='#fff';x.fillRect(76,42,104,42);x.strokeRect(76,42,104,42)}else if(style==='neutral'){x.beginPath();x.moveTo(84,62);x.lineTo(172,62);x.stroke()}else if(style==='surprised'){x.beginPath();x.arc(128,63,25,0,Math.PI*2);x.stroke()}}const t=new THREE.CanvasTexture(cv);t.needsUpdate=true;return t}
-    function addBuiltinFace(group,app,hasHead,customEyes,customMouth){if(!hasHead)return;const add=(kind,style,w,h,y,z)=>{if(!style||style==='none')return;const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:makeFaceTexture(kind,style),transparent:true,depthWrite:false,alphaTest:.08}));p.position.set(0,y,z);group.add(p)};if(!customEyes)add('eyes',app.builtinEyes||'none',.50,.25,2.105,.386);if(!customMouth)add('mouth',app.builtinMouth||'none',.34,.17,1.935,.388)}
+    function addBuiltinFace(group,app,hasHead,customEyes,customMouth){
+      if(!hasHead)return;
+      const shape=app.headShape||'sphere';
+      const add=(kind,style,width,height,y)=>{
+        if(!style||style==='none')return;
+        const texture=makeFaceTexture(kind,style);
+        const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,alphaTest:.05,side:THREE.DoubleSide});
+        const half=width/2, top=y+height/2, bottom=y-height/2;
+        const cols=18,rows=8,verts=[],uvs=[],indices=[];
+        for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){
+          const u=i/cols,v=j/rows,x=(u-.5)*width,yy=bottom+v*height;
+          let z=.326;
+          if(shape==='sphere'){
+            const dy=yy-2.04;
+            z=Math.sqrt(Math.max(.001,.37*.37-x*x-dy*dy))+.004;
+          }else if(shape==='cylinder'){
+            z=Math.sqrt(Math.max(.001,.35*.35-x*x))+.004;
+          }
+          verts.push(x,yy,z);uvs.push(u,v);
+        }
+        for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+          const k=j*(cols+1)+i;indices.push(k,k+1,k+cols+1,k+1,k+cols+2,k+cols+1);
+        }
+        const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geo.setIndex(indices);geo.computeVertexNormals();
+        group.add(new THREE.Mesh(geo,material));
+      };
+      if(!customEyes)add('eyes',app.builtinEyes||'none',.45,.19,2.115);
+      if(!customMouth)add('mouth',app.builtinMouth||'none',.31,.13,1.94);
+    }
     function addBuiltinHair(group,app,headShape,customHead){if(customHead||headShape==='headless')return;const s=app.hairStyle||'classic';if(s==='none')return;const mat=new THREE.MeshLambertMaterial({color:app.hairColor||'#3a261b'});const add=(g,x,y,z)=>{const m=new THREE.Mesh(g,mat);m.position.set(x,y,z);group.add(m)};if(s==='classic')add(new THREE.SphereGeometry(.382,20,12,0,Math.PI*2,0,Math.PI*.30),0,2.07,0);else if(s==='sidepart'){add(new THREE.BoxGeometry(.64,.13,.63),0,2.34,0);add(new THREE.BoxGeometry(.14,.18,.60),-.25,2.26,0)}else if(s==='spiky'){add(new THREE.BoxGeometry(.62,.10,.60),0,2.32,0);[-.22,0,.22].forEach(x=>add(new THREE.ConeGeometry(.10,.24,4),x,2.48,0))}else if(s==='bob'){add(new THREE.BoxGeometry(.64,.12,.61),0,2.34,0);add(new THREE.BoxGeometry(.12,.34,.58),-.28,2.21,0);add(new THREE.BoxGeometry(.12,.34,.58),.28,2.21,0)}else if(s==='mohawk')add(new THREE.BoxGeometry(.13,.32,.62),0,2.48,0);else if(s==='flattop')add(new THREE.BoxGeometry(.58,.20,.56),0,2.41,0);else if(s==='ponytail'){add(new THREE.BoxGeometry(.62,.11,.60),0,2.34,0);add(new THREE.SphereGeometry(.14,12,10),0,2.20,-.41);add(new THREE.BoxGeometry(.15,.38,.15),0,1.99,-.42)}}
     function buildBlockyAvatar(app, cosmetics = {}) {
       const group = new THREE.Group();
@@ -3641,7 +3670,7 @@
       }
       renderAvatarInventory(); updateEditorAvatar();
     }
-    function renderNativeAvatarOptions(){const host=document.getElementById('avatar-native-options'),grid=document.getElementById('avatar-inventory-grid'),cat=avatarEditorCategory,native=['hair','skin','shirts','pants','shoes'].includes(cat);host.style.display=native?'grid':'none';grid.style.display=native?'none':'grid';host.innerHTML='';if(!native)return false;const button=(label,active,fn)=>{const b=document.createElement('button');b.className='kwg-native-card'+(active?' selected':'');b.textContent=label;b.onclick=fn;host.appendChild(b)};const picker=(label,key,fallback,mirror=false)=>{const w=document.createElement('label');w.className='kwg-native-color';w.innerHTML='<span>'+label+'</span><input type="color" value="'+(avatarDraft[key]||fallback)+'">';w.querySelector('input').oninput=e=>{avatarDraft[key]=e.target.value;if(mirror)mirrorSemanticColors(avatarDraft);updateEditorAvatar()};host.appendChild(w)};if(cat==='hair'){BUILTIN_HAIR.forEach(h=>button(h.name,(avatarDraft.hairStyle||'classic')===h.value,()=>{avatarDraft.hairStyle=h.value;renderNativeAvatarOptions();updateEditorAvatar()}));picker('HAIR COLOR','hairColor','#3a261b')}else if(cat==='skin')picker('SKIN COLOR','skinColor',avatarDraft.headColor||'#d9a679',true);else if(cat==='shirts'){['short','long'].forEach(v=>button(v==='short'?'Short Sleeve':'Long Sleeve',(avatarDraft.shirtStyle||'short')===v,()=>{avatarDraft.shirtStyle=v;renderNativeAvatarOptions();updateEditorAvatar()}));picker('SHIRT COLOR','shirtColor','#3b82d0',true)}else if(cat==='pants'){['pants','shorts','skirt'].forEach(v=>button(v[0].toUpperCase()+v.slice(1),(avatarDraft.bottomStyle||'pants')===v,()=>{avatarDraft.bottomStyle=v;renderNativeAvatarOptions();updateEditorAvatar()}));picker('PANTS COLOR','pantsColor','#263447',true)}else if(cat==='shoes')picker('SHOE COLOR','shoesColor','#15191f');return true}
+    function renderNativeAvatarOptions(){const host=document.getElementById('avatar-native-options'),grid=document.getElementById('avatar-inventory-grid'),cat=avatarEditorCategory,native=['hair','skin','shirts','pants','shoes'].includes(cat);host.style.display=native?'grid':'none';grid.style.display=native?'none':'grid';host.innerHTML='';if(!native)return false;const button=(label,active,fn)=>{const b=document.createElement('button');b.className='kwg-native-card'+(active?' selected':'');b.textContent=label;if(cat==='hair'&&label!=='None'){const sw=document.createElement('span');sw.className='kwg-hair-swatch';sw.style.background=avatarDraft.hairColor||'#3a261b';b.prepend(sw)}b.onclick=fn;host.appendChild(b)};const picker=(label,key,fallback,mirror=false)=>{const w=document.createElement('label');w.className='kwg-native-color';w.innerHTML='<span>'+label+'</span><input type="color" value="'+(avatarDraft[key]||fallback)+'">';w.querySelector('input').oninput=e=>{avatarDraft[key]=e.target.value;if(mirror)mirrorSemanticColors(avatarDraft);updateEditorAvatar()};host.appendChild(w)};if(cat==='hair'){BUILTIN_HAIR.forEach(h=>button(h.name,(avatarDraft.hairStyle||'classic')===h.value,()=>{avatarDraft.hairStyle=h.value;renderNativeAvatarOptions();updateEditorAvatar()}));picker('HAIR COLOR','hairColor','#3a261b')}else if(cat==='skin')picker('SKIN COLOR','skinColor',avatarDraft.headColor||'#d9a679',true);else if(cat==='shirts'){['short','long'].forEach(v=>button(v==='short'?'Short Sleeve':'Long Sleeve',(avatarDraft.shirtStyle||'short')===v,()=>{avatarDraft.shirtStyle=v;renderNativeAvatarOptions();updateEditorAvatar()}));picker('SHIRT COLOR','shirtColor','#3b82d0',true)}else if(cat==='pants'){['pants','shorts','skirt'].forEach(v=>button(v[0].toUpperCase()+v.slice(1),(avatarDraft.bottomStyle||'pants')===v,()=>{avatarDraft.bottomStyle=v;renderNativeAvatarOptions();updateEditorAvatar()}));picker('PANTS COLOR','pantsColor','#263447',true)}else if(cat==='shoes')picker('SHOE COLOR','shoesColor','#15191f');return true}
     function renderAvatarInventory() {
       const grid=document.getElementById('avatar-inventory-grid'); if(!grid)return; grid.innerHTML=''; if(renderNativeAvatarOptions())return;
       let items=[];
@@ -3720,33 +3749,38 @@
         container.innerHTML='';container.appendChild(img);
       } catch (err) {
         console.warn('Thumbnail render failed:', err);
-        container.textContent='3D ITEM';
+        container.textContent='NO PREVIEW';
       }
     }
     function renderBuiltinThumbnail(container,item){
-      let obj;
-      if(item.category==='hat'){
-        if(item.builtinValue==='none'){container.textContent='NONE';return;}
-        obj=createHatMesh(item.builtinValue,0xffff00);
-      } else {
-        const mat=new THREE.MeshLambertMaterial({color:0xffff00});
+      if(item.builtinValue==='none'||item.builtinValue==='headless'){container.textContent=item.builtinValue==='headless'?'HEADLESS':'NONE';return;}
+      if(item.category==='eyes'||item.category==='mouth'){
+        const canvas=document.createElement('canvas');canvas.width=160;canvas.height=110;
+        const ctx=canvas.getContext('2d');ctx.fillStyle='#cfa27d';ctx.fillRect(0,0,160,110);
+        const face=makeFaceTexture(item.category,item.builtinValue);
+        const image=face.image;ctx.drawImage(image,10,15,140,80);
+        const img=document.createElement('img');img.src=canvas.toDataURL('image/png');img.alt=item.name;img.style.cssText='width:100%;height:100%;object-fit:contain';container.appendChild(img);face.dispose();return;
+      }
+      let obj=null;
+      if(item.category==='hat')obj=createHatMesh(item.builtinValue,0xffff00);
+      else if(item.category==='head_shape'){
+        const mat=new THREE.MeshLambertMaterial({color:0xd9a679});
         if(item.builtinValue==='sphere')obj=new THREE.Mesh(new THREE.SphereGeometry(.55,24,16),mat);
         else if(item.builtinValue==='cube')obj=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mat);
         else if(item.builtinValue==='cylinder')obj=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,1,24),mat);
-        else {container.textContent='HEADLESS';return;}
       }
-      if(!obj){container.textContent=item.name.toUpperCase();return;}
-      thumbImageFromObject(container,obj);
+      if(!obj){container.textContent='NO PREVIEW';return;}
+      try{thumbImageFromObject(container,obj)}catch(e){container.textContent='NO PREVIEW';}
     }
     // Close-up static thumbnails: GLB cosmetic only, never the full avatar.
     function renderMeshThumbnail(container,item){
-      if (!container || !item || !item.assetUrl) { if(container) container.textContent='3D ITEM'; return; }
+      if (!container || !item || !item.assetUrl) { if(container) container.textContent='NO PREVIEW'; return; }
       container.textContent='LOADING...';
       loadGLBClone(item.assetUrl).then(obj=>{
         const box=new THREE.Box3().setFromObject(obj);const size=box.getSize(new THREE.Vector3());
         const maxDim=Math.max(size.x,size.y,size.z,.001);obj.scale.setScalar(1/maxDim);
         thumbImageFromObject(container,obj);
-      }).catch(err=>{console.warn('GLB thumbnail failed:',err);container.textContent=item.category==='hat'?'3D HAT':'3D HEAD';});
+      }).catch(err=>{console.warn('GLB thumbnail failed:',err);container.textContent='NO PREVIEW';});
     }
 
     // Admin GLB live fitting preview before upload.
