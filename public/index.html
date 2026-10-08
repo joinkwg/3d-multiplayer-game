@@ -4941,16 +4941,19 @@ body.kwg-thumbnail-camera #kwg-audio-dock{display:none!important}
             blockData.y = py;
             blockData.z = pz;
           } else if (buildSubTool === 'move') {
+            // Snap the drag DELTA, not the absolute block center. Placement uses
+            // half-unit centers (e.g. 0.5, 1.5), so rounding absolute positions
+            // would jump the block onto a different grid on the first move.
             let newX = initBlock.x;
             let newY = initBlock.y;
             let newZ = initBlock.z;
 
             if (activeDragAxis === 'px' || activeDragAxis === 'nx') {
-              newX = Math.round(initBlock.x + diff.x);
+              newX = initBlock.x + Math.round(diff.x);
             } else if (activeDragAxis === 'py' || activeDragAxis === 'ny') {
-              newY = Math.round(initBlock.y + diff.y);
+              newY = initBlock.y + Math.round(diff.y);
             } else if (activeDragAxis === 'pz' || activeDragAxis === 'nz') {
-              newZ = Math.round(initBlock.z + diff.z);
+              newZ = initBlock.z + Math.round(diff.z);
             }
 
             blockData.x = newX;
