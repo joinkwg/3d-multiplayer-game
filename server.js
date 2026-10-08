@@ -45,6 +45,58 @@ const defaultAppearance = {
   headShapeItemId: null
 };
 
+// KWG V3.35 — User-generated text filter. Server is authoritative;
+// client uses the same filter for optimistic previews and legacy content.
+// Account passwords, internal IDs and numeric game data must NOT be filtered.
+const KWG_BLOCKED_TERMS = [
+  'fuck','fack','fucks','fucker','fuckers','fucking','motherfucker','motherfucking',
+  'shit','shits','shitty','bullshit','bitch','bitches','bitching',
+  'ass','asshole','assholes','dumbass','jackass','bastard','bastards',
+  'damn','damned','hell','crap','piss','pissed','pissing',
+  'dick','dicks','dickhead','cock','cocks','cocksucker','pussy','cunt','cunts',
+  'slut','sluts','whore','whores','wtf','stfu',
+  'nigger','niggers','nigga','niggas','faggot','faggots','fag','fags',
+  'kike','kikes','spic','spics','chink','chinks','gook','gooks',
+  'wetback','wetbacks','beaner','beaners','raghead','ragheads',
+  'paki','pakis','tranny','trannies','retard','retards','retarded',
+  'dyke','dykes','coon','coons'
+];
+const KWG_BLOCKED_REGEX = new RegExp(
+  '(^|[^a-z])(' + KWG_BLOCKED_TERMS
+    .sort((a,b)=>b.length-a.length)
+    .map(term=>term.split('').join('[\\s._-]{0,3}'))
+    .join('|') + ')(?![a-z])','gi'
+);
+function filterKWGUserText(value){
+  const raw=String(value??'');
+  if(!raw)return raw;
+  // Map common leetspeak and Unicode accents to comparable letters while
+  // keeping an index for masking the exact characters in the original text.
+  const map={'0':'o','1':'i','3':'e','4':'a','5':'s','7':'t','@':'a','$':'s',
+    '!':'i','|':'i','€':'e','£':'l','+':'t','а':'a','е':'e','о':'o',
+    'р':'p','с':'c','х':'x','у':'y','і':'i'};
+  let folded='',offsets=[];
+  for(let i=0;i<raw.length;){
+    const ch=String.fromCodePoint(raw.codePointAt(i));
+    const trailingPunctuation=['!','@','$'].includes(ch) && !/[a-z]/i.test(raw[i+ch.length]||'');
+    const plain=(trailingPunctuation?ch:(map[ch]||ch.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()));
+    for(const unit of plain){folded+=unit;offsets.push([i,i+ch.length]);}
+    i+=ch.length;
+  }
+  const masked=new Set();
+  for(const match of folded.matchAll(KWG_BLOCKED_REGEX)){
+    const start=match.index+match[1].length;
+    const end=start+match[2].length;
+    for(let j=start;j<end;j++){
+      const bounds=offsets[j];if(!bounds)continue;
+      for(let k=bounds[0];k<bounds[1];k++)if(!/\s/.test(raw[k]))masked.add(k);
+    }
+  }
+  // Numbers are masked even when embedded in otherwise permitted words.
+  for(let i=0;i<raw.length;i++)if(/\p{N}/u.test(raw[i]))masked.add(i);
+  return raw.split('').map((ch,i)=>masked.has(i)?'*':ch).join('');
+}
+
 function cleanUsername(v) {
   return String(v || '').trim().slice(0, 16);
 }
@@ -439,8 +491,8 @@ async function worldSummary(row) {
   const room = `world:${row.name}`;
   return {
     name: row.name,
-    displayName: String(row.data?.displayName || row.name).slice(0,40),
-    description: String(row.data?.description || '').slice(0,300),
+    displayName: filterKWGUserText(String(row.data?.displayName || row.name).slice(0,40)),
+    description: filterKWGUserText(String(row.data?.description || '').slice(0,300)),
     thumbnailUrl: String(row.data?.thumbnailUrl || ''),
     onlineCount: io.sockets.adapter.rooms.get(room)?.size || 0,
     ownerUsername: row.owner_username || null,
@@ -503,6 +555,7 @@ io.on('connection', (socket) => {
       username = cleanUsername(username);
       password = String(password || '');
       if (!/^[A-Za-z0-9_]{3,16}$/.test(username)) return cb({success:false,message:'Username must be 3-16 letters, numbers, or underscores.'});
+      if (/\*/.test(filterKWGUserText(username.replace(/[0-9]/g,'')))) return cb({success:false,message:'Please choose a different username.'});
       if (password.length < 6 || password.length > 72) return cb({success:false,message:'Password must be 6-72 characters.'});
 
       const existing = await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)', [username]);
@@ -754,7 +807,7 @@ io.on('connection', (socket) => {
         ORDER BY w.created_at DESC
       `,[u.id]);
       ownedWithIds.rows.forEach(w => byId.set(Number(w.id), {
-        id:Number(w.id), name:w.name, displayName:String(w.data?.displayName||w.name), thumbnailUrl:String(w.data?.thumbnailUrl||''), createdAt:w.createdAt, likeCount:Number(w.likeCount||0)
+        id:Number(w.id), name:w.name, displayName:filterKWGUserText(String(w.data?.displayName||w.name)), thumbnailUrl:String(w.data?.thumbnailUrl||''), createdAt:w.createdAt, likeCount:Number(w.likeCount||0)
       }));
       const showcasedWorlds = showcaseIds.map(id => byId.get(id)).filter(Boolean).slice(0,3);
 
@@ -782,7 +835,7 @@ io.on('connection', (socket) => {
         success:true,
         profile:{
           username:u.username,
-          bio:u.bio || '',
+          bio:filterKWGUserText(u.bio || ''),
           createdAt:u.createdAt,
           appearance:u.appearance || {},
           online:!!onlineSocket,
@@ -796,7 +849,7 @@ io.on('connection', (socket) => {
           },
           showcasedWorlds,
           ownedWorlds: u.id === socket.user.id ? ownedWithIds.rows.map(w => ({
-            id:Number(w.id),name:w.name,displayName:String(w.data?.displayName||w.name),thumbnailUrl:String(w.data?.thumbnailUrl||''),createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
+            id:Number(w.id),name:w.name,displayName:filterKWGUserText(String(w.data?.displayName||w.name)),thumbnailUrl:String(w.data?.thumbnailUrl||''),createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
           })) : []
         }
       });
@@ -806,7 +859,7 @@ io.on('connection', (socket) => {
   socket.on('update_profile', async ({bio,showcaseWorldIds} = {}, cb) => {
     if (!requireAuth(socket, cb)) return;
     try {
-      bio = String(bio || '').trim().slice(0,300);
+      bio = filterKWGUserText(String(bio || '').trim().slice(0,300));
       const ids = [...new Set((Array.isArray(showcaseWorldIds) ? showcaseWorldIds : [])
         .map(Number).filter(Number.isSafeInteger))].slice(0,3);
 
@@ -1081,8 +1134,8 @@ io.on('connection', (socket) => {
     if (!requireAuth(socket,cb)) return;
     const key=cleanWorldName(worldName);
     if (socket.data.worldName!==key) return cb && cb({success:false,message:'Join this world before editing its info.'});
-    const title=String(displayName||'').trim();
-    const desc=String(description||'').trim();
+    const title=filterKWGUserText(String(displayName||'').trim());
+    const desc=filterKWGUserText(String(description||'').trim());
     if (!title || title.length>40 || /[\x00-\x1f\x7f]/.test(title)) return cb && cb({success:false,message:'World title must be 1–40 characters.'});
     if (desc.length>300 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(desc)) return cb && cb({success:false,message:'Description must be 300 characters or fewer.'});
     try {
@@ -1286,14 +1339,14 @@ io.on('connection', (socket) => {
         FROM chat_messages WHERE world_id=$1
         ORDER BY created_at DESC LIMIT 100
       `,[world.id]);
-      cb({success:true,messages:r.rows.reverse().map(x=>({...x,worldName:world.name}))});
+      cb({success:true,messages:r.rows.reverse().map(x=>({...x,message:filterKWGUserText(x.message),worldName:world.name}))});
     } catch (e) { console.error(e); cb({success:false,message:'Could not load chat.'}); }
   });
 
   socket.on('send_world_chat', async ({worldName,message},cb) => {
     if (!requireAuth(socket, cb)) return;
     worldName = cleanWorldName(worldName);
-    message = String(message || '').trim().slice(0,300);
+    message = filterKWGUserText(String(message || '').trim().slice(0,300));
     if (!message) return cb({success:false,message:'Message cannot be empty.'});
     if (socket.data.worldName !== worldName) return cb({success:false,message:'Join the world first.'});
     try {
