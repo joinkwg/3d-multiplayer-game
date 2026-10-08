@@ -2318,7 +2318,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     <section id="kwg-recolor-panel" class="kwg-recolor-panel" aria-label="Recolor brush settings" style="display:none">
       <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">●</span> RECOLOR BRUSH</div>
       <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-recolor-color" value="#4b9cff" aria-label="Brush color"></span></label>
-      <label class="kwg-recolor-field"><span>Material</span><select id="kwg-recolor-material" aria-label="Brush material"><option value="grid">Grid Pattern</option><option value="smooth" selected>Smooth Plastic</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option><option value="grass">Grass</option><option value="neon">Neon / Glowing</option></select></label>
+      <label class="kwg-recolor-field"><span>Material</span><select id="kwg-recolor-material" aria-label="Brush material"><option value="grid" selected>Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
       <p class="kwg-recolor-help">Click any part in the 3D view to apply both.</p>
     </section>
     <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>Ctrl</kbd> + <kbd>R</kbd> Horizontal rotate</div><div><kbd>Ctrl</kbd> + <kbd>T</kbd> Vertical rotate</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div></details>
@@ -2344,8 +2344,6 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
             <label>Block Type:</label>
             <select id="block-action-select">
               <option value="normal">Normal Solid Block</option>
-              <option value="checkpoint">Checkpoint Flag</option>
-              <option value="finish">Finish Line Flag</option>
               <option value="kill">Kill Part</option>
             </select>
           </div>
@@ -2354,11 +2352,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
             <label>Material:</label>
             <select id="block-material-select">
               <option value="grid" selected>Grid Pattern</option>
-              <option value="smooth">Smooth Plastic</option>
               <option value="brick">Brick Wall</option>
               <option value="wood">Wood Planks</option>
-              <option value="grass">Grass</option>
-              <option value="neon">Neon / Glowing</option>
             </select>
           </div>
 
@@ -2947,7 +2942,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     // --- PROCEDURAL TEXTURE GENERATOR ---
     const textureCache = {};
     function getMaterialTexture(matType) {
-      if (matType === 'smooth' || matType === 'neon') return null;
+      if (!['grid','brick','wood','kill','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
       if (textureCache[matType]) return textureCache[matType];
 
       const canvas = document.createElement('canvas');
@@ -2972,14 +2967,33 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         for (let y = 0; y <= 128; y += 32) {
           ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(128, y); ctx.stroke();
         }
-      } else if (matType === 'grass') {
-        ctx.fillStyle = '#2ecc71'; ctx.fillRect(0, 0, 128, 128);
-        ctx.fillStyle = '#27ae60';
-        for (let i = 0; i < 40; i++) {
-          const gx = Math.random() * 128;
-          const gy = Math.random() * 128;
-          ctx.fillRect(gx, gy, 4, 8);
-        }
+      } else if (matType === 'kill') {
+        // A tileable pixel skull-and-crossbones stamp. Its repeat/UV scaling
+        // uses the exact same path as Grid Pattern, including resized parts.
+        ctx.fillStyle = '#343a43';
+        ctx.lineCap = 'square';
+        ctx.lineWidth = 11;
+        ctx.beginPath();
+        ctx.moveTo(32, 102); ctx.lineTo(96, 55);
+        ctx.moveTo(32, 55); ctx.lineTo(96, 102);
+        ctx.stroke();
+        // Squared bone ends, deliberately drawn as pixels rather than emojis.
+        [[25,47],[93,47],[25,94],[93,94]].forEach(([x,y])=>{
+          ctx.fillRect(x,y,12,12);
+        });
+        // Skull silhouette and jaw.
+        ctx.fillRect(42, 19, 44, 12);
+        ctx.fillRect(35, 30, 58, 31);
+        ctx.fillRect(43, 60, 42, 14);
+        ctx.fillRect(49, 74, 30, 8);
+        // Negative-space eye sockets, nose and teeth.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(45, 40, 13, 13);
+        ctx.fillRect(70, 40, 13, 13);
+        ctx.fillRect(61, 54, 7, 7);
+        ctx.fillRect(54, 69, 5, 10);
+        ctx.fillRect(63, 69, 5, 10);
+        ctx.fillRect(72, 69, 5, 10);
       } else if (matType === 'yellow_flag') {
         ctx.fillStyle = '#f1c40f'; ctx.fillRect(0, 0, 128, 128);
         ctx.fillStyle = '#f39c12'; ctx.beginPath(); ctx.arc(64, 64, 30, 0, Math.PI * 2); ctx.fill();
@@ -4345,7 +4359,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       else if (blockData.shape === 'wedge') geo = createWedgeGeometry();
       else geo = new THREE.BoxGeometry(1, 1, 1);
 
-      const mapTexture = getMaterialTexture(blockData.material || 'grid');
+      const mapTexture = getMaterialTexture(blockData.actionType === 'kill' ? 'kill' : (blockData.material || 'grid'));
       const isUncollidable = blockData.canCollide === false;
       const transparency = blockData.transparency || 0;
       const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
@@ -4356,11 +4370,6 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         opacity: opacityVal
       };
       
-      if (blockData.material === 'neon') {
-        matOptions.emissive = new THREE.Color(blockData.color || '#888888');
-        matOptions.emissiveIntensity = 1.0;
-      }
-
       if (mapTexture) {
         const tex = mapTexture.clone();
         tex.needsUpdate = true;
@@ -4377,7 +4386,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         matOptions.map = tex;
       }
 
-      if (blockData.actionType === 'kill') matOptions.emissive = 0x550000;
+      if (blockData.actionType === 'kill') matOptions.emissive = 0x220808;
 
       const mat = new THREE.MeshLambertMaterial(matOptions);
       const mesh = new THREE.Mesh(geo, mat);
@@ -5000,8 +5009,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         partFields.style.display = 'block';
 
         document.getElementById('block-shape-select').value = block.shape || 'box';
-        document.getElementById('block-action-select').value = block.actionType || 'normal';
-        document.getElementById('block-material-select').value = block.material || 'grid';
+        document.getElementById('block-action-select').value = block.actionType === 'kill' ? 'kill' : 'normal';
+        document.getElementById('block-material-select').value = ['grid','brick','wood'].includes(block.material) ? block.material : 'grid';
         document.getElementById('block-color-input').value = block.color || '#888888'; kwgSyncRGBField('block-color-input');
         document.getElementById('block-transparency-input').value = block.transparency !== undefined ? block.transparency : 0;
         document.getElementById('block-collidable-checkbox').checked = block.canCollide !== false;
@@ -6464,6 +6473,43 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       return false;
     }
 
+    // V3.37 — Hazard contact is checked before collision resolution, and again
+    // after ground snapping. Ordinary solid collision must not cancel a kill.
+    // Uses player capsule extents and block bounds so side/top/bottom contact
+    // is detected even when the player never enters the solid block volume.
+    function isPlayerTouchingKillPart(block,pos) {
+      if (!block || block.actionType !== 'kill' || !pos) return false;
+      const bx=Number(block.x)||0, by=Number(block.y)||0, bz=Number(block.z)||0;
+      const hx=Math.max(.005,Math.abs(Number(block.scaleX)||1)*.5);
+      const hy=Math.max(.005,Math.abs(Number(block.scaleY)||1)*.5);
+      const hz=Math.max(.005,Math.abs(Number(block.scaleZ)||1)*.5);
+      const radius=PLAYER_RADIUS + .07;
+      const foot=pos.y, head=pos.y+PLAYER_HEIGHT;
+      const epsilon=.065;
+      if (head < by-hy-epsilon || foot > by+hy+epsilon) return false;
+      const dx=Math.abs(pos.x-bx),dz=Math.abs(pos.z-bz);
+      const shape=block.shape||'box';
+      if(shape==='sphere') {
+        // Ellipsoid approximated at the closest point along player height.
+        const cy=Math.max(foot,Math.min(head,by));
+        const ny=(cy-by)/hy;
+        const section=Math.sqrt(Math.max(0,1-ny*ny));
+        const rx=hx*section+radius, rz=hz*section+radius;
+        return (dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)<=1;
+      }
+      if(shape==='cylinder') {
+        const rx=hx+radius,rz=hz+radius;
+        return (dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)<=1;
+      }
+      // For boxes and wedges, the block's bounding prism is a conservative
+      // contact shape. The physics engine already uses this approximation.
+      const nearX=Math.max(0,dx-hx),nearZ=Math.max(0,dz-hz);
+      return nearX*nearX+nearZ*nearZ<=(radius+epsilon)*(radius+epsilon);
+    }
+    function touchesAnyKillPart(blocks,pos){
+      return blocks.some(b=>b.actionType==='kill'&&isPlayerTouchingKillPart(b,pos));
+    }
+
     function resolveHorizontalCollisionsMP(pos,blocks) {
       const pr=0.42, ph=2.35, feet=pos.y, head=feet+ph;
       for (const b of blocks) {
@@ -6655,6 +6701,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       if (keys['w']||keys['arrowup']) moveDir+=1;
       if (keys['s']||keys['arrowdown']) moveDir-=1;
       const isMoving=moveDir!==0;
+      // Remember contact before the physics engine pushes us out of solids.
+      let touchedHazard=!isEditMode && touchesAnyKillPart(blocks,player.position);
 
       if (targetStepY!==0) {
         const stepStep=targetStepY*.25;
@@ -6668,6 +6716,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         const dz=Math.cos(player.rotation.y)*moveSpeed*moveDir;
         player.position.x+=dx;
         player.position.z+=dz;
+        if(!isEditMode && touchesAnyKillPart(blocks,player.position)) touchedHazard=true;
 
         const ground=getGroundSurfaceUnderPlayerMP(player.position.x,player.position.y,player.position.z,blocks);
         if (ground.floorY!==-Infinity && isGrounded) {
@@ -6702,16 +6751,16 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         isGrounded=false;
       }
 
-      let hitKill=false;
+      if(!isEditMode && touchesAnyKillPart(blocks,player.position)) touchedHazard=true;
+      // Legacy flags in older worlds remain functional, but cannot be placed.
       for (const b of blocks) {
-        if (!b.actionType || b.actionType==='normal') continue;
+        if (b.actionType!=='checkpoint' && b.actionType!=='finish') continue;
         if (!checkPlayerIntersectingBlockData(b,player.position)) continue;
-        if (b.actionType==='kill') hitKill=true;
-        else if (b.actionType==='checkpoint') triggerCheckpoint(b);
-        else if (b.actionType==='finish') triggerFinishLine();
+        if (b.actionType==='checkpoint') triggerCheckpoint(b);
+        else triggerFinishLine();
       }
 
-      if (hitKill || player.position.y < -30) {
+      if (touchedHazard || player.position.y < -30) {
         respawnPlayer();
         return;
       }
