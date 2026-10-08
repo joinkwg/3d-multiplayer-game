@@ -14,6 +14,7 @@ if (!DATABASE_URL) throw new Error('DATABASE_URL is required.');
 const SUPABASE_URL = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '');
 const SUPABASE_STORE_BUCKET = String(process.env.SUPABASE_STORE_BUCKET || 'store-assets');
+const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
 const STORE_CATEGORIES = new Set(['eyes','mouth','torso_decal','hat','head_shape']);
 
 const pool = new Pool({
@@ -167,6 +168,32 @@ async function ensureStoreBucket() {
     const text = await create.text().catch(() => '');
     throw new Error(`Could not create store bucket (${create.status}) ${text}`.trim());
   }
+}
+
+// World thumbnails are public JPEG screenshots; server validates the bytes and owns the upload.
+async function uploadWorldThumbnail(worldId, imageData) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    const err=new Error('Thumbnail storage is not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).');
+    err.clientMessage=err.message; throw err;
+  }
+  if (typeof imageData !== 'string' || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(imageData) || imageData.length>2400000) {
+    const err=new Error('Invalid thumbnail. Capture a new screenshot.');err.clientMessage=err.message;throw err;
+  }
+  const bytes=Buffer.from(imageData.slice('data:image/jpeg;base64,'.length),'base64');
+  if (bytes.length<100 || bytes.length>1500000 || bytes[0]!==0xff || bytes[1]!==0xd8 || bytes[bytes.length-2]!==0xff || bytes[bytes.length-1]!==0xd9) {
+    const err=new Error('Thumbnail must be a JPEG smaller than 1.5 MB.');err.clientMessage=err.message;throw err;
+  }
+  const bucket=encodeURIComponent(SUPABASE_THUMBNAIL_BUCKET);
+  const check=await fetch(`${SUPABASE_URL}/storage/v1/bucket/${bucket}`,{headers:storageHeaders()});
+  if (check.status===404) {
+    const created=await fetch(`${SUPABASE_URL}/storage/v1/bucket`,{method:'POST',headers:storageHeaders({'Content-Type':'application/json'}),body:JSON.stringify({id:SUPABASE_THUMBNAIL_BUCKET,name:SUPABASE_THUMBNAIL_BUCKET,public:true})});
+    if (!created.ok && created.status!==409) throw new Error(`Could not create thumbnail bucket (${created.status}).`);
+  } else if (!check.ok) throw new Error(`Could not check thumbnail bucket (${check.status}).`);
+  const key=`world-${Number(worldId)}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}.jpg`;
+  const url=`${SUPABASE_URL}/storage/v1/object/${bucket}/${key}`;
+  const uploaded=await fetch(url,{method:'POST',headers:storageHeaders({'Content-Type':'image/jpeg','x-upsert':'false'}),body:bytes});
+  if (!uploaded.ok) throw new Error(`Thumbnail upload failed (${uploaded.status}).`);
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${key}`;
 }
 
 function fileBufferFromSocket(value) {
@@ -412,6 +439,9 @@ async function worldSummary(row) {
   const room = `world:${row.name}`;
   return {
     name: row.name,
+    displayName: String(row.data?.displayName || row.name).slice(0,40),
+    description: String(row.data?.description || '').slice(0,300),
+    thumbnailUrl: String(row.data?.thumbnailUrl || ''),
     onlineCount: io.sockets.adapter.rooms.get(room)?.size || 0,
     ownerUsername: row.owner_username || null,
     likes: Number(row.like_count || 0),
@@ -702,7 +732,7 @@ io.on('connection', (socket) => {
         pool.query('SELECT COUNT(*)::int AS n FROM world_likes WHERE user_id=$1',[u.id]),
         pool.query('SELECT COUNT(*)::int AS n FROM user_store_items WHERE user_id=$1',[u.id]),
         pool.query(`
-          SELECT w.name,w.created_at AS "createdAt",
+          SELECT w.name,w.data,w.created_at AS "createdAt",
                  COUNT(wl.user_id)::int AS "likeCount"
           FROM worlds w
           LEFT JOIN world_likes wl ON wl.world_id=w.id
@@ -715,7 +745,7 @@ io.on('connection', (socket) => {
       const showcaseIds = (u.showcased_world_ids || []).map(Number);
       const byId = new Map();
       const ownedWithIds = await pool.query(`
-        SELECT w.id,w.name,w.created_at AS "createdAt",
+        SELECT w.id,w.name,w.data,w.created_at AS "createdAt",
                COUNT(wl.user_id)::int AS "likeCount"
         FROM worlds w
         LEFT JOIN world_likes wl ON wl.world_id=w.id
@@ -724,7 +754,7 @@ io.on('connection', (socket) => {
         ORDER BY w.created_at DESC
       `,[u.id]);
       ownedWithIds.rows.forEach(w => byId.set(Number(w.id), {
-        id:Number(w.id), name:w.name, createdAt:w.createdAt, likeCount:Number(w.likeCount||0)
+        id:Number(w.id), name:w.name, displayName:String(w.data?.displayName||w.name), thumbnailUrl:String(w.data?.thumbnailUrl||''), createdAt:w.createdAt, likeCount:Number(w.likeCount||0)
       }));
       const showcasedWorlds = showcaseIds.map(id => byId.get(id)).filter(Boolean).slice(0,3);
 
@@ -766,7 +796,7 @@ io.on('connection', (socket) => {
           },
           showcasedWorlds,
           ownedWorlds: u.id === socket.user.id ? ownedWithIds.rows.map(w => ({
-            id:Number(w.id),name:w.name,createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
+            id:Number(w.id),name:w.name,displayName:String(w.data?.displayName||w.name),thumbnailUrl:String(w.data?.thumbnailUrl||''),createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
           })) : []
         }
       });
@@ -859,6 +889,7 @@ io.on('connection', (socket) => {
         if (!t.rowCount) return cb({success:false,message:'That template no longer exists.'});
         data = JSON.parse(JSON.stringify(t.rows[0].data));
         data.name = name;
+        delete data.displayName; delete data.description; delete data.thumbnailUrl;
       } else {
         data = {
           name,
@@ -1044,6 +1075,35 @@ io.on('connection', (socket) => {
       io.to(`world:${world.name}`).emit('world_settings_updated',next);
       cb && cb({success:true});
     } catch (e) { console.error(e); cb && cb({success:false,message:'Could not save world settings.'}); }
+  });
+
+  socket.on('world_info_update', async ({worldName,displayName,description,thumbnailData} = {}, cb) => {
+    if (!requireAuth(socket,cb)) return;
+    const key=cleanWorldName(worldName);
+    if (socket.data.worldName!==key) return cb && cb({success:false,message:'Join this world before editing its info.'});
+    const title=String(displayName||'').trim();
+    const desc=String(description||'').trim();
+    if (!title || title.length>40 || /[\x00-\x1f\x7f]/.test(title)) return cb && cb({success:false,message:'World title must be 1–40 characters.'});
+    if (desc.length>300 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(desc)) return cb && cb({success:false,message:'Description must be 300 characters or fewer.'});
+    try {
+      const result=await queueWorldSave(key,async()=>{
+        const world=await getWorldByName(key);
+        if (!world) return {success:false,message:'World not found.'};
+        if (!canEditWorld(socket,world)) return {success:false,message:'You cannot edit this world.'};
+        const data=world.data||{};
+        let thumbnailUrl=data.thumbnailUrl||'';
+        if (thumbnailData!==undefined && thumbnailData!==null) {
+          thumbnailUrl=await uploadWorldThumbnail(world.id,thumbnailData);
+        }
+        data.displayName=title;
+        data.description=desc;
+        data.thumbnailUrl=thumbnailUrl;
+        await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
+        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,thumbnailUrl});
+        return {success:true,displayName:title,description:desc,thumbnailUrl};
+      });
+      cb && cb(result);
+    } catch(e){console.error('World info update:',e);cb && cb({success:false,message:e.clientMessage||'Could not save world info or thumbnail. Check thumbnail storage configuration.'});}
   });
 
   socket.on('save_appearance', async (appearance, cb) => {
