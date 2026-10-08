@@ -731,6 +731,311 @@ body.kwg-thumbnail-camera #kwg-world-viewport{top:0!important;left:0!important;r
 body.kwg-thumbnail-camera #kwg-world-canvas{top:0!important}
 body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #hud,body.kwg-thumbnail-camera #room-info-label,body.kwg-thumbnail-camera #build-toolbar,body.kwg-thumbnail-camera #kwg-settings-window,body.kwg-thumbnail-camera #kwg-properties-window,body.kwg-thumbnail-camera .kwg-studio-resizer,body.kwg-thumbnail-camera #save-status{display:none!important}
 
+
+/* ===============================================================
+   KWG V3.29 · Studio visual system
+   Consistent panel headers, spacing, control hierarchy and world HUD.
+   Cosmetic only: docking, saving, tools, camera and backend unchanged.
+   =============================================================== */
+body{
+  --studio-bg:#10151d;--studio-surface:#171e28;--studio-raised:#1d2734;
+  --studio-border:#334253;--studio-separator:#293746;
+  --studio-text:#edf3fc;--studio-muted:#9aaec5;
+  --studio-accent:#64aaff;--studio-radius:7px;
+}
+body.kwg-in-world #hud{
+  height:var(--kwg-topbar-height)!important;
+  padding:7px 14px!important;
+  gap:8px!important;
+  background:#141c26!important;
+  border-bottom:1px solid #344459!important;
+  box-shadow:0 3px 16px rgba(0,0,0,.18)!important;
+}
+#hud .kwg-control-icon{
+  width:36px!important;height:36px!important;min-width:36px!important;
+  border-radius:7px!important;background:#222e3d!important;
+  border:1px solid #3c5068!important;box-shadow:none!important;
+  transition:background .15s,border-color .15s,transform .15s;
+}
+#hud .kwg-control-icon:hover{
+  background:#30425a!important;border-color:#6dafff!important;
+  transform:translateY(-1px);
+}
+#hud #toggle-edit-btn.active{
+  background:#205287!important;border-color:#69aeff!important;
+  box-shadow:inset 0 0 0 1px rgba(125,188,255,.12)!important;
+}
+#hud #leave-world-btn{background:#30232b!important;border-color:#654351!important}
+#hud #leave-world-btn:hover{background:#56303d!important;border-color:#bf7186!important}
+#hud #save-status{
+  border-radius:6px!important;background:#233b51!important;
+  border:1px solid #466887!important;color:#d9edff!important;
+  font-size:11px!important;padding:8px 12px!important;
+}
+body.kwg-in-world #room-info-label{
+  display:flex!important;flex-direction:column;justify-content:center;
+  align-items:flex-end;gap:2px;top:0!important;right:15px!important;
+  height:var(--kwg-topbar-height);padding:5px 0!important;
+  max-width:min(42vw,450px)!important;line-height:1.15!important;
+  font-size:13px!important;font-weight:700!important;
+  color:#f2f7ff!important;text-transform:none!important;letter-spacing:0!important;
+}
+#room-info-label .kwg-world-label{
+  color:#839ab5;font-size:9px;font-weight:800;letter-spacing:.12em;
+}
+#room-info-label #current-room-text{
+  display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;
+}
+body.kwg-editing #build-toolbar,
+body.kwg-editing #kwg-properties-window,
+body.kwg-editing #kwg-settings-window{
+  background:var(--studio-surface)!important;
+  border:0!important;border-radius:0!important;
+  box-shadow:none!important;
+  padding:0!important;color:var(--studio-text)!important;
+  font-family:inherit;font-size:12px!important;
+  scrollbar-width:thin;scrollbar-color:#45576c transparent;
+  overscroll-behavior:contain;
+}
+body.kwg-editing #build-toolbar,
+body.kwg-editing #kwg-properties-window{
+  border-right:1px solid var(--studio-border)!important;
+}
+body.kwg-editing #kwg-settings-window{
+  border-left:1px solid var(--studio-border)!important;
+}
+/* Remove inherited 90% zoom; apply one explicit typographic scale to all panels. */
+body.kwg-editing #build-toolbar > *,
+body.kwg-editing #kwg-properties-window > *,
+body.kwg-editing #kwg-settings-window > *{zoom:1!important}
+body.kwg-editing .kwg-panel-title{
+  box-sizing:border-box;display:flex;align-items:center;gap:9px;
+  position:sticky;top:0;z-index:3;min-height:44px;
+  margin:0!important;padding:0 13px!important;
+  background:#202a37!important;border:0!important;
+  border-bottom:1px solid #3a4c60!important;
+  color:#e5eef9!important;
+  font-size:11px!important;font-weight:800!important;
+  letter-spacing:.085em!important;line-height:1.2!important;
+  text-transform:uppercase!important;
+}
+.kwg-panel-title-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 20px;width:20px;height:20px;
+  border-radius:5px;background:#2b4058;color:#8fc5ff;
+  font-size:13px;letter-spacing:0;
+}
+body.kwg-editing #build-toolbar .kwg-icon-tools{
+  display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:8px!important;margin:13px 12px 10px!important;
+}
+body.kwg-editing #build-toolbar .kwg-icon-tools button{
+  min-height:42px!important;height:42px!important;aspect-ratio:auto!important;
+  border-radius:7px!important;background:#202b39!important;
+  border:1px solid #3b4e64!important;box-shadow:none!important;
+  padding:8px!important;
+}
+body.kwg-editing #build-toolbar .kwg-icon-tools button svg{width:19px;height:19px}
+body.kwg-editing #build-toolbar .kwg-icon-tools button:hover{
+  background:#2b3e54!important;border-color:#74b2ff!important;
+}
+body.kwg-editing #build-toolbar .kwg-icon-tools button.active{
+  background:#234f7c!important;border-color:#78b8ff!important;
+  color:#fff!important;box-shadow:inset 0 0 0 1px rgba(137,194,255,.14)!important;
+}
+body.kwg-editing .kwg-editor-shortcuts{
+  margin:0 12px 10px;border-top:1px solid var(--studio-separator);
+  color:var(--studio-muted);font-size:10px;line-height:1.6;
+}
+body.kwg-editing .kwg-editor-shortcuts summary{
+  cursor:pointer;padding:8px 0;user-select:none;
+  font-size:10px;font-weight:650;color:#a9bed6;
+}
+body.kwg-editing .kwg-editor-shortcuts > div{padding:2px 0}
+body.kwg-editing .kwg-editor-shortcuts kbd{
+  font:inherit;font-weight:750;color:#d7e7fa;background:#2c3949;
+  border:1px solid #46566a;border-radius:3px;padding:0 3px;
+}
+body.kwg-editing #part-properties-container{padding:13px!important}
+body.kwg-editing #part-properties-container > div:first-child{
+  border:0!important;margin:0!important;padding:0!important;
+}
+body.kwg-editing #no-selection-msg{
+  padding:24px 10px!important;margin:0!important;
+  color:#8fa4bc!important;line-height:1.6;font-style:normal!important;
+  background:#1d2836;border:1px dashed #40556c;border-radius:7px;
+}
+body.kwg-editing #selected-part-fields{display:none}
+body.kwg-editing #selected-part-fields:not([style*="display: none"]):not([style*="display:none"]){
+  display:block;
+}
+body.kwg-editing .tool-row{
+  display:flex;align-items:center;gap:8px;min-width:0;
+  padding:7px 0;margin:0!important;
+  border-bottom:1px solid #293745;
+}
+body.kwg-editing .tool-row:last-child{border-bottom:0}
+body.kwg-editing .tool-row label{
+  color:#b9c9db;font-size:10px!important;letter-spacing:0!important;
+  font-weight:650!important;text-transform:none!important;
+  min-width:0;flex:1;
+}
+body.kwg-editing .tool-row select,
+body.kwg-editing .tool-row input[type="number"]{
+  min-width:0;max-width:57%;width:auto!important;
+  padding:7px 8px!important;
+  border:1px solid #42556c!important;border-radius:5px!important;
+  background:#101923!important;color:#eaf3ff!important;
+  font-size:11px!important;
+}
+body.kwg-editing .tool-row input[type="number"]{width:74px!important}
+body.kwg-editing .tool-row input[type="color"]{
+  width:43px;height:29px;padding:3px;
+  border:1px solid #4a607a;border-radius:5px;
+  background:#111d29;cursor:pointer;
+}
+body.kwg-editing .tool-row input[type="range"]{
+  width:92px!important;max-width:53%;accent-color:#6aafff;
+}
+body.kwg-editing .tool-row input[type="checkbox"]{
+  width:16px;height:16px;accent-color:#67aaff;
+}
+body.kwg-editing .kwg-settings-tabs{
+  display:flex!important;gap:5px!important;margin:0!important;
+  padding:12px 12px 8px!important;
+  border-bottom:1px solid var(--studio-separator);
+}
+body.kwg-editing .kwg-settings-tabs button{
+  flex:1;min-width:0;padding:9px 5px!important;
+  background:transparent!important;border:1px solid transparent!important;
+  border-radius:6px!important;color:#9fb2c9!important;
+  font-size:10px!important;font-weight:750!important;letter-spacing:.02em;
+  transition:background .12s;
+}
+body.kwg-editing .kwg-settings-tabs button:hover{
+  background:#253447!important;color:#eef5ff!important;
+}
+body.kwg-editing .kwg-settings-tabs button.active{
+  background:#254769!important;border-color:#466e95!important;
+  color:#edf6ff!important;
+}
+body.kwg-editing #kwg-settings-environment,
+body.kwg-editing #kwg-settings-info{
+  padding:10px 13px 20px!important;
+}
+body.kwg-editing #kwg-settings-environment > div:first-child{
+  border:0!important;margin:0!important;padding:0!important;
+}
+body.kwg-editing #kwg-info-title,
+body.kwg-editing #kwg-info-description{
+  background:#101923!important;border:1px solid #42566d!important;
+  border-radius:6px!important;padding:10px!important;
+  font-size:12px!important;line-height:1.45!important;
+}
+body.kwg-editing #kwg-info-title:focus,
+body.kwg-editing #kwg-info-description:focus{
+  outline:2px solid rgba(100,170,255,.22)!important;
+  border-color:#75b4ff!important;
+}
+body.kwg-editing .kwg-info-label{
+  margin-top:12px!important;color:#c1d1e4!important;
+  font-size:10px!important;letter-spacing:.055em!important;
+}
+body.kwg-editing .kwg-info-hint{
+  font-size:10px!important;color:#829bb5!important;line-height:1.5;
+}
+body.kwg-editing .kwg-info-photo{
+  border-radius:7px;border:1px solid #40556c;background:#101a26;
+}
+body.kwg-editing .kwg-info-camera-button{
+  border-radius:6px!important;background:#285a8c!important;
+  border:1px solid #548fca!important;font-size:11px!important;
+  padding:11px!important;transition:background .12s;
+}
+body.kwg-editing .kwg-info-camera-button:hover{background:#3672aa!important}
+#kwg-world-viewport{background:#0c1420!important}
+body.kwg-editing #kwg-world-viewport{
+  border-left:0!important;border-right:0!important;
+}
+body.kwg-editing #kwg-world-viewport-title{
+  display:flex!important;align-items:center;justify-content:space-between;
+  height:38px!important;padding:0 14px!important;
+  background:#1a2532!important;border-bottom:1px solid #3b4e63!important;
+  font-size:10px!important;color:#afc1d6!important;letter-spacing:.08em!important;
+}
+body.kwg-editing #kwg-world-canvas{top:38px!important;bottom:23px!important}
+.kwg-scene-heading{display:inline-flex;align-items:center;gap:9px;font-weight:800}
+.kwg-scene-dot{
+  display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:#64b0ff;box-shadow:0 0 0 3px rgba(100,176,255,.13);
+}
+.kwg-scene-stats{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:10px!important;letter-spacing:0!important;
+  color:#b8cce4!important;
+}
+#part-counter{
+  padding:5px 8px;border:1px solid #39516b;border-radius:5px;
+  background:#26384b;color:#d7eaff;font-size:10px;font-weight:700;
+}
+#kwg-scene-footer{
+  display:none;position:absolute;bottom:0;left:0;right:0;height:23px;
+  box-sizing:border-box;padding:0 12px;align-items:center;justify-content:space-between;
+  background:#192431;border-top:1px solid #33465a;
+  color:#8ea4bb;font-size:9px;letter-spacing:.025em;
+  pointer-events:none;
+}
+body.kwg-editing #kwg-scene-footer{display:flex}
+body.kwg-thumbnail-camera #kwg-scene-footer{display:none!important}
+body.kwg-thumbnail-camera #kwg-world-canvas{top:0!important;bottom:0!important}
+body.kwg-editing #world-chat{display:none!important}
+body.kwg-in-world:not(.kwg-editing) #world-chat{
+  border-radius:9px!important;overflow:hidden;
+  background:rgba(18,26,36,.95)!important;
+  border:1px solid #3e536b!important;
+  box-shadow:0 16px 38px rgba(0,0,0,.32)!important;
+}
+body.kwg-in-world #world-chat-header{
+  padding:11px 13px!important;background:#223145!important;
+  color:#e3f0ff!important;font-size:11px!important;
+  letter-spacing:.06em!important;border-bottom:1px solid #3c5066!important;
+}
+body.kwg-in-world #world-chat-messages{
+  padding:12px!important;font-size:12px!important;line-height:1.5;
+}
+body.kwg-in-world #world-chat-form{
+  padding:9px!important;gap:8px!important;background:#192532!important;
+  border-top:1px solid #3a4e65!important;
+}
+body.kwg-in-world #world-chat-input{
+  border-radius:6px!important;border:1px solid #41556c!important;
+  background:#101a26!important;padding:9px!important;
+  font-size:11px!important;
+}
+body.kwg-in-world #world-chat-send{
+  border-radius:6px!important;border:1px solid #5797d4!important;
+  background:#2a659c!important;padding:8px 13px!important;
+  font-size:10px!important;box-shadow:none!important;
+}
+body.kwg-in-world #world-chat-send:hover{background:#367db8!important}
+body.kwg-editing .kwg-studio-resizer::after{
+  background:#3e5267!important;opacity:.7;
+}
+body.kwg-editing .kwg-studio-resizer:hover::after,
+body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
+  background:#77b8ff!important;opacity:1;
+}
+@media(max-width:620px){
+  body.kwg-editing #build-toolbar .kwg-icon-tools{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px!important;
+  }
+  body.kwg-editing .kwg-panel-title{padding:0 8px!important;font-size:10px!important}
+  body.kwg-editing #kwg-world-viewport-title{padding:0 7px!important}
+  #kwg-scene-footer span:last-child{display:none}
+  #room-info-label .kwg-world-label{display:none}
+}
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -911,7 +1216,7 @@ body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #h
     <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
   </div>
 
-  <div id="room-info-label">World: <span id="current-room-text">Default World</span></div>
+  <div id="room-info-label"><span class="kwg-world-label">CURRENT WORLD</span><span id="current-room-text">Default World</span></div>
 
 
   <!-- Per-world chat -->
@@ -976,10 +1281,7 @@ body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #h
 
   <!-- Build Toolbar -->
   <div id="build-toolbar">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 2px solid #444; padding-bottom: 6px;">
-      <h4 style="margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Toolbar</h4>
-      <span id="part-counter" style="font-size: 11px; font-weight: bold; color: #5bc0de;">0/1400 Parts</span>
-    </div>
+    <div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">✦</span><span>TOOLBAR</span></div>
 
     <div class="mode-grid kwg-icon-tools">
 <button id="tool-select-btn" title="Select one part" aria-label="Select" onclick="setBuildSubTool('select')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-7 1-3 7z"/></svg></button>
@@ -990,7 +1292,7 @@ body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #h
 <button id="tool-delete-btn" title="Remove" aria-label="Remove" onclick="setBuildSubTool('delete')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7"/></svg></button>
     </div>
 
-    <div style="font-size:10px;color:#9db5ca;text-align:center;margin:5px 0">Ctrl+R: horizontal rotate · Ctrl+T: vertical rotate · Ctrl+C/V: copy/paste</div>
+    <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>Ctrl</kbd> + <kbd>R</kbd> Horizontal rotate</div><div><kbd>Ctrl</kbd> + <kbd>T</kbd> Vertical rotate</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div></details>
     <!-- Selected Part Properties UI -->
     <div id="part-properties-container">
       <div style="border-top: 2px solid #444; margin: 8px 0 10px 0; padding-top: 8px;">
@@ -1400,7 +1702,8 @@ body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #h
     function updatePartCounter() {
       if (!currentWorldData || !currentWorldData.blocks) return;
       const count = Object.keys(currentWorldData.blocks).length;
-      document.getElementById('part-counter').textContent = `${count}/1400 Parts`;
+      const counter = document.getElementById('part-counter');
+      if(counter)counter.textContent = `${count.toLocaleString()} / 1,400 parts`;
     }
 
     // --- PROCEDURAL TEXTURE GENERATOR ---
@@ -2065,7 +2368,7 @@ body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #h
     const kwgWorldViewport = document.createElement('section');
     kwgWorldViewport.id = 'kwg-world-viewport';
     kwgWorldViewport.setAttribute('aria-label','3D World Viewer');
-    kwgWorldViewport.innerHTML = '<div id="kwg-world-viewport-title">3D VIEWPORT</div><div id="kwg-world-canvas"></div>';
+    kwgWorldViewport.innerHTML = '<div id="kwg-world-viewport-title"><span class="kwg-scene-heading"><span class="kwg-scene-dot"></span> SCENE VIEW</span><span class="kwg-scene-stats"><span id="part-counter">0 / 1400 parts</span></span></div><div id="kwg-world-canvas"></div><div id="kwg-scene-footer"><span>WORLD EDITOR</span><span>Changes save when you exit Edit Mode</span></div>';
     document.body.appendChild(kwgWorldViewport);
     const kwgWorldCanvasHost = document.getElementById('kwg-world-canvas');
     kwgWorldCanvasHost.appendChild(renderer.domElement);
@@ -2886,14 +3189,14 @@ body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #h
     const editorPropertiesWindow = document.createElement('div');
     editorPropertiesWindow.id = 'kwg-properties-window';
     editorPropertiesWindow.className = 'kwg-editor-panel';
-    editorPropertiesWindow.innerHTML = '<div class="kwg-panel-title">PROPERTIES</div>';
+    editorPropertiesWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">☷</span><span>PROPERTIES</span></div>';
     document.body.appendChild(editorPropertiesWindow);
     const partPropertiesNode = document.getElementById('part-properties-container');
     editorPropertiesWindow.appendChild(partPropertiesNode);
     const editorSettingsWindow = document.createElement('div');
     editorSettingsWindow.id = 'kwg-settings-window';
     editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title">SETTINGS <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">📷 SET THUMBNAIL</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save when you exit Edit Mode.</div></div>';
+    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">📷 SET THUMBNAIL</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save when you exit Edit Mode.</div></div>';
     document.body.appendChild(editorSettingsWindow);
     const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
     if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
