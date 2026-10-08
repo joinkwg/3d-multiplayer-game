@@ -1917,6 +1917,79 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
         animation:kwgPixelProgress 3s steps(8,end) infinite;
       }
     }
+
+/* V3.34.1 — Notifications is a real dashboard page, not a floating popover. */
+#notifications-pane{width:100%;min-width:0}
+#notifications-pane .notifications-panel{
+  position:static!important;
+  top:auto!important;right:auto!important;left:auto!important;
+  width:100%!important;max-width:none!important;max-height:none!important;
+  overflow:visible!important;
+  display:block!important;box-sizing:border-box!important;
+  background:#202b3b!important;
+  border:2px solid #66829a!important;border-top:4px solid #9ce078!important;
+  border-radius:0!important;box-shadow:5px 5px 0 #080d16!important;
+}
+#notifications-pane .notifications-head{
+  padding:16px!important;
+  background:#27394b!important;
+  border-bottom:2px solid #526e83!important;
+  align-items:center;flex-wrap:wrap;
+}
+#notifications-pane .notifications-head h2{
+  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
+  font-size:12px!important;line-height:1.8!important;
+  color:#f1f5e7!important;text-shadow:2px 2px 0 #101827!important;
+}
+#notifications-pane .notifications-head-actions{display:flex;flex-wrap:wrap;gap:8px}
+#notifications-pane .notifications-head-actions button,
+#notifications-pane .notification-open{
+  padding:8px 11px!important;
+  background:#2c4256!important;
+  color:#f1f5e7!important;
+  border:2px solid #6b91a9!important;border-bottom:4px solid #314c63!important;
+  border-radius:0!important;box-shadow:2px 2px 0 #101622!important;
+  font-family:'Pixelify Sans','Courier New',monospace!important;
+  font-size:12px!important;letter-spacing:.015em!important;
+}
+#notifications-pane .notifications-head-actions button:hover,
+#notifications-pane .notification-open:hover{background:#3b5a70!important}
+#notifications-pane .notifications-list{
+  max-height:min(62vh,620px)!important;overflow-y:auto!important;
+  background:#192535!important;
+}
+#notifications-pane .notification-row{
+  grid-template-columns:9px minmax(0,1fr) auto!important;
+  align-items:center!important;gap:12px!important;
+  padding:15px 16px!important;
+  border-bottom:2px solid #34485b!important;
+  border-radius:0!important;background:#202e40!important;
+}
+#notifications-pane .notification-row.unread{background:#294356!important}
+#notifications-pane .notification-dot{
+  width:9px;height:9px;margin:0;background:#637e8e;
+  border-radius:0!important;box-shadow:none!important;
+}
+#notifications-pane .notification-row.unread .notification-dot{
+  background:#9ce078;box-shadow:none!important;
+}
+#notifications-pane .notification-message{
+  color:#f1f5e7!important;font-size:14px!important;line-height:1.5!important;
+  overflow-wrap:anywhere;
+}
+#notifications-pane .notification-time{
+  color:#adc4cc!important;font-size:12px!important;margin-top:5px!important;
+}
+#notifications-pane .notifications-empty{
+  padding:50px 20px!important;font-size:14px!important;color:#adc4cc!important;
+}
+@media(max-width:550px){
+  #notifications-pane .notifications-head{align-items:flex-start!important}
+  #notifications-pane .notifications-head-actions{width:100%}
+  #notifications-pane .notifications-head-actions button{flex:1;min-width:120px}
+  #notifications-pane .notification-row{grid-template-columns:9px minmax(0,1fr)!important}
+  #notifications-pane .notification-open{grid-column:2;justify-self:start}
+}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1991,11 +2064,11 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
         <button class="home-tab" data-home-tab="worlds" title="Worlds" aria-label="Worlds"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.8 12h16.4M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5S14.4 18.1 12 20.5M12 3.5C9.6 5.9 8.4 8.7 8.4 12s1.2 6.1 3.6 8.5"/></svg></span><span class="nav-label">Worlds</span></button>
         <button class="home-tab" data-home-tab="store" title="Store" aria-label="Store"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 9h14l-1 11H6z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></svg></span><span class="nav-label">Store</span></button>
         <button class="home-tab" data-home-tab="avatar" title="Avatar Editor" aria-label="Avatar Editor"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.5"/><path d="M7 11.5h10l1.5 9H5.5z"/><path d="M8 14 4 17M16 14l4 3"/></svg></span><span class="nav-label">Avatar</span></button>
-        <button id="notifications-btn" class="home-tab notifications-tab" type="button" title="Notifications" aria-label="Notifications"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 17h12l-1.5-2.2V10a4.5 4.5 0 0 0-9 0v4.8z"/><path d="M10 19.5a2.2 2.2 0 0 0 4 0"/></svg></span><span class="nav-label">Notifications</span><span id="notification-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
+        <button id="notifications-btn" class="home-tab notifications-tab" data-home-tab="notifications" type="button" title="Notifications" aria-label="Notifications"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 17h12l-1.5-2.2V10a4.5 4.5 0 0 0-9 0v4.8z"/><path d="M10 19.5a2.2 2.2 0 0 0 4 0"/></svg></span><span class="nav-label">Notifications</span><span id="notification-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
         <button class="home-tab admin-home-tab" data-home-tab="admin" title="Admin" aria-label="Admin" style="display:none"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14 5.1l2.9-.3.7 2.8 2.5 1.5-1.1 2.7 1.1 2.7-2.5 1.5-.7 2.8-2.9-.3L12 21l-2-2.1-2.9.3-.7-2.8-2.5-1.5L5 12.2 3.9 9.5 6.4 8l.7-2.8 2.9.3z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="nav-label">Admin</span></button>
       </div>
       <div id="home-pane" class="home-pane active"><div class="kwg-page-heading"><div><div class="profile-kicker">DASHBOARD</div><h2>HOME</h2><p>Your worlds, avatar, and collection at a glance.</p></div></div><div class="home-profile-grid"><div class="home-section"><h3>YOUR AVATAR</h3><div id="home-avatar-preview" class="home-avatar-preview"></div></div><div style="display:grid;gap:14px"><div class="home-section"><h3>YOUR WORLDS</h3><div id="home-owned-worlds" class="room-list-container home-owned-worlds"></div></div><div class="home-section"><h3>YOUR INVENTORY</h3><div id="home-inventory-grid" class="home-inventory-grid"></div></div></div></div></div>
-      <div id="notifications-panel" class="notifications-panel" style="display:none">
+      <div id="notifications-pane" class="home-pane"><section id="notifications-panel" class="notifications-panel">
         <div class="notifications-head">
           <div><div class="profile-kicker">SOCIAL</div><h2>NOTIFICATIONS</h2></div>
           <div class="notifications-head-actions">
@@ -2004,7 +2077,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
           </div>
         </div>
         <div id="notifications-list" class="notifications-list"></div>
-      </div>
+      </section></div>
       <div id="profile-pane" class="home-pane">
         <div class="profile-shell">
           <div class="profile-hero">
@@ -2305,7 +2378,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user',
       'get_profile','update_profile','get_friends','send_friend_request',
       'respond_friend_request','cancel_friend_request','remove_friend',
-      'get_notifications','mark_notifications_read','clear_notifications'
+      'mark_notifications_read','clear_notifications'
     ]);
     const kwgLoadingLabels={
       login:'SIGNING IN',register:'CREATING ACCOUNT',resume_session:'RESTORING SESSION',
@@ -5434,6 +5507,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       if (name === 'home') renderHomeOverview();
       if (name === 'profile') loadProfile(loggedInUsername);
       if (name === 'friends') loadFriends();
+      if (name === 'notifications') { renderNotifications(); refreshNotifications(true); }
       if (name === 'admin' && isAdmin) { const pane=document.getElementById('admin-pane'); const card=document.getElementById('admin-card'); if(card && card.parentElement!==pane) pane.appendChild(card); refreshAdminPanel(); }
     }
     document.querySelectorAll('.home-tab').forEach(b => b.addEventListener('click', () => switchHomeTab(b.dataset.homeTab)));
@@ -5565,7 +5639,6 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
         if(n.actorUsername){
           const open=document.createElement('button');open.className='notification-open';open.textContent='PROFILE';
           open.onclick=()=>{
-            document.getElementById('notifications-panel').style.display='none';
             if(!n.isRead) socket.emit('mark_notifications_read',{ids:[Number(n.id)]},()=>refreshNotifications());
             openPlayerProfile(n.actorUsername);
           };
@@ -5575,25 +5648,41 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       });
     }
 
-    function refreshNotifications(){
+    // Background checks (login + 20s polling) update only the unread badge.
+    // A user opening the Notifications page gets the shared loading dialog.
+    let kwgNotificationsRequestId=0;
+    function refreshNotifications(showLoading=false){
       if(!loggedInUsername)return;
-      socket.emit('get_notifications',{},res=>{
-        if(!res?.success)return;
-        kwgNotifications=res.notifications||[];
-        updateNotificationBadge(res.unread||0);renderNotifications();
-      });
+      const requestId=++kwgNotificationsRequestId;
+      const loading=showLoading?beginKWGLoading('LOADING NOTIFICATIONS',{
+        description:'Fetching your notifications',priority:25,immediate:true
+      }):null;
+      let finished=false;
+      const timeout=loading?setTimeout(()=>{
+        if(!finished){finished=true;loading.end();}
+      },15000):null;
+      try{
+        socket.emit('get_notifications',{},res=>{
+          if(!finished){
+            finished=true;
+            if(timeout!==null)clearTimeout(timeout);
+            if(loading)loading.end();
+          }
+          if(!res?.success)return;
+          // Ignore older results arriving after a newer refresh.
+          if(requestId!==kwgNotificationsRequestId)return;
+          kwgNotifications=res.notifications||[];
+          updateNotificationBadge(res.unread||0);
+          // Render the page only if it is visible; otherwise cache the data.
+          if(document.getElementById('notifications-pane').classList.contains('active'))
+            renderNotifications();
+        });
+      }catch(error){
+        if(timeout!==null)clearTimeout(timeout);
+        if(loading)loading.end();
+        console.warn('Notification refresh failed:',error);
+      }
     }
-
-    function toggleNotifications(){
-      const panel=document.getElementById('notifications-panel');
-      const opening=panel.style.display==='none';
-      panel.style.display=opening?'block':'none';
-      if(opening)refreshNotifications();
-    }
-
-    document.getElementById('notifications-btn').addEventListener('click',e=>{e.stopPropagation();toggleNotifications();});
-    document.getElementById('notifications-panel').addEventListener('click',e=>e.stopPropagation());
-    document.addEventListener('click',()=>{document.getElementById('notifications-panel').style.display='none';});
     document.getElementById('notifications-read-btn').addEventListener('click',()=>{
       socket.emit('mark_notifications_read',{},res=>{if(res?.success)refreshNotifications();});
     });
