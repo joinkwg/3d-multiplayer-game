@@ -2950,7 +2950,7 @@ body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #h
 
     const kwgCameraUI=document.createElement('div');
     kwgCameraUI.id='kwg-thumbnail-camera-ui';
-    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong><div class="kwg-camera-help">W A S D to fly · Q / E down/up · Shift to move faster · Drag to look · Scroll to zoom</div></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">📷 CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div><div class="kwg-info-hint">Your photo saves when you exit Edit Mode.</div></div></div>`;
+    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Hold right mouse button and drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong><div class="kwg-camera-help">W A S D move relative to view · Q / E down/up · Shift faster · Hold right-click to look · Scroll to zoom</div></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">📷 CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div><div class="kwg-info-hint">Your photo saves when you exit Edit Mode.</div></div></div>`;
     document.body.appendChild(kwgCameraUI);
     const kwgCameraDragzone=kwgCameraUI.querySelector('.kwg-camera-dragzone');
     const kwgFreeCamera={active:false,reviewing:false,keys:new Set(),yaw:0,pitch:0,dragging:false,lastX:0,lastY:0,photo:null};
@@ -2980,10 +2980,11 @@ body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #h
       const dir=kwgCamDirection.set(-Math.sin(cam.yaw)*Math.cos(cam.pitch),Math.sin(cam.pitch),-Math.cos(cam.yaw)*Math.cos(cam.pitch));
       camera.lookAt(camera.position.clone().add(dir));
       const right=new THREE.Vector3(Math.cos(cam.yaw),0,-Math.sin(cam.yaw));
-      const flatForward=new THREE.Vector3(-Math.sin(cam.yaw),0,-Math.cos(cam.yaw));
+      // Fly in the direction the camera is actually facing, including up/down pitch.
+      const forward=dir.clone();
       const velocity=new THREE.Vector3();
-      if(cam.keys.has('w')||cam.keys.has('arrowup'))velocity.add(flatForward);
-      if(cam.keys.has('s')||cam.keys.has('arrowdown'))velocity.sub(flatForward);
+      if(cam.keys.has('w')||cam.keys.has('arrowup'))velocity.add(forward);
+      if(cam.keys.has('s')||cam.keys.has('arrowdown'))velocity.sub(forward);
       if(cam.keys.has('d')||cam.keys.has('arrowright'))velocity.add(right);
       if(cam.keys.has('a')||cam.keys.has('arrowleft'))velocity.sub(right);
       if(cam.keys.has('e')||cam.keys.has(' '))velocity.y++;
@@ -2991,13 +2992,17 @@ body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #h
       if(velocity.lengthSq()>0)camera.position.addScaledVector(velocity.normalize(),delta*(cam.keys.has('shift')?35:12));
     }
     document.getElementById('kwg-info-camera-btn').addEventListener('click',startWorldThumbnailCamera);
+    kwgCameraDragzone.addEventListener('contextmenu',e=>{
+      if(kwgFreeCamera.active)e.preventDefault();
+    });
     kwgCameraDragzone.addEventListener('pointerdown',e=>{
-      if(e.button!==0 || !kwgFreeCamera.active || kwgFreeCamera.reviewing)return;
+      if(e.button!==2 || !kwgFreeCamera.active || kwgFreeCamera.reviewing)return;
       e.preventDefault();kwgFreeCamera.dragging=true;kwgFreeCamera.lastX=e.clientX;kwgFreeCamera.lastY=e.clientY;
       kwgCameraDragzone.setPointerCapture(e.pointerId);
     });
     kwgCameraDragzone.addEventListener('pointermove',e=>{
       if(!kwgFreeCamera.dragging)return;
+      if((e.buttons & 2)===0){kwgFreeCamera.dragging=false;return;}
       kwgFreeCamera.yaw-=(e.clientX-kwgFreeCamera.lastX)*.004;
       kwgFreeCamera.pitch=Math.max(-1.45,Math.min(1.45,kwgFreeCamera.pitch-(e.clientY-kwgFreeCamera.lastY)*.004));
       kwgFreeCamera.lastX=e.clientX;kwgFreeCamera.lastY=e.clientY;
