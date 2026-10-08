@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KWG 3D Online</title>
   <!-- Avatar Editor V2.5: stable shared thumbnails + GLB inventory fix -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     body { margin: 0; overflow: hidden; font-family: 'Courier New', Courier, monospace, sans-serif; user-select: none; }
     
@@ -1148,6 +1151,674 @@ body.kwg-editing #build-toolbar .kwg-icon-tools{margin-bottom:7px!important}
   body.kwg-in-world #hud .kwg-control-icon{padding:0 6px!important}
   .kwg-hud-button-label{font-size:8px}
   body.kwg-in-world #room-info-label{max-width:24vw!important}
+}
+
+/* ================================================================
+   KWG V3.31 — BLOCKWORK UI
+   Compact voxel-inspired design language for every game screen.
+   Visual changes only: no world, account, inventory or save logic.
+   ================================================================ */
+:root{
+  --vx-bg:#0c1119;
+  --vx-panel:#18212d;
+  --vx-panel-hi:#202d3b;
+  --vx-inset:#101923;
+  --vx-line:#36485c;
+  --vx-line-soft:#293a4b;
+  --vx-text:#e8f0f9;
+  --vx-muted:#96a9bd;
+  --vx-blue:#5aa8ff;
+  --vx-blue-dark:#255f9a;
+  --vx-green:#49b88b;
+  --vx-gold:#edc86a;
+  --vx-danger:#dc7580;
+  --vx-pixel:2px;
+  --vx-space:8px;
+}
+html,body{background:var(--vx-bg);color:var(--vx-text)}
+body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Arial,sans-serif!important;font-size:12px;letter-spacing:0}
+button,input,select,textarea{font-family:inherit!important}
+button{touch-action:manipulation}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{
+  outline:2px solid var(--vx-blue)!important;outline-offset:2px!important;
+}
+::selection{background:#326eab;color:white}
+*{scrollbar-width:thin;scrollbar-color:#49637f #111a25}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:#111a25}
+::-webkit-scrollbar-thumb{background:#3e556e;border:2px solid #111a25}
+/* Rectangular, layered surfaces with small square edge accents. */
+.overlay-screen{background:radial-gradient(ellipse at 50% 25%,#1a2b3c 0,#0b121b 65%)!important}
+.card,.customizer-card,#admin-card{
+  box-sizing:border-box;background:var(--vx-panel)!important;
+  border:1px solid var(--vx-line)!important;border-top:3px solid var(--vx-blue)!important;
+  border-radius:2px!important;box-shadow:6px 6px 0 #070c12,0 18px 45px rgba(0,0,0,.32)!important;
+  color:var(--vx-text)!important;
+}
+#auth-screen .card{width:min(380px,calc(100vw - 32px));padding:23px!important}
+#auth-screen .card h2{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  font-size:21px!important;letter-spacing:.035em!important;
+}
+#auth-screen .card h2::before,.kwg-brand-block h2::before{
+  content:'';display:inline-block;flex:none;width:21px;height:21px;
+  background:linear-gradient(135deg,#7ec5ff 0 49%,#377dc3 50%);
+  box-shadow:inset -4px -4px 0 #24558a,3px 3px 0 #091b2e;
+  border:1px solid #b1dcff;transform:rotate(0deg);
+}
+#auth-screen .card p{font-size:10px!important;letter-spacing:.11em;text-transform:uppercase;color:var(--vx-muted)!important}
+.card input,.card select,.card textarea,
+#admin-card input,#admin-card select,#admin-card textarea,
+#profile-bio-input,.admin-store-form input,.admin-store-form select,
+#world-chat-input,#kwg-info-title,#kwg-info-description{
+  box-sizing:border-box;background:var(--vx-inset)!important;color:var(--vx-text)!important;
+  border:1px solid #40556b!important;border-radius:2px!important;
+  box-shadow:inset 0 2px 0 rgba(0,0,0,.18)!important;
+  font-size:12px!important;line-height:1.35!important;
+}
+.card input,.card select,.card textarea{padding:9px 10px!important}
+.card input:focus,#admin-card input:focus{border-color:var(--vx-blue)!important;outline:none!important}
+input::placeholder,textarea::placeholder{color:#788da4!important}
+.submit-btn,.join-btn,.store-buy-btn,.admin-action,.admin-delete,
+#notifications-read-btn,#notifications-clear-btn,.profile-friend-actions button{
+  border:1px solid #5d9cdb!important;border-bottom:3px solid #1c4a78!important;
+  background:#2b6ca8!important;color:#f6faff!important;
+  border-radius:2px!important;box-shadow:none!important;
+  text-transform:uppercase!important;letter-spacing:.055em!important;
+  font-size:10px!important;font-weight:800!important;
+  padding:9px 12px!important;min-height:32px;
+  transition:background .12s,border-color .12s;
+}
+.submit-btn:hover,.join-btn:hover,.admin-action:hover,.store-buy-btn:not(:disabled):hover{
+  background:#367fbe!important;border-color:#80bfff!important;
+}
+.submit-btn:active,.join-btn:active,.admin-action:active{transform:translateY(1px)!important;box-shadow:none!important}
+.submit-btn.secondary{background:#257c60!important;border-color:#4abf96!important;border-bottom-color:#185840!important}
+.submit-btn.secondary:hover{background:#309776!important}
+.submit-btn.danger,.admin-delete{background:#913d4c!important;border-color:#d77989!important;border-bottom-color:#652b37!important}
+button:disabled{opacity:.52!important;cursor:not-allowed!important;filter:saturate(.5)}
+.error-msg{font-size:11px!important;color:#ff8c91!important;line-height:1.5}
+.close-btn{
+  width:25px;height:25px;right:11px!important;top:10px!important;
+  display:flex;align-items:center;justify-content:center;
+  background:#263648;border:1px solid #526781;border-radius:2px;
+  font-size:17px!important;color:#d4e1ef!important;line-height:1;
+}
+.close-btn:hover{background:#753a49!important;color:#fff!important}
+/* Dashboard shell and global navigation */
+#home-main-card{
+  width:min(980px,calc(100vw - 28px))!important;max-width:calc(100vw - 28px)!important;
+  max-height:calc(100dvh - 24px)!important;padding:16px!important;
+  border-top-width:3px!important;
+}
+.kwg-dashboard-header{padding:1px 2px 12px!important;gap:12px!important;border-bottom:1px solid var(--vx-line)!important}
+.kwg-brand-block h2{
+  display:flex;align-items:center;gap:10px;
+  font-size:18px!important;letter-spacing:.03em!important;
+}
+.kwg-brand-block h2::before{width:17px;height:17px;box-shadow:inset -3px -3px 0 #24558a,2px 2px 0 #091b2e}
+.kwg-userline{font-size:10px!important;letter-spacing:.04em!important;margin-top:3px!important;color:var(--vx-muted)!important}
+.kwg-userline #logged-user-display{color:#a4d1ff!important}
+.kwg-account-tools{gap:6px!important}
+.kwg-coin-pill,.kwg-store-balance,.coin-badge{
+  background:#273025!important;color:var(--vx-gold)!important;
+  border:1px solid #726743!important;border-left:3px solid var(--vx-gold)!important;
+  border-radius:2px!important;box-shadow:none!important;
+  font-size:11px!important;min-height:32px!important;padding:0 10px!important;
+}
+.kwg-icon-tool{width:33px!important;height:33px!important;background:#243244!important;border:1px solid #4a6078!important;border-radius:2px!important}
+.kwg-icon-nav{
+  margin:10px 0 13px!important;padding:4px!important;gap:4px!important;
+  background:#111a25!important;border:1px solid var(--vx-line)!important;
+  border-radius:2px!important;
+}
+.kwg-icon-nav .home-tab{
+  width:39px!important;min-width:39px!important;height:37px!important;
+  border:1px solid transparent!important;border-radius:2px!important;
+}
+.kwg-icon-nav .home-tab:hover{background:#25384b!important;border-color:#526e8b!important}
+.kwg-icon-nav .home-tab.active{
+  background:#294f72!important;color:#b9ddff!important;
+  border-color:#619dd7!important;box-shadow:inset 0 -3px 0 #83bfff!important;
+}
+.kwg-icon-nav .nav-glyph.nav-svg,.kwg-icon-nav .nav-svg svg{width:21px!important;height:21px!important}
+.kwg-icon-nav .nav-label{
+  top:calc(100% + 6px)!important;padding:5px 7px!important;
+  background:#1c2a39!important;border:1px solid #5b7897!important;
+  border-radius:2px!important;box-shadow:3px 3px 0 #090e15!important;
+}
+/* Shared page hierarchy: compact title strips, not oversized hero banners. */
+.kwg-page-heading,.friends-header,.profile-hero{
+  background:#202e3d!important;border:1px solid var(--vx-line)!important;
+  border-left:3px solid var(--vx-blue)!important;border-radius:2px!important;
+  box-shadow:none!important;
+}
+.kwg-page-heading{margin:0 0 11px!important;padding:12px 14px!important;align-items:center!important}
+.kwg-page-heading h2,.friends-header h1{
+  font-size:18px!important;font-weight:850!important;letter-spacing:.035em!important;margin:2px 0 0!important;
+}
+.kwg-page-heading p{font-size:10px!important;margin:4px 0 0!important;color:#9eb0c5!important}
+.profile-kicker{font-size:9px!important;letter-spacing:.13em!important;color:#86b9ee!important}
+.home-section h3,.profile-panel-title,.kwg-style-title{
+  font-size:10px!important;font-weight:850!important;letter-spacing:.09em!important;color:#c3d3e5!important;
+}
+/* Home / Worlds: tight information density, consistent block cards. */
+#home-pane .home-profile-grid{gap:10px!important}
+#home-pane .home-section,.profile-panel,#avatar-editor-pane .inventory-panel,
+.profile-stat,.profile-stats,.friends-summary{
+  background:#18232f!important;border:1px solid var(--vx-line)!important;
+  border-radius:2px!important;box-shadow:none!important;
+}
+#home-pane .home-section{padding:11px!important}
+#home-pane .home-section h3{margin:0 0 9px!important;padding:0 0 8px!important;border-bottom:1px solid var(--vx-line-soft)!important}
+#home-pane .home-avatar-preview,#avatar-editor-pane .avatar-preview-large,.profile-avatar-preview{
+  background:linear-gradient(145deg,#1b2b3a 25%,#0c151e 25% 50%,#162535 50% 75%,#0c151e 75%)!important;
+  background-size:26px 26px!important;border:1px solid #4b6078!important;
+  border-radius:2px!important;box-shadow:none!important;
+}
+#home-pane .home-avatar-preview{min-height:185px}
+.room-list-container{
+  border:1px solid var(--vx-line)!important;background:#111b26!important;
+  border-radius:2px!important;padding:5px!important;margin:9px 0!important;
+  scrollbar-width:thin;
+}
+.room-card,#home-pane .room-card,#home-pane .home-inventory-card,
+.profile-showcase-world,.profile-showcase-picker-item{
+  border:1px solid #354a60!important;border-radius:2px!important;
+  background:#1d2a39!important;box-shadow:none!important;
+  margin-bottom:5px!important;padding:8px!important;gap:9px!important;
+}
+.room-card:hover{background:#24364a!important;border-color:#5d88b3!important}
+.room-title{color:#b6d9ff!important;font-size:12px!important;letter-spacing:.015em!important}
+.room-meta,.room-description{font-size:10px!important;color:#98acc2!important;line-height:1.4!important}
+.kwg-world-card-thumb{border:1px solid #526983!important;border-radius:1px!important;background:#0d1824!important}
+.kwg-world-card-actions{gap:5px!important}
+#worlds-pane .home-toolbar{padding:7px 0!important;font-size:10px!important;color:#b7c9da!important}
+#worlds-pane .home-toolbar select{background:#101a25!important;color:#dceafb!important;border:1px solid #526983!important;border-radius:2px!important;padding:6px!important}
+/* Profile / friends / notifications */
+.profile-shell,.friends-shell{gap:10px!important}
+.profile-hero{padding:12px!important;gap:12px!important;min-height:0!important}
+.profile-identity h1{font-size:22px!important;line-height:1.15!important;letter-spacing:.02em!important}
+.profile-avatar-preview{min-height:185px!important}
+.profile-stats{gap:5px!important;background:transparent!important;border:0!important}
+.profile-stat{padding:10px!important}
+.profile-stat strong{font-size:18px!important;color:#c9e3ff!important}
+.profile-stat span{font-size:9px!important;letter-spacing:.07em!important}
+.profile-panel{padding:12px!important;min-height:110px!important}
+.profile-panel-title{padding:0 0 8px!important;margin:0 0 10px!important;border-bottom:1px solid var(--vx-line)!important}
+.profile-bio,.profile-joined,.profile-edit-note{font-size:11px!important;color:#a9bacd!important}
+.friends-header{padding:12px 14px!important}
+.friends-header h1{font-size:18px!important}
+.friend-row,.friend-card,.friends-list > div{
+  border-radius:2px!important;box-shadow:none!important;
+}
+.notifications-panel{
+  background:#192533!important;border:1px solid #4a617b!important;
+  border-top:3px solid var(--vx-blue)!important;border-radius:2px!important;
+  box-shadow:5px 5px 0 #0a1119!important;
+}
+.notifications-head{padding:11px!important;background:#202e3d!important;border-bottom:1px solid #41576e!important}
+.notifications-head h2{font-size:15px!important;letter-spacing:.035em!important}
+.notifications-list{scrollbar-width:thin}
+.notification-row,.notification-item{border-radius:2px!important}
+.friend-badge,.nav-badge{border-radius:2px!important;background:#b74f64!important;color:#fff!important}
+/* Store and avatar: compact rectangular cards and segmented tabs */
+#store-pane .store-tabs,#avatar-editor-pane .inventory-tabs{
+  gap:4px!important;padding:4px!important;margin:0 0 10px!important;
+  border:1px solid var(--vx-line)!important;background:#101a25!important;border-radius:2px!important;
+}
+#store-pane .store-tab,#avatar-editor-pane .inventory-tab{
+  padding:7px 9px!important;border-radius:2px!important;
+  font-size:10px!important;font-weight:800!important;letter-spacing:.02em!important;
+}
+#store-pane .store-tab.active,#avatar-editor-pane .inventory-tab.active{
+  background:#2a5479!important;border:1px solid #6aa9e6!important;
+  box-shadow:inset 0 -2px 0 #8dc8ff!important;color:#e7f4ff!important;
+}
+#store-items-grid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr))!important;gap:7px!important}
+#store-items-grid .store-item-card{
+  background:#1b2938!important;border:1px solid #40566d!important;
+  padding:8px!important;border-radius:2px!important;box-shadow:none!important;
+  min-height:135px!important;gap:6px!important;
+}
+#store-items-grid .store-item-card:hover{border-color:#75a8d9!important;transform:none!important;background:#24364a!important}
+.store-item-preview,.inventory-thumb,.kwg-clothing-preview{
+  background:#101b28!important;border:1px solid #344b63!important;
+  border-radius:1px!important;
+}
+.store-item-name{font-size:11px!important;color:#c6e2ff!important;letter-spacing:0!important}
+.store-item-price{font-size:11px!important;color:var(--vx-gold)!important}
+#store-items-grid .store-item-card button{padding:7px!important;font-size:10px!important;border-radius:2px!important}
+#avatar-editor-pane .avatar-editor-layout{grid-template-columns:minmax(215px,300px) minmax(0,1fr)!important;gap:10px!important}
+#avatar-editor-pane .avatar-preview-large{height:405px!important}
+#avatar-editor-pane .inventory-panel{padding:9px!important}
+#avatar-inventory-grid{grid-template-columns:repeat(auto-fill,minmax(95px,1fr))!important;gap:6px!important}
+#avatar-inventory-grid .inventory-card,.kwg-native-card,.kwg-native-color{
+  background:#1b2938!important;border:1px solid #3c526a!important;
+  border-radius:2px!important;box-shadow:none!important;padding:7px!important;
+}
+#avatar-inventory-grid .inventory-card:hover,.kwg-native-card:hover{border-color:#75a8d9!important}
+#avatar-inventory-grid .inventory-card.selected,.kwg-native-card.selected{
+  border-color:#85c3ff!important;box-shadow:inset 0 0 0 1px #85c3ff!important;
+  background:#294a69!important;color:#e7f3ff!important;
+}
+.inventory-thumb{height:68px!important;margin-bottom:5px!important}
+.inventory-name{font-size:10px!important;letter-spacing:0!important}
+.kwg-native-card{min-height:112px!important}
+.kwg-clothing-preview{height:76px!important}
+.kwg-style-group{padding:8px!important;background:#14202c!important;border:1px solid #344b62!important;border-radius:2px!important}
+.kwg-style-btn{padding:7px 6px!important;border:1px solid #445b73!important;border-radius:2px!important}
+.kwg-style-btn.active{background:#28557f!important;color:#e3f3ff!important;border-color:#77b7ef!important}
+/* All modal families, admin tooling, and native input controls */
+.modal{background:rgba(5,10,17,.83)!important}
+.customizer-card{padding:16px!important;max-width:calc(100vw - 30px)!important}
+.customizer-preview-container{border:1px solid #425971!important;border-radius:2px!important}
+#admin-card{padding:14px!important}
+.admin-section{border-top:1px solid var(--vx-line)!important;padding-top:12px!important;margin-top:12px!important}
+.admin-row,.admin-store-form{
+  background:#14202c!important;border:1px solid #344a60!important;
+  border-radius:2px!important;padding:8px!important;margin-bottom:5px!important;
+}
+.admin-searchbar{gap:6px!important}
+.admin-searchbar input{min-height:33px!important}
+.admin-search-note{font-size:10px!important;color:#98aabf!important}
+/* World play bar / chat / Studio panes use the same voxel geometry. */
+body.kwg-in-world #hud{
+  padding:5px 9px!important;gap:5px!important;
+}
+body.kwg-editing #hud{
+  background:#192634!important;border-bottom:1px solid #4b637c!important;
+  box-shadow:none!important;
+}
+body.kwg-in-world:not(.kwg-editing) #hud{background:transparent!important;box-shadow:none!important}
+body.kwg-in-world #hud .kwg-control-icon{
+  height:32px!important;min-height:32px!important;padding:0 10px!important;
+  border:1px solid #4d6985!important;border-bottom:2px solid #253d56!important;
+  background:#253b51!important;border-radius:2px!important;
+  font-size:10px!important;letter-spacing:.025em!important;box-shadow:none!important;
+}
+body.kwg-in-world #hud .kwg-control-icon:hover{background:#345779!important;border-color:#77b7ef!important;transform:none!important}
+body.kwg-in-world #hud #toggle-edit-btn.active{background:#285f91!important;border-color:#8fc5ff!important}
+body.kwg-in-world #hud #leave-world-btn{background:#382a35!important;border-color:#765061!important}
+body.kwg-in-world #room-info-label{font-size:12px!important;letter-spacing:.02em!important}
+#room-info-label .kwg-world-label{font-size:9px!important;color:#8aa5c0!important}
+body.kwg-in-world #save-status{border-radius:2px!important;font-size:10px!important}
+body.kwg-in-world:not(.kwg-editing) #world-chat{
+  background:#172432!important;border:1px solid #49627c!important;
+  border-radius:2px!important;box-shadow:4px 4px 0 rgba(4,9,15,.55)!important;
+}
+body.kwg-in-world #world-chat-header{
+  background:#26384b!important;border-bottom:1px solid #486079!important;
+  font-size:10px!important;padding:9px 11px!important;
+}
+body.kwg-in-world #world-chat-messages{font-size:11px!important;padding:10px!important}
+body.kwg-in-world #world-chat-form{padding:7px!important;gap:6px!important;background:#1a2a3a!important}
+body.kwg-in-world #world-chat-input{padding:8px!important;border-radius:2px!important}
+body.kwg-in-world #world-chat-send{padding:7px 11px!important;border-radius:2px!important;font-size:10px!important}
+body.kwg-editing #build-toolbar,body.kwg-editing #kwg-settings-window,body.kwg-editing #kwg-properties-window{
+  background:#17232f!important;border-color:#435b73!important;
+}
+body.kwg-editing .kwg-panel-title{
+  min-height:35px!important;padding:0 10px!important;
+  background:#263647!important;border-bottom:1px solid #526b83!important;
+  font-size:10px!important;letter-spacing:.08em!important;
+}
+.kwg-panel-title-icon{width:17px!important;height:17px!important;flex-basis:17px!important;background:#344d67!important;border-radius:2px!important;font-size:11px!important}
+body.kwg-editing #build-toolbar .kwg-icon-tools{gap:5px!important;margin:9px 9px 6px!important}
+body.kwg-editing #build-toolbar .kwg-icon-tools button{
+  height:37px!important;min-height:37px!important;
+  border:1px solid #48627d!important;border-radius:2px!important;
+  background:#233449!important;padding:7px!important;
+}
+body.kwg-editing #build-toolbar .kwg-icon-tools button:hover{background:#34516c!important;border-color:#83bfff!important}
+body.kwg-editing #build-toolbar .kwg-icon-tools button.active{background:#2a5c8a!important;border-color:#8cc7ff!important;box-shadow:inset 0 -2px 0 #9bd2ff!important}
+body.kwg-editing .kwg-editor-shortcuts{margin:0 9px 8px!important;font-size:10px!important}
+body.kwg-editing .kwg-editor-shortcuts kbd{border-radius:1px!important;background:#263a4d!important}
+body.kwg-editing #part-properties-container{padding:10px!important}
+body.kwg-editing #no-selection-msg{border-radius:2px!important;background:#202e3c!important;padding:13px!important}
+body.kwg-editing .tool-row{padding:6px 0!important}
+body.kwg-editing .tool-row input,body.kwg-editing .tool-row select{
+  border-radius:2px!important;background:#101a25!important;border-color:#4a6179!important;
+}
+body.kwg-editing .kwg-settings-tabs{padding:8px 9px 6px!important;gap:4px!important}
+body.kwg-editing .kwg-settings-tabs button{
+  border-radius:2px!important;padding:7px 5px!important;font-size:10px!important;
+}
+body.kwg-editing .kwg-settings-tabs button.active{background:#2c587f!important;border-color:#6da8e0!important;color:#fff!important}
+body.kwg-editing #kwg-settings-environment,body.kwg-editing #kwg-settings-info{padding:8px 10px 16px!important}
+body.kwg-editing .kwg-info-camera-button{border-radius:2px!important;background:#2c669b!important}
+body.kwg-editing #kwg-info-title,body.kwg-editing #kwg-info-description{border-radius:2px!important}
+body.kwg-editing #kwg-world-viewport-title{
+  height:33px!important;background:#243548!important;border-bottom:1px solid #506b87!important;
+  padding:0 10px!important;font-size:10px!important;
+}
+body.kwg-editing #kwg-world-canvas{top:33px!important;bottom:21px!important}
+body.kwg-editing #kwg-scene-footer{
+  height:21px!important;background:#202e3e!important;border-top:1px solid #425a73!important;
+  font-size:9px!important;
+}
+#part-counter{border-radius:2px!important;background:#2a425a!important;border-color:#5b7793!important;padding:4px 7px!important}
+.kwg-scene-dot{border-radius:1px!important;box-shadow:none!important}
+.kwg-recolor-panel{margin:7px 9px!important;padding:9px!important;border-radius:2px!important;background:#223447!important}
+#kwg-recolor-color,#kwg-recolor-material{border-radius:2px!important}
+.kwg-recolor-heading{margin-bottom:8px!important}
+/* Preserve admin tab security/visibility even when styling all nav items. */
+.kwg-icon-nav .home-tab.admin-home-tab{display:none!important}
+body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inline-flex!important}
+/* Compact responsive rules; keep controls reachable on smaller screens. */
+@media(max-width:760px){
+  #home-main-card{padding:10px!important}
+  #avatar-editor-pane .avatar-editor-layout{grid-template-columns:1fr!important}
+  #avatar-editor-pane .avatar-preview-large{height:285px!important}
+  .kwg-page-heading{padding:10px!important}
+  .profile-hero{grid-template-columns:1fr!important}
+  .profile-avatar-preview{height:210px!important}
+  #store-items-grid{grid-template-columns:repeat(auto-fill,minmax(128px,1fr))!important}
+  body.kwg-in-world #hud .kwg-control-icon{padding:0 6px!important}
+}
+@media(max-width:480px){
+  .kwg-brand-block h2{font-size:15px!important}
+  .kwg-icon-nav{gap:2px!important}
+  .kwg-icon-nav .home-tab{width:35px!important;min-width:35px!important;height:34px!important}
+  .kwg-icon-nav .nav-glyph.nav-svg,.kwg-icon-nav .nav-svg svg{width:19px!important;height:19px!important}
+  .room-card{align-items:flex-start!important}
+  .kwg-world-card-thumb{width:76px!important;min-width:76px!important}
+  .kwg-world-card-actions{flex-direction:column!important}
+  .kwg-page-heading h2{font-size:16px!important}
+  #world-chat{width:min(300px,calc(100vw - 20px))!important}
+  .kwg-hud-button-label{font-size:8px!important}
+  #room-info-label .kwg-world-label{display:none!important}
+}
+@media(prefers-reduced-motion:reduce){
+  .submit-btn,.join-btn,.store-item-card,.home-tab,.kwg-control-icon{transition:none!important}
+}
+
+
+/* ================================================================
+   KWG V3.32 — RETRO PIXEL ARCADE
+   A full-game, pixel-art UI skin: sharp edges, arcade typography,
+   hard-offset shadows, stepped borders and 8-bit accent colors.
+   Presentation only. No changes to gameplay or saving.
+   ================================================================ */
+:root{
+  --vx-bg:#101422;--vx-panel:#202b3b;--vx-panel-hi:#2b3a4d;
+  --vx-inset:#131d2b;--vx-line:#60778c;--vx-line-soft:#394e64;
+  --vx-text:#f1f5e7;--vx-muted:#aec2c8;
+  --vx-blue:#69c9ed;--vx-blue-dark:#287b9e;
+  --vx-green:#9ce078;--vx-gold:#f9cb65;--vx-danger:#ff8496;
+  --g-bg:#101422;--studio-bg:#101422;--studio-surface:#202b3b;
+  --studio-raised:#2b3a4d;--studio-border:#60778c;
+  --studio-separator:#394e64;--studio-text:#f1f5e7;
+  --studio-muted:#aec2c8;--studio-accent:#69c9ed;
+}
+html,body{
+  font-family:'Pixelify Sans','Courier New',monospace!important;
+  font-size:14px!important;letter-spacing:.02em!important;
+  color:var(--vx-text)!important;
+  background:#101422!important;
+}
+button,input,select,textarea{
+  font-family:'Pixelify Sans','Courier New',monospace!important;
+  letter-spacing:.015em!important;
+}
+button{font-weight:700!important}
+button,button:hover,button:focus-visible{border-radius:0!important}
+::selection{background:#5b8a98;color:#fff}
+*{scrollbar-width:thin;scrollbar-color:#66809b #152131}
+::-webkit-scrollbar-track{background:#152131}
+::-webkit-scrollbar-thumb{background:#66809b;border:2px solid #152131}
+.overlay-screen{
+  background-color:#101422!important;
+  background-image:
+    linear-gradient(90deg,rgba(130,178,188,.045) 1px,transparent 1px),
+    linear-gradient(rgba(130,178,188,.045) 1px,transparent 1px),
+    radial-gradient(ellipse at 50% 30%,#243a4b 0%,#101422 70%)!important;
+  background-size:22px 22px,22px 22px,auto!important;
+}
+.card,.customizer-card,#admin-card,.home-section,.home-welcome,
+.profile-hero,.kwg-page-heading,.home-inventory-card,
+.inventory-card,.store-item-card,.room-card,.world-card{
+  border-radius:0!important;
+  background:#202b3b!important;
+  border:2px solid #66829a!important;
+  box-shadow:5px 5px 0 #080d16!important;
+}
+.card,.customizer-card,#admin-card{border-top:4px solid #9ce078!important}
+.home-section,.home-welcome,.profile-hero,.kwg-page-heading{
+  border-color:#4c647a!important;
+}
+#auth-screen .card h2,.kwg-brand-block h2,
+.kwg-page-heading h2,.home-welcome h2,
+.home-section h3,.profile-hero h2,
+#admin-card h2,#admin-card h3,
+.modal h2,.customizer-card h2{
+  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
+  line-height:1.75!important;letter-spacing:0!important;
+  color:#f7f5df!important;
+  text-shadow:2px 2px 0 #101827!important;
+}
+#auth-screen .card h2,.kwg-brand-block h2{font-size:15px!important}
+.kwg-page-heading h2,.home-welcome h2,.profile-hero h2{font-size:13px!important}
+.home-section h3,#admin-card h3{font-size:10px!important}
+#auth-screen .card h2::before,.kwg-brand-block h2::before{
+  width:20px!important;height:20px!important;
+  border:2px solid #f0f4da!important;
+  background:linear-gradient(135deg,#a6eb85 0 49%,#4b9a78 50%)!important;
+  box-shadow:inset -4px -4px 0 #286e5c,3px 3px 0 #0b1420!important;
+}
+#auth-screen input,.card input,.card textarea,.card select,
+#home-main-card input,#home-main-card textarea,#home-main-card select,
+.customizer-card input,.customizer-card select,.customizer-card textarea,
+#admin-card input,#admin-card select,#admin-card textarea{
+  border:2px solid #5c788f!important;
+  background:#111c2b!important;color:#f0f5e9!important;
+  border-radius:0!important;box-shadow:inset 3px 3px 0 #0b1420!important;
+  font-size:13px!important;
+}
+button:focus-visible,a:focus-visible,input:focus-visible,
+textarea:focus-visible,select:focus-visible{
+  outline:2px dashed #f9cb65!important;outline-offset:3px!important;
+}
+.home-tab,.inventory-tab,.store-tab,.home-action,.logout-btn,
+.admin-action,.admin-delete,.store-buy-btn,
+.kwg-native-card,.kwg-style-btn,.world-like-btn,
+#auth-screen button,.card button,.customizer-card button,
+#admin-card button{
+  border-radius:0!important;
+  border:2px solid #6b91a9!important;
+  border-bottom:4px solid #314c63!important;
+  background:#2c4256!important;color:#eaf3e5!important;
+  box-shadow:2px 2px 0 #101622!important;
+  text-transform:uppercase!important;
+  font-size:12px!important;
+  transition:background .08s linear,transform .08s linear!important;
+}
+.home-tab:hover,.inventory-tab:hover,.store-tab:hover,.home-action:hover,
+.admin-action:hover,.kwg-native-card:hover,.kwg-style-btn:hover,
+#auth-screen button:hover,.card button:hover,.customizer-card button:hover{
+  background:#3b5a70!important;transform:translateY(-1px)!important;
+}
+.home-tab.active,.inventory-tab.active,.store-tab.active,
+.kwg-native-card.selected,.kwg-style-btn.active,
+#avatar-editor-pane .inventory-tab.active,#store-pane .store-tab.active{
+  background:#2b695e!important;border-color:#a4e88c!important;
+  border-bottom-color:#467b56!important;color:#e7ffe0!important;
+  box-shadow:inset 0 0 0 1px #8cdb7d!important;
+}
+.home-action,.store-buy-btn,.kwg-info-camera-button{
+  background:#2a806e!important;border-color:#a4e88c!important;
+  border-bottom:4px solid #28594f!important;color:#f0ffe9!important;
+}
+.logout-btn,.admin-delete{background:#7e394b!important;border-color:#f2a1a6!important;border-bottom-color:#502634!important}
+.kwg-icon-nav{gap:5px!important}
+.kwg-icon-nav .home-tab{
+  background:#26394d!important;border:2px solid #607c95!important;
+  border-bottom:4px solid #314c63!important;
+  box-shadow:2px 2px 0 #0c1420!important;
+}
+.kwg-icon-nav .home-tab.active{
+  background:#2c705e!important;border-color:#a2e587!important;
+  border-bottom-color:#417a58!important;
+}
+.kwg-icon-nav .nav-label{font-size:10px!important;letter-spacing:.03em!important}
+.home-avatar-preview,.home-inventory-thumb,.inventory-thumb,
+.kwg-clothing-preview,.store-item-preview,.kwg-world-card-thumb,
+.customizer-preview-container,.avatar-preview-large{
+  border-radius:0!important;border:2px solid #4d6a80!important;
+  background:#142032!important;
+}
+#avatar-inventory-grid .inventory-card,.kwg-native-card,.kwg-native-color,
+#store-items-grid .store-item-card,.home-inventory-card{
+  border:2px solid #4c667e!important;
+  background:#25374a!important;box-shadow:3px 3px 0 #0b1420!important;
+  border-radius:0!important;
+}
+#avatar-inventory-grid .inventory-card.selected,.kwg-native-card.selected{
+  border-color:#a4e88c!important;background:#2b594d!important;
+  box-shadow:inset 0 0 0 2px #a4e88c,3px 3px 0 #0b1420!important;
+}
+.store-item-price,.world-like-btn.liked{color:#f9cb65!important}
+.modal{background:rgba(7,11,20,.87)!important}
+.admin-row,.admin-store-form,.kwg-style-group{
+  border-radius:0!important;border:2px solid #4b667d!important;
+  background:#19283a!important;
+}
+body.kwg-in-world #hud{
+  font-family:'Pixelify Sans','Courier New',monospace!important;
+}
+body.kwg-editing #hud{
+  background:#202b3b!important;border-bottom:3px solid #67829a!important;
+}
+body.kwg-in-world:not(.kwg-editing) #hud{
+  background:transparent!important;border:0!important;box-shadow:none!important;
+}
+body.kwg-in-world #hud .kwg-control-icon{
+  height:34px!important;min-height:34px!important;
+  border:2px solid #7595a8!important;border-bottom:4px solid #304d63!important;
+  background:#2b4055!important;color:#eff7e9!important;
+  border-radius:0!important;box-shadow:2px 2px 0 #0b1420!important;
+  font-size:12px!important;
+}
+body.kwg-in-world #hud .kwg-control-icon:hover{background:#395b72!important}
+body.kwg-in-world #hud #toggle-edit-btn.active{
+  background:#2d796b!important;border-color:#a4e88c!important;
+}
+body.kwg-in-world #hud #leave-world-btn{
+  background:#733747!important;border-color:#f1a0a8!important;
+}
+body.kwg-in-world #room-info-label{
+  font-family:'Pixelify Sans','Courier New',monospace!important;
+  font-size:14px!important;color:#f7f5df!important;
+  text-shadow:2px 2px 0 #101827!important;
+}
+#room-info-label .kwg-world-label{
+  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
+  font-size:7px!important;color:#b7d1d2!important;
+}
+body.kwg-in-world:not(.kwg-editing) #world-chat{
+  border:2px solid #6d8aa2!important;border-radius:0!important;
+  background:#202b3b!important;box-shadow:4px 4px 0 #0b1420!important;
+}
+body.kwg-in-world #world-chat-header{
+  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
+  font-size:9px!important;background:#30465a!important;
+  border-bottom:2px solid #68859b!important;
+  line-height:1.7!important;
+}
+body.kwg-in-world #world-chat-messages{font-size:14px!important}
+body.kwg-in-world #world-chat-form{background:#1a293a!important;border-top:2px solid #4e6a80!important}
+body.kwg-in-world #world-chat-input{
+  border:2px solid #56768c!important;background:#111e2d!important;
+  border-radius:0!important;font-size:13px!important;
+}
+body.kwg-in-world #world-chat-send{
+  border:2px solid #a4e88c!important;border-bottom:4px solid #4d7952!important;
+  background:#2d796b!important;border-radius:0!important;
+  font-size:12px!important;
+}
+body.kwg-editing #build-toolbar,body.kwg-editing #kwg-settings-window,
+body.kwg-editing #kwg-properties-window{
+  background:#202b3b!important;border-color:#627e95!important;
+  font-size:13px!important;
+}
+body.kwg-editing .kwg-panel-title{
+  min-height:38px!important;
+  background:#30465a!important;border-bottom:2px solid #7691a7!important;
+  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
+  font-size:9px!important;line-height:1.6!important;
+  letter-spacing:0!important;color:#f3f6e9!important;
+}
+body.kwg-editing .kwg-panel-title-icon{
+  background:#426078!important;color:#a4e88c!important;
+  border:1px solid #7595a8!important;border-radius:0!important;
+}
+body.kwg-editing #build-toolbar .kwg-icon-tools button{
+  border:2px solid #6b88a0!important;border-bottom:4px solid #36536a!important;
+  border-radius:0!important;background:#2c4358!important;
+  box-shadow:2px 2px 0 #111c2a!important;
+}
+body.kwg-editing #build-toolbar .kwg-icon-tools button.active{
+  background:#2c7968!important;border-color:#a4e88c!important;
+  box-shadow:inset 0 0 0 1px #a4e88c!important;
+}
+body.kwg-editing .kwg-editor-shortcuts kbd{
+  background:#31465a!important;border:2px solid #6a869e!important;
+  border-radius:0!important;
+}
+body.kwg-editing #no-selection-msg{
+  border:2px dashed #607e92!important;border-radius:0!important;
+  background:#1b2b3d!important;font-size:12px!important;
+}
+body.kwg-editing .tool-row label{font-size:12px!important;color:#c4d9d5!important}
+body.kwg-editing .tool-row input,body.kwg-editing .tool-row select,
+body.kwg-editing #kwg-info-title,body.kwg-editing #kwg-info-description{
+  background:#132132!important;border:2px solid #57758d!important;
+  border-radius:0!important;font-size:12px!important;
+}
+body.kwg-editing .kwg-settings-tabs button{
+  border:2px solid #57758d!important;border-bottom:4px solid #314d63!important;
+  border-radius:0!important;background:#2c4053!important;
+  font-size:12px!important;
+}
+body.kwg-editing .kwg-settings-tabs button.active{
+  background:#2d796b!important;border-color:#a4e88c!important;
+  color:#f0ffe9!important;
+}
+body.kwg-editing #kwg-world-viewport-title{
+  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
+  font-size:8px!important;
+  background:#2c4055!important;border-bottom:2px solid #6a879e!important;
+}
+body.kwg-editing #kwg-scene-footer{
+  background:#26394d!important;border-top:2px solid #536f86!important;
+  font-size:10px!important;
+}
+#part-counter{
+  background:#314d5c!important;color:#d6f8d0!important;
+  border:2px solid #7ca58e!important;border-radius:0!important;
+  font-family:'Pixelify Sans',monospace!important;font-size:12px!important;
+}
+.kwg-scene-dot{background:#a4e88c!important;border-radius:0!important}
+.kwg-recolor-panel{
+  border:2px solid #6b879f!important;background:#283d50!important;
+  border-radius:0!important;
+}
+#kwg-recolor-color,#kwg-recolor-material{border-radius:0!important}
+body.kwg-editing .kwg-info-camera-button{
+  background:#2d796b!important;border:2px solid #a4e88c!important;
+  border-bottom:4px solid #4d7952!important;border-radius:0!important;
+}
+.kwg-info-photo{border-radius:0!important;border:2px solid #5a7990!important}
+.kwg-info-hint{font-size:12px!important}
+.kwg-icon-nav .home-tab.admin-home-tab{display:none!important}
+body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inline-flex!important}
+@media(max-width:760px){
+  #auth-screen .card h2,.kwg-brand-block h2{font-size:12px!important}
+  .kwg-page-heading h2,.home-welcome h2{font-size:10px!important}
+  body.kwg-editing .kwg-panel-title{font-size:7px!important}
+}
+@media(prefers-reduced-motion:reduce){
+  button,.home-tab,.inventory-tab,.store-tab{transition:none!important}
 }
 
 </style>
