@@ -1840,6 +1840,32 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
 #kwg-audio-menu p{margin:8px 0 0;color:#b0c4d0;font-size:11px;line-height:1.35}
 body.kwg-thumbnail-camera #kwg-audio-dock{display:none!important}
 @media(max-width:650px){#kwg-audio-dock{right:7px;bottom:7px}#kwg-audio-toggle{font-size:11px;padding:5px 8px}}
+
+/* KWG V3.33.2 — Studio Settings field consistency.
+   Match Cloud Speed to World Name / Description input surfaces. */
+body.kwg-editing #kwg-settings-environment #cloud-speed-input{
+  box-sizing:border-box!important;
+  width:130px!important;
+  min-width:0!important;
+  max-width:57%!important;
+  height:36px!important;
+  padding:7px 10px!important;
+  border:2px solid #57758d!important;
+  border-radius:0!important;
+  background:#132132!important;
+  color:#f0f5e9!important;
+  font-family:'Pixelify Sans','Courier New',monospace!important;
+  font-size:12px!important;
+  line-height:1.3!important;
+  box-shadow:inset 3px 3px 0 #0b1420!important;
+  outline-offset:2px;
+}
+body.kwg-editing #kwg-settings-environment #cloud-speed-input:hover{
+  border-color:#83a6b9!important;
+}
+body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
+  outline:2px dashed #f9cb65!important;
+}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -4169,7 +4195,7 @@ body.kwg-thumbnail-camera #kwg-audio-dock{display:none!important}
     const editorSettingsWindow = document.createElement('div');
     editorSettingsWindow.id = 'kwg-settings-window';
     editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">📷 SET THUMBNAIL</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save when you exit Edit Mode.</div></div>';
+    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save when you exit Edit Mode.</div></div>';
     document.body.appendChild(editorSettingsWindow);
     const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
     if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
@@ -4202,7 +4228,7 @@ body.kwg-thumbnail-camera #kwg-audio-dock{display:none!important}
       const src=kwgInfoDraft.thumbnailData||kwgInfoDraft.thumbnailUrl;
       img.style.display=src?'block':'none';empty.style.display=src?'none':'block';
       if(src)img.src=src;else img.removeAttribute('src');
-      document.getElementById('kwg-info-camera-btn').textContent=src?'📷 RETAKE THUMBNAIL':'📷 SET THUMBNAIL';
+      document.getElementById('kwg-info-camera-btn').textContent=src?'RETAKE THUMBNAIL':'SET THUMBNAIL';
     }
     kwgInfoTitle.addEventListener('input',()=>{kwgInfoDraft.displayName=kwgInfoTitle.value;});
     kwgInfoDescription.addEventListener('input',()=>{
@@ -4226,7 +4252,7 @@ body.kwg-thumbnail-camera #kwg-audio-dock{display:none!important}
 
     const kwgCameraUI=document.createElement('div');
     kwgCameraUI.id='kwg-thumbnail-camera-ui';
-    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Hold right mouse button and drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong><div class="kwg-camera-help">W A S D move relative to view · Q / E down/up · Shift faster · Hold right-click to look · Scroll to zoom</div></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">📷 CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div><div class="kwg-info-hint">Your photo saves when you exit Edit Mode.</div></div></div>`;
+    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Hold right mouse button and drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong><div class="kwg-camera-help">W A S D move relative to view · Q / E down/up · Shift faster · Hold right-click to look · Scroll to zoom</div></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div><div class="kwg-info-hint">Your photo saves when you exit Edit Mode.</div></div></div>`;
     document.body.appendChild(kwgCameraUI);
     const kwgCameraDragzone=kwgCameraUI.querySelector('.kwg-camera-dragzone');
     const kwgFreeCamera={active:false,reviewing:false,keys:new Set(),yaw:0,pitch:0,dragging:false,lastX:0,lastY:0,photo:null};
