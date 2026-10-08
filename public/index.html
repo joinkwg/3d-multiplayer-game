@@ -697,6 +697,40 @@ body.kwg-editing .kwg-studio-resizer{display:block}
 body.kwg-studio-dragging,body.kwg-studio-dragging *{user-select:none!important;-webkit-user-select:none!important}
 body.kwg-studio-dragging.kwg-drag-cols,body.kwg-studio-dragging.kwg-drag-cols *{cursor:col-resize!important}
 body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{cursor:row-resize!important}
+
+/* ===== V3.28: World Info and free-camera thumbnail ===== */
+#kwg-settings-info{display:grid;gap:7px}
+#kwg-settings-info[style*="display: none"],#kwg-settings-info[style*="display:none"]{display:none!important}
+.kwg-info-label{display:block;margin:11px 0 2px;color:#b9cce5;font-size:10px;font-weight:900;letter-spacing:.1em}
+#kwg-info-title,#kwg-info-description{width:100%;box-sizing:border-box;padding:10px;background:#0b121b;border:1px solid #3b516d;color:#eef5ff;font:inherit;font-size:12px;outline:none;resize:vertical}
+#kwg-info-title:focus,#kwg-info-description:focus{border-color:#5ca4ff}
+.kwg-info-hint{color:#879bb5;font-size:10px;line-height:1.5;margin:2px 0 6px}
+.kwg-info-photo{aspect-ratio:16/9;width:100%;background:#101823;border:1px solid #3a506d;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#8194ad;font-size:10px;font-weight:900;letter-spacing:.08em}
+.kwg-info-photo img{display:block;width:100%;height:100%;object-fit:cover}
+.kwg-info-camera-button{width:100%;padding:10px;background:#214b7d;border:1px solid #5aa6ff;color:#f3f8ff;cursor:pointer;font-weight:900;letter-spacing:.04em}
+.room-card{gap:12px;align-items:center}
+.kwg-world-card-thumb{width:142px;min-width:142px;aspect-ratio:16/9;background:linear-gradient(135deg,#16283d,#0c1420);border:1px solid #3d5572;display:flex;align-items:center;justify-content:center;color:#728ca9;font-size:10px;font-weight:900;overflow:hidden}
+.kwg-world-card-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.room-card .room-info{min-width:0;flex:1}
+.room-card .room-description{display:block;color:#9daec4;font-size:11px;line-height:1.4;margin:4px 0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.kwg-world-card-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+@media(max-width:740px){.kwg-world-card-thumb{width:92px;min-width:92px}.kwg-world-card-actions{flex-direction:column}}
+#kwg-thumbnail-camera-ui{display:none;position:fixed;inset:0;z-index:120;pointer-events:none;color:#e7f0ff}
+#kwg-thumbnail-camera-ui .kwg-camera-dragzone{position:absolute;inset:0;pointer-events:auto;cursor:crosshair}
+#kwg-thumbnail-camera-ui .kwg-camera-crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;font-size:25px;text-shadow:0 1px 3px #000}
+#kwg-thumbnail-camera-ui .kwg-camera-top{position:absolute;top:12px;left:12px;right:12px;background:rgba(9,16,27,.9);border:1px solid #4c6688;padding:12px;display:flex;justify-content:space-between;align-items:center;gap:15px;pointer-events:auto}
+.kwg-camera-help{font-size:11px;color:#a7bdd8;margin-top:5px;line-height:1.4}
+.kwg-camera-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.kwg-camera-buttons button{padding:10px 14px;background:#203753;border:1px solid #5375a0;color:#fff;font-weight:900;cursor:pointer}
+.kwg-camera-buttons button:last-child{background:#205a91;border-color:#6baaff}
+#kwg-camera-review{display:none;position:absolute;inset:0;background:rgba(4,9,15,.86);align-items:center;justify-content:center;pointer-events:auto;padding:15px;box-sizing:border-box}
+.kwg-review-card{background:#121d2b;border:1px solid #5d7ca2;padding:16px;width:min(680px,95vw);max-height:95vh;overflow:auto;box-sizing:border-box}
+.kwg-review-card h3{margin:0 0 12px;font-size:13px;letter-spacing:.1em}
+.kwg-review-card img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;margin-bottom:12px;border:1px solid #354b65}
+body.kwg-thumbnail-camera #kwg-world-viewport{top:0!important;left:0!important;right:0!important;bottom:0!important;border:0!important}
+body.kwg-thumbnail-camera #kwg-world-canvas{top:0!important}
+body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #hud,body.kwg-thumbnail-camera #room-info-label,body.kwg-thumbnail-camera #build-toolbar,body.kwg-thumbnail-camera #kwg-settings-window,body.kwg-thumbnail-camera #kwg-properties-window,body.kwg-thumbnail-camera .kwg-studio-resizer,body.kwg-thumbnail-camera #save-status{display:none!important}
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1431,8 +1465,14 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
     function makeWorldCard(w) {
       const card = document.createElement('div');
       card.className = 'room-card';
-      card.innerHTML = `<div class="room-info"><span class="room-title"></span><span class="room-meta">By ${w.ownerUsername || 'Unknown'} • ${w.onlineCount} online • ❤️ ${w.likes || 0}</span></div><div style="display:flex;gap:6px"><button class="world-like-btn ${w.likedByMe ? 'liked' : ''}">${w.likedByMe ? '♥' : '♡'} ${w.likes || 0}</button><button class="join-btn">Enter</button></div>`;
-      card.querySelector('.room-title').textContent = w.name;
+      card.innerHTML = `<div class="kwg-world-card-thumb"><span>NO PHOTO</span></div><div class="room-info"><span class="room-title"></span><span class="room-description"></span><span class="room-meta"></span></div><div class="kwg-world-card-actions"><button class="world-like-btn ${w.likedByMe ? 'liked' : ''}">${w.likedByMe ? '♥' : '♡'} ${w.likes || 0}</button><button class="join-btn">Enter</button></div>`;
+      card.querySelector('.room-title').textContent = w.displayName || w.name;
+      card.querySelector('.room-description').textContent = w.description || 'Explore this world';
+      card.querySelector('.room-meta').textContent = `By ${w.ownerUsername || 'Unknown'} • ${w.onlineCount} online • ♥ ${w.likes || 0}`;
+      if (w.thumbnailUrl && /^https:\/\//i.test(w.thumbnailUrl)) {
+        const img=document.createElement('img');img.src=w.thumbnailUrl;img.alt=`Preview of ${w.displayName||w.name}`;img.loading='lazy';
+        card.querySelector('.kwg-world-card-thumb').replaceChildren(img);
+      }
       card.querySelector('.join-btn').addEventListener('click', () => joinSelectedWorld(w.name));
       card.querySelector('.world-like-btn').addEventListener('click', () => socket.emit('toggle_world_like',{worldName:w.name},res=>{ if(res?.success){ renderRoomList(); renderHomeOverview(); } }));
       if ((w.ownerUsername || '').toLowerCase() === (loggedInUsername || '').toLowerCase()) {
@@ -1506,7 +1546,7 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
         requestAnimationFrame(resizeWorldViewport);
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('room-info-label').style.display = 'block';
-        document.getElementById('current-room-text').textContent = roomName;
+        document.getElementById('current-room-text').textContent = res.worldData?.displayName || roomName;
         canEditCurrentWorld = !!res.canEdit;
         if (res.selfAppearance) playerAppearance = res.selfAppearance;
         equippedCosmetics = res.selfCosmetics || cosmeticsForAppearance(playerAppearance);
@@ -1515,6 +1555,7 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
         editBtn.title = canEditCurrentWorld ? 'Edit this world' : 'Only the world owner or an admin can edit this world';
 
         loadWorldData(res.worldData, res.players, res.selfId);
+        resetWorldInfoEditor(res.worldData,roomName);
         document.getElementById('world-chat').style.display = 'block';
         startWorldIdleWatch();
         loadWorldChat();
@@ -1605,6 +1646,12 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
         if(callback)callback(res);
       });
     }
+    socket.on('world_info_updated', info=>{
+      if(!info || info.worldName!==currentWorldName)return;
+      if(currentWorldData)Object.assign(currentWorldData,{displayName:info.displayName,description:info.description,thumbnailUrl:info.thumbnailUrl});
+      document.getElementById('current-room-text').textContent=info.displayName||currentWorldName;
+      if(!isEditMode)resetWorldInfoEditor(currentWorldData,currentWorldName);
+    });
     function stageWorldSettings(settings){
       if(isEditMode && canEditCurrentWorld){
         stagedWorldEdits.push({eventName:'world_settings_update',payload:{worldName:currentWorldName,settings:JSON.parse(JSON.stringify(settings))}});
@@ -1614,6 +1661,8 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
     }
     async function commitStagedWorldEdits(){
       if(worldCommitInProgress)return false;
+      if(kwgFreeCamera.active) stopWorldThumbnailCamera();
+      if(prepareWorldInfoSave()===false)return false;
       worldCommitInProgress=true;
       try{
         while(stagedWorldEdits.length){
@@ -1624,8 +1673,15 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
             const timer=setTimeout(()=>resolve({success:false,message:'Save timed out'}),12000);
             socket.emit(edit.eventName,edit.payload,r=>{clearTimeout(timer);resolve(r);});
           });
-          if(!res?.success){showToast('Save failed. Your changes are still pending; retry by exiting Edit Mode.');return false;}
+          if(!res?.success){showToast('Save failed: '+(res?.message||'Please retry exiting Edit Mode.'),6000);return false;}
           stagedWorldEdits.shift();
+          if(edit.eventName==='world_info_update') {
+            if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl});
+            kwgInfoOriginal={displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl};
+            kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
+            document.getElementById('current-room-text').textContent=res.displayName;
+            refreshWorldInfoThumbnail();
+          }
           if(edit.callback)edit.callback(res);
         }
         const status=document.getElementById('save-status');
@@ -1678,7 +1734,9 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
       for (const id in worldBlocks) { scene.remove(worldBlocks[id]); delete worldBlocks[id]; }
       if (previewMesh) { scene.remove(previewMesh); previewMesh = null; }
 
+      stopWorldThumbnailCamera();
       currentWorldName = null;
+      resetWorldInfoEditor(null,null);
       stagedWorldEdits.length=0;
 
       document.body.classList.remove('kwg-in-world');
@@ -2835,7 +2893,7 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
     const editorSettingsWindow = document.createElement('div');
     editorSettingsWindow.id = 'kwg-settings-window';
     editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title">SETTINGS <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><p>World name, description and camera thumbnails will be available in the next server-enabled update.</p></div>';
+    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title">SETTINGS <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">📷 SET THUMBNAIL</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save when you exit Edit Mode.</div></div>';
     document.body.appendChild(editorSettingsWindow);
     const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
     if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
@@ -2849,6 +2907,166 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
       editorSettingsWindow.querySelector('#kwg-settings-environment').style.display=btn.dataset.kwgSetting==='environment'?'block':'none';
       editorSettingsWindow.querySelector('#kwg-settings-info').style.display=btn.dataset.kwgSetting==='info'?'block':'none';
     }));
+    // ===== V3.28: World Info editor and free-camera thumbnails =====
+    let kwgInfoOriginal={displayName:'',description:'',thumbnailUrl:''};
+    let kwgInfoDraft={displayName:'',description:'',thumbnailUrl:'',thumbnailData:null};
+    const kwgInfoTitle=document.getElementById('kwg-info-title');
+    const kwgInfoDescription=document.getElementById('kwg-info-description');
+    function resetWorldInfoEditor(world,worldId){
+      kwgInfoOriginal={displayName:String(world?.displayName||worldId||''),description:String(world?.description||''),thumbnailUrl:String(world?.thumbnailUrl||'')};
+      kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
+      kwgInfoTitle.value=kwgInfoDraft.displayName;
+      kwgInfoDescription.value=kwgInfoDraft.description;
+      document.getElementById('kwg-info-char-count').textContent=`${kwgInfoDraft.description.length} / 300`;
+      refreshWorldInfoThumbnail();
+    }
+    function refreshWorldInfoThumbnail(){
+      const img=document.getElementById('kwg-info-photo-img');
+      const empty=document.getElementById('kwg-info-photo-empty');
+      const src=kwgInfoDraft.thumbnailData||kwgInfoDraft.thumbnailUrl;
+      img.style.display=src?'block':'none';empty.style.display=src?'none':'block';
+      if(src)img.src=src;else img.removeAttribute('src');
+      document.getElementById('kwg-info-camera-btn').textContent=src?'📷 RETAKE THUMBNAIL':'📷 SET THUMBNAIL';
+    }
+    kwgInfoTitle.addEventListener('input',()=>{kwgInfoDraft.displayName=kwgInfoTitle.value;});
+    kwgInfoDescription.addEventListener('input',()=>{
+      kwgInfoDraft.description=kwgInfoDescription.value;
+      document.getElementById('kwg-info-char-count').textContent=`${kwgInfoDraft.description.length} / 300`;
+    });
+    function prepareWorldInfoSave(){
+      if(!currentWorldName || !canEditCurrentWorld)return;
+      const title=kwgInfoDraft.displayName.trim();
+      const description=kwgInfoDraft.description.trim();
+      const changed=title!==kwgInfoOriginal.displayName || description!==kwgInfoOriginal.description || !!kwgInfoDraft.thumbnailData;
+      const idx=stagedWorldEdits.findIndex(x=>x.eventName==='world_info_update');
+      if(!changed){if(idx>=0)stagedWorldEdits.splice(idx,1);return true;}
+      if(!title){showToast('World name cannot be empty');return false;}
+      const payload={worldName:currentWorldName,displayName:title,description};
+      if(kwgInfoDraft.thumbnailData)payload.thumbnailData=kwgInfoDraft.thumbnailData;
+      const item={eventName:'world_info_update',payload};
+      if(idx>=0)stagedWorldEdits[idx]=item;else stagedWorldEdits.push(item);
+      return true;
+    }
+
+    const kwgCameraUI=document.createElement('div');
+    kwgCameraUI.id='kwg-thumbnail-camera-ui';
+    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong><div class="kwg-camera-help">W A S D to fly · Q / E down/up · Shift to move faster · Drag to look · Scroll to zoom</div></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">📷 CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div><div class="kwg-info-hint">Your photo saves when you exit Edit Mode.</div></div></div>`;
+    document.body.appendChild(kwgCameraUI);
+    const kwgCameraDragzone=kwgCameraUI.querySelector('.kwg-camera-dragzone');
+    const kwgFreeCamera={active:false,reviewing:false,keys:new Set(),yaw:0,pitch:0,dragging:false,lastX:0,lastY:0,photo:null};
+    const kwgCamDirection=new THREE.Vector3();
+    function startWorldThumbnailCamera(){
+      if(!isEditMode || !canEditCurrentWorld || !currentWorldName)return;
+      kwgFreeCamera.active=true;kwgFreeCamera.reviewing=false;kwgFreeCamera.photo=null;
+      kwgFreeCamera.keys.clear();kwgFreeCamera.dragging=false;
+      const d=new THREE.Vector3();camera.getWorldDirection(d);
+      kwgFreeCamera.yaw=Math.atan2(-d.x,-d.z);
+      kwgFreeCamera.pitch=Math.asin(Math.max(-.99,Math.min(.99,d.y)));
+      kwgCameraUI.style.display='block';
+      kwgCameraUI.querySelector('#kwg-camera-review').style.display='none';
+      document.body.classList.add('kwg-thumbnail-camera');
+      isRightClicking=false;
+      requestAnimationFrame(resizeWorldViewport);
+    }
+    function stopWorldThumbnailCamera(){
+      kwgFreeCamera.active=false;kwgFreeCamera.reviewing=false;kwgFreeCamera.dragging=false;
+      kwgFreeCamera.keys.clear();kwgCameraUI.style.display='none';
+      document.body.classList.remove('kwg-thumbnail-camera');
+      requestAnimationFrame(resizeWorldViewport);
+    }
+    function updateWorldThumbnailCamera(delta){
+      if(!kwgFreeCamera.active || kwgFreeCamera.reviewing)return;
+      const cam=kwgFreeCamera;
+      const dir=kwgCamDirection.set(-Math.sin(cam.yaw)*Math.cos(cam.pitch),Math.sin(cam.pitch),-Math.cos(cam.yaw)*Math.cos(cam.pitch));
+      camera.lookAt(camera.position.clone().add(dir));
+      const right=new THREE.Vector3(Math.cos(cam.yaw),0,-Math.sin(cam.yaw));
+      const flatForward=new THREE.Vector3(-Math.sin(cam.yaw),0,-Math.cos(cam.yaw));
+      const velocity=new THREE.Vector3();
+      if(cam.keys.has('w')||cam.keys.has('arrowup'))velocity.add(flatForward);
+      if(cam.keys.has('s')||cam.keys.has('arrowdown'))velocity.sub(flatForward);
+      if(cam.keys.has('d')||cam.keys.has('arrowright'))velocity.add(right);
+      if(cam.keys.has('a')||cam.keys.has('arrowleft'))velocity.sub(right);
+      if(cam.keys.has('e')||cam.keys.has(' '))velocity.y++;
+      if(cam.keys.has('q'))velocity.y--;
+      if(velocity.lengthSq()>0)camera.position.addScaledVector(velocity.normalize(),delta*(cam.keys.has('shift')?35:12));
+    }
+    document.getElementById('kwg-info-camera-btn').addEventListener('click',startWorldThumbnailCamera);
+    kwgCameraDragzone.addEventListener('pointerdown',e=>{
+      if(e.button!==0 || !kwgFreeCamera.active || kwgFreeCamera.reviewing)return;
+      e.preventDefault();kwgFreeCamera.dragging=true;kwgFreeCamera.lastX=e.clientX;kwgFreeCamera.lastY=e.clientY;
+      kwgCameraDragzone.setPointerCapture(e.pointerId);
+    });
+    kwgCameraDragzone.addEventListener('pointermove',e=>{
+      if(!kwgFreeCamera.dragging)return;
+      kwgFreeCamera.yaw-=(e.clientX-kwgFreeCamera.lastX)*.004;
+      kwgFreeCamera.pitch=Math.max(-1.45,Math.min(1.45,kwgFreeCamera.pitch-(e.clientY-kwgFreeCamera.lastY)*.004));
+      kwgFreeCamera.lastX=e.clientX;kwgFreeCamera.lastY=e.clientY;
+    });
+    const stopCameraDrag=()=>{kwgFreeCamera.dragging=false;};
+    kwgCameraDragzone.addEventListener('pointerup',stopCameraDrag);
+    kwgCameraDragzone.addEventListener('pointercancel',stopCameraDrag);
+    kwgCameraDragzone.addEventListener('lostpointercapture',stopCameraDrag);
+    kwgCameraDragzone.addEventListener('wheel',e=>{
+      if(!kwgFreeCamera.active || kwgFreeCamera.reviewing)return;
+      e.preventDefault();const d=new THREE.Vector3();camera.getWorldDirection(d);
+      camera.position.addScaledVector(d,e.deltaY<0?3:-3);
+    },{passive:false});
+    window.addEventListener('keydown',e=>{
+      if(!kwgFreeCamera.active)return;
+      if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();stopWorldThumbnailCamera();return;}
+      const k=e.key.toLowerCase();
+      if(['w','a','s','d','q','e','shift',' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){
+        e.preventDefault();e.stopImmediatePropagation();kwgFreeCamera.keys.add(k);
+      }
+    },true);
+    window.addEventListener('keyup',e=>{
+      if(!kwgFreeCamera.active)return;
+      kwgFreeCamera.keys.delete(e.key.toLowerCase());
+    },true);
+    window.addEventListener('blur',()=>kwgFreeCamera.keys.clear());
+    function captureWorldThumbnail(){
+      const hidden=[spawnMarker,gizmoGroup,hoverOutlineGroup,selectionOutlineGroup,localPlayerAvatar,previewMesh,...Object.values(otherPlayers).map(p=>p.mesh)].filter(Boolean);
+      const was=hidden.map(o=>o.visible);
+      const previousAspect=camera.aspect;
+      const w=960,h=540;
+      const target=new THREE.WebGLRenderTarget(w,h,{depthBuffer:true});
+      const pixels=new Uint8Array(w*h*4);
+      try{
+        hidden.forEach(o=>o.visible=false);
+        camera.aspect=w/h;camera.updateProjectionMatrix();
+        renderer.setRenderTarget(target);renderer.render(scene,camera);
+        renderer.readRenderTargetPixels(target,0,0,w,h,pixels);
+      }finally{
+        renderer.setRenderTarget(null);target.dispose();camera.aspect=previousAspect;camera.updateProjectionMatrix();
+        hidden.forEach((o,i)=>o.visible=was[i]);
+      }
+      const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+      const ctx=canvas.getContext('2d');const frame=ctx.createImageData(w,h);
+      for(let y=0;y<h;y++)frame.data.set(pixels.subarray((h-1-y)*w*4,(h-y)*w*4),y*w*4);
+      ctx.putImageData(frame,0,0);
+      return canvas.toDataURL('image/jpeg',.79);
+    }
+    kwgCameraUI.querySelector('#kwg-camera-cancel').addEventListener('click',stopWorldThumbnailCamera);
+    kwgCameraUI.querySelector('#kwg-camera-capture').addEventListener('click',()=>{
+      try{
+        const photo=captureWorldThumbnail();
+        if(photo.length>2200000){showToast('Screenshot too large. Please try again.');return;}
+        kwgFreeCamera.photo=photo;kwgFreeCamera.reviewing=true;
+        kwgCameraUI.querySelector('#kwg-camera-preview').src=photo;
+        kwgCameraUI.querySelector('#kwg-camera-review').style.display='flex';
+      }catch(err){console.error('Thumbnail capture:',err);showToast('Could not capture thumbnail. Try again.');}
+    });
+    kwgCameraUI.querySelector('#kwg-camera-retake').addEventListener('click',()=>{
+      kwgFreeCamera.reviewing=false;kwgFreeCamera.photo=null;
+      kwgCameraUI.querySelector('#kwg-camera-review').style.display='none';
+    });
+    kwgCameraUI.querySelector('#kwg-camera-use').addEventListener('click',()=>{
+      if(!kwgFreeCamera.photo)return;
+      kwgInfoDraft.thumbnailData=kwgFreeCamera.photo;
+      refreshWorldInfoThumbnail();stopWorldThumbnailCamera();
+      showToast('Thumbnail ready — exit Edit Mode to save');
+    });
+
     let kwgCopiedPart = null;
     window.addEventListener('keydown', e=>{
       if(!isEditMode || !canEditCurrentWorld || !e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
@@ -3741,7 +3959,7 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
     function renderProfileWorldCard(world) {
       const row=document.createElement('div'); row.className='profile-world-card';
       const info=document.createElement('div');
-      info.innerHTML=`<div class="profile-world-name">${escapeChatText(world.name)}</div><div class="profile-world-meta">♥ ${Number(world.likeCount||0)} LIKES</div>`;
+      info.innerHTML=`<div class="profile-world-name">${escapeChatText(world.displayName||world.name)}</div><div class="profile-world-meta">♥ ${Number(world.likeCount||0)} LIKES</div>`;
       const btn=document.createElement('button'); btn.textContent='VIEW';
       btn.addEventListener('click',()=>{switchHomeTab('worlds');});
       row.append(info,btn); return row;
@@ -4683,8 +4901,9 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
       requestAnimationFrame(animate);
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      updatePlayerPhysics(delta);
-      updateGizmoScreenScale();
+      if(!kwgFreeCamera.active) updatePlayerPhysics(delta);
+      if(!kwgFreeCamera.active) updateGizmoScreenScale();
+      else updateWorldThumbnailCamera(delta);
 
       if (localPlayerAvatar) {
         // Sky-layer clouds follow the player instead of occupying fixed map space.
@@ -4697,7 +4916,7 @@ body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{
         cloudsGroup.rotation.y += delta * 0.02 * cloudRotationSpeedMultiplier;
       }
 
-      if (localPlayerAvatar) {
+      if (localPlayerAvatar && !kwgFreeCamera.active) {
         // Exact single-player camera: same distance, height, rotation, smoothing,
         // right-click orbit, and automatic re-lock behind the player.
         const player = localPlayerAvatar;
