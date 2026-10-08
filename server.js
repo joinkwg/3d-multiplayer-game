@@ -1075,6 +1075,11 @@ io.on('connection', (socket) => {
             err.clientMessage = 'Part limit reached (1400/1400 parts).';
             throw err;
           }
+          // V3.37: Only the two current block types and three current
+          // materials may be saved by clients. Existing legacy worlds are
+          // not rewritten on load; their old flags stay intact until edited.
+          blockData.actionType = blockData.actionType === 'kill' ? 'kill' : 'normal';
+          blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
           data.blocks[blockData.id] = blockData;
         } else if (action === 'delete') {
           const target = data.blocks[blockId];
