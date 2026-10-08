@@ -2852,7 +2852,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       refreshStoreData();
       document.getElementById('auth-screen').style.display = 'none';
       document.getElementById('home-screen').style.display = 'flex';
-      document.getElementById('logged-user-display').textContent = loggedInUsername;
+      document.getElementById('logged-user-display').textContent = filterKWGUserText(loggedInUsername);
       switchHomeTab('home');
       renderHomeOverview();
     }
@@ -2965,11 +2965,11 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       const card = document.createElement('div');
       card.className = 'room-card';
       card.innerHTML = `<div class="kwg-world-card-thumb"><span>NO PHOTO</span></div><div class="room-info"><span class="room-title"></span><span class="room-description"></span><span class="room-meta"></span></div><div class="kwg-world-card-actions"><button class="world-like-btn ${w.likedByMe ? 'liked' : ''}">${w.likedByMe ? '♥' : '♡'} ${w.likes || 0}</button><button class="join-btn">Enter</button></div>`;
-      card.querySelector('.room-title').textContent = w.displayName || w.name;
-      card.querySelector('.room-description').textContent = w.description || 'Explore this world';
-      card.querySelector('.room-meta').textContent = `By ${w.ownerUsername || 'Unknown'} • ${w.onlineCount} online • ♥ ${w.likes || 0}`;
+      card.querySelector('.room-title').textContent = filterKWGUserText(w.displayName || w.name);
+      card.querySelector('.room-description').textContent = filterKWGUserText(w.description || 'Explore this world');
+      card.querySelector('.room-meta').textContent = `By ${filterKWGUserText(w.ownerUsername || 'Unknown')} • ${w.onlineCount} online • ♥ ${w.likes || 0}`;
       if (w.thumbnailUrl && /^https:\/\//i.test(w.thumbnailUrl)) {
-        const img=document.createElement('img');img.src=w.thumbnailUrl;img.alt=`Preview of ${w.displayName||w.name}`;img.loading='lazy';
+        const img=document.createElement('img');img.src=w.thumbnailUrl;img.alt=`Preview of ${filterKWGUserText(w.displayName||w.name)}`;img.loading='lazy';
         card.querySelector('.kwg-world-card-thumb').replaceChildren(img);
       }
       card.querySelector('.join-btn').addEventListener('click', () => joinSelectedWorld(w.name));
@@ -3050,7 +3050,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
         requestAnimationFrame(resizeWorldViewport);
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('room-info-label').style.display = 'block';
-        document.getElementById('current-room-text').textContent = res.worldData?.displayName || roomName;
+        document.getElementById('current-room-text').textContent = filterKWGUserText(res.worldData?.displayName || roomName);
         canEditCurrentWorld = !!res.canEdit;
         if (res.selfAppearance) playerAppearance = res.selfAppearance;
         equippedCosmetics = res.selfCosmetics || cosmeticsForAppearance(playerAppearance);
@@ -3075,7 +3075,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       templateSelect.innerHTML = '<option value="blank">Blank Baseplate</option>';
       socket.emit('get_world_templates', (res) => {
         if (res?.success) (res.templates || []).forEach(t => {
-          const opt=document.createElement('option'); opt.value=t.id; opt.textContent=t.name; templateSelect.appendChild(opt);
+          const opt=document.createElement('option'); opt.value=t.id; opt.textContent=filterKWGUserText(t.name); templateSelect.appendChild(opt);
         });
       });
       createModal.style.display = 'flex';
@@ -3153,7 +3153,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     socket.on('world_info_updated', info=>{
       if(!info || info.worldName!==currentWorldName)return;
       if(currentWorldData)Object.assign(currentWorldData,{displayName:info.displayName,description:info.description,thumbnailUrl:info.thumbnailUrl});
-      document.getElementById('current-room-text').textContent=info.displayName||currentWorldName;
+      document.getElementById('current-room-text').textContent=filterKWGUserText(info.displayName||currentWorldName);
       if(!isEditMode)resetWorldInfoEditor(currentWorldData,currentWorldName);
     });
     function stageWorldSettings(settings){
@@ -3192,7 +3192,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
             if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl});
             kwgInfoOriginal={displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl};
             kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
-            document.getElementById('current-room-text').textContent=res.displayName;
+            document.getElementById('current-room-text').textContent=filterKWGUserText(res.displayName);
             refreshWorldInfoThumbnail();
           }
           if(edit.callback)edit.callback(res);
@@ -3298,6 +3298,58 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     });
 
 
+    // KWG V3.35 — User-generated text filter. Server is authoritative;
+    // client uses the same filter for optimistic previews and legacy content.
+    // Account passwords, internal IDs and numeric game data must NOT be filtered.
+    const KWG_BLOCKED_TERMS = [
+      'fuck','fack','fucks','fucker','fuckers','fucking','motherfucker','motherfucking',
+      'shit','shits','shitty','bullshit','bitch','bitches','bitching',
+      'ass','asshole','assholes','dumbass','jackass','bastard','bastards',
+      'damn','damned','hell','crap','piss','pissed','pissing',
+      'dick','dicks','dickhead','cock','cocks','cocksucker','pussy','cunt','cunts',
+      'slut','sluts','whore','whores','wtf','stfu',
+      'nigger','niggers','nigga','niggas','faggot','faggots','fag','fags',
+      'kike','kikes','spic','spics','chink','chinks','gook','gooks',
+      'wetback','wetbacks','beaner','beaners','raghead','ragheads',
+      'paki','pakis','tranny','trannies','retard','retards','retarded',
+      'dyke','dykes','coon','coons'
+    ];
+    const KWG_BLOCKED_REGEX = new RegExp(
+      '(^|[^a-z])(' + KWG_BLOCKED_TERMS
+        .sort((a,b)=>b.length-a.length)
+        .map(term=>term.split('').join('[\\s._-]{0,3}'))
+        .join('|') + ')(?![a-z])','gi'
+    );
+    function filterKWGUserText(value){
+      const raw=String(value??'');
+      if(!raw)return raw;
+      // Map common leetspeak and Unicode accents to comparable letters while
+      // keeping an index for masking the exact characters in the original text.
+      const map={'0':'o','1':'i','3':'e','4':'a','5':'s','7':'t','@':'a','$':'s',
+        '!':'i','|':'i','€':'e','£':'l','+':'t','а':'a','е':'e','о':'o',
+        'р':'p','с':'c','х':'x','у':'y','і':'i'};
+      let folded='',offsets=[];
+      for(let i=0;i<raw.length;){
+        const ch=String.fromCodePoint(raw.codePointAt(i));
+        const trailingPunctuation=['!','@','$'].includes(ch) && !/[a-z]/i.test(raw[i+ch.length]||'');
+        const plain=(trailingPunctuation?ch:(map[ch]||ch.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()));
+        for(const unit of plain){folded+=unit;offsets.push([i,i+ch.length]);}
+        i+=ch.length;
+      }
+      const masked=new Set();
+      for(const match of folded.matchAll(KWG_BLOCKED_REGEX)){
+        const start=match.index+match[1].length;
+        const end=start+match[2].length;
+        for(let j=start;j<end;j++){
+          const bounds=offsets[j];if(!bounds)continue;
+          for(let k=bounds[0];k<bounds[1];k++)if(!/\s/.test(raw[k]))masked.add(k);
+        }
+      }
+      // Numbers are masked even when embedded in otherwise permitted words.
+      for(let i=0;i<raw.length;i++)if(/\p{N}/u.test(raw[i]))masked.add(i);
+      return raw.split('').map((ch,i)=>masked.has(i)?'*':ch).join('');
+    }
+    
     // --- PER-WORLD CHAT ---
     function escapeChatText(value) {
       const div = document.createElement('div');
@@ -3311,7 +3363,8 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       const row = document.createElement('div');
       row.className = 'chat-line';
       const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
-      row.innerHTML = `<span class="chat-name">${escapeChatText(msg.username || 'Player')}:</span> ${escapeChatText(msg.message || '')}<span class="chat-time">${escapeChatText(time)}</span>`;
+      row.innerHTML = `<span class="chat-name">${escapeChatText(filterKWGUserText(msg.username || 'Player'))}:</span> ${escapeChatText(filterKWGUserText(msg.message || ''))}<span class="chat-time">${escapeChatText(time)}</span>`;
+      row.querySelector('.chat-name').dataset.profileUsername=String(msg.username||'Player');
       box.appendChild(row);
       while (box.children.length > 100) box.removeChild(box.firstChild);
       box.scrollTop = box.scrollHeight;
@@ -3344,7 +3397,8 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       const box = document.getElementById('world-chat-messages');
       const pending = document.createElement('div');
       pending.className = 'chat-line chat-pending';
-      pending.innerHTML = `<span class="chat-name">${escapeChatText(loggedInUsername || 'You')}:</span> ${escapeChatText(message)}<span class="chat-time"></span>`;
+      pending.innerHTML = `<span class="chat-name">${escapeChatText(filterKWGUserText(loggedInUsername || 'You'))}:</span> ${escapeChatText(filterKWGUserText(message))}<span class="chat-time"></span>`;
+      pending.querySelector('.chat-name').dataset.profileUsername=String(loggedInUsername||'You');
       box.appendChild(pending);
       box.scrollTop = box.scrollHeight;
       input.value = '';
@@ -3360,7 +3414,10 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     });
 
     socket.on('world_chat_message', (msg) => {
-      if (msg.worldName === currentWorldName) appendChatMessage(msg);
+      if (msg.worldName === currentWorldName) {
+        appendChatMessage(msg);
+        showKWGChatBubble(msg.username,msg.message);
+      }
     });
 
     socket.on('account_deleted', () => {
@@ -3414,7 +3471,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       if (!rows.length) { users.innerHTML = '<div class="admin-search-note">No matching accounts.</div>'; return; }
       rows.forEach(u => {
         const row = document.createElement('div'); row.className = 'admin-row';
-        const info = document.createElement('span'); const name = document.createElement('b'); name.textContent = u.username; info.appendChild(name);
+        const info = document.createElement('span'); const name = document.createElement('b'); name.textContent = filterKWGUserText(u.username); info.appendChild(name);
         const meta = document.createElement('small'); meta.style.marginLeft = '7px'; meta.className = u.online ? 'admin-status-online' : 'admin-status-offline';
         meta.textContent = `${u.isAdmin ? 'ADMIN' : 'USER'} • ${u.online ? 'ONLINE' : 'OFFLINE'} • 🪙 ${u.coins ?? 0}`; info.appendChild(meta); row.appendChild(info);
         const actions = document.createElement('div'); actions.className = 'admin-actions';
@@ -3947,18 +4004,93 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       return group;
     }
 
-    function createNameTagSprite(name) {
-      const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-      canvas.width = 256; canvas.height = 64;
-      ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(10, 10, 236, 44);
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.strokeRect(10, 10, 236, 44);
-      ctx.font = 'Bold 22px Courier New, monospace'; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(name.toUpperCase(), 128, 32);
-
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true }));
-      sprite.scale.set(1.5, 0.375, 1); 
-      sprite.position.y = 2.5;
+    // V3.35 — Pixel-style nametags and camera-facing chat bubbles.
+    // Name tags sit above even the taller hats; bubbles stack above the tags.
+    function kwgSpriteFromCanvas(canvas,width,height){
+      const texture=new THREE.CanvasTexture(canvas);
+      texture.minFilter=THREE.LinearFilter;
+      texture.magFilter=THREE.LinearFilter;
+      const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:true});
+      const sprite=new THREE.Sprite(material);
+      sprite.scale.set(width,height,1);
+      sprite.renderOrder=8;
       return sprite;
+    }
+    function createNameTagSprite(name){
+      const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
+      const ctx=canvas.getContext('2d');
+      ctx.clearRect(0,0,512,96);
+      ctx.fillStyle='#0a1422';ctx.fillRect(6,9,500,78);
+      ctx.fillStyle='#7c9db1';ctx.fillRect(6,9,500,5);ctx.fillRect(6,82,500,5);
+      ctx.fillRect(6,9,5,78);ctx.fillRect(501,9,5,78);
+      ctx.fillStyle='#9ce078';ctx.fillRect(16,20,8,56);
+      const label=filterKWGUserText(String(name||'PLAYER')).toUpperCase().slice(0,24);
+      let size=39;
+      do{ctx.font=`700 ${size}px "Pixelify Sans", monospace`;size-=2;}
+      while(ctx.measureText(label).width>450&&size>21);
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#f1f5e7';
+      ctx.fillText(label,264,49);
+      const sprite=kwgSpriteFromCanvas(canvas,1.95,.365);
+      sprite.name='kwg-name-tag';sprite.position.set(0,3.14,0);
+      return sprite;
+    }
+    function wrapKWGBubbleText(value){
+      const words=filterKWGUserText(String(value||'')).replace(/\s+/g,' ').trim().split(' ');
+      const lines=[];let line='';
+      for(let word of words){
+        while(word.length>25){
+          if(line){lines.push(line);line='';}
+          lines.push(word.slice(0,25));word=word.slice(25);
+        }
+        const combined=line?line+' '+word:word;
+        if(combined.length>25&&line){lines.push(line);line=word;}
+        else line=combined;
+      }
+      if(line)lines.push(line);
+      if(lines.length>3){lines.length=3;lines[2]=lines[2].slice(0,22)+'...';}
+      return lines;
+    }
+    function makeKWGChatBubble(message){
+      const lines=wrapKWGBubbleText(message);
+      if(!lines.length)return null;
+      const canvas=document.createElement('canvas');canvas.width=512;canvas.height=192;
+      const ctx=canvas.getContext('2d');ctx.clearRect(0,0,512,192);
+      // A square, layered pixel speech balloon, with a blocky tail.
+      ctx.fillStyle='#0a1422';ctx.fillRect(13,11,486,149);
+      ctx.fillStyle='#86abc0';ctx.fillRect(13,11,486,5);ctx.fillRect(13,155,486,5);
+      ctx.fillRect(13,11,5,149);ctx.fillRect(494,11,5,149);
+      ctx.fillStyle='#9ce078';ctx.fillRect(25,22,462,6);
+      ctx.fillStyle='#0a1422';ctx.fillRect(235,160,42,12);ctx.fillRect(247,172,18,11);
+      ctx.fillStyle='#86abc0';ctx.fillRect(235,160,5,11);ctx.fillRect(272,160,5,11);
+      ctx.fillStyle='#f1f5e7';ctx.font='700 32px "Pixelify Sans", monospace';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      const spacing=38;const startY=86-(lines.length-1)*spacing/2;
+      lines.forEach((line,i)=>ctx.fillText(line,256,startY+i*spacing,452));
+      const sprite=kwgSpriteFromCanvas(canvas,2.75,1.03);
+      sprite.name='kwg-chat-bubble';sprite.position.set(0,4.04,0);
+      return sprite;
+    }
+    function disposeKWGSprite(sprite){
+      if(!sprite)return;
+      if(sprite.parent)sprite.parent.remove(sprite);
+      if(sprite.material){sprite.material.map?.dispose();sprite.material.dispose();}
+    }
+    function showKWGChatBubble(username,message){
+      if(!currentWorldName||!username||!message)return;
+      const isSelf=String(username).toLowerCase()===String(loggedInUsername||'').toLowerCase();
+      const avatar=isSelf?localPlayerAvatar:
+        Object.values(otherPlayers).find(p=>String(p.username||'').toLowerCase()===String(username).toLowerCase())?.mesh;
+      if(!avatar)return;
+      const previous=avatar.userData.kwgBubble;
+      if(previous)disposeKWGSprite(previous);
+      const bubble=makeKWGChatBubble(message);
+      if(!bubble)return;
+      avatar.add(bubble);avatar.userData.kwgBubble=bubble;
+      setTimeout(()=>{
+        if(avatar.userData.kwgBubble===bubble){
+          disposeKWGSprite(bubble);avatar.userData.kwgBubble=null;
+        }
+      },6000);
     }
 
     // --- ANIMATION CONTROLLER FOR RUN / JUMP / IDLE ---
@@ -5537,7 +5669,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     function renderProfileWorldCard(world) {
       const row=document.createElement('div'); row.className='profile-world-card';
       const info=document.createElement('div');
-      info.innerHTML=`<div class="profile-world-name">${escapeChatText(world.displayName||world.name)}</div><div class="profile-world-meta">♥ ${Number(world.likeCount||0)} LIKES</div>`;
+      info.innerHTML=`<div class="profile-world-name">${escapeChatText(filterKWGUserText(world.displayName||world.name))}</div><div class="profile-world-meta">♥ ${Number(world.likeCount||0)} LIKES</div>`;
       const btn=document.createElement('button'); btn.textContent='VIEW';
       btn.addEventListener('click',()=>{switchHomeTab('worlds');});
       row.append(info,btn); return row;
@@ -5545,7 +5677,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
 
     function renderProfile(profile) {
       viewedProfile=profile;
-      document.getElementById('profile-username').textContent=profile.username;
+      document.getElementById('profile-username').textContent=filterKWGUserText(profile.username);
       document.getElementById('profile-joined').textContent='JOINED '+formatProfileDate(profile.createdAt).toUpperCase();
       document.getElementById('profile-stat-worlds').textContent=profile.stats?.worlds ?? 0;
       document.getElementById('profile-stat-likes').textContent=profile.stats?.likesGiven ?? 0;
@@ -5553,7 +5685,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
 
       const status=document.getElementById('profile-status');
       status.classList.toggle('online',!!profile.online);
-      status.innerHTML=`<span class="profile-status-dot"></span><span>${profile.online ? (profile.currentWorld ? 'ONLINE · '+escapeChatText(profile.currentWorld) : 'ONLINE') : 'OFFLINE'}</span>`;
+      status.innerHTML=`<span class="profile-status-dot"></span><span>${profile.online ? (profile.currentWorld ? 'ONLINE · '+escapeChatText(filterKWGUserText(profile.currentWorld)) : 'ONLINE') : 'OFFLINE'}</span>`;
 
       const join=document.getElementById('profile-join-world-btn');
       if(profile.currentWorld && profile.currentWorld!==currentWorldName){
@@ -5562,7 +5694,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       }else join.style.display='none';
 
       const bio=document.getElementById('profile-bio-view');
-      bio.textContent=profile.bio || (profile.isOwnProfile ? 'You have not written an About Me yet.' : 'This player has not written an About Me yet.');
+      bio.textContent=filterKWGUserText(profile.bio) || (profile.isOwnProfile ? 'You have not written an About Me yet.' : 'This player has not written an About Me yet.');
 
       const friendActions=document.getElementById('profile-friend-actions');
       friendActions.innerHTML='';
@@ -5633,7 +5765,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
         const row=document.createElement('div');row.className='notification-row'+(n.isRead?'':' unread');
         const dot=document.createElement('span');dot.className='notification-dot';
         const body=document.createElement('div');
-        const msg=document.createElement('div');msg.className='notification-message';msg.textContent=n.message;
+        const msg=document.createElement('div');msg.className='notification-message';msg.textContent=filterKWGUserText(n.message);
         const tm=document.createElement('div');tm.className='notification-time';tm.textContent=timeAgo(n.createdAt);
         body.append(msg,tm);row.append(dot,body);
         if(n.actorUsername){
@@ -5705,7 +5837,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       const main=document.createElement('div'); main.className='friend-main';
       const dot=document.createElement('span'); dot.className='friend-dot'+(user.online?' online':'');
       const text=document.createElement('div');
-      const name=document.createElement('div'); name.className='friend-name'; name.textContent=user.username;
+      const name=document.createElement('div'); name.className='friend-name'; name.textContent=filterKWGUserText(user.username);
       name.addEventListener('click',()=>openPlayerProfile(user.username));
       const presence=document.createElement('div'); presence.className='friend-presence';
       if(kind==='friend') presence.textContent=user.online?(user.currentWorld?'ONLINE · '+user.currentWorld:'ONLINE'):'OFFLINE';
@@ -6608,7 +6740,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       root.querySelectorAll?.('#world-chat-messages .chat-line').forEach(line=>{
         const nameEl=line.querySelector('.chat-name');
         if(!nameEl || nameEl.classList.contains('kwg-profile-link'))return;
-        const raw=(nameEl.textContent||'').replace(/:\s*$/,'').trim();
+        const raw=nameEl.dataset.profileUsername||(nameEl.textContent||'').replace(/:\s*$/,'').trim();
         if(!raw)return;
         nameEl.classList.add('kwg-profile-link');
         nameEl.dataset.profileUsername=raw;
