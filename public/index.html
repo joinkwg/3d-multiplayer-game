@@ -1990,6 +1990,48 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
   #notifications-pane .notification-row{grid-template-columns:9px minmax(0,1fr)!important}
   #notifications-pane .notification-open{grid-column:2;justify-self:start}
 }
+
+/* V3.36: Copy/paste RGB values in one field throughout KWG. */
+.kwg-rgb-control{
+  display:inline-flex!important;align-items:center!important;gap:7px!important;
+  min-width:0;max-width:100%;vertical-align:middle;
+}
+.kwg-rgb-control > input[type="color"]{
+  flex:0 0 35px!important;width:35px!important;min-width:35px!important;
+  height:35px!important;box-sizing:border-box!important;
+  padding:3px!important;background:#132132!important;
+  border:2px solid #57758d!important;border-radius:0!important;
+  cursor:pointer!important;
+}
+.kwg-rgb-control .kwg-rgb-field{
+  box-sizing:border-box!important;flex:1 1 126px!important;
+  width:126px!important;min-width:0!important;max-width:165px!important;
+  height:35px!important;padding:6px 8px!important;
+  background:#132132!important;color:#f0f5e9!important;
+  border:2px solid #57758d!important;border-radius:0!important;
+  box-shadow:inset 3px 3px 0 #0b1420!important;
+  font-family:'Pixelify Sans','Courier New',monospace!important;
+  font-size:13px!important;letter-spacing:0!important;
+  text-align:left!important;
+}
+.kwg-rgb-control .kwg-rgb-field:focus{outline:2px solid #9ce078!important;outline-offset:1px!important}
+.kwg-rgb-control .kwg-rgb-field.kwg-rgb-invalid{border-color:#e27c76!important}
+body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
+  width:126px!important;max-width:165px!important;height:35px!important;
+}
+#avatar-editor-pane .kwg-avatar-colors .kwg-rgb-control{
+  display:flex!important;flex-wrap:nowrap!important;width:100%!important;
+}
+#avatar-editor-pane .kwg-avatar-colors .kwg-rgb-control input[type="color"]{
+  flex:0 0 34px!important;width:34px!important;height:34px!important;
+}
+#avatar-editor-pane .kwg-avatar-colors .kwg-rgb-field{
+  flex:1 1 auto!important;width:100%!important;max-width:none!important;
+  height:34px!important;font-size:12px!important;
+}
+#kwg-recolor-panel .kwg-recolor-color-wrap .kwg-rgb-control{flex:1}
+#kwg-recolor-panel .kwg-recolor-color-wrap .kwg-rgb-field{width:125px!important}
+#save-status{display:none!important}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -2275,7 +2317,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
 
     <section id="kwg-recolor-panel" class="kwg-recolor-panel" aria-label="Recolor brush settings" style="display:none">
       <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">●</span> RECOLOR BRUSH</div>
-      <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-recolor-color" value="#4b9cff" aria-label="Brush color"><output id="kwg-recolor-color-value">#4B9CFF</output></span></label>
+      <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-recolor-color" value="#4b9cff" aria-label="Brush color"></span></label>
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-recolor-material" aria-label="Brush material"><option value="grid">Grid Pattern</option><option value="smooth" selected>Smooth Plastic</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option><option value="grass">Grass</option><option value="neon">Neon / Glowing</option></select></label>
       <p class="kwg-recolor-help">Click any part in the 3D view to apply both.</p>
     </section>
@@ -2344,7 +2386,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       
       <div class="tool-row">
         <label>Sky Color:</label>
-        <input type="color" id="sky-color-input" value="#a0a0e0">
+        <input type="color" id="sky-color-input" value="#1e1e7b">
       </div>
 
       <div class="tool-row">
@@ -3138,8 +3180,6 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     function emitWorldSave(eventName, payload, callback) {
       if(isEditMode && canEditCurrentWorld){
         stagedWorldEdits.push({eventName,payload:JSON.parse(JSON.stringify(payload)),callback});
-        const el=document.getElementById('save-status');
-        if(el){el.style.display='flex';el.textContent=`${stagedWorldEdits.length} changes pending · use Save & Exit to save`;}
         return;
       }
       pendingWorldSaves++;
@@ -3159,8 +3199,6 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     function stageWorldSettings(settings){
       if(isEditMode && canEditCurrentWorld){
         stagedWorldEdits.push({eventName:'world_settings_update',payload:{worldName:currentWorldName,settings:JSON.parse(JSON.stringify(settings))}});
-        const el=document.getElementById('save-status');
-        if(el){el.style.display='flex';el.textContent=`${stagedWorldEdits.length} changes pending · use Save & Exit to save`;}
       }else socket.emit('world_settings_update',{worldName:currentWorldName,settings});
     }
     async function commitStagedWorldEdits(){
@@ -3638,7 +3676,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
 
     // --- THREE.JS SCENE SETUP ---
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xa0a0e0);
+    scene.background = new THREE.Color(0x1e1e7b);
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -4382,9 +4420,9 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       selectBlock(null);
       for (const id in worldBlocks) { scene.remove(worldBlocks[id]); delete worldBlocks[id]; }
 
-      const skyHex = world.skyColor || '#a0a0e0';
+      const skyHex = world.skyColor || '#1e1e7b';
       scene.background.set(skyHex);
-      document.getElementById('sky-color-input').value = skyHex;
+      document.getElementById('sky-color-input').value = skyHex; kwgSyncRGBField('sky-color-input');
 
       const cloudsEnabled = world.cloudsEnabled !== false;
       const cloudSpeed = (world.cloudSpeed !== undefined) ? world.cloudSpeed : 1.0;
@@ -4392,7 +4430,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
 
       document.getElementById('clouds-enabled-checkbox').checked = cloudsEnabled;
       document.getElementById('cloud-speed-input').value = cloudSpeed;
-      document.getElementById('cloud-color-input').value = cloudColorHex;
+      document.getElementById('cloud-color-input').value = cloudColorHex; kwgSyncRGBField('cloud-color-input');
       cloudRotationSpeedMultiplier = parseFloat(cloudSpeed) || 0;
 
       updateCloudsAppearance(cloudsEnabled, cloudColorHex);
@@ -4452,7 +4490,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
 
       if (settings.skyColor) {
         scene.background.set(settings.skyColor);
-        document.getElementById('sky-color-input').value = settings.skyColor;
+        document.getElementById('sky-color-input').value = settings.skyColor; kwgSyncRGBField('sky-color-input');
       }
       if (settings.spawnPoint) {
         spawnMarker.position.set(settings.spawnPoint.x, settings.spawnPoint.y, settings.spawnPoint.z);
@@ -4900,10 +4938,6 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
         : 'default';
     }
 
-    document.getElementById('kwg-recolor-color').addEventListener('input',e=>{
-      document.getElementById('kwg-recolor-color-value').textContent=e.target.value.toUpperCase();
-    });
-
     function setBuildSubTool(tool) {
       buildSubTool = buildSubTool === tool ? null : tool;
       tool = buildSubTool;
@@ -4968,7 +5002,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
         document.getElementById('block-shape-select').value = block.shape || 'box';
         document.getElementById('block-action-select').value = block.actionType || 'normal';
         document.getElementById('block-material-select').value = block.material || 'grid';
-        document.getElementById('block-color-input').value = block.color || '#888888';
+        document.getElementById('block-color-input').value = block.color || '#888888'; kwgSyncRGBField('block-color-input');
         document.getElementById('block-transparency-input').value = block.transparency !== undefined ? block.transparency : 0;
         document.getElementById('block-collidable-checkbox').checked = block.canCollide !== false;
       } else {
@@ -5206,6 +5240,83 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
         stageWorldSettings({ cloudColor: color });
       }
     });
+
+
+    // V3.36: Every game color swatch has one copy/paste friendly RGB field.
+    // Native color inputs remain as optional swatches; RGB text is the primary editor.
+    function kwgHexToRGB(hex){
+      const m=/^#([0-9a-f]{6})$/i.exec(String(hex||''));
+      if(!m)return '0, 0, 0';
+      return [0,2,4].map(i=>parseInt(m[1].slice(i,i+2),16)).join(', ');
+    }
+    function kwgRGBToHex(text){
+      const value=String(text||'').trim();
+      if(/^#?[0-9a-f]{6}$/i.test(value))return '#'+value.replace('#','').toLowerCase();
+      const inner=value.replace(/^rgb\s*\(/i,'').replace(/\)\s*$/,'');
+      const chunks=inner.split(/\s*,\s*/);
+      if(chunks.length!==3)return null;
+      const nums=chunks.map(v=>Number(v.trim()));
+      if(nums.some(n=>!Number.isInteger(n)||n<0||n>255))return null;
+      return '#'+nums.map(n=>n.toString(16).padStart(2,'0')).join('');
+    }
+    function kwgSyncRGBField(colorId){
+      const swatch=document.getElementById(colorId);
+      const field=document.getElementById(colorId+'-rgb');
+      if(!swatch||!field)return;
+      if(document.activeElement!==field)field.value=kwgHexToRGB(swatch.value);
+      field.classList.remove('kwg-rgb-invalid');
+    }
+    function kwgInstallRGBFields(){
+      document.querySelectorAll('input[type="color"]').forEach(swatch=>{
+        if(!swatch.id||document.getElementById(swatch.id+'-rgb'))return;
+        const wrapper=document.createElement('span');
+        wrapper.className='kwg-rgb-control';
+        swatch.parentNode.insertBefore(wrapper,swatch);
+        wrapper.appendChild(swatch);
+        swatch.setAttribute('title','Choose a color');
+        const field=document.createElement('input');
+        field.type='text';
+        field.id=swatch.id+'-rgb';
+        field.className='kwg-rgb-field';
+        field.setAttribute('aria-label',(swatch.getAttribute('aria-label')||swatch.id.replace(/[-_]/g,' '))+' RGB color');
+        field.setAttribute('autocomplete','off');
+        field.setAttribute('spellcheck','false');
+        field.setAttribute('inputmode','text');
+        field.placeholder='R, G, B';
+        field.value=kwgHexToRGB(swatch.value);
+        field.title='Copy or paste an RGB color: 30, 30, 123';
+        wrapper.appendChild(field);
+        const commit=()=>{
+          const hex=kwgRGBToHex(field.value);
+          if(!hex){
+            field.classList.add('kwg-rgb-invalid');
+            return false;
+          }
+          field.classList.remove('kwg-rgb-invalid');
+          field.value=kwgHexToRGB(hex);
+          if(swatch.value.toLowerCase()!==hex){
+            swatch.value=hex;
+            swatch.dispatchEvent(new Event('input',{bubbles:true}));
+          }
+          return true;
+        };
+        field.addEventListener('input',()=>{
+          const hex=kwgRGBToHex(field.value);
+          field.classList.toggle('kwg-rgb-invalid',field.value.trim().length>0&&!hex);
+          if(hex)commit();
+        });
+        field.addEventListener('change',commit);
+        field.addEventListener('keydown',event=>{
+          if(event.key==='Enter'){event.preventDefault();commit();field.blur();}
+        });
+        field.addEventListener('blur',()=>{
+          if(!commit()){field.value=kwgHexToRGB(swatch.value);field.classList.remove('kwg-rgb-invalid');}
+        });
+        swatch.addEventListener('input',()=>kwgSyncRGBField(swatch.id));
+        swatch.addEventListener('change',()=>kwgSyncRGBField(swatch.id));
+      });
+    }
+    kwgInstallRGBFields();
 
     // --- PLACEMENT CURSOR ALIGNMENT ---
     const raycaster = new THREE.Raycaster();
@@ -6078,7 +6189,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     function updateEditorAvatar(){if(!editorScene||!avatarDraft)return;if(editorMesh)editorScene.remove(editorMesh);editorMesh=buildBlockyAvatar(avatarDraft,cosmeticsForAppearance(avatarDraft));editorMesh.rotation.y=editorTargetRotation;editorScene.add(editorMesh);}
     function normalizeSemanticAppearance(app){app=app||{};app.skinColor=app.skinColor||app.headColor||'#d9a679';app.shirtColor=app.shirtColor||app.torsoColor||'#3b82d0';app.pantsColor=app.pantsColor||app.leftLegColor||'#263447';app.shoesColor=app.shoesColor||'#15191f';app.hairColor=app.hairColor||'#3a261b';return app;}
     function mirrorSemanticColors(app){normalizeSemanticAppearance(app);app.headColor=app.skinColor;app.torsoColor=app.shirtColor;app.leftArmColor=app.skinColor;app.rightArmColor=app.skinColor;app.leftLegColor=app.pantsColor;app.rightLegColor=app.pantsColor;return app;}
-    function syncEditorColors(){normalizeSemanticAppearance(avatarDraft);[['av-skin-color','skinColor'],['av-shirt-color','shirtColor'],['av-pants-color','pantsColor'],['av-shoes-color','shoesColor'],['av-hair-color','hairColor']].forEach(([id,k])=>{document.getElementById(id).value=avatarDraft[k];});}
+    function syncEditorColors(){normalizeSemanticAppearance(avatarDraft);[['av-skin-color','skinColor'],['av-shirt-color','shirtColor'],['av-pants-color','pantsColor'],['av-shoes-color','shoesColor'],['av-hair-color','hairColor']].forEach(([id,k])=>{document.getElementById(id).value=avatarDraft[k];kwgSyncRGBField(id);});}
     function syncBodyStyleButtons(){if(!avatarDraft)return;avatarDraft.shirtStyle=avatarDraft.shirtStyle||'short';avatarDraft.bottomStyle=avatarDraft.bottomStyle||'pants';document.querySelectorAll('[data-shirt-style]').forEach(b=>b.classList.toggle('active',b.dataset.shirtStyle===avatarDraft.shirtStyle));document.querySelectorAll('[data-bottom-style]').forEach(b=>b.classList.toggle('active',b.dataset.bottomStyle===avatarDraft.bottomStyle));}
     function openAvatarEditor(){refreshStoreData(()=>{avatarDraft=JSON.parse(JSON.stringify(playerAppearance));initEditorPreview();syncEditorColors();syncBodyStyleButtons();renderAvatarInventory();updateEditorAvatar();});}
     document.querySelectorAll('[data-shirt-style]').forEach(b=>b.addEventListener('click',()=>{if(!avatarDraft)return;avatarDraft.shirtStyle=b.dataset.shirtStyle;syncBodyStyleButtons();updateEditorAvatar();}));
