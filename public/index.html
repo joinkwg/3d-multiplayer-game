@@ -669,6 +669,34 @@ body.kwg-editing #build-toolbar,body.kwg-editing #kwg-properties-window{border-r
 body.kwg-editing #kwg-settings-window{border-left:1px solid #46556b!important}
 @media(max-width:900px){body{--kwg-left-dock:205px;--kwg-right-dock:225px;--kwg-toolbar-height:205px}}
 @media(max-width:620px){body{--kwg-left-dock:145px;--kwg-right-dock:155px;--kwg-toolbar-height:220px}body.kwg-editing #build-toolbar,body.kwg-editing #kwg-properties-window,body.kwg-editing #kwg-settings-window{padding:8px!important}body.kwg-editing .kwg-icon-tools{grid-template-columns:repeat(3,minmax(0,1fr))!important}body.kwg-editing .kwg-settings-tabs{flex-wrap:wrap}body.kwg-editing .kwg-settings-tabs button{font-size:9px;padding:6px}body.kwg-editing .tool-row{flex-wrap:wrap;gap:4px}}
+
+/* ===== V3.27.5: narrower, compact, resizable Studio panels ===== */
+body{--kwg-left-dock:243px;--kwg-right-dock:284px}
+@media(max-width:900px){body{--kwg-left-dock:185px;--kwg-right-dock:203px}}
+@media(max-width:620px){body{--kwg-left-dock:131px;--kwg-right-dock:140px}}
+/* Scale the panel contents, not the dock itself: the viewport still gets the full freed space. */
+body.kwg-editing #build-toolbar > *,
+body.kwg-editing #kwg-properties-window > *,
+body.kwg-editing #kwg-settings-window > *{zoom:.9}
+body.kwg-editing #build-toolbar,
+body.kwg-editing #kwg-properties-window,
+body.kwg-editing #kwg-settings-window{padding:10px!important;font-size:11px!important}
+body.kwg-editing .kwg-icon-tools{gap:4px!important}
+body.kwg-editing .kwg-icon-tools button{padding:5px 1px!important}
+body.kwg-editing .kwg-icon-tools svg{width:19px;height:19px}
+/* The dividers sit on the dock edges; dragging them resizes the actual 3D viewport. */
+.kwg-studio-resizer{display:none;position:fixed;z-index:29;background:transparent;touch-action:none;user-select:none;-webkit-user-select:none}
+body.kwg-editing .kwg-studio-resizer{display:block}
+.kwg-studio-resizer::after{content:'';position:absolute;background:#43556b;opacity:.75;transition:background .12s,opacity .12s}
+.kwg-studio-resizer:hover::after,.kwg-studio-resizer.kwg-resizing::after{background:#6cb3ff;opacity:1}
+#kwg-resize-left{top:var(--kwg-topbar-height);bottom:0;left:calc(var(--kwg-left-dock) - 5px);width:10px;cursor:col-resize}
+#kwg-resize-right{top:var(--kwg-topbar-height);bottom:0;right:calc(var(--kwg-right-dock) - 5px);width:10px;cursor:col-resize}
+#kwg-resize-left::after,#kwg-resize-right::after{top:0;bottom:0;left:4px;width:2px}
+#kwg-resize-toolbar{top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height) - 5px);left:0;width:var(--kwg-left-dock);height:10px;cursor:row-resize}
+#kwg-resize-toolbar::after{left:0;right:0;top:4px;height:2px}
+body.kwg-studio-dragging,body.kwg-studio-dragging *{user-select:none!important;-webkit-user-select:none!important}
+body.kwg-studio-dragging.kwg-drag-cols,body.kwg-studio-dragging.kwg-drag-cols *{cursor:col-resize!important}
+body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{cursor:row-resize!important}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -2849,11 +2877,83 @@ body.kwg-editing #kwg-settings-window{border-left:1px solid #46556b!important}
     });
 
 
+    // Studio-style splitters. Layout values live only for this editing session;
+    // reopening Edit Mode always restores the CSS defaults for the screen size.
+    const studioResizers = [
+      ['kwg-resize-left','left'],
+      ['kwg-resize-right','right'],
+      ['kwg-resize-toolbar','toolbar']
+    ];
+    const studioDefaultProperties = ['--kwg-left-dock','--kwg-right-dock','--kwg-toolbar-height'];
+    function resetStudioDockSizes() {
+      studioDefaultProperties.forEach(name=>document.body.style.removeProperty(name));
+      requestAnimationFrame(resizeWorldViewport);
+    }
+    function studioDockPixels(name) {
+      return parseFloat(getComputedStyle(document.body).getPropertyValue(name)) || 0;
+    }
+    function clampStudioDocks(side, requested) {
+      const vw=window.innerWidth;
+      const left=studioDockPixels('--kwg-left-dock');
+      const right=studioDockPixels('--kwg-right-dock');
+      const minLeft=vw<=620?100:140;
+      const minRight=vw<=620?105:155;
+      const minViewport=vw<=620?105:220;
+      if(side==='left')return Math.max(minLeft,Math.min(requested,Math.min(520,vw-right-minViewport)));
+      if(side==='right')return Math.max(minRight,Math.min(requested,Math.min(560,vw-left-minViewport)));
+      return Math.max(95,Math.min(requested,window.innerHeight-studioDockPixels('--kwg-topbar-height')-110));
+    }
+    studioResizers.forEach(([id,side])=>{
+      const grip=document.createElement('div');
+      grip.id=id;
+      grip.className='kwg-studio-resizer';
+      grip.setAttribute('role','separator');
+      grip.setAttribute('aria-label',side==='left'?'Resize Toolbar and Properties width':side==='right'?'Resize Settings width':'Resize Toolbar height');
+      grip.title=side==='left'?'Drag to resize left panels':side==='right'?'Drag to resize Settings':'Drag to resize Toolbar and Properties';
+      document.body.appendChild(grip);
+      grip.addEventListener('pointerdown',e=>{
+        if(!isEditMode || e.button!==0)return;
+        e.preventDefault();
+        e.stopPropagation();
+        grip.setPointerCapture(e.pointerId);
+        grip.classList.add('kwg-resizing');
+        document.body.classList.add('kwg-studio-dragging',side==='toolbar'?'kwg-drag-rows':'kwg-drag-cols');
+      });
+      grip.addEventListener('pointermove',e=>{
+        if(!grip.hasPointerCapture(e.pointerId)||!isEditMode)return;
+        let prop,value;
+        if(side==='left'){prop='--kwg-left-dock';value=e.clientX;}
+        else if(side==='right'){prop='--kwg-right-dock';value=window.innerWidth-e.clientX;}
+        else {prop='--kwg-toolbar-height';value=e.clientY-studioDockPixels('--kwg-topbar-height');}
+        document.body.style.setProperty(prop,clampStudioDocks(side,value)+'px');
+        resizeWorldViewport();
+      });
+      function finishStudioResize(){
+        grip.classList.remove('kwg-resizing');
+        document.body.classList.remove('kwg-studio-dragging','kwg-drag-cols','kwg-drag-rows');
+        resizeWorldViewport();
+      }
+      grip.addEventListener('pointerup',finishStudioResize);
+      grip.addEventListener('pointercancel',finishStudioResize);
+      grip.addEventListener('lostpointercapture',finishStudioResize);
+    });
+    window.addEventListener('resize',()=>{
+      if(!isEditMode)return;
+      // Keep the viewport usable if the browser becomes narrower during editing.
+      ['left','right'].forEach(side=>{
+        const prop=side==='left'?'--kwg-left-dock':'--kwg-right-dock';
+        if(document.body.style.getPropertyValue(prop))
+          document.body.style.setProperty(prop,clampStudioDocks(side,studioDockPixels(prop))+'px');
+      });
+      resizeWorldViewport();
+    });
+
     toggleEditBtn.addEventListener('click', async () => {
       if(worldCommitInProgress)return;
       if(isEditMode && !(await commitStagedWorldEdits()))return;
       if (!canEditCurrentWorld) { showToast('Only the world owner or an admin can edit this world.'); return; }
       isEditMode = !isEditMode;
+      resetStudioDockSizes();
       toggleEditBtn.setAttribute('aria-label',isEditMode?'Disable Edit Mode':'Enable Edit Mode');
       toggleEditBtn.title=isEditMode?'Disable Edit Mode':'Enable Edit Mode';
       toggleEditBtn.classList.toggle('active', isEditMode);
