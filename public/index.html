@@ -1036,6 +1036,120 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
   #room-info-label .kwg-world-label{display:none}
 }
 
+
+/* ==============================================================
+   KWG V3.30 · Clean in-world controls, three-stack Studio sidebar
+   and independent material + color recolor brush.
+   =============================================================== */
+body{--kwg-toolbar-height:245px;--kwg-settings-height:265px}
+body.kwg-in-world:not(.kwg-editing) #kwg-world-viewport{top:0!important}
+body.kwg-in-world:not(.kwg-editing) #hud{
+  background:transparent!important;border:0!important;box-shadow:none!important;
+  backdrop-filter:none!important;filter:none!important;
+}
+body.kwg-in-world #hud{
+  overflow:visible!important;white-space:nowrap;flex-wrap:nowrap!important;
+  padding:6px 12px!important;
+}
+body.kwg-in-world #hud .kwg-control-icon{
+  width:auto!important;min-width:0!important;height:36px!important;
+  padding:0 12px!important;display:inline-flex!important;align-items:center;
+  justify-content:center;gap:8px;border-radius:7px!important;
+  font-size:10px!important;font-weight:800!important;letter-spacing:.035em!important;
+  white-space:nowrap!important;text-transform:none!important;
+}
+body.kwg-in-world #hud .kwg-control-icon svg{width:17px!important;height:17px!important;flex:none}
+.kwg-hud-button-label{display:inline-block;font-size:10px;font-weight:800;line-height:1}
+body.kwg-in-world #room-info-label{
+  position:fixed!important;top:0!important;right:13px!important;left:auto!important;
+  z-index:31!important;box-sizing:border-box!important;
+  height:var(--kwg-topbar-height)!important;max-height:var(--kwg-topbar-height)!important;
+  min-height:0!important;margin:0!important;padding:5px 0!important;
+  display:flex!important;flex-direction:column!important;justify-content:center!important;
+  align-items:flex-end!important;gap:2px!important;
+  background:none!important;background-color:transparent!important;
+  border:0!important;border-radius:0!important;box-shadow:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  filter:none!important;isolation:auto!important;overflow:hidden!important;
+  white-space:nowrap!important;line-height:1.2!important;
+}
+body.kwg-in-world #room-info-label::before,
+body.kwg-in-world #room-info-label::after{content:none!important;display:none!important}
+body.kwg-editing #kwg-world-viewport{
+  left:var(--kwg-left-dock)!important;right:0!important;
+  border-left:1px solid var(--studio-border)!important;border-right:0!important;
+}
+body.kwg-editing #build-toolbar,
+body.kwg-editing #kwg-settings-window,
+body.kwg-editing #kwg-properties-window{
+  left:0!important;right:auto!important;width:var(--kwg-left-dock)!important;
+  border-right:1px solid var(--studio-border)!important;border-left:0!important;
+}
+body.kwg-editing #build-toolbar{
+  top:var(--kwg-topbar-height)!important;
+  height:var(--kwg-toolbar-height)!important;
+}
+body.kwg-editing #kwg-settings-window{
+  top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height))!important;
+  height:var(--kwg-settings-height)!important;
+}
+body.kwg-editing #kwg-properties-window{
+  top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height) + var(--kwg-settings-height))!important;
+  height:calc(100dvh - var(--kwg-topbar-height) - var(--kwg-toolbar-height) - var(--kwg-settings-height))!important;
+}
+/* Toolbar and Settings each have their own horizontal resize divider. */
+#kwg-resize-toolbar{
+  top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height) - 5px)!important;
+  left:0!important;width:var(--kwg-left-dock)!important;
+}
+#kwg-resize-settings{
+  top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height) + var(--kwg-settings-height) - 5px)!important;
+  left:0;width:var(--kwg-left-dock);height:10px;cursor:row-resize;
+}
+#kwg-resize-settings::after{left:0;right:0;top:4px;height:2px}
+#kwg-resize-right{display:none!important}
+body.kwg-editing #build-toolbar .kwg-icon-tools{margin-bottom:7px!important}
+.kwg-recolor-panel{
+  margin:8px 12px 10px;padding:11px 10px 9px;
+  background:#202e3d;border:1px solid #47617e;border-radius:7px;
+}
+.kwg-recolor-heading{
+  display:flex;align-items:center;gap:7px;
+  font-size:10px;font-weight:800;letter-spacing:.07em;
+  color:#d9eaff;margin-bottom:11px;
+}
+.kwg-recolor-heading-icon{font-size:15px;color:#64adff;line-height:1}
+.kwg-recolor-field{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  font-size:10px;color:#b9cde3;font-weight:700;margin:8px 0;
+}
+.kwg-recolor-color-wrap{display:flex;align-items:center;gap:7px}
+#kwg-recolor-color{
+  width:37px;height:29px;box-sizing:border-box;padding:3px;
+  border:1px solid #617b98;border-radius:5px;
+  background:#121f2d;cursor:pointer;
+}
+#kwg-recolor-color-value{font-size:10px;color:#e4f2ff;font-weight:700;font-variant-numeric:tabular-nums}
+#kwg-recolor-material{
+  width:124px;max-width:65%;min-width:0;
+  padding:7px 5px;border:1px solid #526c87;border-radius:5px;
+  background:#121e2c;color:#f0f7ff;font-size:10px;
+}
+.kwg-recolor-help{margin:10px 0 0;color:#91aecb;font-size:10px;line-height:1.45}
+@media(max-width:740px){
+  body.kwg-in-world #hud .kwg-control-icon{gap:5px;padding:0 7px!important}
+  .kwg-hud-button-label{font-size:9px}
+  body.kwg-in-world #room-info-label{max-width:30vw!important;right:7px!important}
+  body.kwg-in-world #room-info-label .kwg-world-label{font-size:8px}
+  body{--kwg-toolbar-height:225px;--kwg-settings-height:220px}
+  #kwg-recolor-material{width:100px}
+}
+@media(max-width:520px){
+  body.kwg-in-world #hud .kwg-control-icon{padding:0 6px!important}
+  .kwg-hud-button-label{font-size:8px}
+  body.kwg-in-world #room-info-label{max-width:24vw!important}
+}
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1210,9 +1324,9 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
 
   <!-- Game HUD -->
   <div id="hud">
-    <button class="hud-btn kwg-control-icon" id="toggle-edit-btn" title="Enable Edit Mode" aria-label="Enable Edit Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M5 15l10-10 4 4-10 10H5zM13 7l4 4"/></svg></button>
-    <button class="hud-btn kwg-control-icon" id="respawn-btn" title="Respawn" aria-label="Respawn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 1-3-6M20 4v7h-7"/></svg></button>
-    <button class="hud-btn kwg-control-icon" id="leave-world-btn" title="Leave World" aria-label="Leave World"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg></button>
+    <button class="hud-btn kwg-control-icon" id="toggle-edit-btn" title="Enable Edit Mode" aria-label="Enable Edit Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M5 15l10-10 4 4-10 10H5zM13 7l4 4"/></svg><span class="kwg-hud-button-label" id="kwg-edit-mode-label">EDIT</span></button>
+    <button class="hud-btn kwg-control-icon" id="respawn-btn" title="Respawn" aria-label="Respawn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 1-3-6M20 4v7h-7"/></svg><span class="kwg-hud-button-label">RESPAWN</span></button>
+    <button class="hud-btn kwg-control-icon" id="leave-world-btn" title="Leave World" aria-label="Leave World"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg><span class="kwg-hud-button-label">LEAVE</span></button>
     <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
   </div>
 
@@ -1288,10 +1402,16 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
 <button id="tool-place-btn" title="Place" aria-label="Place" onclick="setBuildSubTool('place')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M4 12h16"/></svg></button>
 <button id="tool-move-btn" title="Move" aria-label="Move" onclick="setBuildSubTool('move')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4"/></svg></button>
 <button id="tool-scale-btn" title="Scale" aria-label="Scale" onclick="setBuildSubTool('scale')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10V4h6M20 14v6h-6M4 4l7 7M20 20l-7-7"/></svg></button>
-<button id="tool-recolor-btn" title="Recolor" aria-label="Recolor" onclick="setBuildSubTool('recolor')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 9-9 9-9-9 9-9z"/><path d="M3 12h18"/></svg></button>
+<button id="tool-recolor-btn" title="Recolor parts with the chosen color and material" aria-label="Recolor" onclick="setBuildSubTool('recolor')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z"/><path d="m5 3 5 5"/><path d="M2 21h16"/><path d="M19 16s-2 2.2-2 3.5a2 2 0 0 0 4 0c0-1.3-2-3.5-2-3.5Z"/></svg></button>
 <button id="tool-delete-btn" title="Remove" aria-label="Remove" onclick="setBuildSubTool('delete')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7"/></svg></button>
     </div>
 
+    <section id="kwg-recolor-panel" class="kwg-recolor-panel" aria-label="Recolor brush settings" style="display:none">
+      <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">●</span> RECOLOR BRUSH</div>
+      <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-recolor-color" value="#4b9cff" aria-label="Brush color"><output id="kwg-recolor-color-value">#4B9CFF</output></span></label>
+      <label class="kwg-recolor-field"><span>Material</span><select id="kwg-recolor-material" aria-label="Brush material"><option value="grid">Grid Pattern</option><option value="smooth" selected>Smooth Plastic</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option><option value="grass">Grass</option><option value="neon">Neon / Glowing</option></select></label>
+      <p class="kwg-recolor-help">Click any part in the 3D view to apply both.</p>
+    </section>
     <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>Ctrl</kbd> + <kbd>R</kbd> Horizontal rotate</div><div><kbd>Ctrl</kbd> + <kbd>T</kbd> Vertical rotate</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div></details>
     <!-- Selected Part Properties UI -->
     <div id="part-properties-container">
@@ -2057,6 +2177,7 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
       isEditMode = false;
       document.body.classList.remove('kwg-editing');
       document.getElementById('toggle-edit-btn').classList.remove('active');
+      document.getElementById('kwg-edit-mode-label').textContent='EDIT';
       renderRoomList();
     }
 
@@ -3407,10 +3528,10 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
     // reopening Edit Mode always restores the CSS defaults for the screen size.
     const studioResizers = [
       ['kwg-resize-left','left'],
-      ['kwg-resize-right','right'],
+      ['kwg-resize-settings','settings'],
       ['kwg-resize-toolbar','toolbar']
     ];
-    const studioDefaultProperties = ['--kwg-left-dock','--kwg-right-dock','--kwg-toolbar-height'];
+    const studioDefaultProperties = ['--kwg-left-dock','--kwg-right-dock','--kwg-toolbar-height','--kwg-settings-height'];
     function resetStudioDockSizes() {
       studioDefaultProperties.forEach(name=>document.body.style.removeProperty(name));
       requestAnimationFrame(resizeWorldViewport);
@@ -3427,15 +3548,18 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
       const minViewport=vw<=620?105:220;
       if(side==='left')return Math.max(minLeft,Math.min(requested,Math.min(520,vw-right-minViewport)));
       if(side==='right')return Math.max(minRight,Math.min(requested,Math.min(560,vw-left-minViewport)));
-      return Math.max(95,Math.min(requested,window.innerHeight-studioDockPixels('--kwg-topbar-height')-110));
+      const available=window.innerHeight-studioDockPixels('--kwg-topbar-height');
+      if(side==='toolbar')return Math.max(150,Math.min(requested,available-studioDockPixels('--kwg-settings-height')-125));
+      if(side==='settings')return Math.max(135,Math.min(requested,available-studioDockPixels('--kwg-toolbar-height')-125));
+      return requested;
     }
     studioResizers.forEach(([id,side])=>{
       const grip=document.createElement('div');
       grip.id=id;
       grip.className='kwg-studio-resizer';
       grip.setAttribute('role','separator');
-      grip.setAttribute('aria-label',side==='left'?'Resize Toolbar and Properties width':side==='right'?'Resize Settings width':'Resize Toolbar height');
-      grip.title=side==='left'?'Drag to resize left panels':side==='right'?'Drag to resize Settings':'Drag to resize Toolbar and Properties';
+      grip.setAttribute('aria-label',side==='left'?'Resize editor sidebar width':side==='settings'?'Resize Settings and Properties heights':'Resize Toolbar and Settings heights');
+      grip.title=side==='left'?'Drag to resize editor sidebar':side==='settings'?'Drag to resize Settings and Properties':'Drag to resize Toolbar and Settings';
       document.body.appendChild(grip);
       grip.addEventListener('pointerdown',e=>{
         if(!isEditMode || e.button!==0)return;
@@ -3443,13 +3567,13 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
         e.stopPropagation();
         grip.setPointerCapture(e.pointerId);
         grip.classList.add('kwg-resizing');
-        document.body.classList.add('kwg-studio-dragging',side==='toolbar'?'kwg-drag-rows':'kwg-drag-cols');
+        document.body.classList.add('kwg-studio-dragging',side==='left'?'kwg-drag-cols':'kwg-drag-rows');
       });
       grip.addEventListener('pointermove',e=>{
         if(!grip.hasPointerCapture(e.pointerId)||!isEditMode)return;
         let prop,value;
         if(side==='left'){prop='--kwg-left-dock';value=e.clientX;}
-        else if(side==='right'){prop='--kwg-right-dock';value=window.innerWidth-e.clientX;}
+        else if(side==='settings'){prop='--kwg-settings-height';value=e.clientY-studioDockPixels('--kwg-topbar-height')-studioDockPixels('--kwg-toolbar-height');}
         else {prop='--kwg-toolbar-height';value=e.clientY-studioDockPixels('--kwg-topbar-height');}
         document.body.style.setProperty(prop,clampStudioDocks(side,value)+'px');
         resizeWorldViewport();
@@ -3466,8 +3590,8 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
     window.addEventListener('resize',()=>{
       if(!isEditMode)return;
       // Keep the viewport usable if the browser becomes narrower during editing.
-      ['left','right'].forEach(side=>{
-        const prop=side==='left'?'--kwg-left-dock':'--kwg-right-dock';
+      ['left'].forEach(side=>{
+        const prop='--kwg-left-dock';
         if(document.body.style.getPropertyValue(prop))
           document.body.style.setProperty(prop,clampStudioDocks(side,studioDockPixels(prop))+'px');
       });
@@ -3483,6 +3607,7 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
       toggleEditBtn.setAttribute('aria-label',isEditMode?'Disable Edit Mode':'Enable Edit Mode');
       toggleEditBtn.title=isEditMode?'Disable Edit Mode':'Enable Edit Mode';
       toggleEditBtn.classList.toggle('active', isEditMode);
+      document.getElementById('kwg-edit-mode-label').textContent=isEditMode?'EXIT EDIT':'EDIT';
       buildToolbar.style.display = isEditMode ? 'block' : 'none';
       editorPropertiesWindow.style.display = isEditMode ? 'block' : 'none';
       editorSettingsWindow.classList.toggle('kwg-open',isEditMode);
@@ -3504,6 +3629,7 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
       place: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M13 3h6v10h10v6H19v10h-6V19H3v-6h10z" fill="white" stroke="black" stroke-width="2"/></svg>`,
       move: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 2l6 7h-4v5h5V10l7 6-7 6v-4h-5v5h4l-6 7-6-7h4v-5H9v4l-7-6 7-6v4h5V9h-4z" fill="white" stroke="black" stroke-width="1.8" stroke-linejoin="miter"/></svg>`,
       scale: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M4 13V4h9l-3 3 5 5-3 3-5-5-3 3zm24 6v9h-9l3-3-5-5 3-3 5 5z" fill="white" stroke="black" stroke-width="2" stroke-linejoin="miter"/></svg>`,
+      recolor: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="m15 3 11 11-11 11L4 14Z" fill="white" stroke="black" stroke-width="2"/><path d="M6 3l10 10" stroke="black" stroke-width="2"/><path d="M2 29h24" stroke="white" stroke-width="3"/><path d="M2 29h24" stroke="black" stroke-width="1"/></svg>`,
       delete: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M9 9h14l-1 19H10L9 9zm-3-5h7V2h6v2h7v4H6z" fill="white" stroke="black" stroke-width="2" stroke-linejoin="miter"/><path d="M14 13v10M18 13v10" stroke="black" stroke-width="2"/></svg>`
     };
 
@@ -3516,6 +3642,7 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
       place: svgCursor(editorCursorSvgs.place),
       scale: svgCursor(editorCursorSvgs.scale),
       move: svgCursor(editorCursorSvgs.move),
+      recolor: svgCursor(editorCursorSvgs.recolor, 6, 7),
       delete: svgCursor(editorCursorSvgs.delete)
     };
 
@@ -3525,10 +3652,16 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
         : 'default';
     }
 
+    document.getElementById('kwg-recolor-color').addEventListener('input',e=>{
+      document.getElementById('kwg-recolor-color-value').textContent=e.target.value.toUpperCase();
+    });
+
     function setBuildSubTool(tool) {
       buildSubTool = buildSubTool === tool ? null : tool;
       tool = buildSubTool;
       updateEditorCursor();
+      const recolorPanel=document.getElementById('kwg-recolor-panel');
+      if(recolorPanel)recolorPanel.style.display=tool==='recolor'?'block':'none';
       ['select', 'place', 'scale', 'move', 'recolor', 'delete'].forEach(t => {
         const btn = document.getElementById(`tool-${t}-btn`);
         if (btn) btn.classList.toggle('active', t === tool);
@@ -4170,7 +4303,18 @@ body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
 
           if (buildSubTool === 'select' || buildSubTool === 'scale' || buildSubTool === 'move' || buildSubTool === 'recolor') {
             if(!selectedBlockIds.has(blockId)||selectedBlockIds.size===0)selectBlock(hitObj);
-            if(buildSubTool==='recolor') { const color=document.getElementById('block-color-input').value; const b=currentWorldData.blocks[blockId]; if(b && b.color!==color){b.color=color;redrawEditedPart(blockId);selectBlock(worldBlocks[blockId]);emitWorldSave('block_update',{worldName:currentWorldName,action:'update',blockData:b},r=>{if(r&&!r.success)showToast('Could not save color');});} }
+            if(buildSubTool==='recolor') {
+              const color=document.getElementById('kwg-recolor-color').value;
+              const material=document.getElementById('kwg-recolor-material').value;
+              const b=currentWorldData.blocks[blockId];
+              if(b && (b.color!==color || (b.material||'grid')!==material)){
+                b.color=color;
+                b.material=material;
+                redrawEditedPart(blockId);
+                selectBlock(worldBlocks[blockId]);
+                emitWorldSave('block_update',{worldName:currentWorldName,action:'update',blockData:b},r=>{if(r&&!r.success)showToast('Could not save recolor');});
+              }
+            }
           } else if (buildSubTool === 'delete') {
             if (blockId === 'baseplate' || currentWorldData.blocks[blockId]?.shape === 'baseplate') {
               showToast('The baseplate cannot be removed. You can resize it instead.');
