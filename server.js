@@ -954,7 +954,7 @@ io.on('connection', (socket) => {
             }
           },
           spawnPoint: {x:0,y:0.05,z:0},
-          skyColor:'#a0a0e0',
+          skyColor:'#1e1e7b',
           cloudsEnabled:true,
           cloudSpeed:1.0,
           cloudColor:'#ffffff'
