@@ -629,6 +629,23 @@
     #kwg-open-settings{width:100%;margin-top:8px}
     #kwg-settings-info p{line-height:1.5;color:#aabbd0}
     @media(max-width:940px){#kwg-properties-window{top:255px;left:10px}#kwg-settings-window{top:65px;right:8px}}
+
+/* V3.27.1: Studio-style docked workspace */
+body.kwg-editing #world-chat{display:none!important}
+#hud{position:absolute!important;top:0!important;left:0!important;right:0!important;width:auto!important;height:53px!important;display:flex;align-items:center;gap:7px;padding:6px 12px!important;box-sizing:border-box;background:rgba(13,19,28,.97)!important;border-bottom:1px solid #40526b;z-index:30!important}
+#hud .kwg-control-icon{display:flex;align-items:center;justify-content:center;width:38px;height:36px;min-width:38px;padding:7px!important;background:#1a2738!important;border:1px solid #40526b!important;color:#dce9fa!important}
+#hud .kwg-control-icon svg{width:19px;height:19px;pointer-events:none}
+#hud #leave-world-btn{background:#42242b!important;border-color:#9c4a56!important}
+#hud #toggle-edit-btn.active{background:#214b7d!important;border-color:#5aa6ff!important}
+#room-info-label{position:absolute!important;top:8px!important;right:12px!important;left:auto!important;z-index:31!important;max-width:40vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:0!important;box-shadow:none!important;background:transparent!important;text-align:right!important;padding:8px!important}
+body.kwg-editing #build-toolbar,body.kwg-editing #kwg-settings-window,body.kwg-editing #kwg-properties-window{position:absolute!important;display:block!important;box-sizing:border-box!important;z-index:20!important;border-radius:0!important;box-shadow:none!important;overflow-y:auto!important;overflow-x:hidden!important;min-height:0!important}
+body.kwg-editing #build-toolbar{top:53px!important;left:0!important;right:auto!important;width:270px!important;height:175px!important;max-height:none!important;padding:12px!important}
+body.kwg-editing #kwg-settings-window{top:228px!important;left:0!important;right:auto!important;width:270px!important;height:calc(100vh - 228px)!important;max-height:none!important;padding:12px!important}
+body.kwg-editing #kwg-properties-window{top:53px!important;right:0!important;left:auto!important;width:295px!important;height:calc(100vh - 53px)!important;max-height:none!important;padding:12px!important}
+#build-toolbar::before{display:none!important}
+#build-toolbar .mode-grid{margin-bottom:5px!important}
+#kwg-open-settings,#kwg-close-settings{display:none!important}
+@media(max-width:760px){body.kwg-editing #build-toolbar,body.kwg-editing #kwg-settings-window{width:195px!important}body.kwg-editing #kwg-properties-window{width:195px!important}body.kwg-editing #build-toolbar{height:205px!important}body.kwg-editing #kwg-settings-window{top:258px!important;height:calc(100vh - 258px)!important}#room-info-label{max-width:35vw!important;font-size:10px!important}}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -803,9 +820,9 @@
 
   <!-- Game HUD -->
   <div id="hud">
-    <button class="hud-btn" id="toggle-edit-btn">Edit Mode: OFF</button>
-    <button class="hud-btn" id="respawn-btn">Respawn</button>
-    <button class="hud-btn" id="leave-world-btn" style="background: #e74c3c; color: white;">Leave World</button>
+    <button class="hud-btn kwg-control-icon" id="toggle-edit-btn" title="Enable Edit Mode" aria-label="Enable Edit Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M5 15l10-10 4 4-10 10H5zM13 7l4 4"/></svg></button>
+    <button class="hud-btn kwg-control-icon" id="respawn-btn" title="Respawn" aria-label="Respawn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 1-3-6M20 4v7h-7"/></svg></button>
+    <button class="hud-btn kwg-control-icon" id="leave-world-btn" title="Leave World" aria-label="Leave World"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg></button>
     <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
   </div>
 
@@ -875,7 +892,7 @@
   <!-- Build Toolbar -->
   <div id="build-toolbar">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 2px solid #444; padding-bottom: 6px;">
-      <h4 style="margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">World Editor</h4>
+      <h4 style="margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Toolbar</h4>
       <span id="part-counter" style="font-size: 11px; font-weight: bold; color: #5bc0de;">0/1400 Parts</span>
     </div>
 
@@ -1504,14 +1521,14 @@
         el.style.display = 'flex';
         el.textContent = pendingWorldSaves === 1 ? 'Saving change...' : `Saving ${pendingWorldSaves} changes...`;
         if (leaveBtn) {
-          leaveBtn.textContent = 'Saving...';
+          leaveBtn.title = 'Saving changes…';
           leaveBtn.style.opacity = '0.65';
         }
       } else {
         el.style.display = 'flex';
         el.textContent = 'All changes saved';
         if (leaveBtn) {
-          leaveBtn.textContent = 'Leave World';
+          leaveBtn.title = 'Leave World';
           leaveBtn.style.opacity = '1';
         }
         clearTimeout(updateSaveStatusUI.hideTimer);
@@ -1521,14 +1538,51 @@
       }
     }
 
+    // Stage changes locally during Edit Mode. Commit sequentially on exit.
+    const stagedWorldEdits=[];
+    let worldCommitInProgress=false;
     function emitWorldSave(eventName, payload, callback) {
+      if(isEditMode && canEditCurrentWorld){
+        stagedWorldEdits.push({eventName,payload:JSON.parse(JSON.stringify(payload)),callback});
+        const el=document.getElementById('save-status');
+        if(el){el.style.display='flex';el.textContent=`${stagedWorldEdits.length} changes pending · exit Edit Mode to save`;}
+        return;
+      }
       pendingWorldSaves++;
       updateSaveStatusUI();
       socket.emit(eventName, payload, (res) => {
-        pendingWorldSaves = Math.max(0, pendingWorldSaves - 1);
+        pendingWorldSaves=Math.max(0,pendingWorldSaves-1);
         updateSaveStatusUI();
-        if (callback) callback(res);
+        if(callback)callback(res);
       });
+    }
+    function stageWorldSettings(settings){
+      if(isEditMode && canEditCurrentWorld){
+        stagedWorldEdits.push({eventName:'world_settings_update',payload:{worldName:currentWorldName,settings:JSON.parse(JSON.stringify(settings))}});
+        const el=document.getElementById('save-status');
+        if(el){el.style.display='flex';el.textContent=`${stagedWorldEdits.length} changes pending · exit Edit Mode to save`;}
+      }else socket.emit('world_settings_update',{worldName:currentWorldName,settings});
+    }
+    async function commitStagedWorldEdits(){
+      if(worldCommitInProgress)return false;
+      worldCommitInProgress=true;
+      try{
+        while(stagedWorldEdits.length){
+          const edit=stagedWorldEdits[0];
+          const status=document.getElementById('save-status');
+          if(status){status.style.display='flex';status.textContent=`Saving ${stagedWorldEdits.length} changes…`;}
+          const res=await new Promise(resolve=>{
+            const timer=setTimeout(()=>resolve({success:false,message:'Save timed out'}),12000);
+            socket.emit(edit.eventName,edit.payload,r=>{clearTimeout(timer);resolve(r);});
+          });
+          if(!res?.success){showToast('Save failed. Your changes are still pending; retry by exiting Edit Mode.');return false;}
+          stagedWorldEdits.shift();
+          if(edit.callback)edit.callback(res);
+        }
+        const status=document.getElementById('save-status');
+        if(status){status.textContent='All changes saved';setTimeout(()=>{if(!stagedWorldEdits.length&&status)status.style.display='none';},1400);}
+        return true;
+      }finally{worldCommitInProgress=false;}
     }
 
     // --- 10 MINUTE IN-WORLD IDLE TIMEOUT ---
@@ -1550,7 +1604,7 @@
       clearInterval(worldIdleTimer);
       worldIdleTimer = setInterval(() => {
         if (!currentWorldName) return;
-        if (Date.now() - worldLastActivityAt >= WORLD_IDLE_LIMIT_MS) {
+        if (!isEditMode && Date.now() - worldLastActivityAt >= WORLD_IDLE_LIMIT_MS) {
           clearInterval(worldIdleTimer);
           worldIdleTimer = null;
           performLeaveWorld();
@@ -1576,6 +1630,7 @@
       if (previewMesh) { scene.remove(previewMesh); previewMesh = null; }
 
       currentWorldName = null;
+      stagedWorldEdits.length=0;
 
       document.getElementById('hud').style.display = 'none';
       document.getElementById('world-chat').style.display = 'none';
@@ -1584,15 +1639,18 @@
       document.getElementById('build-toolbar').style.display = 'none';
       document.getElementById('kwg-properties-window')?.style.setProperty('display','none');
       document.getElementById('kwg-settings-window')?.classList.remove('kwg-open');
+      document.body.classList.remove('kwg-editing');
       document.getElementById('home-screen').style.display = 'flex';
 
       isEditMode = false;
-      document.getElementById('toggle-edit-btn').textContent = 'Edit Mode: OFF';
+      document.body.classList.remove('kwg-editing');
       document.getElementById('toggle-edit-btn').classList.remove('active');
       renderRoomList();
     }
 
-    document.getElementById('leave-world-btn').addEventListener('click', () => {
+    document.getElementById('leave-world-btn').addEventListener('click', async () => {
+      if(worldCommitInProgress)return;
+      if(isEditMode){if(!(await commitStagedWorldEdits()))return;}
       if (pendingWorldSaves > 0) {
         const leaveAnyway = confirm(
           `There ${pendingWorldSaves === 1 ? 'is' : 'are'} still ${pendingWorldSaves} unsaved ${pendingWorldSaves === 1 ? 'change' : 'changes'} being saved.\n\nThe server has not finished saving them yet. Leaving now could lose those changes. Are you sure you want to leave?`
@@ -2704,13 +2762,13 @@
     const editorSettingsWindow = document.createElement('div');
     editorSettingsWindow.id = 'kwg-settings-window';
     editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title">WORLD SETTINGS <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><p>World name, description and camera thumbnails will be available in the next server-enabled update.</p></div>';
+    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title">SETTINGS <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><p>World name, description and camera thumbnails will be available in the next server-enabled update.</p></div>';
     document.body.appendChild(editorSettingsWindow);
     const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
     if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
     const settingsToggle = document.createElement('button');
     settingsToggle.id = 'kwg-open-settings'; settingsToggle.type='button'; settingsToggle.textContent='⚙ SETTINGS';
-    buildToolbar.appendChild(settingsToggle);
+    settingsToggle.style.display = "none"; buildToolbar.appendChild(settingsToggle);
     settingsToggle.addEventListener('click',()=>editorSettingsWindow.classList.toggle('kwg-open'));
     document.getElementById('kwg-close-settings').addEventListener('click',()=>editorSettingsWindow.classList.remove('kwg-open'));
     editorSettingsWindow.querySelectorAll('[data-kwg-setting]').forEach(btn=>btn.addEventListener('click',()=>{
@@ -2746,14 +2804,18 @@
     });
 
 
-    toggleEditBtn.addEventListener('click', () => {
+    toggleEditBtn.addEventListener('click', async () => {
+      if(worldCommitInProgress)return;
+      if(isEditMode && !(await commitStagedWorldEdits()))return;
       if (!canEditCurrentWorld) { showToast('Only the world owner or an admin can edit this world.'); return; }
       isEditMode = !isEditMode;
-      toggleEditBtn.textContent = isEditMode ? 'Edit Mode: ON' : 'Edit Mode: OFF';
+      toggleEditBtn.setAttribute('aria-label',isEditMode?'Disable Edit Mode':'Enable Edit Mode');
+      toggleEditBtn.title=isEditMode?'Disable Edit Mode':'Enable Edit Mode';
       toggleEditBtn.classList.toggle('active', isEditMode);
       buildToolbar.style.display = isEditMode ? 'block' : 'none';
       editorPropertiesWindow.style.display = isEditMode ? 'block' : 'none';
-      if(!isEditMode)editorSettingsWindow.classList.remove('kwg-open');
+      editorSettingsWindow.classList.toggle('kwg-open',isEditMode);
+      document.body.classList.toggle('kwg-editing',isEditMode);
       updateEditorCursor();
       if (!isEditMode) {
         selectBlock(null);
@@ -3064,7 +3126,7 @@
       const color = e.target.value;
       scene.background.set(color);
       if (currentWorldName) {
-        socket.emit('world_settings_update', { worldName: currentWorldName, settings: { skyColor: color } });
+        stageWorldSettings({ skyColor: color });
       }
     });
 
@@ -3072,7 +3134,7 @@
       const enabled = e.target.checked;
       updateCloudsAppearance(enabled, document.getElementById('cloud-color-input').value);
       if (currentWorldName) {
-        socket.emit('world_settings_update', { worldName: currentWorldName, settings: { cloudsEnabled: enabled } });
+        stageWorldSettings({ cloudsEnabled: enabled });
       }
     });
 
@@ -3080,7 +3142,7 @@
       const spd = parseFloat(e.target.value);
       cloudRotationSpeedMultiplier = isNaN(spd) ? 0 : spd;
       if (currentWorldName) {
-        socket.emit('world_settings_update', { worldName: currentWorldName, settings: { cloudSpeed: cloudRotationSpeedMultiplier } });
+        stageWorldSettings({ cloudSpeed: cloudRotationSpeedMultiplier });
       }
     });
 
@@ -3088,7 +3150,7 @@
       const color = e.target.value;
       updateCloudsAppearance(document.getElementById('clouds-enabled-checkbox').checked, color);
       if (currentWorldName) {
-        socket.emit('world_settings_update', { worldName: currentWorldName, settings: { cloudColor: color } });
+        stageWorldSettings({ cloudColor: color });
       }
     });
 
@@ -3101,7 +3163,7 @@
           z: Math.round(pos.z) 
         };
         spawnMarker.position.set(spawnPoint.x, spawnPoint.y, spawnPoint.z);
-        socket.emit('world_settings_update', { worldName: currentWorldName, settings: { spawnPoint } });
+        stageWorldSettings({ spawnPoint });
         showToast("Spawn Point Set!");
       }
     });
