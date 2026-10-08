@@ -4055,19 +4055,26 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       if(!lines.length)return null;
       const canvas=document.createElement('canvas');canvas.width=512;canvas.height=192;
       const ctx=canvas.getContext('2d');ctx.clearRect(0,0,512,192);
-      // A square, layered pixel speech balloon, with a blocky tail.
-      ctx.fillStyle='#0a1422';ctx.fillRect(13,11,486,149);
-      ctx.fillStyle='#86abc0';ctx.fillRect(13,11,486,5);ctx.fillRect(13,155,486,5);
-      ctx.fillRect(13,11,5,149);ctx.fillRect(494,11,5,149);
-      ctx.fillStyle='#9ce078';ctx.fillRect(25,22,462,6);
-      ctx.fillStyle='#0a1422';ctx.fillRect(235,160,42,12);ctx.fillRect(247,172,18,11);
-      ctx.fillStyle='#86abc0';ctx.fillRect(235,160,5,11);ctx.fillRect(272,160,5,11);
-      ctx.fillStyle='#f1f5e7';ctx.font='700 32px "Pixelify Sans", monospace';
+      // Compact classic white speech bubble with a crisp, pixel-square outline.
+      // Drawn at full canvas resolution so the 3D sprite remains readable.
+      ctx.fillStyle='#111827';
+      ctx.fillRect(17,13,478,141);             // dark square outline
+      ctx.fillStyle='#ffffff';
+      ctx.fillRect(23,19,466,129);             // white interior
+      ctx.fillStyle='#111827';
+      ctx.fillRect(239,154,35,12);             // pixel tail outline
+      ctx.fillRect(250,166,15,11);
+      ctx.fillStyle='#ffffff';
+      ctx.fillRect(245,148,23,12);             // tail connects to white bubble
+      ctx.fillRect(245,154,23,7);
+      ctx.fillRect(254,161,7,8);
+      ctx.fillStyle='#17202b';
+      ctx.font='700 32px "Pixelify Sans", monospace';
       ctx.textAlign='center';ctx.textBaseline='middle';
-      const spacing=38;const startY=86-(lines.length-1)*spacing/2;
-      lines.forEach((line,i)=>ctx.fillText(line,256,startY+i*spacing,452));
-      const sprite=kwgSpriteFromCanvas(canvas,2.75,1.03);
-      sprite.name='kwg-chat-bubble';sprite.position.set(0,4.04,0);
+      const spacing=38;const startY=84-(lines.length-1)*spacing/2;
+      lines.forEach((line,i)=>ctx.fillText(line,256,startY+i*spacing,435));
+      const sprite=kwgSpriteFromCanvas(canvas,2.12,.80);
+      sprite.name='kwg-chat-bubble';sprite.position.set(0,3.85,0);
       return sprite;
     }
     function disposeKWGSprite(sprite){
