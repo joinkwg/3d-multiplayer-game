@@ -1821,6 +1821,25 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
   button,.home-tab,.inventory-tab,.store-tab{transition:none!important}
 }
 
+
+/* KWG V3.33 - 8-bit sound controls */
+#kwg-audio-dock{position:fixed;right:14px;bottom:14px;z-index:18000;font-family:'Pixelify Sans','Courier New',monospace}
+#kwg-audio-toggle{display:flex;align-items:center;gap:7px;min-height:35px;padding:6px 11px;cursor:pointer;
+  color:#f1f5e7;background:#263c51;border:2px solid #8baac0;border-bottom:4px solid #385b73;
+  box-shadow:3px 3px 0 #0a111c;font-size:12px;font-weight:700;letter-spacing:.04em}
+#kwg-audio-toggle:hover{background:#35566c}
+#kwg-audio-toggle[aria-expanded="true"]{border-color:#9ce078;background:#2d594e}
+#kwg-audio-toggle .kwg-audio-glyph{font-size:17px;line-height:1}
+#kwg-audio-menu{position:absolute;right:0;bottom:calc(100% + 9px);width:224px;padding:12px;
+  color:#f1f5e7;background:#202b3b;border:2px solid #7897ad;box-shadow:5px 5px 0 #0a111c}
+#kwg-audio-menu[hidden]{display:none!important}
+#kwg-audio-menu h3{margin:0 0 11px;font-family:'Press Start 2P','Pixelify Sans',monospace;font-size:9px;line-height:1.6;color:#9ce078}
+#kwg-audio-menu .kwg-audio-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0;font-size:13px}
+#kwg-audio-menu input[type=range]{width:100%;accent-color:#9ce078;cursor:pointer}
+#kwg-audio-menu input[type=checkbox]{width:17px;height:17px;accent-color:#9ce078;cursor:pointer}
+#kwg-audio-menu p{margin:8px 0 0;color:#b0c4d0;font-size:11px;line-height:1.35}
+body.kwg-thumbnail-camera #kwg-audio-dock{display:none!important}
+@media(max-width:650px){#kwg-audio-dock{right:7px;bottom:7px}#kwg-audio-toggle{font-size:11px;padding:5px 8px}}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1832,6 +1851,21 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
 </head>
 <body>
   <div id="kwg-loading-cog" aria-hidden="true"></div>
+
+
+  <!-- Persistent retro sound controls (available on login, home, and in worlds). -->
+  <div id="kwg-audio-dock">
+    <div id="kwg-audio-menu" role="group" aria-label="Sound settings" hidden>
+      <h3>♪ SOUND SETTINGS</h3>
+      <label class="kwg-audio-row" for="kwg-audio-enabled"><span>Sound effects</span><input id="kwg-audio-enabled" type="checkbox" checked></label>
+      <label class="kwg-audio-row" for="kwg-audio-volume"><span>Volume</span><output id="kwg-audio-volume-label">35%</output></label>
+      <input id="kwg-audio-volume" type="range" min="0" max="100" step="5" value="35" aria-label="Sound effects volume">
+      <p>8-bit sounds · settings saved on this device</p>
+    </div>
+    <button id="kwg-audio-toggle" type="button" aria-label="Sound settings" aria-expanded="false" aria-controls="kwg-audio-menu">
+      <span class="kwg-audio-glyph" id="kwg-audio-icon" aria-hidden="true">♫</span><span>SOUND</span>
+    </button>
+  </div>
 
   <!-- Game Notification Banner -->
   <div id="game-toast"></div>
@@ -2211,6 +2245,136 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
     }
 
 
+
+    // KWG V3.33: Tiny original procedural arcade sounds (no audio downloads or server).
+    // The AudioContext is initialized only after a real user gesture (browser autoplay rules).
+    const kwgAudio = (() => {
+      const storageKey = 'kwg_pixel_sfx_v1';
+      let settings = {enabled:true, volume:35};
+      try {
+        const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
+        if(saved && typeof saved==='object'){
+          if(typeof saved.enabled==='boolean')settings.enabled=saved.enabled;
+          if(Number.isFinite(Number(saved.volume)))settings.volume=Math.max(0,Math.min(100,Number(saved.volume)));
+        }
+      }catch(_){}
+      let context=null;
+      let lastSoundAt=0;
+      function getContext(){
+        if(!context){
+          const AC=window.AudioContext||window.webkitAudioContext;
+          if(!AC)return null;
+          try{context=new AC();}catch(_){return null;}
+        }
+        if(context.state==='suspended')context.resume().catch(()=>{});
+        return context;
+      }
+      function tone(ctx,at,freq,duration,type='square',gain=.14,endFreq){
+        const osc=ctx.createOscillator();
+        const amp=ctx.createGain();
+        osc.type=type;
+        osc.frequency.setValueAtTime(Math.max(40,freq),at);
+        if(endFreq)osc.frequency.exponentialRampToValueAtTime(Math.max(40,endFreq),at+duration);
+        amp.gain.setValueAtTime(.0001,at);
+        amp.gain.exponentialRampToValueAtTime(Math.max(.0002,gain*settings.volume/100),at+.008);
+        amp.gain.exponentialRampToValueAtTime(.0001,at+duration);
+        osc.connect(amp);amp.connect(ctx.destination);
+        osc.start(at);osc.stop(at+duration+.012);
+        osc.onended=()=>{osc.disconnect();amp.disconnect();};
+      }
+      const patterns={
+        click:[[540,.038,'square',.075,600]],
+        tab:[[390,.038,'triangle',.12,520],[560,.046,'square',.065,610]],
+        select:[[650,.045,'triangle',.12,740]],
+        place:[[235,.045,'square',.14,310],[360,.055,'triangle',.10,410]],
+        recolor:[[480,.05,'triangle',.13,670],[730,.045,'square',.07,820]],
+        remove:[[350,.052,'square',.13,240],[220,.07,'triangle',.12,140]],
+        success:[[500,.065,'triangle',.16,650],[760,.11,'square',.10,840]],
+        error:[[220,.09,'square',.12,165],[160,.11,'square',.10,110]],
+        join:[[320,.075,'square',.12,440],[500,.085,'triangle',.15,660],[720,.12,'square',.10,850]],
+        leave:[[700,.065,'triangle',.10,520],[490,.09,'square',.10,280]],
+        respawn:[[280,.09,'triangle',.13,420],[480,.09,'triangle',.12,690]],
+        chat:[[760,.05,'sine',.18,930]],
+        capture:[[210,.025,'square',.14,145],[860,.045,'triangle',.13,990]],
+        toggle:[[450,.04,'square',.09,560]]
+      };
+      function play(name){
+        if(!settings.enabled||settings.volume<=0||document.hidden)return;
+        const now=performance.now();
+        if(now-lastSoundAt<28)return; // prevent overlapping double-click event sounds
+        const ctx=getContext();if(!ctx)return;
+        lastSoundAt=now;
+        let at=ctx.currentTime+.006;
+        for(const [freq,duration,type,gain,endFreq] of (patterns[name]||patterns.click)){
+          tone(ctx,at,freq,duration,type,gain,endFreq);
+          at+=duration*.78;
+        }
+      }
+      function save(){
+        try{localStorage.setItem(storageKey,JSON.stringify(settings));}catch(_){}
+      }
+      function setEnabled(value){settings.enabled=!!value;save();}
+      function setVolume(value){settings.volume=Math.max(0,Math.min(100,Number(value)||0));save();}
+      return {play,setEnabled,setVolume,get enabled(){return settings.enabled;},get volume(){return settings.volume;}};
+    })();
+    const kwgSoundToggle=document.getElementById('kwg-audio-toggle');
+    const kwgSoundMenu=document.getElementById('kwg-audio-menu');
+    const kwgSoundEnabled=document.getElementById('kwg-audio-enabled');
+    const kwgSoundVolume=document.getElementById('kwg-audio-volume');
+    const kwgSoundVolumeLabel=document.getElementById('kwg-audio-volume-label');
+    function syncKWGAudioUI(){
+      kwgSoundEnabled.checked=kwgAudio.enabled;
+      kwgSoundVolume.value=String(kwgAudio.volume);
+      kwgSoundVolumeLabel.textContent=kwgAudio.volume+'%';
+      document.getElementById('kwg-audio-icon').textContent=kwgAudio.enabled&&kwgAudio.volume>0?'♫':'×';
+      kwgSoundToggle.title=kwgAudio.enabled?'Sound settings':'Sound effects muted';
+    }
+    syncKWGAudioUI();
+    kwgSoundToggle.addEventListener('click',e=>{
+      e.stopPropagation();
+      const open=kwgSoundMenu.hidden;
+      kwgSoundMenu.hidden=!open;
+      kwgSoundToggle.setAttribute('aria-expanded',String(open));
+      if(open)kwgAudio.play('toggle');
+    });
+    kwgSoundMenu.addEventListener('click',e=>e.stopPropagation());
+    kwgSoundEnabled.addEventListener('change',()=>{
+      kwgAudio.setEnabled(kwgSoundEnabled.checked);syncKWGAudioUI();
+      if(kwgAudio.enabled)kwgAudio.play('success');
+    });
+    kwgSoundVolume.addEventListener('input',()=>{
+      kwgAudio.setVolume(kwgSoundVolume.value);syncKWGAudioUI();
+    });
+    kwgSoundVolume.addEventListener('change',()=>kwgAudio.play('select'));
+    document.addEventListener('pointerdown',e=>{
+      if(e.target.closest?.('#kwg-audio-dock'))return;
+      if(!kwgSoundMenu.hidden){
+        kwgSoundMenu.hidden=true;kwgSoundToggle.setAttribute('aria-expanded','false');
+      }
+    },true);
+    document.addEventListener('keydown',e=>{
+      if(e.key==='Escape'&&!kwgSoundMenu.hidden){
+        kwgSoundMenu.hidden=true;kwgSoundToggle.setAttribute('aria-expanded','false');
+      }
+    });
+    // One delegated listener covers existing and dynamically generated game buttons.
+    document.addEventListener('click',e=>{
+      const button=e.target.closest?.('button');
+      if(!button||button.closest('#kwg-audio-dock')||button.disabled)return;
+      if(button.matches('.home-tab,.inventory-tab,.store-tab,[data-kwg-setting]'))kwgAudio.play('tab');
+      else if(button.matches('#respawn-btn'))kwgAudio.play('respawn');
+      else if(button.matches('#leave-world-btn'))kwgAudio.play('leave');
+      else if(button.matches('#toggle-edit-btn'))kwgAudio.play('toggle');
+      else if(button.matches('#kwg-camera-capture'))kwgAudio.play('capture');
+      else if(button.matches('#kwg-camera-use,#save-avatar-editor-btn'))kwgAudio.play('success');
+      else if(button.matches('[id^="tool-"][id$="-btn"]'))kwgAudio.play('select');
+      else kwgAudio.play('click');
+    },true);
+    document.addEventListener('change',e=>{
+      if(e.target.matches?.('select:not(#kwg-audio-volume),input[type="checkbox"]:not(#kwg-audio-enabled)'))
+        kwgAudio.play('select');
+    });
+
     let currentWorldName = null;
     let loggedInUsername = null;
     let localPlayerAvatar = null;
@@ -2240,6 +2404,10 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
       if (!toast) return;
       toast.textContent = msg;
       toast.style.display = 'block';
+      if(/failed|could not|error|denied|limit reached|cannot|not allowed|timed out/i.test(String(msg)))
+        kwgAudio.play('error');
+      else if(/saved|success|ready|copied|purchased|sent|created/i.test(String(msg)))
+        kwgAudio.play('success');
       if (toastTimeout) clearTimeout(toastTimeout);
       toastTimeout = setTimeout(() => {
         toast.style.display = 'none';
@@ -2641,6 +2809,7 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
         document.getElementById('home-screen').style.display = 'none';
         document.getElementById('create-world-modal').style.display = 'none';
         document.body.classList.add('kwg-in-world');
+        kwgAudio.play('join');
         requestAnimationFrame(resizeWorldViewport);
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('room-info-label').style.display = 'block';
@@ -2930,6 +3099,7 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
       box.appendChild(pending);
       box.scrollTop = box.scrollHeight;
       input.value = '';
+      kwgAudio.play('chat');
 
       socket.emit('send_world_chat', { worldName: currentWorldName, message }, (res) => {
         if (pending.parentNode) pending.remove();
@@ -4889,6 +5059,7 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
                   return;
                 }
                 delete currentWorldData.blocks[blockId];
+                kwgAudio.play('remove');
                 emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
                 scene.remove(worldBlocks[blockId]);
                 delete worldBlocks[blockId];
@@ -4980,6 +5151,7 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
           };
 
           currentWorldData.blocks[blockKey] = blockData;
+          kwgAudio.play('place');
           emitWorldSave('block_update', { worldName: currentWorldName, action: 'add', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
 
           const mesh = buildBlockMesh(blockData);
@@ -5000,6 +5172,7 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
               if(b && (b.color!==color || (b.material||'grid')!==material)){
                 b.color=color;
                 b.material=material;
+                kwgAudio.play('recolor');
                 redrawEditedPart(blockId);
                 selectBlock(worldBlocks[blockId]);
                 emitWorldSave('block_update',{worldName:currentWorldName,action:'update',blockData:b},r=>{if(r&&!r.success)showToast('Could not save recolor');});
@@ -5011,6 +5184,7 @@ body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inli
               return;
             }
             delete currentWorldData.blocks[blockId];
+            kwgAudio.play('remove');
             emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
             scene.remove(worldBlocks[blockId]);
             delete worldBlocks[blockId];
