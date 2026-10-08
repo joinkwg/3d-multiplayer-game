@@ -233,10 +233,6 @@
     #world-chat-header{background:#1b2028;border-bottom-color:#46515f;letter-spacing:.5px}
     #world-chat-form{background:#1b2028;border-top-color:#46515f}
     #save-status{border-radius:0!important;box-shadow:3px 3px 0 #000}
-    #kwg-loading-cog{display:none;position:fixed;z-index:10000;pointer-events:none;width:40px;height:40px;margin:12px 0 0 12px;filter:drop-shadow(1px 1px 0 #000)}
-    #kwg-loading-cog::before{content:"⚙";display:block;width:40px;height:40px;color:#fff;font:700 40px/40px "Courier New",monospace;text-align:center;animation:kwgCogSpin .75s linear infinite;text-shadow:1px 1px 0 #000}
-    body.kwg-loading #kwg-loading-cog{display:block}
-    @keyframes kwgCogSpin{to{transform:rotate(360deg)}}
     *{scrollbar-color:#566273 #171b21;scrollbar-width:thin}
     *::-webkit-scrollbar{width:10px;height:10px}*::-webkit-scrollbar-track{background:#171b21}*::-webkit-scrollbar-thumb{background:#566273;border:2px solid #171b21}*::-webkit-scrollbar-thumb:hover{background:#718096}
 
@@ -1866,6 +1862,61 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:hover{
 body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
   outline:2px dashed #f9cb65!important;
 }
+
+    /* V3.34 — One consistent pixel loading dialog throughout KWG. */
+    #kwg-loading-overlay{
+      position:fixed;inset:0;z-index:25000;display:none;
+      align-items:center;justify-content:center;
+      background:rgba(8,13,24,.74);backdrop-filter:blur(2px);
+      padding:20px;box-sizing:border-box;cursor:wait;
+    }
+    #kwg-loading-overlay.kwg-visible{display:flex}
+    #kwg-loading-panel{
+      box-sizing:border-box;width:min(370px,100%);padding:20px;
+      background:#202b3b;border:3px solid #91b2c4;
+      border-top:5px solid #9ce078;box-shadow:7px 7px 0 #080d16;
+      color:#f1f5e7;font-family:'Pixelify Sans','Courier New',monospace;
+    }
+    #kwg-loading-kicker{
+      margin:0 0 12px;color:#9ce078;
+      font-family:'Press Start 2P','Pixelify Sans',monospace;
+      font-size:9px;line-height:1.7;letter-spacing:0;
+    }
+    #kwg-loading-title{
+      margin:0 0 12px;color:#f1f5e7;
+      font-size:17px;line-height:1.3;font-weight:700;
+      text-transform:uppercase;
+    }
+    #kwg-loading-track{
+      position:relative;overflow:hidden;height:22px;
+      background:#111c2b;border:2px solid #718ea3;
+      box-shadow:inset 2px 2px 0 #080d16;
+    }
+    #kwg-loading-fill{
+      height:100%;width:0%;background:#9ce078;
+      box-shadow:inset 0 -4px 0 #5c9e67;
+      transition:width .14s steps(8,end);
+    }
+    #kwg-loading-overlay.kwg-indeterminate #kwg-loading-fill{
+      width:40%;
+      background:repeating-linear-gradient(90deg,#9ce078 0 14px,#76bba0 14px 28px);
+      animation:kwgPixelProgress 1.25s steps(18,end) infinite;
+      transition:none;
+    }
+    @keyframes kwgPixelProgress{
+      from{transform:translateX(-105%)}
+      to{transform:translateX(260%)}
+    }
+    #kwg-loading-footer{
+      margin-top:9px;display:flex;justify-content:space-between;gap:10px;
+      color:#b6cbd0;font-size:12px;line-height:1.35;
+    }
+    #kwg-loading-percent{color:#f9cb65;font-weight:700;font-variant-numeric:tabular-nums}
+    @media(prefers-reduced-motion:reduce){
+      #kwg-loading-overlay.kwg-indeterminate #kwg-loading-fill{
+        animation:kwgPixelProgress 3s steps(8,end) infinite;
+      }
+    }
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1876,7 +1927,19 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
 </style>
 </head>
 <body>
-  <div id="kwg-loading-cog" aria-hidden="true"></div>
+  <div id="kwg-loading-overlay" role="status" aria-live="polite" aria-atomic="true" aria-label="Loading" aria-hidden="true">
+    <div id="kwg-loading-panel">
+      <div id="kwg-loading-kicker">KWG / LOADING</div>
+      <div id="kwg-loading-title">LOADING...</div>
+      <div id="kwg-loading-track" role="progressbar" aria-label="Loading progress" aria-valuemin="0" aria-valuemax="100">
+        <div id="kwg-loading-fill"></div>
+      </div>
+      <div id="kwg-loading-footer">
+        <span id="kwg-loading-description">Please wait</span>
+        <span id="kwg-loading-percent">...</span>
+      </div>
+    </div>
+  </div>
 
 
   <!-- Persistent retro sound controls (available on login, home, and in worlds). -->
@@ -2232,44 +2295,119 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     // --- SOCKET.IO BACKEND CONNECTION ---
     const socket = (typeof io !== 'undefined') ? io() : null;
 
-    // --- V3.13 UI LOADING FEEDBACK ---
-    let kwgLoadingCount=0;
+    // V3.34 — Shared loading dialog. Only real completed save requests receive
+    // numeric percentages; other requests use an indeterminate animated bar.
     const kwgLoadingEvents=new Set([
       'login','register','resume_session','get_worlds','join_world','create_world',
       'get_world_templates','get_store','buy_store_item','save_appearance',
       'update_appearance','toggle_world_like','delete_own_world',
       'admin_search_users','admin_search_worlds','admin_make_world_template',
-      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user','get_profile','update_profile','get_friends','send_friend_request','respond_friend_request','cancel_friend_request','remove_friend','get_notifications','mark_notifications_read','clear_notifications'
+      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user',
+      'get_profile','update_profile','get_friends','send_friend_request',
+      'respond_friend_request','cancel_friend_request','remove_friend',
+      'get_notifications','mark_notifications_read','clear_notifications'
     ]);
-    function setKWGLoading(delta){
-      kwgLoadingCount=Math.max(0,kwgLoadingCount+delta);
-      document.body.classList.toggle('kwg-loading',kwgLoadingCount>0);
+    const kwgLoadingLabels={
+      login:'SIGNING IN',register:'CREATING ACCOUNT',resume_session:'RESTORING SESSION',
+      get_worlds:'LOADING WORLDS',join_world:'LOADING WORLD',create_world:'CREATING WORLD',
+      get_world_templates:'LOADING TEMPLATES',get_store:'LOADING STORE',
+      buy_store_item:'PURCHASING ITEM',save_appearance:'SAVING AVATAR',
+      update_appearance:'SAVING AVATAR',toggle_world_like:'UPDATING WORLD',
+      delete_own_world:'DELETING WORLD',get_profile:'LOADING PROFILE',
+      update_profile:'SAVING PROFILE',get_friends:'LOADING FRIENDS',
+      get_notifications:'LOADING NOTIFICATIONS'
+    };
+    const kwgLoadingOverlay=document.getElementById('kwg-loading-overlay');
+    const kwgLoadingTitle=document.getElementById('kwg-loading-title');
+    const kwgLoadingDescription=document.getElementById('kwg-loading-description');
+    const kwgLoadingPercent=document.getElementById('kwg-loading-percent');
+    const kwgLoadingFill=document.getElementById('kwg-loading-fill');
+    const kwgLoadingTrack=document.getElementById('kwg-loading-track');
+    const kwgLoadingTasks=new Map();
+    let kwgLoadingSerial=0,kwgLoadingShowTimer=null,kwgLoadingHideTimer=null;
+    let kwgLoadingVisibleSince=0;
+    function renderKWGLoading(){
+      clearTimeout(kwgLoadingShowTimer);
+      clearTimeout(kwgLoadingHideTimer);
+      if(!kwgLoadingTasks.size){
+        if(!kwgLoadingOverlay.classList.contains('kwg-visible'))return;
+        // Keep the popup visible briefly to avoid a distracting flash.
+        const elapsed=performance.now()-kwgLoadingVisibleSince;
+        kwgLoadingHideTimer=setTimeout(()=>{
+          if(kwgLoadingTasks.size){renderKWGLoading();return;}
+          kwgLoadingOverlay.classList.remove('kwg-visible','kwg-indeterminate');
+          delete kwgLoadingOverlay.dataset.shown;
+          kwgLoadingOverlay.setAttribute('aria-hidden','true');
+          document.body.classList.remove('kwg-loading');
+        },Math.max(0,360-elapsed));
+        return;
+      }
+      let chosen=null;
+      for(const task of kwgLoadingTasks.values())
+        if(!chosen || task.priority>chosen.priority || (task.priority===chosen.priority && task.id>chosen.id))chosen=task;
+      const paint=()=>{
+        if(!kwgLoadingTasks.size)return;
+        kwgLoadingOverlay.classList.add('kwg-visible');
+        kwgLoadingOverlay.setAttribute('aria-hidden','false');
+        document.body.classList.add('kwg-loading');
+        if(!kwgLoadingVisibleSince || !kwgLoadingOverlay.dataset.shown){
+          kwgLoadingVisibleSince=performance.now();kwgLoadingOverlay.dataset.shown='1';
+        }
+        kwgLoadingTitle.textContent=chosen.title;
+        kwgLoadingDescription.textContent=chosen.description;
+        const measured=typeof chosen.progress==='number';
+        kwgLoadingOverlay.classList.toggle('kwg-indeterminate',!measured);
+        kwgLoadingPercent.textContent=measured?Math.round(chosen.progress)+'%':'...';
+        kwgLoadingFill.style.width=measured?chosen.progress+'%':'';
+        if(measured)kwgLoadingTrack.setAttribute('aria-valuenow',String(Math.round(chosen.progress)));
+        else kwgLoadingTrack.removeAttribute('aria-valuenow');
+      };
+      if(kwgLoadingOverlay.classList.contains('kwg-visible'))paint();
+      else kwgLoadingShowTimer=setTimeout(paint,chosen.immediate?0:160);
     }
-    document.addEventListener('pointermove',e=>{
-      const cog=document.getElementById('kwg-loading-cog');
-      if(cog){cog.style.left=`${e.clientX}px`;cog.style.top=`${e.clientY}px`;}
-    },{passive:true});
-
+    function beginKWGLoading(title,opts={}){
+      const id=++kwgLoadingSerial;
+      kwgLoadingTasks.set(id,{
+        id,title,description:opts.description||'Please wait',
+        progress:typeof opts.progress==='number'?Math.max(0,Math.min(100,opts.progress)):null,
+        priority:opts.priority||0,immediate:!!opts.immediate
+      });
+      renderKWGLoading();
+      return {
+        update(progress,description){
+          const task=kwgLoadingTasks.get(id);if(!task)return;
+          if(typeof progress==='number')task.progress=Math.max(0,Math.min(100,progress));
+          if(description!==undefined)task.description=description;
+          renderKWGLoading();
+        },
+        end(){kwgLoadingTasks.delete(id);renderKWGLoading();}
+      };
+    }
     if(socket){
       const kwgOriginalSocketEmit=socket.emit.bind(socket);
       socket.emit=function(eventName,...args){
         const i=args.length-1;
         if(!kwgLoadingEvents.has(eventName)||i<0||typeof args[i]!=='function')
           return kwgOriginalSocketEmit(eventName,...args);
-
-        setKWGLoading(1);
+        const task=beginKWGLoading(kwgLoadingLabels[eventName]||
+          (eventName.startsWith('admin_')?'LOADING ADMIN DATA':'LOADING'),{
+          description:eventName==='join_world'?'Preparing your world':'Syncing with server',
+          priority:eventName==='join_world'?30:10
+        });
         const ack=args[i];
         let done=false;
         const finish=(...values)=>{
-          if(!done){done=true;setKWGLoading(-1);}
-          return ack(...values);
+          if(done)return;
+          done=true;
+          try{return ack(...values);}
+          finally{task.end();}
         };
         const timer=setTimeout(()=>finish({success:false,message:'Request timed out.'}),15000);
         args[i]=(...values)=>{clearTimeout(timer);return finish(...values);};
-        return kwgOriginalSocketEmit(eventName,...args);
+        try{return kwgOriginalSocketEmit(eventName,...args);}
+        catch(error){clearTimeout(timer);task.end();throw error;}
       };
     }
-
 
 
     // KWG V3.33: Tiny original procedural arcade sounds (no audio downloads or server).
@@ -2928,7 +3066,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       if(isEditMode && canEditCurrentWorld){
         stagedWorldEdits.push({eventName,payload:JSON.parse(JSON.stringify(payload)),callback});
         const el=document.getElementById('save-status');
-        if(el){el.style.display='flex';el.textContent=`${stagedWorldEdits.length} changes pending · exit Edit Mode to save`;}
+        if(el){el.style.display='flex';el.textContent=`${stagedWorldEdits.length} changes pending · use Save & Exit to save`;}
         return;
       }
       pendingWorldSaves++;
@@ -2949,7 +3087,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       if(isEditMode && canEditCurrentWorld){
         stagedWorldEdits.push({eventName:'world_settings_update',payload:{worldName:currentWorldName,settings:JSON.parse(JSON.stringify(settings))}});
         const el=document.getElementById('save-status');
-        if(el){el.style.display='flex';el.textContent=`${stagedWorldEdits.length} changes pending · exit Edit Mode to save`;}
+        if(el){el.style.display='flex';el.textContent=`${stagedWorldEdits.length} changes pending · use Save & Exit to save`;}
       }else socket.emit('world_settings_update',{worldName:currentWorldName,settings});
     }
     async function commitStagedWorldEdits(){
@@ -2957,6 +3095,11 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       if(kwgFreeCamera.active) stopWorldThumbnailCamera();
       if(prepareWorldInfoSave()===false)return false;
       worldCommitInProgress=true;
+      const totalEdits=stagedWorldEdits.length;
+      const saveLoading=beginKWGLoading('SAVING WORLD',{
+        description:totalEdits?`Saving 0 of ${totalEdits} changes`:'Checking world changes',
+        progress:totalEdits?0:100,priority:100,immediate:true
+      });
       try{
         while(stagedWorldEdits.length){
           const edit=stagedWorldEdits[0];
@@ -2968,6 +3111,10 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
           });
           if(!res?.success){showToast('Save failed: '+(res?.message||'Please retry exiting Edit Mode.'),6000);return false;}
           stagedWorldEdits.shift();
+          saveLoading.update(
+            Math.round(((totalEdits-stagedWorldEdits.length)/totalEdits)*100),
+            `Saved ${totalEdits-stagedWorldEdits.length} of ${totalEdits} changes`
+          );
           if(edit.eventName==='world_info_update') {
             if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl});
             kwgInfoOriginal={displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl};
@@ -2980,7 +3127,10 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
         const status=document.getElementById('save-status');
         if(status){status.textContent='All changes saved';setTimeout(()=>{if(!stagedWorldEdits.length&&status)status.style.display='none';},1400);}
         return true;
-      }finally{worldCommitInProgress=false;}
+      }finally{
+        saveLoading.end();
+        worldCommitInProgress=false;
+      }
     }
 
     // --- 10 MINUTE IN-WORLD IDLE TIMEOUT ---
@@ -3367,7 +3517,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     const kwgWorldViewport = document.createElement('section');
     kwgWorldViewport.id = 'kwg-world-viewport';
     kwgWorldViewport.setAttribute('aria-label','3D World Viewer');
-    kwgWorldViewport.innerHTML = '<div id="kwg-world-viewport-title"><span class="kwg-scene-heading"><span class="kwg-scene-dot"></span> SCENE VIEW</span><span class="kwg-scene-stats"><span id="part-counter">0 / 1400 parts</span></span></div><div id="kwg-world-canvas"></div><div id="kwg-scene-footer"><span>WORLD EDITOR</span><span>Changes save when you exit Edit Mode</span></div>';
+    kwgWorldViewport.innerHTML = '<div id="kwg-world-viewport-title"><span class="kwg-scene-heading"><span class="kwg-scene-dot"></span> SCENE VIEW</span><span class="kwg-scene-stats"><span id="part-counter">0 / 1400 parts</span></span></div><div id="kwg-world-canvas"></div><div id="kwg-scene-footer"><span>WORLD EDITOR</span><span>Changes save with Save & Exit</span></div>';
     document.body.appendChild(kwgWorldViewport);
     const kwgWorldCanvasHost = document.getElementById('kwg-world-canvas');
     kwgWorldCanvasHost.appendChild(renderer.domElement);
@@ -4195,7 +4345,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     const editorSettingsWindow = document.createElement('div');
     editorSettingsWindow.id = 'kwg-settings-window';
     editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save when you exit Edit Mode.</div></div>';
+    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save with Save & Exit.</div></div>';
     document.body.appendChild(editorSettingsWindow);
     const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
     if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
@@ -4252,7 +4402,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
 
     const kwgCameraUI=document.createElement('div');
     kwgCameraUI.id='kwg-thumbnail-camera-ui';
-    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Hold right mouse button and drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong><div class="kwg-camera-help">W A S D move relative to view · Q / E down/up · Shift faster · Hold right-click to look · Scroll to zoom</div></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div><div class="kwg-info-hint">Your photo saves when you exit Edit Mode.</div></div></div>`;
+    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Hold right mouse button and drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong><div class="kwg-camera-help">W A S D move relative to view · Q / E down/up · Shift faster · Hold right-click to look · Scroll to zoom</div></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div><div class="kwg-info-hint">Your photo saves with Save & Exit.</div></div></div>`;
     document.body.appendChild(kwgCameraUI);
     const kwgCameraDragzone=kwgCameraUI.querySelector('.kwg-camera-dragzone');
     const kwgFreeCamera={active:false,reviewing:false,keys:new Set(),yaw:0,pitch:0,dragging:false,lastX:0,lastY:0,photo:null};
@@ -4371,7 +4521,7 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       if(!kwgFreeCamera.photo)return;
       kwgInfoDraft.thumbnailData=kwgFreeCamera.photo;
       refreshWorldInfoThumbnail();stopWorldThumbnailCamera();
-      showToast('Thumbnail ready — exit Edit Mode to save');
+      showToast('Thumbnail ready — use Save & Exit to save');
     });
 
     let kwgCopiedPart = null;
@@ -4482,10 +4632,10 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
       if (!canEditCurrentWorld) { showToast('Only the world owner or an admin can edit this world.'); return; }
       isEditMode = !isEditMode;
       resetStudioDockSizes();
-      toggleEditBtn.setAttribute('aria-label',isEditMode?'Disable Edit Mode':'Enable Edit Mode');
-      toggleEditBtn.title=isEditMode?'Disable Edit Mode':'Enable Edit Mode';
+      toggleEditBtn.setAttribute('aria-label',isEditMode?'Save & Exit':'Enable Edit Mode');
+      toggleEditBtn.title=isEditMode?'Save & Exit':'Enable Edit Mode';
       toggleEditBtn.classList.toggle('active', isEditMode);
-      document.getElementById('kwg-edit-mode-label').textContent=isEditMode?'EXIT EDIT':'EDIT';
+      document.getElementById('kwg-edit-mode-label').textContent=isEditMode?'SAVE & EXIT':'EDIT';
       buildToolbar.style.display = isEditMode ? 'block' : 'none';
       editorPropertiesWindow.style.display = isEditMode ? 'block' : 'none';
       editorSettingsWindow.classList.toggle('kwg-open',isEditMode);
@@ -5265,6 +5415,15 @@ body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
     let editorDragging = false, editorLastX = 0, editorTargetRotation = 0;
 
     function switchHomeTab(name) {
+      const pageName=({home:'HOME',worlds:'WORLDS',store:'STORE',avatar:'AVATAR',
+        friends:'FRIENDS',profile:'PROFILE',notifications:'NOTIFICATIONS',
+        admin:'ADMIN'})[name]||String(name).toUpperCase();
+      const pageLoading=beginKWGLoading('OPENING '+pageName,{
+        description:'Preparing page',priority:20,immediate:true
+      });
+      // A short transition makes even cached pages feel consistent; network
+      // requests get their own loader and keep it up until their acknowledgements.
+      setTimeout(()=>pageLoading.end(),430);
       document.querySelectorAll('.home-tab').forEach(b => b.classList.toggle('active', b.dataset.homeTab === name));
       document.querySelectorAll('.home-pane').forEach(p => p.classList.remove('active'));
       const paneId = name === 'avatar' ? 'avatar-editor-pane' : name + '-pane';
