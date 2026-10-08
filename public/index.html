@@ -1953,6 +1953,10 @@ body.kwg-editing #build-toolbar .kwg-icon-tools{margin-bottom:7px!important}
     document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click',()=>switchHomeTab(b.dataset.goTab)));
 
     function joinSelectedWorld(roomName) {
+      isEditMode = false;
+      buildSubTool = null;
+      document.body.classList.remove('kwg-editing');
+      updateEditorCursor();
       currentWorldName = roomName;
       currentCheckpoint = null;
       canEditCurrentWorld = false;
@@ -2175,7 +2179,14 @@ body.kwg-editing #build-toolbar .kwg-icon-tools{margin-bottom:7px!important}
       document.getElementById('home-screen').style.display = 'flex';
 
       isEditMode = false;
+      buildSubTool = null;
       document.body.classList.remove('kwg-editing');
+      updateEditorCursor();
+      const recolorPanel=document.getElementById('kwg-recolor-panel');
+      if(recolorPanel)recolorPanel.style.display='none';
+      ['select','place','move','scale','recolor','delete'].forEach(tool=>{
+        document.getElementById(`tool-${tool}-btn`)?.classList.remove('active');
+      });
       document.getElementById('toggle-edit-btn').classList.remove('active');
       document.getElementById('kwg-edit-mode-label').textContent='EDIT';
       renderRoomList();
@@ -3613,6 +3624,14 @@ body.kwg-editing #build-toolbar .kwg-icon-tools{margin-bottom:7px!important}
       editorSettingsWindow.classList.toggle('kwg-open',isEditMode);
       document.body.classList.toggle('kwg-editing',isEditMode);
       requestAnimationFrame(resizeWorldViewport);
+      if (!isEditMode) {
+        buildSubTool = null;
+        const recolorPanel=document.getElementById('kwg-recolor-panel');
+        if(recolorPanel)recolorPanel.style.display='none';
+        ['select','place','move','scale','recolor','delete'].forEach(tool=>{
+          document.getElementById(`tool-${tool}-btn`)?.classList.remove('active');
+        });
+      }
       updateEditorCursor();
       if (!isEditMode) {
         selectBlock(null);
