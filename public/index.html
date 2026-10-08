@@ -2568,6 +2568,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         join:[[320,.075,'square',.12,440],[500,.085,'triangle',.15,660],[720,.12,'square',.10,850]],
         leave:[[700,.065,'triangle',.10,520],[490,.09,'square',.10,280]],
         respawn:[[280,.09,'triangle',.13,420],[480,.09,'triangle',.12,690]],
+        // V3.38: Descending 8-bit defeat jingle for kill parts and falling.
+        death:[[560,.11,'square',.18,390],[390,.12,'square',.17,260],[260,.16,'sawtooth',.13,120],[125,.19,'triangle',.16,55]],
         chat:[[760,.05,'sine',.18,930]],
         capture:[[210,.025,'square',.14,145],[860,.045,'triangle',.13,990]],
         toggle:[[450,.04,'square',.09,560]]
@@ -6761,6 +6763,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       }
 
       if (touchedHazard || player.position.y < -30) {
+        kwgAudio.play('death');
         respawnPlayer();
         return;
       }
