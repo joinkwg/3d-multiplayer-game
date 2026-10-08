@@ -650,6 +650,25 @@ body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important
 #build-toolbar .mode-grid{margin-bottom:5px!important}
 #kwg-open-settings,#kwg-close-settings{display:none!important}
 @media(max-width:760px){body.kwg-editing #build-toolbar,body.kwg-editing #kwg-settings-window{width:195px!important}body.kwg-editing #kwg-properties-window{width:195px!important;top:478px!important;height:calc(100vh - 478px)!important}body.kwg-editing #build-toolbar{height:205px!important}body.kwg-editing #kwg-settings-window{top:258px!important;height:220px!important}#room-info-label{max-width:35vw!important;font-size:10px!important}}
+
+/* ===== V3.27.4: true docked 3D Studio workspace ===== */
+body{--kwg-left-dock:270px;--kwg-right-dock:315px;--kwg-topbar-height:53px;--kwg-toolbar-height:175px}
+#kwg-world-viewport{position:fixed;inset:0;z-index:2;background:#101824;overflow:hidden;box-sizing:border-box}
+body.kwg-in-world:not(.kwg-editing) #kwg-world-viewport{top:var(--kwg-topbar-height)}
+#kwg-world-viewport-title{display:none;position:absolute;top:0;left:0;right:0;height:30px;box-sizing:border-box;padding:8px 12px;background:#192330;border-bottom:1px solid #40526b;color:#9eb5d0;font-size:10px;font-weight:900;letter-spacing:.12em;z-index:1;pointer-events:none}
+#kwg-world-canvas{position:absolute;inset:0;overflow:hidden}
+#kwg-world-canvas canvas{display:block;width:100%!important;height:100%!important;touch-action:none}
+body.kwg-editing #kwg-world-viewport{top:var(--kwg-topbar-height);left:var(--kwg-left-dock);right:var(--kwg-right-dock);bottom:0;border-left:1px solid #40526b;border-right:1px solid #40526b}
+body.kwg-editing #kwg-world-viewport-title{display:block}
+body.kwg-editing #kwg-world-canvas{top:30px}
+body.kwg-editing #build-toolbar,body.kwg-editing #kwg-properties-window,body.kwg-editing #kwg-settings-window{position:fixed!important;z-index:20!important;box-sizing:border-box!important;display:block!important;overflow-y:auto!important;overflow-x:hidden!important;max-height:none!important;border-radius:0!important;box-shadow:none!important;min-height:0!important;padding:12px!important}
+body.kwg-editing #build-toolbar{top:var(--kwg-topbar-height)!important;left:0!important;right:auto!important;width:var(--kwg-left-dock)!important;height:var(--kwg-toolbar-height)!important}
+body.kwg-editing #kwg-properties-window{top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height))!important;left:0!important;right:auto!important;width:var(--kwg-left-dock)!important;height:calc(100dvh - var(--kwg-topbar-height) - var(--kwg-toolbar-height))!important}
+body.kwg-editing #kwg-settings-window{top:var(--kwg-topbar-height)!important;right:0!important;left:auto!important;width:var(--kwg-right-dock)!important;height:calc(100dvh - var(--kwg-topbar-height))!important}
+body.kwg-editing #build-toolbar,body.kwg-editing #kwg-properties-window{border-right:1px solid #46556b!important}
+body.kwg-editing #kwg-settings-window{border-left:1px solid #46556b!important}
+@media(max-width:900px){body{--kwg-left-dock:205px;--kwg-right-dock:225px;--kwg-toolbar-height:205px}}
+@media(max-width:620px){body{--kwg-left-dock:145px;--kwg-right-dock:155px;--kwg-toolbar-height:220px}body.kwg-editing #build-toolbar,body.kwg-editing #kwg-properties-window,body.kwg-editing #kwg-settings-window{padding:8px!important}body.kwg-editing .kwg-icon-tools{grid-template-columns:repeat(3,minmax(0,1fr))!important}body.kwg-editing .kwg-settings-tabs{flex-wrap:wrap}body.kwg-editing .kwg-settings-tabs button{font-size:9px;padding:6px}body.kwg-editing .tool-row{flex-wrap:wrap;gap:4px}}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1456,6 +1475,7 @@ body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important
         document.getElementById('home-screen').style.display = 'none';
         document.getElementById('create-world-modal').style.display = 'none';
         document.body.classList.add('kwg-in-world');
+        requestAnimationFrame(resizeWorldViewport);
         document.getElementById('hud').style.display = 'flex';
         document.getElementById('room-info-label').style.display = 'block';
         document.getElementById('current-room-text').textContent = roomName;
@@ -1634,6 +1654,7 @@ body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important
       stagedWorldEdits.length=0;
 
       document.body.classList.remove('kwg-in-world');
+      requestAnimationFrame(resizeWorldViewport);
       document.getElementById('hud').style.display = 'none';
       document.getElementById('world-chat').style.display = 'none';
       document.getElementById('world-chat-messages').innerHTML = '';
@@ -1953,14 +1974,36 @@ body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+    // The world renderer now belongs to a real viewport pane, not the full browser window.
+    // Keeping the canvas in its own pane prevents sidebars from covering the 3D view.
+    const kwgWorldViewport = document.createElement('section');
+    kwgWorldViewport.id = 'kwg-world-viewport';
+    kwgWorldViewport.setAttribute('aria-label','3D World Viewer');
+    kwgWorldViewport.innerHTML = '<div id="kwg-world-viewport-title">3D VIEWPORT</div><div id="kwg-world-canvas"></div>';
+    document.body.appendChild(kwgWorldViewport);
+    const kwgWorldCanvasHost = document.getElementById('kwg-world-canvas');
+    kwgWorldCanvasHost.appendChild(renderer.domElement);
+    function resizeWorldViewport() {
+      const rect = kwgWorldCanvasHost.getBoundingClientRect();
+      const width = Math.max(1,Math.round(rect.width));
+      const height = Math.max(1,Math.round(rect.height));
+      if(renderer.domElement.width === width && renderer.domElement.height === height &&
+         Math.abs(camera.aspect-width/height)<0.0001) return;
+      camera.aspect = width/height;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+      renderer.setSize(width,height,false);
+    }
+    // Pointer positions must use the canvas rectangle after the viewport has moved/resized.
+    function updateWorldMouseFromPointer(e) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      if(rect.width < 1 || rect.height < 1) return false;
+      mouse.x = ((e.clientX-rect.left)/rect.width)*2-1;
+      mouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
+      return true;
+    }
+    window.addEventListener('resize',resizeWorldViewport);
+    if(typeof ResizeObserver !== 'undefined') new ResizeObserver(resizeWorldViewport).observe(kwgWorldCanvasHost);
+    resizeWorldViewport();
 
     const light = new THREE.DirectionalLight(0xffffff, 1.1);
     light.position.set(15, 30, 20);
@@ -2722,7 +2765,7 @@ body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important
         if(id==='baseplate')return;
         const box=new THREE.Box3().setFromObject(mesh), corners=[];
         for(const xx of [box.min.x,box.max.x])for(const yy of [box.min.y,box.max.y])for(const zz of [box.min.z,box.max.z]){
-          v.set(xx,yy,zz).project(camera);corners.push({x:(v.x+1)*innerWidth/2,y:(1-v.y)*innerHeight/2,z:v.z});
+          v.set(xx,yy,zz).project(camera);corners.push({x:renderer.domElement.getBoundingClientRect().left+(v.x+1)*renderer.domElement.getBoundingClientRect().width/2,y:renderer.domElement.getBoundingClientRect().top+(1-v.y)*renderer.domElement.getBoundingClientRect().height/2,z:v.z});
         }
         if(corners.some(c=>c.z>=-1&&c.z<=1&&c.x>=left&&c.x<=right&&c.y>=top&&c.y<=bottom))ids.push(id);
       });
@@ -2818,6 +2861,7 @@ body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important
       editorPropertiesWindow.style.display = isEditMode ? 'block' : 'none';
       editorSettingsWindow.classList.toggle('kwg-open',isEditMode);
       document.body.classList.toggle('kwg-editing',isEditMode);
+      requestAnimationFrame(resizeWorldViewport);
       updateEditorCursor();
       if (!isEditMode) {
         selectBlock(null);
@@ -3190,8 +3234,7 @@ body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important
         if (previewMesh) previewMesh.visible = false;
         return;
       }
-      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      updateWorldMouseFromPointer(e);
       raycaster.setFromCamera(mouse, camera);
 
       
@@ -3380,8 +3423,7 @@ body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important
         lastMouseY = e.clientY;
 
         if (isEditMode && buildSubTool === 'delete') {
-          mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-          mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+          updateWorldMouseFromPointer(e);
           raycaster.setFromCamera(mouse, camera);
 
           const intersects = raycaster.intersectObjects(Object.values(worldBlocks), true);
@@ -3414,8 +3456,7 @@ body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important
       if (e.button !== 0) return;
       if (!isEditMode) return;
 
-      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      updateWorldMouseFromPointer(e);
       raycaster.setFromCamera(mouse, camera);
 
       if ((buildSubTool === 'scale' || buildSubTool === 'move') && gizmoGroup.children.length > 0) {
