@@ -2586,7 +2586,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
           at+=duration*.78;
         }
       }
-      // V3.39: Soft crunchy pixel footsteps, generated in Web Audio.
+      // V3.39.1: Clearer, louder crunchy pixel footsteps, generated in Web Audio.
       // Use a separate path from menu SFX so normal footsteps never mute clicks.
       let footstepIndex=0;
       function footstep(){
@@ -2603,10 +2603,10 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         }
         const source=ctx.createBufferSource();source.buffer=buffer;
         const filter=ctx.createBiquadFilter();filter.type='lowpass';
-        filter.frequency.value=footstepIndex++%2?550:720;
+        filter.frequency.value=footstepIndex++%2?1050:1350;
         const amp=ctx.createGain();
         amp.gain.setValueAtTime(.0001,at);
-        amp.gain.linearRampToValueAtTime(.13*settings.volume/100,at+.008);
+        amp.gain.linearRampToValueAtTime(.44*settings.volume/100,at+.008);
         amp.gain.exponentialRampToValueAtTime(.0001,at+length);
         source.connect(filter);filter.connect(amp);amp.connect(ctx.destination);
         source.start(at);source.stop(at+length+.005);
