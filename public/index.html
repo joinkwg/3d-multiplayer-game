@@ -4187,7 +4187,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       if (!limbs) return;
 
       if (isMoving) {
-        avatar.userData.walkClock = (avatar.userData.walkClock || 0) + 0.18;
+        // Slightly slower stride animation, shared by local and remote avatars.
+        avatar.userData.walkClock = (avatar.userData.walkClock || 0) + 0.15;
         const angle = Math.sin(avatar.userData.walkClock) * 0.65;
         limbs.leftLeg.rotation.x = angle;
         limbs.rightLeg.rotation.x = -angle;
@@ -6804,7 +6805,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       if(isMoving && isGrounded && !isEditMode && stepTravel>.001 && stepTravel<1){
         kwgStepDistance+=stepTravel;
         const now=performance.now();
-        if(kwgStepDistance>=.72 && now-kwgLastStepAt>=270){
+        // Slightly faster footfall cadence to match the slower leg swing.
+        if(kwgStepDistance>=.60 && now-kwgLastStepAt>=215){
           kwgAudio.footstep();
           kwgLastStepAt=now;
           kwgStepDistance=0;
