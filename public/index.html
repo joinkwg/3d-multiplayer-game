@@ -6415,18 +6415,53 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       };
     }
 
+    // V3.39.4 — Collision bounds use the same XYZ Euler rotations as the
+    // Three.js block mesh. At 90-degree increments, these bounds are exact
+    // for rectangular parts, including combinations of Ctrl+R and Ctrl+T.
+    function kwgPartIsRotated(b){
+      const tau=Math.PI*2;
+      const x=((Number(b.rotationX)||0)%tau+tau)%tau;
+      const y=((Number(b.rotationY)||0)%tau+tau)%tau;
+      return Math.min(x,tau-x)>.00001 || Math.min(y,tau-y)>.00001;
+    }
     function getBlockAABB(block) {
-      const sx = block.scaleX || 1;
-      const sy = block.scaleY || 1;
-      const sz = block.scaleZ || 1;
-      return {
-        minX: block.x - sx / 2,
-        maxX: block.x + sx / 2,
-        minY: block.y - sy / 2,
-        maxY: block.y + sy / 2,
-        minZ: block.z - sz / 2,
-        maxZ: block.z + sz / 2
-      };
+      const bx=Number(block.x)||0,by=Number(block.y)||0,bz=Number(block.z)||0;
+      const hx=Math.max(.001,Math.abs(Number(block.scaleX)||1)/2);
+      const hy=Math.max(.001,Math.abs(Number(block.scaleY)||1)/2);
+      const hz=Math.max(.001,Math.abs(Number(block.scaleZ)||1)/2);
+      let ex=hx,ey=hy,ez=hz;
+      if(kwgPartIsRotated(block)){
+        // Mesh.rotation uses Euler XYZ; matrix columns are rotated local axes.
+        const m=new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(
+          Number(block.rotationX)||0,Number(block.rotationY)||0,0,'XYZ'
+        )).elements;
+        ex=Math.abs(m[0])*hx+Math.abs(m[4])*hy+Math.abs(m[8])*hz;
+        ey=Math.abs(m[1])*hx+Math.abs(m[5])*hy+Math.abs(m[9])*hz;
+        ez=Math.abs(m[2])*hx+Math.abs(m[6])*hy+Math.abs(m[10])*hz;
+      }
+      return {minX:bx-ex,maxX:bx+ex,minY:by-ey,maxY:by+ey,minZ:bz-ez,maxZ:bz+ez};
+    }
+    // For rotated curved/sloped shapes, raycast the actual transformed mesh
+    // instead of pretending its surface is still in the original orientation.
+    const kwgCollisionRaycaster=new THREE.Raycaster();
+    const kwgCollisionRayOrigin=new THREE.Vector3();
+    const kwgCollisionRayDirectionDown=new THREE.Vector3(0,-1,0);
+    const kwgCollisionRayDirectionUp=new THREE.Vector3(0,1,0);
+    function kwgRotatedSurfaceRayY(b,px,pz,fromY,direction,normalSign){
+      const mesh=worldBlocks[b.id];
+      if(!mesh)return null;
+      mesh.updateWorldMatrix(true,false);
+      kwgCollisionRayOrigin.set(px,fromY,pz);
+      kwgCollisionRaycaster.set(kwgCollisionRayOrigin,direction);
+      kwgCollisionRaycaster.near=0;
+      kwgCollisionRaycaster.far=2000;
+      const hits=kwgCollisionRaycaster.intersectObject(mesh,false);
+      for(const hit of hits){
+        if(!hit.face)continue;
+        const normal=hit.face.normal.clone().transformDirection(mesh.matrixWorld);
+        if(normal.y*normalSign>.1)return hit.point.y;
+      }
+      return null;
     }
 
     function checkAABBOverlap(boxA, boxB) {
@@ -6441,8 +6476,18 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     // This intentionally mirrors the old single-player controller instead of the
     // experimental V3.8 contact-normal/traction system.
 
-    function getPartSurfaceYFromData(b, px, pz) {
+    function getPartSurfaceYFromData(b, px, pz, playerFeetY) {
       const shape=b.shape || 'box';
+      if(kwgPartIsRotated(b)){
+        const bounds=getBlockAABB(b);
+        if(px<bounds.minX-.2||px>bounds.maxX+.2||pz<bounds.minZ-.2||pz>bounds.maxZ+.2)return null;
+        // Rectangular parts rotated by 90 degrees are still axis-aligned,
+        // with swapped dimensions; the top of the new bounds is the floor.
+        if(shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish')
+          return bounds.maxY;
+        return kwgRotatedSurfaceRayY(b,px,pz,
+          playerFeetY+maxStepHeight+.12,kwgCollisionRayDirectionDown,1);
+      }
       const bx=Number(b.x)||0, by=Number(b.y)||0, bz=Number(b.z)||0;
       const sx=Math.abs(Number(b.scaleX)||1), sy=Math.abs(Number(b.scaleY)||1), sz=Math.abs(Number(b.scaleZ)||1);
       const hx=sx/2, hy=sy/2, hz=sz/2;
@@ -6476,7 +6521,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       for (const b of blocks) {
         if (b.canCollide===false) continue;
         for (const [ox,oz] of offsets) {
-          const y=getPartSurfaceYFromData(b,px+ox,pz+oz);
+          const y=getPartSurfaceYFromData(b,px+ox,pz+oz,py);
           if (y!==null && y<=py+maxStepHeight+0.1 && y>highest) {
             highest=y; groundBlock=b;
           }
@@ -6486,6 +6531,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     }
 
     function checkPlayerIntersectingBlockData(b,pos) {
+      if(kwgPartIsRotated(b))return checkAABBOverlap(
+        getPlayerAABB(pos.x,pos.y,pos.z),getBlockAABB(b));
       const shape=b.shape || 'box';
       const bx=Number(b.x)||0, by=Number(b.y)||0, bz=Number(b.z)||0;
       const sx=Math.abs(Number(b.scaleX)||1), sy=Math.abs(Number(b.scaleY)||1), sz=Math.abs(Number(b.scaleZ)||1);
@@ -6518,6 +6565,14 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     // is detected even when the player never enters the solid block volume.
     function isPlayerTouchingKillPart(block,pos) {
       if (!block || block.actionType !== 'kill' || !pos) return false;
+      if(kwgPartIsRotated(block)){
+        const bounds=getBlockAABB(block);
+        const radius=PLAYER_RADIUS+.07,epsilon=.065;
+        if(pos.y+PLAYER_HEIGHT<bounds.minY-epsilon||pos.y>bounds.maxY+epsilon)return false;
+        const dx=Math.max(bounds.minX-pos.x,0,pos.x-bounds.maxX);
+        const dz=Math.max(bounds.minZ-pos.z,0,pos.z-bounds.maxZ);
+        return dx*dx+dz*dz<=(radius+epsilon)*(radius+epsilon);
+      }
       const bx=Number(block.x)||0, by=Number(block.y)||0, bz=Number(block.z)||0;
       const hx=Math.max(.005,Math.abs(Number(block.scaleX)||1)*.5);
       const hy=Math.max(.005,Math.abs(Number(block.scaleY)||1)*.5);
@@ -6553,6 +6608,21 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       const pr=0.42, ph=2.35, feet=pos.y, head=feet+ph;
       for (const b of blocks) {
         if (b.canCollide===false) continue;
+        if(kwgPartIsRotated(b)){
+          const bounds=getBlockAABB(b);
+          if(bounds.maxY<=feet+.05||bounds.minY>=head)continue;
+          const minX=bounds.minX-pr,maxX=bounds.maxX+pr;
+          const minZ=bounds.minZ-pr,maxZ=bounds.maxZ+pr;
+          if(pos.x>minX&&pos.x<maxX&&pos.z>minZ&&pos.z<maxZ){
+            const distances=[pos.x-minX,maxX-pos.x,pos.z-minZ,maxZ-pos.z];
+            const smallest=Math.min(...distances);
+            if(smallest===distances[0])pos.x=minX;
+            else if(smallest===distances[1])pos.x=maxX;
+            else if(smallest===distances[2])pos.z=minZ;
+            else pos.z=maxZ;
+          }
+          continue;
+        }
         const shape=b.shape||'box';
         const bx=Number(b.x)||0,by=Number(b.y)||0,bz=Number(b.z)||0;
         const sx=Math.abs(Number(b.scaleX)||1),sy=Math.abs(Number(b.scaleY)||1),sz=Math.abs(Number(b.scaleZ)||1);
@@ -6684,6 +6754,27 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
       for (const b of blocks) {
         if (b.canCollide === false) continue;
+        if(kwgPartIsRotated(b)){
+          const bounds=getBlockAABB(b);
+          if(pos.x<bounds.minX-.38||pos.x>bounds.maxX+.38||
+             pos.z<bounds.minZ-.38||pos.z>bounds.maxZ+.38)continue;
+          let undersideY=null;
+          const shape=b.shape||'box';
+          if(shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish'){
+            undersideY=bounds.minY;
+          }else{
+            // Curved and sloped surfaces use the real rotated triangle mesh.
+            for(const [ox,oz] of [[0,0],[.25,0],[-.25,0],[0,.25],[0,-.25]]){
+              const y=kwgRotatedSurfaceRayY(b,pos.x+ox,pos.z+oz,
+                oldHeadY-.02,kwgCollisionRayDirectionUp,-1);
+              if(y!==null&&(undersideY===null||y<undersideY))undersideY=y;
+            }
+          }
+          if(undersideY!==null && oldHeadY<=undersideY+.02 &&
+             newHeadY>=undersideY-.02 && undersideY<lowestCeiling)
+            lowestCeiling=undersideY;
+          continue;
+        }
 
         const shape = b.shape || 'box';
         const bx = Number(b.x) || 0, by = Number(b.y) || 0, bz = Number(b.z) || 0;
