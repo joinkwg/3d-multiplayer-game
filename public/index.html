@@ -2586,12 +2586,38 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
           at+=duration*.78;
         }
       }
+      // V3.39: Soft crunchy pixel footsteps, generated in Web Audio.
+      // Use a separate path from menu SFX so normal footsteps never mute clicks.
+      let footstepIndex=0;
+      function footstep(){
+        if(!settings.enabled||settings.volume<=0||document.hidden)return;
+        const ctx=getContext();if(!ctx)return;
+        const at=ctx.currentTime+.004;
+        const length=.085;
+        const buffer=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*length),ctx.sampleRate);
+        const samples=buffer.getChannelData(0);
+        // Short filtered noise sounds like a retro boot scuff, not a musical beep.
+        for(let i=0;i<samples.length;i++){
+          const t=i/samples.length;
+          samples[i]=(Math.random()*2-1)*(1-t)*(1-t);
+        }
+        const source=ctx.createBufferSource();source.buffer=buffer;
+        const filter=ctx.createBiquadFilter();filter.type='lowpass';
+        filter.frequency.value=footstepIndex++%2?550:720;
+        const amp=ctx.createGain();
+        amp.gain.setValueAtTime(.0001,at);
+        amp.gain.linearRampToValueAtTime(.13*settings.volume/100,at+.008);
+        amp.gain.exponentialRampToValueAtTime(.0001,at+length);
+        source.connect(filter);filter.connect(amp);amp.connect(ctx.destination);
+        source.start(at);source.stop(at+length+.005);
+        source.onended=()=>{source.disconnect();filter.disconnect();amp.disconnect();};
+      }
       function save(){
         try{localStorage.setItem(storageKey,JSON.stringify(settings));}catch(_){}
       }
       function setEnabled(value){settings.enabled=!!value;save();}
       function setVolume(value){settings.volume=Math.max(0,Math.min(100,Number(value)||0));save();}
-      return {play,setEnabled,setVolume,get enabled(){return settings.enabled;},get volume(){return settings.volume;}};
+      return {play,footstep,setEnabled,setVolume,get enabled(){return settings.enabled;},get volume(){return settings.volume;}};
     })();
     const kwgSoundToggle=document.getElementById('kwg-audio-toggle');
     const kwgSoundMenu=document.getElementById('kwg-audio-menu');
@@ -6363,6 +6389,9 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
     const moveSpeed = 0.09;
     const turnSpeed = 0.04;
+    // Distance-based footsteps track actual avatar movement, not just held keys.
+    let kwgStepDistance=0;
+    let kwgLastStepAt=0;
 
     const PLAYER_RADIUS = 0.35;
     const PLAYER_HEIGHT = 2.3;
@@ -6699,6 +6728,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         if (keys['d']||keys['arrowright']) player.rotation.y-=turnSpeed;
       }
 
+      const stepStartX=player.position.x,stepStartZ=player.position.z;
       let moveDir=0;
       if (keys['w']||keys['arrowup']) moveDir+=1;
       if (keys['s']||keys['arrowdown']) moveDir-=1;
@@ -6763,10 +6793,23 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       }
 
       if (touchedHazard || player.position.y < -30) {
+        kwgStepDistance=0;
         kwgAudio.play('death');
         respawnPlayer();
         return;
       }
+
+      // No footsteps when standing still, jumping, falling, editing or flying.
+      const stepTravel=Math.hypot(player.position.x-stepStartX,player.position.z-stepStartZ);
+      if(isMoving && isGrounded && !isEditMode && stepTravel>.001 && stepTravel<1){
+        kwgStepDistance+=stepTravel;
+        const now=performance.now();
+        if(kwgStepDistance>=.72 && now-kwgLastStepAt>=270){
+          kwgAudio.footstep();
+          kwgLastStepAt=now;
+          kwgStepDistance=0;
+        }
+      }else kwgStepDistance=0;
 
       updateAvatarAnimations(player,isMoving,isGrounded,delta,undefined,velocityY);
 
