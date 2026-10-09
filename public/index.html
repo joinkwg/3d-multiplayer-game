@@ -2321,7 +2321,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-recolor-material" aria-label="Brush material"><option value="grid" selected>Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
       <p class="kwg-recolor-help">Click any part in the 3D view to apply both.</p>
     </section>
-    <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>Ctrl</kbd> + <kbd>R</kbd> Horizontal rotate</div><div><kbd>Ctrl</kbd> + <kbd>T</kbd> Vertical rotate</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div></details>
+    <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>Ctrl</kbd> + <kbd>R</kbd> Rotate 90° horizontally</div><div><kbd>Ctrl</kbd> + <kbd>T</kbd> Rotate 90° vertically</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div></details>
     <!-- Selected Part Properties UI -->
     <div id="part-properties-container">
       <div style="border-top: 2px solid #444; margin: 8px 0 10px 0; padding-top: 8px;">
@@ -4833,8 +4833,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         return;
       }
       if(!b)return;
-      if(k==='r')b.rotationY=(Number(b.rotationY)||0)+Math.PI/12;
-      if(k==='t')b.rotationX=(Number(b.rotationX)||0)+Math.PI/12;
+      if(k==='r')b.rotationY=((Number(b.rotationY)||0)+Math.PI/2)%(Math.PI*2);
+      if(k==='t')b.rotationX=((Number(b.rotationX)||0)+Math.PI/2)%(Math.PI*2);
       redrawEditedPart(selectedBlockId);selectBlock(worldBlocks[selectedBlockId]);
       emitWorldSave('block_update',{worldName:currentWorldName,action:'update',blockData:b},r=>{if(r&&!r.success)showToast('Could not save rotation');});
     });
@@ -5148,6 +5148,24 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       drawBlockOutline(targetMesh, hoverOutlineGroup, 0x3388ff);
     }
 
+    // Scale handles operate along the part's rotated LOCAL axes. Move handles
+    // intentionally remain world-aligned so moving a rotated part stays intuitive.
+    function kwgPartAxis(mesh, axisName, localScale){
+      const axis=axisName.endsWith('x')?new THREE.Vector3(1,0,0):
+        axisName.endsWith('y')?new THREE.Vector3(0,1,0):new THREE.Vector3(0,0,1);
+      if(localScale)axis.applyQuaternion(mesh.quaternion);
+      return axis.normalize();
+    }
+    function kwgPartAxisLength(mesh, axisName, localScale){
+      if(localScale){
+        const axis=axisName.slice(-1);
+        return axis==='x'?mesh.scale.x:axis==='y'?mesh.scale.y:mesh.scale.z;
+      }
+      const bounds=new THREE.Box3().setFromObject(mesh);
+      const dims=new THREE.Vector3();bounds.getSize(dims);
+      return axisName.endsWith('x')?dims.x:axisName.endsWith('y')?dims.y:dims.z;
+    }
+
     function buildGizmosForBlock(blockMesh) {
       clearGizmos();
       if (!blockMesh) return;
@@ -5187,8 +5205,16 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       directions.forEach(d => {
         const mat = new THREE.MeshBasicMaterial({ color: arrowColor, depthTest: false });
         const arrow = new THREE.Mesh(arrowGeo, mat);
-        arrow.position.copy(d.pos);
-        arrow.rotation.set(d.rot.x, d.rot.y, d.rot.z);
+        if(buildSubTool==='scale' && selectedBlockIds.size<=1){
+          const direction=kwgPartAxis(blockMesh,d.name,true);
+          const sign=d.name.startsWith('n')?-1:1;
+          const half=kwgPartAxisLength(blockMesh,d.name,true)/2;
+          arrow.position.copy(blockMesh.position).addScaledVector(direction,sign*(half+0.6));
+          arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.multiplyScalar(sign));
+        }else{
+          arrow.position.copy(d.pos);
+          arrow.rotation.set(d.rot.x, d.rot.y, d.rot.z);
+        }
         arrow.renderOrder = 999;
         arrow.userData = { isGizmoArrow: true, axis: d.name, baseGizmoScale: 1 };
         gizmoGroup.add(arrow);
@@ -5223,8 +5249,17 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
       gizmoGroup.children.forEach((arrow) => {
         arrow.scale.setScalar(s);
-        const offset = offsets[arrow.userData.axis];
-        if (offset) arrow.position.copy(center).add(offset);
+        const axisName=arrow.userData.axis;
+        if(buildSubTool==='scale' && selectedBlockIds.size<=1){
+          const direction=kwgPartAxis(selectedMesh,axisName,true);
+          const sign=axisName.startsWith('n')?-1:1;
+          const half=kwgPartAxisLength(selectedMesh,axisName,true)/2;
+          arrow.position.copy(selectedMesh.position).addScaledVector(direction,sign*(half+0.6*s));
+          arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.multiplyScalar(sign));
+        }else{
+          const offset=offsets[axisName];
+          if(offset)arrow.position.copy(center).add(offset);
+        }
       });
     }
 
@@ -5396,9 +5431,9 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       
       if (isDraggingPart && draggedPartId && activeDragAxis && (buildSubTool === 'move' || buildSubTool === 'scale')) {
         const intersectionPoint = new THREE.Vector3();
-        raycaster.ray.intersectPlane(dragPlane, intersectionPoint);
+        const hitDragPlane=raycaster.ray.intersectPlane(dragPlane, intersectionPoint);
 
-        if (intersectionPoint && currentWorldData && currentWorldData.blocks[draggedPartId]) {
+        if (hitDragPlane && currentWorldData && currentWorldData.blocks[draggedPartId]) {
           const blockData = currentWorldData.blocks[draggedPartId];
           const initBlock = initialDragBlockState;
           const diff = intersectionPoint.clone().sub(dragOffsetVector);
@@ -5408,75 +5443,32 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
           const minScaleZ = 1;
 
           if (buildSubTool === 'scale') {
-            let sx = initBlock.scaleX;
-            let sy = initBlock.scaleY;
-            let sz = initBlock.scaleZ;
-            let px = initBlock.x;
-            let py = initBlock.y;
-            let pz = initBlock.z;
-
-            if (activeDragAxis === 'px') {
-              const change = Math.round(diff.x);
-              if (isCtrlHeld) {
-                sx = Math.max(minScaleX, initBlock.scaleX + change * 2);
-                px = initBlock.x;
-              } else {
-                sx = Math.max(minScaleX, initBlock.scaleX + change);
-                px = initBlock.x + (sx - initBlock.scaleX) / 2;
-              }
-            } else if (activeDragAxis === 'nx') {
-              const change = Math.round(-diff.x);
-              if (isCtrlHeld) {
-                sx = Math.max(minScaleX, initBlock.scaleX + change * 2);
-                px = initBlock.x;
-              } else {
-                sx = Math.max(minScaleX, initBlock.scaleX + change);
-                px = initBlock.x - (sx - initBlock.scaleX) / 2;
-              }
-            } else if (activeDragAxis === 'py') {
-              const change = Math.round(diff.y);
-              if (isCtrlHeld) {
-                sy = Math.max(minScaleY, initBlock.scaleY + change * 2);
-                py = initBlock.y;
-              } else {
-                sy = Math.max(minScaleY, initBlock.scaleY + change);
-                py = initBlock.y + (sy - initBlock.scaleY) / 2;
-              }
-            } else if (activeDragAxis === 'ny') {
-              const change = Math.round(-diff.y);
-              if (isCtrlHeld) {
-                sy = Math.max(minScaleY, initBlock.scaleY + change * 2);
-                py = initBlock.y;
-              } else {
-                sy = Math.max(minScaleY, initBlock.scaleY + change);
-                py = initBlock.y - (sy - initBlock.scaleY) / 2;
-              }
-            } else if (activeDragAxis === 'pz') {
-              const change = Math.round(diff.z);
-              if (isCtrlHeld) {
-                sz = Math.max(minScaleZ, initBlock.scaleZ + change * 2);
-                pz = initBlock.z;
-              } else {
-                sz = Math.max(minScaleZ, initBlock.scaleZ + change);
-                pz = initBlock.z + (sz - initBlock.scaleZ) / 2;
-              }
-            } else if (activeDragAxis === 'nz') {
-              const change = Math.round(-diff.z);
-              if (isCtrlHeld) {
-                sz = Math.max(minScaleZ, initBlock.scaleZ + change * 2);
-                pz = initBlock.z;
-              } else {
-                sz = Math.max(minScaleZ, initBlock.scaleZ + change);
-                pz = initBlock.z - (sz - initBlock.scaleZ) / 2;
-              }
+            const localScale=selectedBlockIds.size<=1;
+            const initialMesh=worldBlocks[draggedPartId];
+            // Project the mouse displacement onto the part's rotated local axis.
+            // This prevents a 90-degree rotation from scaling the wrong dimension.
+            const axis=kwgPartAxis(initialMesh,activeDragAxis,localScale);
+            const sign=activeDragAxis.startsWith('n')?-1:1;
+            const delta=Math.round(diff.dot(axis)*sign);
+            const dimension=activeDragAxis.slice(-1);
+            const property=dimension==='x'?'scaleX':dimension==='y'?'scaleY':'scaleZ';
+            const oldSize=Number(initBlock[property])||1;
+            const newSize=Math.max(1,oldSize+delta*(isCtrlHeld?2:1));
+            blockData.scaleX=Number(initBlock.scaleX)||1;
+            blockData.scaleY=Number(initBlock.scaleY)||1;
+            blockData.scaleZ=Number(initBlock.scaleZ)||1;
+            blockData[property]=newSize;
+            blockData.x=initBlock.x;
+            blockData.y=initBlock.y;
+            blockData.z=initBlock.z;
+            if(!isCtrlHeld){
+              // Move the center along the *rotated* axis so the opposite face
+              // stays anchored. Ctrl keeps the center fixed for symmetric scale.
+              const centerShift=sign*(newSize-oldSize)/2;
+              blockData.x+=axis.x*centerShift;
+              blockData.y+=axis.y*centerShift;
+              blockData.z+=axis.z*centerShift;
             }
-
-            blockData.scaleX = sx;
-            blockData.scaleY = sy;
-            blockData.scaleZ = sz;
-            blockData.x = px;
-            blockData.y = py;
-            blockData.z = pz;
           } else if (buildSubTool === 'move') {
             // Snap the drag DELTA, not the absolute block center. Placement uses
             // half-unit centers (e.g. 0.5, 1.5), so rounding absolute positions
@@ -5637,15 +5629,30 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
           new THREE.Box3().setFromObject(blockMesh).getCenter(blockCenter);
 
           let planeNormal = new THREE.Vector3();
-          if (activeDragAxis.includes('x')) planeNormal.set(0, 0, 1);
-          else if (activeDragAxis.includes('y')) planeNormal.set(1, 0, 0);
-          else if (activeDragAxis.includes('z')) planeNormal.set(1, 0, 0);
+          if(buildSubTool==='scale' && selectedBlockIds.size<=1){
+            const axis=kwgPartAxis(blockMesh,activeDragAxis,true);
+            // The plane contains the rotated scale axis and faces the camera.
+            camera.getWorldDirection(planeNormal);
+            planeNormal.addScaledVector(axis,-planeNormal.dot(axis));
+            if(planeNormal.lengthSq()<0.001){
+              planeNormal.set(0,1,0).addScaledVector(axis,-axis.y);
+              if(planeNormal.lengthSq()<0.001)planeNormal.set(1,0,0);
+            }
+            planeNormal.normalize();
+          }else{
+            if (activeDragAxis.includes('x')) planeNormal.set(0, 0, 1);
+            else if (activeDragAxis.includes('y')) planeNormal.set(1, 0, 0);
+            else if (activeDragAxis.includes('z')) planeNormal.set(1, 0, 0);
+          }
 
           dragPlane = new THREE.Plane();
           dragPlane.setFromNormalAndCoplanarPoint(planeNormal, blockCenter);
 
           dragOffsetVector = new THREE.Vector3();
-          raycaster.ray.intersectPlane(dragPlane, dragOffsetVector);
+          if(!raycaster.ray.intersectPlane(dragPlane, dragOffsetVector)){
+            isDraggingPart=false;draggedPartId=null;activeDragAxis=null;dragPlane=null;
+            return;
+          }
           return;
         }
       }
