@@ -1075,8 +1075,8 @@ io.on('connection', (socket) => {
                  && Object.keys(data.blocks).length>=1400){
                 const e=new Error('Part limit reached (1400/1400 parts).');e.clientMessage=e.message;throw e;
               }
-              // Same V3.37 material and action rules as the single-edit path.
-              blockData.actionType=blockData.actionType==='kill'?'kill':'normal';
+              // V3.41: allow normal, kill and checkpoint types; preserve materials.
+              blockData.actionType=['normal','kill','checkpoint'].includes(blockData.actionType)?blockData.actionType:'normal';
               blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
               data.blocks[blockData.id]=blockData;
             }else if(action==='delete'){
@@ -1162,10 +1162,10 @@ io.on('connection', (socket) => {
             err.clientMessage = 'Part limit reached (1400/1400 parts).';
             throw err;
           }
-          // V3.37: Only the two current block types and three current
+          // V3.41: Only the three current block types and three current
           // materials may be saved by clients. Existing legacy worlds are
           // not rewritten on load; their old flags stay intact until edited.
-          blockData.actionType = blockData.actionType === 'kill' ? 'kill' : 'normal';
+          blockData.actionType = ['normal','kill','checkpoint'].includes(blockData.actionType) ? blockData.actionType : 'normal';
           blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
           data.blocks[blockData.id] = blockData;
         } else if (action === 'delete') {
