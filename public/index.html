@@ -3095,6 +3095,35 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return texture;
     }
 
+    // KWG V3.42.4: Special block icons are an overlay, not a replacement
+    // for the chosen Grid / Brick / Wood material. Both layers share the
+    // exact same UVs, so scaling works consistently on every shape.
+    function getBlockSurfaceTexture(materialType, actionType) {
+      const baseType=['grid','brick','wood'].includes(materialType) ? materialType : 'grid';
+      const iconType=['kill','checkpoint','spawn'].includes(actionType) ? actionType : null;
+      if (!iconType) return getMaterialTexture(baseType);
+      const key='combined:'+baseType+':'+iconType;
+      if(textureCache[key])return textureCache[key];
+
+      const canvas=document.createElement('canvas');
+      canvas.width=128;canvas.height=128;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(getMaterialTexture(baseType).image,0,0,128,128);
+      // Icon tiles have a white background. Multiply preserves the material
+      // in white areas while drawing dark icon pixels over it.
+      ctx.globalCompositeOperation='multiply';
+      ctx.drawImage(getMaterialTexture(iconType).image,0,0,128,128);
+      ctx.globalCompositeOperation='source-over';
+
+      const texture=new THREE.CanvasTexture(canvas);
+      texture.wrapS=THREE.RepeatWrapping;
+      texture.wrapT=THREE.RepeatWrapping;
+      // Pixel icons stay recognizable on wedge slopes and narrow faces.
+      texture.magFilter=THREE.NearestFilter;
+      textureCache[key]=texture;
+      return texture;
+    }
+
     // --- DASHBOARD NAVIGATION ---
     function makeWorldCard(w) {
       const card = document.createElement('div');
@@ -4369,8 +4398,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1,
         -1,0,0, -1,0,0, -1,0,0,
         1,0,0, 1,0,0, 1,0,0,
-        -0.707, 0.707, 0, -0.707, 0.707, 0, -0.707, 0.707, 0,
-        -0.707, 0.707, 0, -0.707, 0.707, 0, -0.707, 0.707, 0
+        0, 0.707, 0.707, 0, 0.707, 0.707, 0, 0.707, 0.707,
+        0, 0.707, 0.707, 0, 0.707, 0.707, 0, 0.707, 0.707
       ]);
       const uvs = new Float32Array([
         0,0, 1,0, 1,1,  0,0, 1,1, 0,1,
@@ -4498,9 +4527,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           }else if(tri<4){ // back, XY
             u=(x+.5)*sx;v=(y+.5)*sy;
           }else if(tri<6){ // triangular end caps, ZY
-            u=(z+.5)*sz;v=(y+.5)*sy;
-          }else{ // inclined face, X and diagonal ZY
-            u=(x+.5)*sx;v=(z+.5)*slopeLength;
+            // Keep the play/skull/check symbol inside the triangle instead
+            // of clipping it at the hypotenuse of a 1x1 tile.
+            u=(z+.5)*sz+1/6;
+            v=(y+.5)*sy+1/6;
+          }else{ // inclined roof: width X and actual diagonal distance
+            u=(x+.5)*sx;
+            v=(z+.5)*slopeLength;
           }
           uv.setXY(i,u,v);
         }
@@ -4542,7 +4575,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       else geo = new THREE.BoxGeometry(1, 1, 1);
       applyPartFaceTiling(geo, blockData);
 
-      const mapTexture = getMaterialTexture(blockData.actionType === 'kill' ? 'kill' : blockData.actionType === 'checkpoint' ? 'checkpoint' : blockData.actionType === 'spawn' ? 'spawn' : (blockData.material || 'grid'));
+      const mapTexture = getBlockSurfaceTexture(blockData.material || 'grid', blockData.actionType || 'normal');
       const isUncollidable = blockData.canCollide === false;
       const transparency = blockData.transparency || 0;
       const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
