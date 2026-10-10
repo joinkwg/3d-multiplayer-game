@@ -4541,7 +4541,42 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       uv.needsUpdate=true;
     }
 
-    // KWG V3.42.8: Correct triangular end-cap UVs while keeping each
+    // KWG V3.42.9: The end caps are right triangles, not squares.
+    // Their icon stamps must sit inside the triangular silhouette while the
+    // background grid/brick/wood stays in its normal, undistorted UV space.
+    // Repeating is still controlled by each face's physical dimensions.
+    function getWedgeCapTexture(materialType, actionType, face) {
+      const baseType=['grid','brick','wood'].includes(materialType)?materialType:'grid';
+      const iconType=['kill','checkpoint','spawn'].includes(actionType)?actionType:null;
+      if(!iconType)return getMaterialTexture(baseType);
+      const key='wedge-cap-429:'+baseType+':'+iconType+':'+face;
+      if(textureCache[key])return textureCache[key];
+      const canvas=document.createElement('canvas');
+      canvas.width=128;canvas.height=128;
+      const ctx=canvas.getContext('2d');
+      ctx.drawImage(getMaterialTexture(baseType).image,0,0,128,128);
+      // In the existing UV orientation, the left cap occupies the lower
+      // left triangle and the right cap occupies the lower right triangle.
+      // Their centroids are (1/3,1/3) and (2/3,1/3), respectively.
+      // Stamp the icon at the centroid, at 65% of its normal size, so
+      // it isn't chopped in half by the sloping diagonal boundary.
+      const icon=getMaterialTexture(iconType).image;
+      const size=84;
+      const cx=(face===2?1/3:2/3)*128;
+      const cy=(2/3)*128; // Canvas Y is inverted relative to UV Y.
+      ctx.globalCompositeOperation='multiply';
+      ctx.drawImage(icon,cx-size/2,cy-size/2,size,size);
+      ctx.globalCompositeOperation='source-over';
+      const texture=new THREE.CanvasTexture(canvas);
+      texture.wrapS=THREE.RepeatWrapping;
+      texture.wrapT=THREE.RepeatWrapping;
+      texture.magFilter=THREE.NearestFilter;
+      textureCache[key]=texture;
+      return texture;
+    }
+
+    // KWG V3.42.9: Independent per-face repeats with flat, undistorted
+    // UVs on both triangular end caps.
     // wedge surface's independent material texture
     // transform. A single repeated UV map cannot express five different
     // physical face dimensions, and the old atlas produced invalid sampling.
@@ -4568,7 +4603,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         geometry.addGroup(first,count,face);
         // Every face gets its own texture clone so its repeats cannot
         // affect the other faces (or any other block).
-        const tex=surfaceTexture.clone();
+        const faceSource=(face===2||face===3)
+          ?getWedgeCapTexture(blockData.material||'grid',blockData.actionType||'normal',face)
+          :surfaceTexture;
+        const tex=faceSource.clone();
         tex.wrapS=THREE.RepeatWrapping;
         tex.wrapT=THREE.RepeatWrapping;
         tex.repeat.set(...faceTiles[face]);
@@ -4580,17 +4618,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           let u,v;
           if(face===0){u=x+.5;v=z+.5;}
           else if(face===1){u=x+.5;v=y+.5;}
-          else if(face===2 || face===3){
-            // Triangular end caps need a *triangular* UV layout.
-            // Old mapping put the icon center directly on the sloping
-            // edge (or outside the visible triangle), so the texture
-            // looked blank or like an enormous cropped icon.
-            // Map the tip to the top CENTER of the tile instead.
-            // This keeps the icon center inside the visible triangle.
-            const baseU=face===2?(z+.5):(1-(z+.5));
-            u=y>0?0.5:baseU;
-            v=y+.5;
-          }
+          else if(face===2){u=z+.5;v=y+.5;}
+          else if(face===3){u=1-(z+.5);v=y+.5;}
           else{u=x+.5;v=z+.5;}
           uv.setXY(i,u,v);
         }
