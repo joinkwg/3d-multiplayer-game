@@ -6459,7 +6459,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       for(const hit of hits){
         if(!hit.face)continue;
         const normal=hit.face.normal.clone().transformDirection(mesh.matrixWorld);
-        if(normal.y*normalSign>.1)return hit.point.y;
+        if(normal.y*normalSign>.52)return hit.point.y;
       }
       return null;
     }
@@ -6604,11 +6604,78 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       return blocks.some(b=>b.actionType==='kill'&&isPlayerTouchingKillPart(b,pos));
     }
 
+    // V3.39.6 — For rotated non-box shapes, test the ACTUAL triangles, not
+    // the surrounding rectangular AABB. The latter fills in the empty space
+    // above a wedge ramp and makes the avatar run in place.
+    const kwgShapeMoveDirection=new THREE.Vector3();
+    const kwgShapeRayOrigin=new THREE.Vector3();
+    const kwgShapeFaceNormal=new THREE.Vector3();
+    function kwgResolveRotatedShapeSide(pos,b,previousX,previousZ,feet,head,pr){
+      const mesh=worldBlocks[b.id];
+      if(!mesh)return;
+      const dx=pos.x-previousX,dz=pos.z-previousZ;
+      const distance=Math.hypot(dx,dz);
+      if(distance<.00001)return;
+      const bounds=getBlockAABB(b);
+      if(bounds.maxY<feet+.05||bounds.minY>head)return;
+      if(Math.min(previousX,pos.x)>bounds.maxX+pr+.1 ||
+         Math.max(previousX,pos.x)<bounds.minX-pr-.1 ||
+         Math.min(previousZ,pos.z)>bounds.maxZ+pr+.1 ||
+         Math.max(previousZ,pos.z)<bounds.minZ-pr-.1)return;
+      mesh.updateWorldMatrix(true,false);
+      const ux=dx/distance,uz=dz/distance;
+      kwgShapeMoveDirection.set(ux,0,uz);
+      const sampleHeights=[feet+.22,feet+.72,feet+1.45,head-.18];
+      let nearest=null;
+      // A ray from the avatar's previous position detects actual sloped,
+      // round, and triangular surfaces. Do not treat a walkable ramp as a wall.
+      for(const height of sampleHeights){
+        if(height<bounds.minY-.05||height>bounds.maxY+.05)continue;
+        kwgShapeRayOrigin.set(previousX,height,previousZ);
+        kwgCollisionRaycaster.set(kwgShapeRayOrigin,kwgShapeMoveDirection);
+        kwgCollisionRaycaster.near=0;
+        kwgCollisionRaycaster.far=distance+pr+.08;
+        for(const hit of kwgCollisionRaycaster.intersectObject(mesh,false)){
+          if(!hit.face)continue;
+          kwgShapeFaceNormal.copy(hit.face.normal).transformDirection(mesh.matrixWorld);
+          // Top-facing slopes are floors, handled by ground snapping. Only
+          // side faces or steep ramps should impede horizontal movement.
+          if(kwgShapeFaceNormal.y>.52)continue;
+          const horizontalDot=ux*kwgShapeFaceNormal.x+uz*kwgShapeFaceNormal.z;
+          if(horizontalDot>=-.08)continue; // not entering this face
+          if(!nearest||hit.distance<nearest.distance){
+            nearest={distance:hit.distance,nx:kwgShapeFaceNormal.x,nz:kwgShapeFaceNormal.z};
+          }
+          break;
+        }
+      }
+      if(!nearest)return;
+      // Keep the player's radius outside the surface without ever ejecting
+      // them to the opposite side of a large shape.
+      const allowed=Math.max(0,Math.min(distance,nearest.distance-pr-.015));
+      const remain=distance-allowed;
+      const nx=nearest.nx,nz=nearest.nz;
+      const len=Math.hypot(nx,nz)||1;
+      const wallX=nx/len,wallZ=nz/len;
+      const inward=ux*wallX+uz*wallZ;
+      // Slide along the wall instead of freezing the entire movement.
+      const slideX=(ux-Math.min(0,inward)*wallX)*remain;
+      const slideZ=(uz-Math.min(0,inward)*wallZ)*remain;
+      pos.x=previousX+ux*allowed+slideX;
+      pos.z=previousZ+uz*allowed+slideZ;
+    }
+
     function resolveHorizontalCollisionsMP(pos,blocks,previousX=pos.x,previousZ=pos.z) {
       const pr=0.42, ph=2.35, feet=pos.y, head=feet+ph;
       for (const b of blocks) {
         if (b.canCollide===false) continue;
         if(kwgPartIsRotated(b)){
+          const shape=b.shape||'box';
+          if(shape!=='box'&&shape!=='baseplate'&&
+             b.actionType!=='checkpoint'&&b.actionType!=='finish'){
+            kwgResolveRotatedShapeSide(pos,b,previousX,previousZ,feet,head,pr);
+            continue;
+          }
           const bounds=getBlockAABB(b);
           if(bounds.maxY<=feet+.05||bounds.minY>=head)continue;
           const minX=bounds.minX-pr,maxX=bounds.maxX+pr;
