@@ -6616,6 +6616,88 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     const kwgShapeMoveDirection=new THREE.Vector3();
     const kwgShapeRayOrigin=new THREE.Vector3();
     const kwgShapeFaceNormal=new THREE.Vector3();
+    // V3.39.8 — Exact rotated ellipsoid sweep for flattened / stretched spheres.
+    // Mesh-ray samples can miss a thin sphere completely (or start inside it),
+    // especially after a 90-degree rotation. Use the actual three independent
+    // radii and inverse XYZ rotation for the horizontal player sweep instead.
+    function kwgResolveRotatedSphereSide(pos,b,previousX,previousZ,feet,head,pr){
+      const dx=pos.x-previousX,dz=pos.z-previousZ;
+      if(Math.abs(dx)+Math.abs(dz)<.000001)return;
+      const bounds=getBlockAABB(b);
+      if(bounds.maxY<feet-.01||bounds.minY>head+.01)return;
+      if(Math.min(previousX,pos.x)>bounds.maxX+pr ||
+         Math.max(previousX,pos.x)<bounds.minX-pr ||
+         Math.min(previousZ,pos.z)>bounds.maxZ+pr ||
+         Math.max(previousZ,pos.z)<bounds.minZ-pr)return;
+      const bx=Number(b.x)||0,by=Number(b.y)||0,bz=Number(b.z)||0;
+      // Player radius is horizontal; the ellipsoid's local radii must NOT
+      // collapse into a single radius when its axes are rotated.
+      const rx=Math.max(.001,Math.abs(Number(b.scaleX)||1)*.5)+pr;
+      const ry=Math.max(.001,Math.abs(Number(b.scaleY)||1)*.5)+.025;
+      const rz=Math.max(.001,Math.abs(Number(b.scaleZ)||1)*.5)+pr;
+      const inverse=new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(
+        Number(b.rotationX)||0,Number(b.rotationY)||0,0,'XYZ'
+      )).invert();
+      const e=inverse.elements;
+      function local(x,y,z){
+        x-=bx;y-=by;z-=bz;
+        return [e[0]*x+e[4]*y+e[8]*z,
+                e[1]*x+e[5]*y+e[9]*z,
+                e[2]*x+e[6]*y+e[10]*z];
+      }
+      function value(x,y,z){
+        const v=local(x,y,z);
+        return v[0]*v[0]/(rx*rx)+v[1]*v[1]/(ry*ry)+v[2]*v[2]/(rz*rz);
+      }
+      // Sample the portion of the player's body overlapping the sphere,
+      // including very thin flattened spheres (fixed-height samples alone
+      // can miss these after rotation).
+      const bottom=Math.max(feet+.06,bounds.minY+.01);
+      const top=Math.min(head-.08,bounds.maxY-.01);
+      if(top<bottom)return;
+      const heights=[bottom,(bottom+top)*.5,top];
+      if(top-bottom>.4){heights.push(bottom+(top-bottom)*.25,bottom+(top-bottom)*.75);}
+      let first=1.01,contactHeight=null;
+      for(const y of heights){
+        const p=local(previousX,y,previousZ);
+        const v=[e[0]*dx+e[8]*dz,e[1]*dx+e[9]*dz,e[2]*dx+e[10]*dz];
+        const a=v[0]*v[0]/(rx*rx)+v[1]*v[1]/(ry*ry)+v[2]*v[2]/(rz*rz);
+        const bb=2*(p[0]*v[0]/(rx*rx)+p[1]*v[1]/(ry*ry)+p[2]*v[2]/(rz*rz));
+        const c=p[0]*p[0]/(rx*rx)+p[1]*p[1]/(ry*ry)+p[2]*p[2]/(rz*rz)-1;
+        // Already overlapping: do not trap the player or teleport them out.
+        // Ground snapping handles standing on top of the ellipsoid.
+        if(c<=0||a<1e-12)continue;
+        const disc=bb*bb-4*a*c;
+        if(disc<0)continue;
+        const t=(-bb-Math.sqrt(disc))/(2*a);
+        if(t>=0&&t<=1&&t<first){first=t;contactHeight=y;}
+      }
+      if(contactHeight===null)return;
+      const safeT=Math.max(0,first-.002);
+      const cx=previousX+dx*safeT,cz=previousZ+dz*safeT;
+      const v=local(cx,contactHeight,cz);
+      // Ellipsoid gradient transformed back into world coordinates gives
+      // the actual sideways normal, including X/Y rotations.
+      const gx=v[0]/(rx*rx),gy=v[1]/(ry*ry),gz=v[2]/(rz*rz);
+      const nx=e[0]*gx+e[1]*gy+e[2]*gz;
+      const nz=e[8]*gx+e[9]*gy+e[10]*gz;
+      const nlen=Math.hypot(nx,nz);
+      if(nlen<.000001){pos.x=cx;pos.z=cz;return;}
+      const ux=nx/nlen,uz=nz/nlen;
+      const remaining=1-safeT;
+      const dot=dx*ux+dz*uz;
+      const slideX=(dx-Math.min(0,dot)*ux)*remaining;
+      const slideZ=(dz-Math.min(0,dot)*uz)*remaining;
+      const sx=cx+slideX,sz=cz+slideZ;
+      // A tangent approximation can re-enter a highly squashed ellipsoid.
+      // If it does, stay at the safe contact point for this frame.
+      if(heights.some(y=>value(sx,y,sz)<.999)){
+        pos.x=cx;pos.z=cz;
+      }else{
+        pos.x=sx;pos.z=sz;
+      }
+    }
+
     function kwgResolveRotatedShapeSide(pos,b,previousX,previousZ,feet,head,pr){
       const mesh=worldBlocks[b.id];
       if(!mesh)return;
@@ -6677,6 +6759,10 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         if (b.canCollide===false) continue;
         if(kwgPartIsRotated(b)){
           const shape=b.shape||'box';
+          if(shape==='sphere'){
+            kwgResolveRotatedSphereSide(pos,b,previousX,previousZ,feet,head,pr);
+            continue;
+          }
           if(shape!=='box'&&shape!=='baseplate'&&
              b.actionType!=='checkpoint'&&b.actionType!=='finish'){
             kwgResolveRotatedShapeSide(pos,b,previousX,previousZ,feet,head,pr);
