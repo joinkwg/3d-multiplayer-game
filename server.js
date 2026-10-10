@@ -1040,6 +1040,93 @@ io.on('connection', (socket) => {
     socket.to(`world:${p.worldName}`).emit('player_moved', p);
   });
 
+  // KWG V3.40: One read and one PostgreSQL write for up to 100 ordered edits.
+  // The existing single-edit event remains supported for compatibility.
+  socket.on('world_edits_batch', async ({worldName,edits} = {}, cb) => {
+    if (!requireAuth(socket,cb)) return;
+    const key=cleanWorldName(worldName);
+    if (socket.data.worldName!==key)
+      return cb && cb({success:false,message:'Join the world before saving.'});
+    if (!Array.isArray(edits)||edits.length<1||edits.length>100)
+      return cb && cb({success:false,message:'Invalid save batch size.'});
+    try {
+      await queueWorldSave(key,async()=>{
+        const world=await getWorldByName(key);
+        if(!world){const e=new Error('World not found.');e.clientMessage=e.message;throw e;}
+        if(!canEditWorld(socket,world)){
+          const e=new Error('Only the world owner or an admin can edit this world.');
+          e.clientMessage=e.message;throw e;
+        }
+        const data=world.data;
+        data.blocks=data.blocks||{};
+        const notifications=[];
+        for(const edit of edits){
+          if(!edit||!edit.payload||edit.payload.worldName!==key){
+            const e=new Error('Invalid save batch.');e.clientMessage=e.message;throw e;
+          }
+          const payload=edit.payload;
+          if(edit.eventName==='block_update'){
+            const {action,blockData,blockId}=payload;
+            if(action==='add'||action==='update'){
+              if(!blockData||typeof blockData.id!=='string'||!blockData.id){
+                const e=new Error('Invalid block data.');e.clientMessage=e.message;throw e;
+              }
+              if(action==='add'&&!Object.prototype.hasOwnProperty.call(data.blocks,blockData.id)
+                 && Object.keys(data.blocks).length>=1400){
+                const e=new Error('Part limit reached (1400/1400 parts).');e.clientMessage=e.message;throw e;
+              }
+              // Same V3.37 material and action rules as the single-edit path.
+              blockData.actionType=blockData.actionType==='kill'?'kill':'normal';
+              blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
+              data.blocks[blockData.id]=blockData;
+            }else if(action==='delete'){
+              const target=data.blocks[blockId];
+              if(blockId==='baseplate'||target?.shape==='baseplate'){
+                const e=new Error('The baseplate cannot be deleted.');e.clientMessage=e.message;throw e;
+              }
+              delete data.blocks[blockId];
+            }else{
+              const e=new Error('Invalid block action.');e.clientMessage=e.message;throw e;
+            }
+            notifications.push({type:'block_updated',data:{action,blockData,blockId}});
+          }else if(edit.eventName==='world_settings_update'){
+            const settings=payload.settings;
+            if(!settings||typeof settings!=='object'||Array.isArray(settings)){
+              const e=new Error('Invalid world settings.');e.clientMessage=e.message;throw e;
+            }
+            const allowed=['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint'];
+            const next={};
+            for(const k of allowed)if(Object.prototype.hasOwnProperty.call(settings,k))next[k]=settings[k];
+            if(next.skyColor&&!validColor(next.skyColor))delete next.skyColor;
+            if(next.cloudColor&&!validColor(next.cloudColor))delete next.cloudColor;
+            if(next.cloudSpeed!==undefined)next.cloudSpeed=Math.max(0,Math.min(10,Number(next.cloudSpeed)||0));
+            if(next.cloudsEnabled!==undefined)next.cloudsEnabled=!!next.cloudsEnabled;
+            if(next.spawnPoint){
+              const p=next.spawnPoint;
+              if(![p.x,p.y,p.z].every(Number.isFinite))delete next.spawnPoint;
+            }
+            Object.assign(data,next);
+            notifications.push({type:'world_settings_updated',data:next});
+          }else{
+            const e=new Error('Unsupported save operation.');e.clientMessage=e.message;throw e;
+          }
+        }
+        // All-or-nothing persistence: if any edit fails, none are written.
+        await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',
+          [JSON.stringify(data),world.id]);
+        // Only broadcast AFTER the database confirms the complete batch.
+        for(const n of notifications){
+          if(n.type==='block_updated')socket.to(`world:${world.name}`).emit(n.type,n.data);
+          else io.to(`world:${world.name}`).emit(n.type,n.data);
+        }
+      });
+      cb && cb({success:true,saved:edits.length});
+    }catch(e){
+      console.error('World batch save:',e);
+      cb && cb({success:false,message:e.clientMessage||'Could not save world changes.'});
+    }
+  });
+
   socket.on('block_update', async ({worldName, action, blockData, blockId}, cb) => {
     if (!requireAuth(socket)) return;
     if (socket.data.worldName !== cleanWorldName(worldName)) return;
