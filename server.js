@@ -1,7666 +1,1654 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KWG 3D Online</title>
-  <!-- Avatar Editor V2.5: stable shared thumbnails + GLB inventory fix -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
-  <style>
-    body { margin: 0; overflow: hidden; font-family: 'Courier New', Courier, monospace, sans-serif; user-select: none; }
-    
-    /* Overlays & Modals */
-    .overlay-screen {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(10, 15, 25, 0.92); display: flex; align-items: center;
-      justify-content: center; z-index: 100;
-    }
-    .card {
-      background: #22252a; padding: 24px; border: 4px solid #ffffff;
-      text-align: center; box-shadow: 6px 6px 0px #000000; width: 360px; color: #ffffff;
-    }
-    .card input {
-      width: 100%; padding: 10px; margin: 6px 0; box-sizing: border-box;
-      font-size: 14px; border: 3px solid #555; background: #111; color: #fff;
-      font-family: inherit; font-weight: bold; border-radius: 0;
-    }
-    .card input:focus { outline: none; border-color: #3388ff; }
-    .submit-btn {
-      width: 100%; padding: 10px; background: #3388ff; color: white;
-      border: 3px solid #ffffff; font-size: 15px; cursor: pointer; margin-top: 10px;
-      font-weight: bold; font-family: inherit; text-transform: uppercase;
-      box-shadow: 3px 3px 0px #000000; border-radius: 0;
-    }
-    .submit-btn:hover { background: #2266cc; }
-    .submit-btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0px #000; }
-    .submit-btn.secondary { background: #27ae60; }
-    .submit-btn.secondary:hover { background: #1e8449; }
-    .submit-btn.danger { background: #e74c3c; }
-    .submit-btn.danger:hover { background: #c0392b; }
-    .submit-btn:disabled { background: #555; color: #888; border-color: #777; cursor: not-allowed; box-shadow: none; transform: none; }
-    
-    .error-msg { color: #e74c3c; font-size: 13px; margin-top: 8px; min-height: 18px; font-weight: bold; }
+require('dotenv').config();
+const path = require('path');
+const http = require('http');
+const express = require('express');
+const { Server } = require('socket.io');
+const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
-    /* World Browser Home Dashboard */
-    .room-list-container {
-      max-height: 220px; overflow-y: auto; margin: 12px 0; text-align: left;
-      border: 3px solid #444; background: #15181c; padding: 6px; border-radius: 0;
-    }
-    .room-card {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 12px; border: 2px solid #333; background: #2a2e35;
-      margin-bottom: 6px; border-radius: 0;
-    }
-    .room-card:last-child { margin-bottom: 0; }
-    .room-info { display: flex; flex-direction: column; gap: 2px; }
-    .room-title { font-weight: bold; font-size: 14px; color: #5bc0de; text-transform: uppercase; }
-    .room-meta { font-size: 11px; color: #aaaaaa; }
-    .join-btn {
-      padding: 6px 12px; background: #3388ff; color: white; border: 2px solid #fff;
-      font-weight: bold; cursor: pointer; font-size: 12px; font-family: inherit;
-      box-shadow: 2px 2px 0px #000; text-transform: uppercase; border-radius: 0;
-    }
-    .join-btn:hover { background: #2266cc; }
+const PORT = Number(process.env.PORT || 3000);
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error('DATABASE_URL is required.');
 
-    /* Notification Banner */
-    #game-toast {
-      display: none; position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
-      background: rgba(39, 174, 96, 0.95); color: #ffffff; padding: 10px 24px;
-      border: 3px solid #ffffff; box-shadow: 4px 4px 0px #000000; font-weight: bold;
-      font-size: 14px; text-transform: uppercase; z-index: 200; pointer-events: none;
-    }
+const SUPABASE_URL = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
+const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '');
+const SUPABASE_STORE_BUCKET = String(process.env.SUPABASE_STORE_BUCKET || 'store-assets');
+const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
+const STORE_CATEGORIES = new Set(['eyes','mouth','torso_decal','hat','head_shape']);
 
-    /* Top HUD Navigation */
-    #hud {
-      display: none; position: absolute; top: 10px; left: 10px; z-index: 10; gap: 10px; flex-wrap: wrap;
-    }
-    .hud-btn {
-      padding: 10px 16px; background: #22252a; border: 3px solid #ffffff;
-      color: #ffffff; font-weight: bold; cursor: pointer; box-shadow: 4px 4px 0px #000000;
-      font-size: 13px; font-family: inherit; text-transform: uppercase; border-radius: 0;
-    }
-    .hud-btn:hover { background: #333842; }
-    .hud-btn.active { background: #27ae60; color: white; border-color: #ffffff; }
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: process.env.PGSSL === 'disable' ? false : { rejectUnauthorized: false }
+});
 
-    /* Room Information Label */
-    #room-info-label {
-      display: none; position: absolute; top: 10px; right: 10px; z-index: 10;
-      background: #22252a; color: white; padding: 10px 16px; border: 3px solid #ffffff;
-      box-shadow: 4px 4px 0px #000000; font-weight: bold; font-size: 13px; text-transform: uppercase;
-    }
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { maxHttpBufferSize: 10 * 1024 * 1024 });
 
-    /* Build Toolbar Panel */
-    #build-toolbar {
-      display: none; position: absolute; top: 65px; left: 10px; z-index: 10;
-      background: #22252a; color: #ffffff; padding: 14px; border: 3px solid #ffffff;
-      box-shadow: 6px 6px 0px #000000; width: 300px; font-size: 12px; border-radius: 0;
-      max-height: calc(100vh - 90px); overflow-y: auto;
-    }
-    .tool-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-    .tool-row label { font-weight: bold; text-transform: uppercase; }
-    .tool-row input, .tool-row select { padding: 4px; border: 2px solid #555; background: #111; color: #fff; font-family: inherit; border-radius: 0; }
-    .tool-row input[type="number"] { width: 60px; }
-    .tool-row input[type="range"] { width: 100px; cursor: pointer; accent-color: #3388ff; }
-    .tool-row input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #3388ff; }
-    
-    .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
-    .mode-grid button { padding: 8px; border: 2px solid #fff; background: #444; color: #fff; cursor: pointer; font-weight: bold; font-size: 11px; font-family: inherit; text-transform: uppercase; box-shadow: 2px 2px 0px #000; border-radius: 0; }
-    .mode-grid button.active { background: #3388ff; color: white; }
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/health', (_req, res) => res.json({ ok: true }));
 
-    /* Customizer Modal & Preview */
-    .modal {
-      display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.85); align-items: center; justify-content: center; z-index: 150;
-    }
-    .customizer-card {
-      background: #22252a; color: #ffffff; padding: 24px; border: 4px solid #ffffff;
-      text-align: center; box-shadow: 8px 8px 0px #000000; width: 580px; border-radius: 0;
-      position: relative; max-height: 90vh; overflow-y: auto;
-    }
-    .customizer-layout {
-      display: flex; gap: 16px; margin-top: 10px; align-items: flex-start;
-    }
-    .customizer-preview-container {
-      width: 220px; height: 260px; background: #111; border: 3px solid #555;
-      position: relative; overflow: hidden; cursor: grab; flex-shrink: 0; border-radius: 0;
-    }
-    .customizer-preview-container:active { cursor: grabbing; }
-    .preview-hint {
-      position: absolute; bottom: 6px; left: 0; width: 100%; font-size: 10px;
-      color: #aaa; text-align: center; pointer-events: none; text-transform: uppercase;
-    }
-    .customizer-controls {
-      flex-grow: 1; display: flex; flex-direction: column; gap: 10px; text-align: left; font-size: 12px;
-    }
-    .customizer-controls label {
-      display: flex; justify-content: space-between; align-items: center; font-weight: bold; text-transform: uppercase;
-    }
-    .customizer-controls input[type="color"] {
-      width: 40px; height: 26px; border: 2px solid #555; padding: 0; cursor: pointer; background: none; border-radius: 0;
-    }
-    .customizer-controls select {
-      padding: 4px 8px; border: 2px solid #555; background: #111; color: #fff; font-size: 12px; font-family: inherit; border-radius: 0;
-    }
-    .close-btn { position: absolute; top: 8px; right: 14px; font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; font-family: monospace; }
-    .close-btn:hover { color: #fff; }
+const defaultAppearance = {
+  hat: 'none',
+  headShape: 'sphere',
+  headColor: '#f3ff00',
+  torsoColor: '#0015ff',
+  leftArmColor: '#0015ff',
+  rightArmColor: '#0015ff',
+  leftLegColor: '#000000',
+  rightLegColor: '#000000',
+  eyesItemId: null,
+  mouthItemId: null,
+  torsoDecalItemId: null,
+  hatItemId: null,
+  headShapeItemId: null
+};
 
-    /* Per-world chat */
-    #world-chat {
-      display: none; position: absolute; right: 10px; bottom: 10px; z-index: 20;
-      width: 320px; background: rgba(20,23,28,.96); color:#fff; border:3px solid #fff;
-      box-shadow:5px 5px 0 #000; font-size:12px;
-    }
-    #world-chat-header { padding:8px 10px; border-bottom:2px solid #444; font-weight:bold; text-transform:uppercase; }
-    #world-chat-messages { height:180px; overflow-y:auto; padding:8px; }
-    .chat-line { margin-bottom:6px; word-break:break-word; }
-    .chat-name { color:#5bc0de; font-weight:bold; }
-    .chat-time { color:#777; font-size:10px; margin-left:5px; }
-    #world-chat-form { display:flex; gap:5px; padding:7px; border-top:2px solid #444; }
-    #world-chat-input { flex:1; min-width:0; padding:8px; background:#111; color:#fff; border:2px solid #555; font-family:inherit; }
-    #world-chat-send { padding:8px 10px; background:#3388ff; color:#fff; border:2px solid #fff; font-weight:bold; cursor:pointer; font-family:inherit; }
-    #admin-panel { display:none; position:absolute; inset:0; background:rgba(0,0,0,.88); z-index:250; align-items:center; justify-content:center; }
-    #admin-card { width:720px; max-width:92vw; max-height:86vh; overflow:auto; background:#22252a; color:#fff; border:4px solid #fff; box-shadow:8px 8px #000; padding:20px; }
-    .admin-section { margin-top:14px; border-top:2px solid #444; padding-top:10px; }
-    .admin-row { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px; background:#15181c; border:2px solid #333; margin-bottom:5px; }
-    .admin-delete { background:#e74c3c; color:#fff; border:2px solid #fff; padding:5px 9px; cursor:pointer; font-weight:bold; font-family:inherit; }
-    .admin-action { background:#3388ff; color:#fff; border:2px solid #fff; padding:5px 9px; cursor:pointer; font-weight:bold; font-family:inherit; margin-left:5px; }
-    .admin-action.warn { background:#e67e22; }
-    .admin-actions { display:flex; gap:5px; flex-wrap:wrap; justify-content:flex-end; }
-    .admin-status-online { color:#2ecc71; }
-    .admin-status-offline { color:#888; }
-    .admin-searchbar { display:flex; gap:6px; margin-bottom:8px; }
-    .admin-searchbar input { flex:1; min-width:0; padding:8px; background:#111; color:#fff; border:2px solid #555; font-family:inherit; }
-    .admin-search-note { color:#888; font-size:10px; margin:0 0 8px; }
-
-    /* Store */
-    #store-modal { z-index: 230; }
-    #store-card { width: 760px; max-width: 92vw; max-height: 88vh; overflow-y: auto; text-align: left; }
-    .store-topbar { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:10px; }
-    .coin-badge { display:inline-block; background:#f1c40f; color:#111; border:3px solid #fff; padding:6px 10px; font-weight:bold; box-shadow:2px 2px 0 #000; }
-    .store-tabs { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
-    .store-tab { padding:7px 10px; background:#444; color:#fff; border:2px solid #fff; cursor:pointer; font-family:inherit; font-weight:bold; text-transform:uppercase; }
-    .store-tab.active { background:#3388ff; }
-    #store-items-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px; }
-    .store-item-card { background:#15181c; border:2px solid #444; padding:10px; min-height:150px; display:flex; flex-direction:column; gap:7px; }
-    .store-item-preview { height:82px; background:#0b0d10; border:2px solid #333; display:flex; align-items:center; justify-content:center; overflow:hidden; font-weight:bold; color:#888; }
-    .store-item-preview img { max-width:100%; max-height:100%; image-rendering:auto; }
-    .store-item-name { font-weight:bold; color:#5bc0de; text-transform:uppercase; }
-    .store-item-price { color:#f1c40f; font-weight:bold; }
-    .store-buy-btn { margin-top:auto; padding:7px; background:#27ae60; color:#fff; border:2px solid #fff; cursor:pointer; font-family:inherit; font-weight:bold; }
-    .store-buy-btn:disabled { background:#555; color:#aaa; cursor:not-allowed; }
-    .admin-store-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; background:#15181c; border:2px solid #333; padding:10px; margin-bottom:10px; }
-    .admin-store-form label { display:flex; flex-direction:column; gap:4px; font-size:11px; font-weight:bold; text-transform:uppercase; }
-    .admin-store-form input, .admin-store-form select { background:#111; color:#fff; border:2px solid #555; padding:7px; font-family:inherit; }
-    #admin-mesh-fit-fields { grid-column:span 2; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
-    #admin-store-upload-btn { grid-column:span 2; margin-top:0; }
-    #admin-store-config-note { grid-column:span 2; color:#aaa; font-size:11px; }
-    @media (max-width: 650px) {
-      .customizer-layout { flex-direction:column; }
-      .customizer-preview-container { width:100%; box-sizing:border-box; }
-      .admin-store-form { grid-template-columns:1fr; }
-      #admin-mesh-fit-fields, #admin-store-upload-btn, #admin-store-config-note { grid-column:span 1; }
-      #admin-mesh-fit-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
-    }
-
-
-    /* Home tabs + Avatar Editor V2 */
-    .home-tabs{display:flex;gap:6px;margin:10px 0 12px}.home-tab{flex:1;padding:9px;background:#444;color:#fff;border:2px solid #fff;font-family:inherit;font-weight:bold;cursor:pointer}.home-tab.active{background:#3388ff}
-    .home-pane{display:none}.home-pane.active{display:block}
-    #home-main-card{width:900px;max-width:94vw;max-height:92vh;overflow:auto;text-align:left}
-    #avatar-editor-pane{min-height:540px}.avatar-editor-layout{display:grid;grid-template-columns:320px 1fr;gap:14px}.avatar-preview-large{height:470px;background:#111;border:3px solid #555;position:relative;cursor:grab;overflow:hidden}.avatar-preview-large:active{cursor:grabbing}
-    .inventory-panel{min-width:0}.inventory-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}.inventory-tab{padding:6px 8px;background:#444;color:#fff;border:2px solid #fff;font-family:inherit;font-weight:bold;cursor:pointer;font-size:11px}.inventory-tab.active{background:#3388ff}
-    #avatar-inventory-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;max-height:300px;overflow:auto}.inventory-card{background:#15181c;border:2px solid #444;padding:6px;cursor:pointer;color:#fff;font-family:inherit;text-align:center}.inventory-card.selected{border-color:#2ecc71;box-shadow:inset 0 0 0 2px #2ecc71}.inventory-thumb{height:78px;background:#0b0d10;border:1px solid #333;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:5px}.inventory-thumb img{max-width:100%;max-height:100%}.inventory-name{font-size:10px;font-weight:bold;word-break:break-word}.color-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}.color-grid label{display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:bold;text-transform:uppercase;background:#15181c;padding:6px;border:1px solid #333}.color-grid input{width:36px;height:24px}
-    .mesh-thumb-canvas{width:100%;height:100%;display:block}.admin-fit-preview{grid-column:span 2;height:300px;background:#0b0d10;border:2px solid #444;position:relative;display:none}.admin-fit-preview-note{position:absolute;left:7px;bottom:5px;color:#aaa;font-size:10px;pointer-events:none}
-    .home-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.home-toolbar select{background:#111;color:#fff;border:2px solid #555;padding:8px;font-family:inherit}.world-like-btn{background:#292d33;color:#fff;border:2px solid #666;padding:7px 10px;font-family:inherit;cursor:pointer}.world-like-btn.liked{background:#e74c3c;border-color:#fff}.home-welcome{background:#15181c;border:2px solid #3b4048;padding:18px}.home-profile-grid{display:grid;grid-template-columns:300px 1fr;gap:14px}.home-section{background:#15181c;border:2px solid #3b4048;padding:12px;min-width:0}.home-section h3{margin:0 0 10px}.home-avatar-preview{height:390px;background:#0b0d10;border:3px solid #555;display:flex;align-items:center;justify-content:center;overflow:hidden}.home-avatar-preview img{width:100%;height:100%;object-fit:contain}.home-owned-worlds{max-height:220px;overflow:auto}.home-inventory-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px;max-height:245px;overflow:auto}.home-inventory-card{background:#20242a;border:2px solid #444;padding:6px;text-align:center;min-width:0}.home-inventory-thumb{height:72px;background:#0b0d10;border:1px solid #333;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:5px}.home-inventory-thumb img{max-width:100%;max-height:100%}.home-inventory-name{font-size:10px;font-weight:bold;word-break:break-word}.home-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}.home-action{padding:18px 8px;background:#292d33;color:#fff;border:2px solid #fff;font-family:inherit;font-weight:bold;cursor:pointer}.recent-worlds{margin-top:14px}.logout-btn{background:#e74c3c;color:#fff;border:2px solid #fff;padding:8px 10px;font-family:inherit;font-weight:bold;cursor:pointer}.admin-home-tab{display:none}#admin-pane #admin-card{width:auto;max-width:none;max-height:none;overflow:visible;box-shadow:none;border:2px solid #444;padding:12px}#admin-pane #close-admin-panel{display:none}
-    @media(max-width:760px){.home-profile-grid{grid-template-columns:1fr}.home-actions{grid-template-columns:1fr}#home-main-card{width:94vw}.avatar-editor-layout{grid-template-columns:1fr}.avatar-preview-large{height:330px}.admin-fit-preview{grid-column:span 1}}
-
-    /* ===== V3.13 POLISHED UI ===== */
-    :root{--kwg-panel:#242a33;--kwg-panel2:#171b21;--kwg-line:#596474;--kwg-bright:#dfe7f2;--kwg-blue:#3b8cff;--kwg-text:#f4f7fb;--kwg-muted:#9aa7b7;--kwg-shadow:#090b0e}
-    body{background:#11151a;color:var(--kwg-text)}
-    .card,.customizer-card,#admin-card,#build-toolbar,#world-chat,#room-info-label{background:linear-gradient(180deg,#272d36 0%,#20252d 100%);border-color:var(--kwg-bright);box-shadow:5px 5px 0 var(--kwg-shadow)}
-    .card h1,.card h2,.customizer-card h2,#admin-card h2{letter-spacing:.7px;text-shadow:2px 2px 0 #000}
-    .submit-btn,.hud-btn,.join-btn,.mode-grid button,#world-chat-send,.admin-action,.admin-delete,.world-like-btn{transition:background-color .12s ease,border-color .12s ease,transform .08s ease,box-shadow .08s ease,filter .12s ease}
-    .submit-btn:hover,.hud-btn:hover,.join-btn:hover,.mode-grid button:hover,#world-chat-send:hover,.admin-action:hover,.admin-delete:hover,.world-like-btn:hover{filter:brightness(1.12)}
-    .submit-btn:focus-visible,.hud-btn:focus-visible,.join-btn:focus-visible,.mode-grid button:focus-visible,#world-chat-send:focus-visible,.admin-action:focus-visible,.admin-delete:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #73adff;outline-offset:2px}
-    .room-list-container,.admin-row,.room-card{border-color:#3e4754;background:#191e25}
-    .room-card{transition:background-color .12s ease,border-color .12s ease,transform .12s ease}
-    .room-card:hover{background:#222933;border-color:#647286;transform:translateY(-1px)}
-    .room-title{color:#69b4ff;letter-spacing:.3px}.room-meta,.admin-search-note{color:var(--kwg-muted)}
-    .card input,.tool-row input,.tool-row select,.customizer-controls select,#world-chat-input,.admin-searchbar input{background:#10141a;border-color:#46515f;color:var(--kwg-text);transition:border-color .12s ease,background-color .12s ease}
-    .card input:hover,.tool-row input:hover,.tool-row select:hover,.customizer-controls select:hover,#world-chat-input:hover,.admin-searchbar input:hover{border-color:#667589}
-    #world-chat-header{background:#1b2028;border-bottom-color:#46515f;letter-spacing:.5px}
-    #world-chat-form{background:#1b2028;border-top-color:#46515f}
-    #save-status{border-radius:0!important;box-shadow:3px 3px 0 #000}
-    *{scrollbar-color:#566273 #171b21;scrollbar-width:thin}
-    *::-webkit-scrollbar{width:10px;height:10px}*::-webkit-scrollbar-track{background:#171b21}*::-webkit-scrollbar-thumb{background:#566273;border:2px solid #171b21}*::-webkit-scrollbar-thumb:hover{background:#718096}
-
-  
-    /* ============================================================
-       V3.14 — KWG PROFESSIONAL GAME UI
-       A full visual/layout pass layered safely over existing markup.
-       ============================================================ */
-    :root{
-      --g-bg:#0b0e13;--g-surface:#121720;--g-surface2:#181f2a;--g-surface3:#202936;
-      --g-line:#344154;--g-line2:#52627a;--g-text:#f6f8fc;--g-muted:#9daabd;
-      --g-accent:#4b9cff;--g-accent2:#236fdb;--g-good:#39c979;--g-danger:#ef5b55;
-      --g-gold:#f2c14e;--g-shadow:rgba(0,0,0,.55);
-    }
-    html,body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif!important;background:var(--g-bg)!important}
-    body{letter-spacing:.01em}
-    body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle at 50% -20%,rgba(75,156,255,.10),transparent 38%)}
-
-    /* Game-shell top navigation */
-    #topbar,#top-bar,.topbar,.nav-bar{
-      background:linear-gradient(180deg,#151b25,#0e131b)!important;
-      border-bottom:1px solid #3b4759!important;
-      box-shadow:0 8px 24px rgba(0,0,0,.38)!important;
-      min-height:58px!important;padding:8px 16px!important;
-      backdrop-filter:blur(12px);
-    }
-    #topbar button,#top-bar button,.topbar button,.nav-bar button{
-      min-height:38px!important;padding:8px 16px!important;background:transparent!important;
-      border:1px solid transparent!important;color:#b8c4d4!important;font-weight:750!important;
-      box-shadow:none!important;text-transform:none!important;letter-spacing:.02em!important;
-    }
-    #topbar button:hover,#top-bar button:hover,.topbar button:hover,.nav-bar button:hover{
-      color:#fff!important;background:#202936!important;border-color:#344154!important;
-    }
-    #topbar button.active,#top-bar button.active,.topbar button.active,.nav-bar button.active{
-      color:#fff!important;background:#223b5e!important;border-color:#4b9cff!important;
-      box-shadow:inset 0 -2px 0 #69adff!important;
-    }
-
-    /* Main menu / page composition */
-    #menu,#main-menu,.menu-screen,.screen,.page{position:relative;z-index:2}
-    .card,.customizer-card,#admin-card{
-      background:linear-gradient(180deg,rgba(27,34,45,.98),rgba(16,21,29,.98))!important;
-      border:1px solid var(--g-line)!important;border-top:2px solid #53647d!important;
-      box-shadow:0 18px 50px var(--g-shadow),inset 0 1px 0 rgba(255,255,255,.035)!important;
-      padding:28px!important;
-    }
-    .card h1,.card h2,.customizer-card h2,#admin-card h2{
-      font-weight:850!important;letter-spacing:-.02em!important;text-shadow:none!important;color:#fff!important;
-    }
-    .card h1{font-size:30px!important}
-    .card h2,.customizer-card h2,#admin-card h2{font-size:20px!important}
-    .card p,.room-meta,.admin-search-note,.muted{color:var(--g-muted)!important}
-
-    /* Inputs */
-    input,select,textarea{
-      font-family:inherit!important;background:#0d1219!important;color:#f6f8fc!important;
-      border:1px solid #344154!important;box-shadow:inset 0 1px 3px rgba(0,0,0,.45)!important;
-      min-height:38px;
-    }
-    input:hover,select:hover,textarea:hover{border-color:#53647b!important}
-    input:focus,select:focus,textarea:focus{
-      border-color:#4b9cff!important;box-shadow:0 0 0 2px rgba(75,156,255,.17),inset 0 1px 3px rgba(0,0,0,.4)!important;
-      outline:none!important;
-    }
-
-    /* Unified buttons */
-    button,.submit-btn,.join-btn,.hud-btn,.admin-action,.world-like-btn{
-      font-family:inherit!important;font-weight:800!important;letter-spacing:.01em!important;
-    }
-    .submit-btn,.join-btn{
-      background:linear-gradient(180deg,#56a6ff,#347edc)!important;border:1px solid #79b8ff!important;
-      color:#fff!important;box-shadow:0 3px 0 #174a8a,0 7px 16px rgba(0,0,0,.28)!important;
-    }
-    .submit-btn:hover,.join-btn:hover{filter:brightness(1.08)!important;transform:translateY(-1px)}
-    .submit-btn:active,.join-btn:active{transform:translateY(2px)!important;box-shadow:0 1px 0 #174a8a!important}
-    .danger,.delete-btn,.admin-delete{background:linear-gradient(180deg,#f26962,#c9423c)!important;border-color:#ff8b85!important;color:white!important}
-    button:disabled{opacity:.48!important;filter:saturate(.5)!important;cursor:not-allowed!important}
-
-    /* Worlds as game/server cards */
-    .room-list-container{background:transparent!important;border:0!important;padding:4px!important;gap:10px!important}
-    .room-card{
-      position:relative;background:linear-gradient(90deg,#171e28,#121821)!important;
-      border:1px solid #344154!important;border-left:3px solid #4b9cff!important;
-      box-shadow:0 7px 18px rgba(0,0,0,.25)!important;padding:15px 16px!important;
-    }
-    .room-card:hover{background:linear-gradient(90deg,#202b39,#171f2a)!important;border-color:#53647b!important;transform:translateY(-2px)!important}
-    .room-title{font-size:17px!important;font-weight:850!important;color:#fff!important}
-    .world-like-btn{background:#101721!important;border:1px solid #344154!important;color:#dbe5f3!important}
-
-    /* In-world HUD: compact professional overlays */
-    #hud{z-index:100!important}
-    #room-info-label{
-      background:rgba(12,16,22,.91)!important;border:1px solid #435169!important;
-      border-left:3px solid #4b9cff!important;box-shadow:0 8px 22px rgba(0,0,0,.35)!important;
-      backdrop-filter:blur(9px);padding:9px 13px!important;
-    }
-    #build-toolbar{
-      background:rgba(14,19,27,.95)!important;border:1px solid #46556b!important;
-      border-top:2px solid #637692!important;box-shadow:0 14px 36px rgba(0,0,0,.5)!important;
-      backdrop-filter:blur(10px);
-    }
-    #build-toolbar::before{
-      content:"WORLD EDITOR";display:block;color:#8796aa;font-size:10px;font-weight:900;
-      letter-spacing:.18em;padding:3px 4px 9px;border-bottom:1px solid #2e3949;margin-bottom:9px;
-    }
-    .mode-grid button{
-      background:#171f2a!important;border:1px solid #344154!important;color:#b9c5d5!important;
-      box-shadow:none!important;min-height:38px!important;
-    }
-    .mode-grid button:hover{background:#222e3d!important;color:#fff!important;border-color:#52627a!important}
-    .mode-grid button.active{background:#214b7d!important;color:#fff!important;border-color:#5aa6ff!important;box-shadow:inset 0 -2px 0 #78b7ff!important}
-
-    /* Chat feels like a proper multiplayer overlay */
-    #world-chat{
-      background:rgba(11,15,21,.91)!important;border:1px solid #3d4a5e!important;
-      box-shadow:0 14px 38px rgba(0,0,0,.48)!important;backdrop-filter:blur(9px);
-    }
-    #world-chat-header{
-      background:linear-gradient(180deg,#202936,#171e28)!important;color:#eaf0f8!important;
-      font-size:11px!important;font-weight:900!important;letter-spacing:.14em!important;
-      padding:10px 12px!important;
-    }
-    #world-chat-messages{padding:11px!important}
-    #world-chat-form{background:#10161e!important;padding:9px!important}
-    #world-chat-send{background:#347edc!important;border-color:#65aaff!important;color:white!important}
-
-    /* Admin / store / avatar areas */
-    .admin-row{background:#111720!important;border:1px solid #303c4e!important;box-shadow:0 4px 10px rgba(0,0,0,.2)!important}
-    .admin-row:hover{border-color:#4c5d75!important;background:#171f2a!important}
-    .admin-searchbar{background:#111720!important;border:1px solid #303c4e!important;padding:12px!important}
-    .customizer-tabs button,.store-tabs button{
-      background:#111720!important;border:1px solid #303c4e!important;color:#9eacbf!important;
-    }
-    .customizer-tabs button.active,.store-tabs button.active{
-      background:#223e62!important;border-color:#4b9cff!important;color:#fff!important;
-    }
-
-    /* Professional micro-interactions */
-    button{transition:transform .08s ease,filter .12s ease,background-color .12s ease,border-color .12s ease!important}
-    button:not(:disabled):active{transform:translateY(1px)}
-    #save-status{
-      background:rgba(11,15,21,.94)!important;border:1px solid #46556b!important;border-left:3px solid #39c979!important;
-      color:#dce7f4!important;font-weight:750!important;letter-spacing:.02em!important;
-      box-shadow:0 7px 18px rgba(0,0,0,.38)!important;padding:7px 10px!important;
-    }
-    ::selection{background:#347edc;color:#fff}
-
-  
-    .chat-line.chat-pending{opacity:.42;font-style:italic}
-    .chat-line.chat-pending .chat-time::before{content:"SENDING ";font-size:9px;letter-spacing:.08em;color:#9daabd}
-    .chat-line.chat-failed{opacity:.7;color:#ef7770}
-
-  
-    /* ===== V3.16 PLAYER PROFILES ===== */
-    .profile-shell{display:grid;gap:14px}
-    .profile-hero{display:grid;grid-template-columns:230px 1fr;min-height:230px;background:linear-gradient(110deg,#111822,#1d2a3a);border:1px solid #3c4a5e;border-left:4px solid #4b9cff;box-shadow:0 12px 30px rgba(0,0,0,.35);overflow:hidden}
-    .profile-avatar-preview{background:radial-gradient(circle at 50% 35%,#25374d,#0b1017 72%);display:flex;align-items:center;justify-content:center;min-height:230px;border-right:1px solid #344154;overflow:hidden}
-    .profile-avatar-preview img{width:100%;height:100%;object-fit:contain}
-    .profile-avatar-placeholder{color:#607087;font-weight:900;letter-spacing:.15em}
-    .profile-identity{padding:28px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center}
-    .profile-kicker,.profile-panel-title{font-size:10px;font-weight:900;letter-spacing:.18em;color:#8392a7}
-    #profile-username{font-size:34px!important;margin:6px 0 9px!important;letter-spacing:-.03em!important}
-    .profile-status{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:900;letter-spacing:.08em;color:#8e9bad}
-    .profile-status-dot{width:8px;height:8px;background:#697687;box-shadow:0 0 0 2px rgba(105,118,135,.15)}
-    .profile-status.online{color:#5fdd92}.profile-status.online .profile-status-dot{background:#39c979;box-shadow:0 0 10px rgba(57,201,121,.55)}
-    .profile-joined{color:#8795a8;font-size:12px;margin-top:8px}
-    .profile-join-btn{margin-top:16px!important;width:auto!important;padding-left:22px!important;padding-right:22px!important}
-    .profile-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-    .profile-stat{background:#111720;border:1px solid #303d50;padding:15px;text-align:center;box-shadow:0 5px 15px rgba(0,0,0,.22)}
-    .profile-stat strong{display:block;font-size:24px;color:#fff}.profile-stat span{font-size:9px;font-weight:900;letter-spacing:.14em;color:#7f8ea3}
-    .profile-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:14px}
-    .profile-panel{background:#111720;border:1px solid #303d50;padding:18px;min-height:180px}
-    .profile-panel-title{padding-bottom:10px;border-bottom:1px solid #293547;margin-bottom:12px}
-    .profile-bio{white-space:pre-wrap;line-height:1.55;color:#d8e0eb;min-height:70px}
-    #profile-bio-input{width:100%;height:105px;resize:vertical;padding:10px;box-sizing:border-box}
-    .profile-edit-note{text-align:right;color:#748399;font-size:10px;margin:4px 0 12px}
-    .profile-showcase-editor-title{margin-top:8px}.profile-showcase-editor-title span{color:#5f6d80;font-size:8px}
-    .profile-showcase-picker{display:grid;gap:6px;max-height:150px;overflow:auto;margin-bottom:12px}
-    .profile-showcase-choice{display:flex;gap:9px;align-items:center;background:#0d1219;border:1px solid #2e3a4c;padding:8px;cursor:pointer}
-    .profile-showcase-choice input{min-height:auto}
-    .profile-showcase-worlds{display:grid;gap:8px}
-    .profile-world-card{background:linear-gradient(90deg,#17202b,#111720);border:1px solid #344154;border-left:3px solid #4b9cff;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px}
-    .profile-world-name{font-weight:850}.profile-world-meta{font-size:10px;color:#8795a8;margin-top:3px}
-    .profile-world-card button{padding:7px 10px;background:#253c5b;color:#fff;border:1px solid #4b78ad;cursor:pointer}
-    @media(max-width:720px){.profile-hero{grid-template-columns:1fr}.profile-avatar-preview{height:210px;border-right:0;border-bottom:1px solid #344154}.profile-grid{grid-template-columns:1fr}}
-
-
-    /* ===== V3.17 CLICKABLE PLAYER NAMES ===== */
-    .chat-name.kwg-profile-link,.kwg-profile-link{
-      cursor:pointer!important;color:#72b5ff!important;text-decoration:none;
-      font-weight:850!important;
-    }
-    .chat-name.kwg-profile-link:hover,.kwg-profile-link:hover{
-      color:#a8d2ff!important;text-decoration:underline;
-    }
-
-
-    /* ===== V3.18 FRIENDS ===== */
-    .friend-badge{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;margin-left:5px;background:#e94d5f;color:#fff;font-size:9px;font-weight:950;vertical-align:middle}
-    .profile-friend-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-    .profile-friend-actions button{width:auto!important;margin:0!important;padding:9px 14px!important}
-    .friends-shell{display:grid;gap:14px}
-    .friends-header{display:flex;align-items:end;justify-content:space-between;background:linear-gradient(110deg,#111822,#1d2a3a);border:1px solid #3c4a5e;border-left:4px solid #4b9cff;padding:22px}
-    .friends-header h1{margin:3px 0 0!important}.friends-summary{font-size:11px;font-weight:900;letter-spacing:.12em;color:#8d9cb0}
-    .friends-list{display:grid;gap:7px}
-    .friend-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;background:#0d1219;border:1px solid #2e3a4c;padding:11px}
-    .friend-main{display:flex;align-items:center;gap:10px;min-width:0}
-    .friend-dot{width:8px;height:8px;background:#647185;flex:none}.friend-dot.online{background:#39c979;box-shadow:0 0 9px rgba(57,201,121,.5)}
-    .friend-name{font-weight:900;color:#dce8f7;cursor:pointer}.friend-name:hover{color:#72b5ff;text-decoration:underline}
-    .friend-presence{font-size:10px;color:#7e8da2;margin-top:2px}
-    .friend-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-    .friend-actions button{padding:7px 9px;background:#253c5b;color:#fff;border:1px solid #4b78ad;cursor:pointer;font-weight:800;font-size:10px}
-    .friend-actions button.danger{background:#3c2228;border-color:#77404b}
-    .friends-empty{padding:12px 0;color:#6f7e92}
-
-
-    /* ===== V3.18.1 PROFILE ACTION ROW FIX ===== */
-    .profile-action-row{
-      display:flex!important;
-      align-items:center!important;
-      flex-wrap:wrap!important;
-      gap:8px!important;
-      margin-top:16px!important;
-      width:100%!important;
-    }
-    .profile-action-row .profile-join-btn{
-      display:none;
-      margin:0!important;
-      width:auto!important;
-      flex:0 0 auto!important;
-    }
-    .profile-action-row .profile-friend-actions{
-      display:flex!important;
-      align-items:center!important;
-      flex-wrap:wrap!important;
-      gap:8px!important;
-      margin:0!important;
-      width:auto!important;
-      flex:0 0 auto!important;
-    }
-    .profile-action-row .profile-friend-actions:empty{display:none!important}
-    .profile-action-row .profile-friend-actions button{
-      display:inline-flex!important;
-      align-items:center!important;
-      justify-content:center!important;
-      width:auto!important;
-      margin:0!important;
-      flex:0 0 auto!important;
-    }
-
-
-    /* ===== V3.19 NOTIFICATIONS ===== */
-    .notifications-tab{display:inline-flex!important;align-items:center!important;gap:5px!important}
-    .notifications-panel{position:absolute;z-index:90;top:72px;right:18px;width:min(430px,calc(100vw - 36px));max-height:min(620px,calc(100vh - 100px));overflow:hidden;background:#0e141d;border:1px solid #42516a;border-top:3px solid #4b9cff;box-shadow:0 20px 55px rgba(0,0,0,.58)}
-    .notifications-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:15px;border-bottom:1px solid #293649;background:#151e2a}
-    .notifications-head h2{font-size:17px!important;margin:2px 0 0!important}
-    .notifications-head-actions{display:flex;gap:6px}
-    .notifications-head-actions button{background:#202d3d;border:1px solid #3c4c62;color:#cbd8e8;padding:7px 8px;font-size:9px;font-weight:900;cursor:pointer}
-    .notifications-list{overflow:auto;max-height:520px}
-    .notification-row{display:grid;grid-template-columns:8px 1fr auto;gap:10px;align-items:start;padding:13px 14px;border-bottom:1px solid #222e3e;background:#101721}
-    .notification-row.unread{background:#162336}
-    .notification-dot{width:8px;height:8px;margin-top:5px;background:#526177}.notification-row.unread .notification-dot{background:#4b9cff;box-shadow:0 0 9px rgba(75,156,255,.55)}
-    .notification-message{font-size:12px;line-height:1.45;color:#dce5f0}.notification-time{font-size:9px;color:#738298;margin-top:4px}
-    .notification-open{background:#223a59;border:1px solid #41658d;color:#fff;padding:6px 8px;font-size:9px;font-weight:900;cursor:pointer}
-    .notifications-empty{padding:30px 18px;text-align:center;color:#718096}
-
-
-    /* ===== V3.19.2 MODERN DASHBOARD CHROME ===== */
-    .kwg-dashboard-header{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:4px 2px 15px;border-bottom:1px solid #273446}
-    .kwg-brand-block h2{margin:0!important;text-transform:uppercase;font-size:20px!important;letter-spacing:.02em!important}
-    .kwg-userline{font-size:10px;color:#74849a;margin-top:4px;text-transform:uppercase;letter-spacing:.09em;font-weight:800}
-    .kwg-userline #logged-user-display{color:#79b8ff!important;font-weight:950!important}
-    .kwg-account-tools{display:flex;align-items:center;gap:7px}
-    .kwg-coin-pill{display:inline-flex!important;align-items:center!important;gap:7px!important;height:36px!important;box-sizing:border-box!important;background:#141d29!important;color:#e9c95a!important;border:1px solid #39485d!important;border-left:3px solid #d9b944!important;padding:0 11px!important;box-shadow:none!important;font-size:12px!important;letter-spacing:.04em!important}
-    .kwg-tool-icon{font-size:9px;color:#f0cd54}
-    .kwg-icon-tool{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:36px!important;height:36px!important;padding:0!important;background:#141d29!important;color:#9eabbc!important;border:1px solid #39485d!important;box-shadow:none!important;font-size:30px!important;line-height:1!important}
-    .kwg-icon-tool:hover{background:#342129!important;color:#ff8591!important;border-color:#70404a!important}
-    .kwg-icon-nav{display:flex!important;align-items:center!important;gap:5px!important;margin:12px 0 16px!important;padding:5px!important;background:#0c121a!important;border:1px solid #263244!important;overflow:visible!important;flex-wrap:wrap!important}
-    .kwg-icon-nav .home-tab{position:relative!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;width:42px!important;height:40px!important;min-width:42px!important;padding:0!important;margin:0!important;background:transparent!important;color:#7e8da2!important;border:1px solid transparent!important;box-shadow:none!important}
-    .kwg-icon-nav .home-tab:hover{background:#172333!important;color:#cfe4ff!important;border-color:#30445e!important}
-    .kwg-icon-nav .home-tab.active{background:#1b2c41!important;color:#7dbaff!important;border-color:#41668e!important;box-shadow:inset 0 -2px 0 #4b9cff!important}
-    .kwg-icon-nav .nav-glyph{display:block;font-size:36px;line-height:1;font-family:Arial,sans-serif;transform:scale(.94);transform-origin:center}
-    .kwg-icon-nav .nav-label{position:absolute;z-index:20;left:50%;top:calc(100% + 8px);transform:translateX(-50%) translateY(-2px);pointer-events:none;opacity:0;background:#0b1017;color:#dce8f7;border:1px solid #3b4a5e;padding:5px 7px;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;transition:opacity .12s ease,transform .12s ease;box-shadow:0 5px 14px rgba(0,0,0,.35)}
-    .kwg-icon-nav .home-tab:hover .nav-label{opacity:1;transform:translateX(-50%) translateY(0)}
-    .kwg-icon-nav .nav-badge{position:absolute!important;right:-5px!important;top:-5px!important;margin:0!important;z-index:5!important}
-    .kwg-icon-nav .notifications-tab{gap:0!important}
-    @media(max-width:620px){.kwg-dashboard-header{align-items:flex-start}.kwg-brand-block h2{font-size:17px!important}.kwg-icon-nav{gap:3px!important}.kwg-icon-nav .home-tab{width:38px!important;min-width:38px!important}}
-
-
-    /* ===== V3.19.4 CLEAR NAVIGATION ICONS ===== */
-    .kwg-icon-nav .nav-glyph.nav-svg{
-      width:27px!important;height:27px!important;font-size:0!important;
-      transform:none!important;display:flex!important;align-items:center!important;justify-content:center!important;
-    }
-    .kwg-icon-nav .nav-svg svg{
-      width:27px;height:27px;overflow:visible;
-      fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
-    }
-    .kwg-icon-nav .nav-svg svg circle:not([r="3"]){fill:none}
-    .kwg-icon-nav button[data-home-tab="profile"] .nav-svg svg circle:first-child,
-    .kwg-icon-nav button[data-home-tab="friends"] .nav-svg svg circle{
-      fill:currentColor;stroke:none;
-    }
-
-
-    /* ===== V3.20 HOME / STORE / AVATAR UI REFRESH ===== */
-    .kwg-page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:3px 0 14px;padding:18px 19px;background:linear-gradient(110deg,#111822,#1b2838);border:1px solid #344256;border-left:4px solid #4b9cff;box-shadow:0 8px 24px rgba(0,0,0,.24)}
-    .kwg-page-heading h2{margin:3px 0 0!important;font-size:23px!important;letter-spacing:-.02em!important}
-    .kwg-page-heading p{margin:5px 0 0;color:#8291a5;font-size:11px}
-    #home-pane .home-profile-grid{gap:12px!important}
-    #home-pane .home-section{background:#111720!important;border:1px solid #303d50!important;padding:15px!important;box-shadow:0 7px 18px rgba(0,0,0,.2)!important}
-    #home-pane .home-section h3{margin:0 0 11px!important;padding-bottom:9px!important;border-bottom:1px solid #293547!important;color:#aebdd0!important;font-size:10px!important;letter-spacing:.15em!important}
-    #home-pane .home-avatar-preview{background:radial-gradient(circle at 50% 35%,#24364b,#0b1017 72%)!important;border:1px solid #35445a!important}
-    #home-pane .home-inventory-card,#home-pane .room-card{background:#0d131b!important;border:1px solid #2d3a4c!important;box-shadow:none!important}
-    #store-pane .store-topbar{margin-bottom:12px!important}
-    #store-pane .kwg-store-balance{display:inline-flex!important;align-items:center!important;gap:7px!important;background:#121b27!important;color:#e9c95a!important;border:1px solid #3a485b!important;border-left:3px solid #d9b944!important;box-shadow:none!important;padding:9px 12px!important;font-size:13px!important}
-    #store-pane .store-tabs{display:flex!important;gap:4px!important;padding:5px!important;margin:0 0 12px!important;background:#0c121a!important;border:1px solid #293547!important}
-    #store-pane .store-tab{padding:9px 12px!important;background:transparent!important;color:#8291a5!important;border:1px solid transparent!important;font-size:10px!important;letter-spacing:.07em!important;box-shadow:none!important}
-    #store-pane .store-tab:hover{background:#172333!important;color:#d9e9fc!important;border-color:#30445e!important}
-    #store-pane .store-tab.active{background:#1b2c41!important;color:#79b8ff!important;border-color:#41668e!important;box-shadow:inset 0 -2px 0 #4b9cff!important}
-    #store-items-grid{gap:9px!important}
-    #store-items-grid .store-item-card{background:#111720!important;border:1px solid #303d50!important;padding:11px!important;box-shadow:0 5px 15px rgba(0,0,0,.2)!important}
-    #store-items-grid .store-item-card:hover{border-color:#4b6e98!important;transform:translateY(-1px)}
-    #store-items-grid .store-item-card button{border:1px solid #41658d!important;background:#203754!important;box-shadow:none!important}
-    #avatar-editor-pane .avatar-editor-layout{gap:12px!important}
-    #avatar-editor-pane .avatar-preview-large{background:radial-gradient(circle at 50% 35%,#24364b,#0b1017 72%)!important;border:1px solid #35445a!important;box-shadow:0 8px 24px rgba(0,0,0,.25)!important}
-    #avatar-editor-pane .inventory-panel{background:#111720!important;border:1px solid #303d50!important;padding:12px!important}
-    #avatar-editor-pane .inventory-tabs{display:flex!important;gap:4px!important;padding:5px!important;background:#0c121a!important;border:1px solid #293547!important;margin-bottom:10px!important}
-    #avatar-editor-pane .inventory-tab{padding:8px 10px!important;background:transparent!important;color:#8291a5!important;border:1px solid transparent!important;font-size:10px!important;letter-spacing:.06em!important;box-shadow:none!important}
-    #avatar-editor-pane .inventory-tab:hover{background:#172333!important;color:#d9e9fc!important;border-color:#30445e!important}
-    #avatar-editor-pane .inventory-tab.active{background:#1b2c41!important;color:#79b8ff!important;border-color:#41668e!important;box-shadow:inset 0 -2px 0 #4b9cff!important}
-    #avatar-inventory-grid .inventory-card{background:#0d131b!important;border:1px solid #2d3a4c!important;box-shadow:none!important}
-    #avatar-inventory-grid .inventory-card:hover{border-color:#4b6e98!important}
-    #avatar-editor-pane .color-grid{margin-top:12px!important;padding-top:12px!important;border-top:1px solid #293547!important;gap:7px!important}
-    #avatar-editor-pane .color-grid label{background:#0d131b!important;border:1px solid #2d3a4c!important;padding:8px!important;color:#9eacbe!important;font-size:10px!important;font-weight:850!important}
-    #avatar-editor-pane input[type="color"]{border:1px solid #46566b!important;background:#151e29!important}
-    #save-avatar-editor-btn{margin-top:9px!important;background:#255b93!important;border:1px solid #4c87c2!important;box-shadow:none!important}
-    /* Admin navigation is opt-in after authenticated admin state is known. */
-    .admin-home-tab{display:none!important}
-    body.kwg-admin-authenticated .admin-home-tab{display:inline-flex!important}
-
-
-    /* ===== V3.20.1 ADMIN VISIBILITY HOTFIX ===== */
-    .kwg-icon-nav .home-tab.admin-home-tab{
-      display:none!important;
-    }
-    body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{
-      display:inline-flex!important;
-    }
-
-
-    /* ===== V3.21 PROFESSIONAL AVATAR BODY + SEMANTIC COLORS ===== */
-    #avatar-editor-pane .kwg-avatar-colors{grid-template-columns:repeat(5,minmax(0,1fr))!important}
-    #avatar-editor-pane .kwg-avatar-colors label{display:grid!important;grid-template-columns:1fr!important;gap:7px!important;text-align:center!important;letter-spacing:.08em!important}
-    #avatar-editor-pane .kwg-avatar-colors input[type="color"]{width:100%!important;height:34px!important;padding:2px!important;cursor:pointer!important}
-    @media(max-width:760px){#avatar-editor-pane .kwg-avatar-colors{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
-
-
-    /* ===== V3.22 AVATAR CLOTHING + BUILT-IN FACE OPTIONS ===== */
-    .kwg-body-style-panel{display:grid;grid-template-columns:1fr 1.35fr;gap:9px;margin-bottom:10px}
-    .kwg-style-group{background:#0d131b;border:1px solid #2d3a4c;padding:9px}
-    .kwg-style-title{color:#7f90a6;font-size:9px;font-weight:900;letter-spacing:.13em;margin-bottom:7px}
-    .kwg-style-buttons{display:flex;gap:4px}
-    .kwg-style-btn{flex:1;padding:7px 5px;background:#141d29;color:#8494a9;border:1px solid #304055;font-family:inherit;font-size:9px;font-weight:900;cursor:pointer}
-    .kwg-style-btn:hover{color:#dceaff;border-color:#466484}
-    .kwg-style-btn.active{background:#1f3c5d;color:#82bdff;border-color:#4b84bd;box-shadow:inset 0 -2px 0 #4b9cff}
-    @media(max-width:760px){.kwg-body-style-panel{grid-template-columns:1fr}.kwg-style-buttons{flex-wrap:wrap}}
-
-
-/* V3.23 avatar editor */
-#avatar-editor-pane .kwg-avatar-tabs{display:grid!important;grid-template-columns:repeat(5,1fr)!important}#avatar-editor-pane .kwg-avatar-tabs .inventory-tab{text-align:center!important;padding:9px 4px!important}.avatar-native-options{grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin-bottom:8px}.kwg-native-card,.kwg-native-color{min-height:68px;background:#0d131b;color:#aebdd0;border:1px solid #2d3a4c;padding:10px;font-family:inherit;font-weight:900;font-size:10px;cursor:pointer}.kwg-native-card.selected{background:#1b2c41;color:#79b8ff;border-color:#4b84bd;box-shadow:inset 0 -2px 0 #4b9cff}.kwg-native-color{display:grid;gap:7px;cursor:default}.kwg-native-color input{width:100%;height:32px;background:#151e29;border:1px solid #46566b;cursor:pointer}@media(max-width:760px){#avatar-editor-pane .kwg-avatar-tabs{grid-template-columns:repeat(2,1fr)!important}}
-.kwg-hair-swatch{display:block;width:44px;height:26px;margin:0 auto 9px;border-radius:55% 55% 15% 15%;border:2px solid rgba(255,255,255,.25)}
-
-/* V3.24.1 shirt designs integrated into Shirts */
-.kwg-shirt-design-heading{grid-column:1/-1;font-size:11px;letter-spacing:.12em;font-weight:900;color:#9bb1c9;border-top:1px solid #314057;padding-top:13px;margin-top:6px}
-.kwg-shirt-design-grid{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:9px}
-.kwg-shirt-design-grid .inventory-card{min-width:0}
-
-.kwg-icon-tools{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:5px!important}.kwg-icon-tools button{display:flex!important;justify-content:center;align-items:center;padding:7px 2px!important;min-width:0;aspect-ratio:1}.kwg-icon-tools svg{width:21px;height:21px;pointer-events:none}
-
-    /* KWG V3.27 separate editor windows */
-    #build-toolbar{width:272px!important}
-    .kwg-editor-panel{display:none;position:absolute;z-index:11;top:65px;background:rgba(14,19,27,.96);border:1px solid #46556b;border-top:2px solid #637692;box-shadow:0 14px 36px rgba(0,0,0,.5);color:#fff;padding:14px;width:280px;max-height:calc(100vh - 90px);overflow:auto;font-size:12px;box-sizing:border-box}
-    #kwg-properties-window{left:300px}
-    #kwg-settings-window{right:12px;width:315px}
-    #kwg-settings-window.kwg-open{display:block}
-    .kwg-panel-title{font-weight:900;letter-spacing:.13em;font-size:11px;color:#a9bcd5;padding-bottom:10px;border-bottom:1px solid #36465b;margin-bottom:10px}
-    #kwg-close-settings{float:right;background:transparent;color:#dce9ff;border:0;font-size:21px;cursor:pointer}
-    .kwg-settings-tabs{display:flex;gap:7px;margin-bottom:13px}
-    .kwg-settings-tabs button,#kwg-open-settings{background:#1b293b;border:1px solid #466287;color:#d7e7ff;padding:9px;cursor:pointer;font-weight:bold}
-    .kwg-settings-tabs button.active{background:#214b7d;border-color:#5aa6ff}
-    #kwg-open-settings{width:100%;margin-top:8px}
-    #kwg-settings-info p{line-height:1.5;color:#aabbd0}
-    @media(max-width:940px){#kwg-properties-window{top:255px;left:10px}#kwg-settings-window{top:65px;right:8px}}
-
-/* V3.27.2: Studio-style docked workspace */
-body.kwg-editing #world-chat{display:none!important}
-body.kwg-in-world #hud{display:flex!important}
-body:not(.kwg-in-world) #hud,body:not(.kwg-in-world) #room-info-label{display:none!important}
-#hud{position:absolute!important;top:0!important;left:0!important;right:0!important;width:auto!important;height:53px!important;display:none;align-items:center;gap:7px;padding:6px 12px!important;box-sizing:border-box;background:rgba(13,19,28,.97)!important;border-bottom:1px solid #40526b;z-index:30!important}
-#hud .kwg-control-icon{display:flex;align-items:center;justify-content:center;width:38px;height:36px;min-width:38px;padding:7px!important;background:#1a2738!important;border:1px solid #40526b!important;color:#dce9fa!important}
-#hud .kwg-control-icon svg{width:19px;height:19px;pointer-events:none}
-#hud #leave-world-btn{background:#42242b!important;border-color:#9c4a56!important}
-#hud #toggle-edit-btn.active{background:#214b7d!important;border-color:#5aa6ff!important}
-#room-info-label{position:absolute!important;top:8px!important;right:12px!important;left:auto!important;z-index:31!important;max-width:40vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:0!important;box-shadow:none!important;background:transparent!important;text-align:right!important;padding:8px!important}
-body.kwg-editing #build-toolbar,body.kwg-editing #kwg-settings-window,body.kwg-editing #kwg-properties-window{position:absolute!important;display:block!important;box-sizing:border-box!important;z-index:20!important;border-radius:0!important;box-shadow:none!important;overflow-y:auto!important;overflow-x:hidden!important;min-height:0!important}
-body.kwg-editing #build-toolbar{top:53px!important;left:0!important;right:auto!important;width:270px!important;height:175px!important;max-height:none!important;padding:12px!important}
-body.kwg-editing #kwg-settings-window{top:228px!important;left:0!important;right:auto!important;width:270px!important;height:240px!important;max-height:none!important;padding:12px!important}
-body.kwg-editing #kwg-properties-window{top:468px!important;right:auto!important;left:0!important;width:270px!important;height:calc(100vh - 468px)!important;max-height:none!important;padding:12px!important}
-#build-toolbar::before{display:none!important}
-/* Keep window titles; remove redundant light-blue subsection subtitles. */
-#part-properties-container > div:first-child > div:first-child,#kwg-settings-environment > div:first-child > div:first-child{display:none!important}
-#build-toolbar .mode-grid{margin-bottom:5px!important}
-#kwg-open-settings,#kwg-close-settings{display:none!important}
-@media(max-width:760px){body.kwg-editing #build-toolbar,body.kwg-editing #kwg-settings-window{width:195px!important}body.kwg-editing #kwg-properties-window{width:195px!important;top:478px!important;height:calc(100vh - 478px)!important}body.kwg-editing #build-toolbar{height:205px!important}body.kwg-editing #kwg-settings-window{top:258px!important;height:220px!important}#room-info-label{max-width:35vw!important;font-size:10px!important}}
-
-/* ===== V3.27.4: true docked 3D Studio workspace ===== */
-body{--kwg-left-dock:270px;--kwg-right-dock:315px;--kwg-topbar-height:53px;--kwg-toolbar-height:175px}
-#kwg-world-viewport{position:fixed;inset:0;z-index:2;background:#101824;overflow:hidden;box-sizing:border-box}
-body.kwg-in-world:not(.kwg-editing) #kwg-world-viewport{top:var(--kwg-topbar-height)}
-#kwg-world-viewport-title{display:none;position:absolute;top:0;left:0;right:0;height:30px;box-sizing:border-box;padding:8px 12px;background:#192330;border-bottom:1px solid #40526b;color:#9eb5d0;font-size:10px;font-weight:900;letter-spacing:.12em;z-index:1;pointer-events:none}
-#kwg-world-canvas{position:absolute;inset:0;overflow:hidden}
-#kwg-world-canvas canvas{display:block;width:100%!important;height:100%!important;touch-action:none}
-body.kwg-editing #kwg-world-viewport{top:var(--kwg-topbar-height);left:var(--kwg-left-dock);right:var(--kwg-right-dock);bottom:0;border-left:1px solid #40526b;border-right:1px solid #40526b}
-body.kwg-editing #kwg-world-viewport-title{display:block}
-body.kwg-editing #kwg-world-canvas{top:30px}
-body.kwg-editing #build-toolbar,body.kwg-editing #kwg-properties-window,body.kwg-editing #kwg-settings-window{position:fixed!important;z-index:20!important;box-sizing:border-box!important;display:block!important;overflow-y:auto!important;overflow-x:hidden!important;max-height:none!important;border-radius:0!important;box-shadow:none!important;min-height:0!important;padding:12px!important}
-body.kwg-editing #build-toolbar{top:var(--kwg-topbar-height)!important;left:0!important;right:auto!important;width:var(--kwg-left-dock)!important;height:var(--kwg-toolbar-height)!important}
-body.kwg-editing #kwg-properties-window{top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height))!important;left:0!important;right:auto!important;width:var(--kwg-left-dock)!important;height:calc(100dvh - var(--kwg-topbar-height) - var(--kwg-toolbar-height))!important}
-body.kwg-editing #kwg-settings-window{top:var(--kwg-topbar-height)!important;right:0!important;left:auto!important;width:var(--kwg-right-dock)!important;height:calc(100dvh - var(--kwg-topbar-height))!important}
-body.kwg-editing #build-toolbar,body.kwg-editing #kwg-properties-window{border-right:1px solid #46556b!important}
-body.kwg-editing #kwg-settings-window{border-left:1px solid #46556b!important}
-@media(max-width:900px){body{--kwg-left-dock:205px;--kwg-right-dock:225px;--kwg-toolbar-height:205px}}
-@media(max-width:620px){body{--kwg-left-dock:145px;--kwg-right-dock:155px;--kwg-toolbar-height:220px}body.kwg-editing #build-toolbar,body.kwg-editing #kwg-properties-window,body.kwg-editing #kwg-settings-window{padding:8px!important}body.kwg-editing .kwg-icon-tools{grid-template-columns:repeat(3,minmax(0,1fr))!important}body.kwg-editing .kwg-settings-tabs{flex-wrap:wrap}body.kwg-editing .kwg-settings-tabs button{font-size:9px;padding:6px}body.kwg-editing .tool-row{flex-wrap:wrap;gap:4px}}
-
-/* ===== V3.27.5: narrower, compact, resizable Studio panels ===== */
-body{--kwg-left-dock:243px;--kwg-right-dock:284px}
-@media(max-width:900px){body{--kwg-left-dock:185px;--kwg-right-dock:203px}}
-@media(max-width:620px){body{--kwg-left-dock:131px;--kwg-right-dock:140px}}
-/* Scale the panel contents, not the dock itself: the viewport still gets the full freed space. */
-body.kwg-editing #build-toolbar > *,
-body.kwg-editing #kwg-properties-window > *,
-body.kwg-editing #kwg-settings-window > *{zoom:.9}
-body.kwg-editing #build-toolbar,
-body.kwg-editing #kwg-properties-window,
-body.kwg-editing #kwg-settings-window{padding:10px!important;font-size:11px!important}
-body.kwg-editing .kwg-icon-tools{gap:4px!important}
-body.kwg-editing .kwg-icon-tools button{padding:5px 1px!important}
-body.kwg-editing .kwg-icon-tools svg{width:19px;height:19px}
-/* The dividers sit on the dock edges; dragging them resizes the actual 3D viewport. */
-.kwg-studio-resizer{display:none;position:fixed;z-index:29;background:transparent;touch-action:none;user-select:none;-webkit-user-select:none}
-body.kwg-editing .kwg-studio-resizer{display:block}
-.kwg-studio-resizer::after{content:'';position:absolute;background:#43556b;opacity:.75;transition:background .12s,opacity .12s}
-.kwg-studio-resizer:hover::after,.kwg-studio-resizer.kwg-resizing::after{background:#6cb3ff;opacity:1}
-#kwg-resize-left{top:var(--kwg-topbar-height);bottom:0;left:calc(var(--kwg-left-dock) - 5px);width:10px;cursor:col-resize}
-#kwg-resize-right{top:var(--kwg-topbar-height);bottom:0;right:calc(var(--kwg-right-dock) - 5px);width:10px;cursor:col-resize}
-#kwg-resize-left::after,#kwg-resize-right::after{top:0;bottom:0;left:4px;width:2px}
-#kwg-resize-toolbar{top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height) - 5px);left:0;width:var(--kwg-left-dock);height:10px;cursor:row-resize}
-#kwg-resize-toolbar::after{left:0;right:0;top:4px;height:2px}
-body.kwg-studio-dragging,body.kwg-studio-dragging *{user-select:none!important;-webkit-user-select:none!important}
-body.kwg-studio-dragging.kwg-drag-cols,body.kwg-studio-dragging.kwg-drag-cols *{cursor:col-resize!important}
-body.kwg-studio-dragging.kwg-drag-rows,body.kwg-studio-dragging.kwg-drag-rows *{cursor:row-resize!important}
-
-/* ===== V3.28: World Info and free-camera thumbnail ===== */
-#kwg-settings-info{display:grid;gap:7px}
-#kwg-settings-info[style*="display: none"],#kwg-settings-info[style*="display:none"]{display:none!important}
-.kwg-info-label{display:block;margin:11px 0 2px;color:#b9cce5;font-size:10px;font-weight:900;letter-spacing:.1em}
-#kwg-info-title,#kwg-info-description{width:100%;box-sizing:border-box;padding:10px;background:#0b121b;border:1px solid #3b516d;color:#eef5ff;font:inherit;font-size:12px;outline:none;resize:vertical}
-#kwg-info-title:focus,#kwg-info-description:focus{border-color:#5ca4ff}
-.kwg-info-hint{color:#879bb5;font-size:10px;line-height:1.5;margin:2px 0 6px}
-.kwg-info-photo{aspect-ratio:16/9;width:100%;background:#101823;border:1px solid #3a506d;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#8194ad;font-size:10px;font-weight:900;letter-spacing:.08em}
-.kwg-info-photo img{display:block;width:100%;height:100%;object-fit:cover}
-.kwg-info-camera-button{width:100%;padding:10px;background:#214b7d;border:1px solid #5aa6ff;color:#f3f8ff;cursor:pointer;font-weight:900;letter-spacing:.04em}
-.room-card{gap:12px;align-items:center}
-.kwg-world-card-thumb{width:142px;min-width:142px;aspect-ratio:16/9;background:linear-gradient(135deg,#16283d,#0c1420);border:1px solid #3d5572;display:flex;align-items:center;justify-content:center;color:#728ca9;font-size:10px;font-weight:900;overflow:hidden}
-.kwg-world-card-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.room-card .room-info{min-width:0;flex:1}
-.room-card .room-description{display:block;color:#9daec4;font-size:11px;line-height:1.4;margin:4px 0;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
-.kwg-world-card-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
-@media(max-width:740px){.kwg-world-card-thumb{width:92px;min-width:92px}.kwg-world-card-actions{flex-direction:column}}
-#kwg-thumbnail-camera-ui{display:none;position:fixed;inset:0;z-index:120;pointer-events:none;color:#e7f0ff}
-#kwg-thumbnail-camera-ui .kwg-camera-dragzone{position:absolute;inset:0;pointer-events:auto;cursor:crosshair}
-#kwg-thumbnail-camera-ui .kwg-camera-crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;font-size:25px;text-shadow:0 1px 3px #000}
-#kwg-thumbnail-camera-ui .kwg-camera-top{position:absolute;top:12px;left:12px;right:12px;background:rgba(9,16,27,.9);border:1px solid #4c6688;padding:12px;display:flex;justify-content:space-between;align-items:center;gap:15px;pointer-events:auto}
-.kwg-camera-help{font-size:11px;color:#a7bdd8;margin-top:5px;line-height:1.4}
-.kwg-camera-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.kwg-camera-buttons button{padding:10px 14px;background:#203753;border:1px solid #5375a0;color:#fff;font-weight:900;cursor:pointer}
-.kwg-camera-buttons button:last-child{background:#205a91;border-color:#6baaff}
-#kwg-camera-review{display:none;position:absolute;inset:0;background:rgba(4,9,15,.86);align-items:center;justify-content:center;pointer-events:auto;padding:15px;box-sizing:border-box}
-.kwg-review-card{background:#121d2b;border:1px solid #5d7ca2;padding:16px;width:min(680px,95vw);max-height:95vh;overflow:auto;box-sizing:border-box}
-.kwg-review-card h3{margin:0 0 12px;font-size:13px;letter-spacing:.1em}
-.kwg-review-card img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;margin-bottom:12px;border:1px solid #354b65}
-body.kwg-thumbnail-camera #kwg-world-viewport{top:0!important;left:0!important;right:0!important;bottom:0!important;border:0!important}
-body.kwg-thumbnail-camera #kwg-world-canvas{top:0!important}
-body.kwg-thumbnail-camera #kwg-world-viewport-title,body.kwg-thumbnail-camera #hud,body.kwg-thumbnail-camera #room-info-label,body.kwg-thumbnail-camera #build-toolbar,body.kwg-thumbnail-camera #kwg-settings-window,body.kwg-thumbnail-camera #kwg-properties-window,body.kwg-thumbnail-camera .kwg-studio-resizer,body.kwg-thumbnail-camera #save-status{display:none!important}
-
-
-/* ===============================================================
-   KWG V3.29 · Studio visual system
-   Consistent panel headers, spacing, control hierarchy and world HUD.
-   Cosmetic only: docking, saving, tools, camera and backend unchanged.
-   =============================================================== */
-body{
-  --studio-bg:#10151d;--studio-surface:#171e28;--studio-raised:#1d2734;
-  --studio-border:#334253;--studio-separator:#293746;
-  --studio-text:#edf3fc;--studio-muted:#9aaec5;
-  --studio-accent:#64aaff;--studio-radius:7px;
-}
-body.kwg-in-world #hud{
-  height:var(--kwg-topbar-height)!important;
-  padding:7px 14px!important;
-  gap:8px!important;
-  background:#141c26!important;
-  border-bottom:1px solid #344459!important;
-  box-shadow:0 3px 16px rgba(0,0,0,.18)!important;
-}
-#hud .kwg-control-icon{
-  width:36px!important;height:36px!important;min-width:36px!important;
-  border-radius:7px!important;background:#222e3d!important;
-  border:1px solid #3c5068!important;box-shadow:none!important;
-  transition:background .15s,border-color .15s,transform .15s;
-}
-#hud .kwg-control-icon:hover{
-  background:#30425a!important;border-color:#6dafff!important;
-  transform:translateY(-1px);
-}
-#hud #toggle-edit-btn.active{
-  background:#205287!important;border-color:#69aeff!important;
-  box-shadow:inset 0 0 0 1px rgba(125,188,255,.12)!important;
-}
-#hud #leave-world-btn{background:#30232b!important;border-color:#654351!important}
-#hud #leave-world-btn:hover{background:#56303d!important;border-color:#bf7186!important}
-#hud #save-status{
-  border-radius:6px!important;background:#233b51!important;
-  border:1px solid #466887!important;color:#d9edff!important;
-  font-size:11px!important;padding:8px 12px!important;
-}
-body.kwg-in-world #room-info-label{
-  display:flex!important;flex-direction:column;justify-content:center;
-  align-items:flex-end;gap:2px;top:0!important;right:15px!important;
-  height:var(--kwg-topbar-height);padding:5px 0!important;
-  max-width:min(42vw,450px)!important;line-height:1.15!important;
-  font-size:13px!important;font-weight:700!important;
-  color:#f2f7ff!important;text-transform:none!important;letter-spacing:0!important;
-}
-#room-info-label .kwg-world-label{
-  color:#839ab5;font-size:9px;font-weight:800;letter-spacing:.12em;
-}
-#room-info-label #current-room-text{
-  display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;
-}
-body.kwg-editing #build-toolbar,
-body.kwg-editing #kwg-properties-window,
-body.kwg-editing #kwg-settings-window{
-  background:var(--studio-surface)!important;
-  border:0!important;border-radius:0!important;
-  box-shadow:none!important;
-  padding:0!important;color:var(--studio-text)!important;
-  font-family:inherit;font-size:12px!important;
-  scrollbar-width:thin;scrollbar-color:#45576c transparent;
-  overscroll-behavior:contain;
-}
-body.kwg-editing #build-toolbar,
-body.kwg-editing #kwg-properties-window{
-  border-right:1px solid var(--studio-border)!important;
-}
-body.kwg-editing #kwg-settings-window{
-  border-left:1px solid var(--studio-border)!important;
-}
-/* Remove inherited 90% zoom; apply one explicit typographic scale to all panels. */
-body.kwg-editing #build-toolbar > *,
-body.kwg-editing #kwg-properties-window > *,
-body.kwg-editing #kwg-settings-window > *{zoom:1!important}
-body.kwg-editing .kwg-panel-title{
-  box-sizing:border-box;display:flex;align-items:center;gap:9px;
-  position:sticky;top:0;z-index:3;min-height:44px;
-  margin:0!important;padding:0 13px!important;
-  background:#202a37!important;border:0!important;
-  border-bottom:1px solid #3a4c60!important;
-  color:#e5eef9!important;
-  font-size:11px!important;font-weight:800!important;
-  letter-spacing:.085em!important;line-height:1.2!important;
-  text-transform:uppercase!important;
-}
-.kwg-panel-title-icon{
-  display:inline-flex;align-items:center;justify-content:center;
-  flex:0 0 20px;width:20px;height:20px;
-  border-radius:5px;background:#2b4058;color:#8fc5ff;
-  font-size:13px;letter-spacing:0;
-}
-body.kwg-editing #build-toolbar .kwg-icon-tools{
-  display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;
-  gap:8px!important;margin:13px 12px 10px!important;
-}
-body.kwg-editing #build-toolbar .kwg-icon-tools button{
-  min-height:42px!important;height:42px!important;aspect-ratio:auto!important;
-  border-radius:7px!important;background:#202b39!important;
-  border:1px solid #3b4e64!important;box-shadow:none!important;
-  padding:8px!important;
-}
-body.kwg-editing #build-toolbar .kwg-icon-tools button svg{width:19px;height:19px}
-body.kwg-editing #build-toolbar .kwg-icon-tools button:hover{
-  background:#2b3e54!important;border-color:#74b2ff!important;
-}
-body.kwg-editing #build-toolbar .kwg-icon-tools button.active{
-  background:#234f7c!important;border-color:#78b8ff!important;
-  color:#fff!important;box-shadow:inset 0 0 0 1px rgba(137,194,255,.14)!important;
-}
-body.kwg-editing .kwg-editor-shortcuts{
-  margin:0 12px 10px;border-top:1px solid var(--studio-separator);
-  color:var(--studio-muted);font-size:10px;line-height:1.6;
-}
-body.kwg-editing .kwg-editor-shortcuts summary{
-  cursor:pointer;padding:8px 0;user-select:none;
-  font-size:10px;font-weight:650;color:#a9bed6;
-}
-body.kwg-editing .kwg-editor-shortcuts > div{padding:2px 0}
-body.kwg-editing .kwg-editor-shortcuts kbd{
-  font:inherit;font-weight:750;color:#d7e7fa;background:#2c3949;
-  border:1px solid #46566a;border-radius:3px;padding:0 3px;
-}
-body.kwg-editing #part-properties-container{padding:13px!important}
-body.kwg-editing #part-properties-container > div:first-child{
-  border:0!important;margin:0!important;padding:0!important;
-}
-body.kwg-editing #no-selection-msg{
-  padding:24px 10px!important;margin:0!important;
-  color:#8fa4bc!important;line-height:1.6;font-style:normal!important;
-  background:#1d2836;border:1px dashed #40556c;border-radius:7px;
-}
-body.kwg-editing #selected-part-fields{display:none}
-body.kwg-editing #selected-part-fields:not([style*="display: none"]):not([style*="display:none"]){
-  display:block;
-}
-body.kwg-editing .tool-row{
-  display:flex;align-items:center;gap:8px;min-width:0;
-  padding:7px 0;margin:0!important;
-  border-bottom:1px solid #293745;
-}
-body.kwg-editing .tool-row:last-child{border-bottom:0}
-body.kwg-editing .tool-row label{
-  color:#b9c9db;font-size:10px!important;letter-spacing:0!important;
-  font-weight:650!important;text-transform:none!important;
-  min-width:0;flex:1;
-}
-body.kwg-editing .tool-row select,
-body.kwg-editing .tool-row input[type="number"]{
-  min-width:0;max-width:57%;width:auto!important;
-  padding:7px 8px!important;
-  border:1px solid #42556c!important;border-radius:5px!important;
-  background:#101923!important;color:#eaf3ff!important;
-  font-size:11px!important;
-}
-body.kwg-editing .tool-row input[type="number"]{width:74px!important}
-body.kwg-editing .tool-row input[type="color"]{
-  width:43px;height:29px;padding:3px;
-  border:1px solid #4a607a;border-radius:5px;
-  background:#111d29;cursor:pointer;
-}
-body.kwg-editing .tool-row input[type="range"]{
-  width:92px!important;max-width:53%;accent-color:#6aafff;
-}
-body.kwg-editing .tool-row input[type="checkbox"]{
-  width:16px;height:16px;accent-color:#67aaff;
-}
-body.kwg-editing .kwg-settings-tabs{
-  display:flex!important;gap:5px!important;margin:0!important;
-  padding:12px 12px 8px!important;
-  border-bottom:1px solid var(--studio-separator);
-}
-body.kwg-editing .kwg-settings-tabs button{
-  flex:1;min-width:0;padding:9px 5px!important;
-  background:transparent!important;border:1px solid transparent!important;
-  border-radius:6px!important;color:#9fb2c9!important;
-  font-size:10px!important;font-weight:750!important;letter-spacing:.02em;
-  transition:background .12s;
-}
-body.kwg-editing .kwg-settings-tabs button:hover{
-  background:#253447!important;color:#eef5ff!important;
-}
-body.kwg-editing .kwg-settings-tabs button.active{
-  background:#254769!important;border-color:#466e95!important;
-  color:#edf6ff!important;
-}
-body.kwg-editing #kwg-settings-environment,
-body.kwg-editing #kwg-settings-info{
-  padding:10px 13px 20px!important;
-}
-body.kwg-editing #kwg-settings-environment > div:first-child{
-  border:0!important;margin:0!important;padding:0!important;
-}
-body.kwg-editing #kwg-info-title,
-body.kwg-editing #kwg-info-description{
-  background:#101923!important;border:1px solid #42566d!important;
-  border-radius:6px!important;padding:10px!important;
-  font-size:12px!important;line-height:1.45!important;
-}
-body.kwg-editing #kwg-info-title:focus,
-body.kwg-editing #kwg-info-description:focus{
-  outline:2px solid rgba(100,170,255,.22)!important;
-  border-color:#75b4ff!important;
-}
-body.kwg-editing .kwg-info-label{
-  margin-top:12px!important;color:#c1d1e4!important;
-  font-size:10px!important;letter-spacing:.055em!important;
-}
-body.kwg-editing .kwg-info-hint{
-  font-size:10px!important;color:#829bb5!important;line-height:1.5;
-}
-body.kwg-editing .kwg-info-photo{
-  border-radius:7px;border:1px solid #40556c;background:#101a26;
-}
-body.kwg-editing .kwg-info-camera-button{
-  border-radius:6px!important;background:#285a8c!important;
-  border:1px solid #548fca!important;font-size:11px!important;
-  padding:11px!important;transition:background .12s;
-}
-body.kwg-editing .kwg-info-camera-button:hover{background:#3672aa!important}
-#kwg-world-viewport{background:#0c1420!important}
-body.kwg-editing #kwg-world-viewport{
-  border-left:0!important;border-right:0!important;
-}
-body.kwg-editing #kwg-world-viewport-title{
-  display:flex!important;align-items:center;justify-content:space-between;
-  height:38px!important;padding:0 14px!important;
-  background:#1a2532!important;border-bottom:1px solid #3b4e63!important;
-  font-size:10px!important;color:#afc1d6!important;letter-spacing:.08em!important;
-}
-body.kwg-editing #kwg-world-canvas{top:38px!important;bottom:23px!important}
-.kwg-scene-heading{display:inline-flex;align-items:center;gap:9px;font-weight:800}
-.kwg-scene-dot{
-  display:inline-block;width:7px;height:7px;border-radius:50%;
-  background:#64b0ff;box-shadow:0 0 0 3px rgba(100,176,255,.13);
-}
-.kwg-scene-stats{
-  display:inline-flex;align-items:center;gap:8px;
-  font-size:10px!important;letter-spacing:0!important;
-  color:#b8cce4!important;
-}
-#part-counter{
-  padding:5px 8px;border:1px solid #39516b;border-radius:5px;
-  background:#26384b;color:#d7eaff;font-size:10px;font-weight:700;
-}
-#kwg-scene-footer{
-  display:none;position:absolute;bottom:0;left:0;right:0;height:23px;
-  box-sizing:border-box;padding:0 12px;align-items:center;justify-content:space-between;
-  background:#192431;border-top:1px solid #33465a;
-  color:#8ea4bb;font-size:9px;letter-spacing:.025em;
-  pointer-events:none;
-}
-body.kwg-editing #kwg-scene-footer{display:flex}
-body.kwg-thumbnail-camera #kwg-scene-footer{display:none!important}
-body.kwg-thumbnail-camera #kwg-world-canvas{top:0!important;bottom:0!important}
-body.kwg-editing #world-chat{display:none!important}
-body.kwg-in-world:not(.kwg-editing) #world-chat{
-  border-radius:9px!important;overflow:hidden;
-  background:rgba(18,26,36,.95)!important;
-  border:1px solid #3e536b!important;
-  box-shadow:0 16px 38px rgba(0,0,0,.32)!important;
-}
-body.kwg-in-world #world-chat-header{
-  padding:11px 13px!important;background:#223145!important;
-  color:#e3f0ff!important;font-size:11px!important;
-  letter-spacing:.06em!important;border-bottom:1px solid #3c5066!important;
-}
-body.kwg-in-world #world-chat-messages{
-  padding:12px!important;font-size:12px!important;line-height:1.5;
-}
-body.kwg-in-world #world-chat-form{
-  padding:9px!important;gap:8px!important;background:#192532!important;
-  border-top:1px solid #3a4e65!important;
-}
-body.kwg-in-world #world-chat-input{
-  border-radius:6px!important;border:1px solid #41556c!important;
-  background:#101a26!important;padding:9px!important;
-  font-size:11px!important;
-}
-body.kwg-in-world #world-chat-send{
-  border-radius:6px!important;border:1px solid #5797d4!important;
-  background:#2a659c!important;padding:8px 13px!important;
-  font-size:10px!important;box-shadow:none!important;
-}
-body.kwg-in-world #world-chat-send:hover{background:#367db8!important}
-body.kwg-editing .kwg-studio-resizer::after{
-  background:#3e5267!important;opacity:.7;
-}
-body.kwg-editing .kwg-studio-resizer:hover::after,
-body.kwg-editing .kwg-studio-resizer.kwg-resizing::after{
-  background:#77b8ff!important;opacity:1;
-}
-@media(max-width:620px){
-  body.kwg-editing #build-toolbar .kwg-icon-tools{
-    grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px!important;
+// KWG V3.35 — User-generated text filter. Server is authoritative;
+// client uses the same filter for optimistic previews and legacy content.
+// Account passwords, internal IDs and numeric game data must NOT be filtered.
+const KWG_BLOCKED_TERMS = [
+  'fuck','fack','fucks','fucker','fuckers','fucking','motherfucker','motherfucking',
+  'shit','shits','shitty','bullshit','bitch','bitches','bitching',
+  'ass','asshole','assholes','dumbass','jackass','bastard','bastards',
+  'damn','damned','hell','crap','piss','pissed','pissing',
+  'dick','dicks','dickhead','cock','cocks','cocksucker','pussy','cunt','cunts',
+  'slut','sluts','whore','whores','wtf','stfu',
+  'nigger','niggers','nigga','niggas','faggot','faggots','fag','fags',
+  'kike','kikes','spic','spics','chink','chinks','gook','gooks',
+  'wetback','wetbacks','beaner','beaners','raghead','ragheads',
+  'paki','pakis','tranny','trannies','retard','retards','retarded',
+  'dyke','dykes','coon','coons'
+];
+const KWG_BLOCKED_REGEX = new RegExp(
+  '(^|[^a-z])(' + KWG_BLOCKED_TERMS
+    .sort((a,b)=>b.length-a.length)
+    .map(term=>term.split('').join('[\\s._-]{0,3}'))
+    .join('|') + ')(?![a-z])','gi'
+);
+function filterKWGUserText(value){
+  const raw=String(value??'');
+  if(!raw)return raw;
+  // Map common leetspeak and Unicode accents to comparable letters while
+  // keeping an index for masking the exact characters in the original text.
+  const map={'0':'o','1':'i','3':'e','4':'a','5':'s','7':'t','@':'a','$':'s',
+    '!':'i','|':'i','€':'e','£':'l','+':'t','а':'a','е':'e','о':'o',
+    'р':'p','с':'c','х':'x','у':'y','і':'i'};
+  let folded='',offsets=[];
+  for(let i=0;i<raw.length;){
+    const ch=String.fromCodePoint(raw.codePointAt(i));
+    const trailingPunctuation=['!','@','$'].includes(ch) && !/[a-z]/i.test(raw[i+ch.length]||'');
+    const plain=(trailingPunctuation?ch:(map[ch]||ch.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()));
+    for(const unit of plain){folded+=unit;offsets.push([i,i+ch.length]);}
+    i+=ch.length;
   }
-  body.kwg-editing .kwg-panel-title{padding:0 8px!important;font-size:10px!important}
-  body.kwg-editing #kwg-world-viewport-title{padding:0 7px!important}
-  #kwg-scene-footer span:last-child{display:none}
-  #room-info-label .kwg-world-label{display:none}
-}
-
-
-/* ==============================================================
-   KWG V3.30 · Clean in-world controls, three-stack Studio sidebar
-   and independent material + color recolor brush.
-   =============================================================== */
-body{--kwg-toolbar-height:245px;--kwg-settings-height:265px}
-body.kwg-in-world:not(.kwg-editing) #kwg-world-viewport{top:0!important}
-body.kwg-in-world:not(.kwg-editing) #hud{
-  background:transparent!important;border:0!important;box-shadow:none!important;
-  backdrop-filter:none!important;filter:none!important;
-}
-body.kwg-in-world #hud{
-  overflow:visible!important;white-space:nowrap;flex-wrap:nowrap!important;
-  padding:6px 12px!important;
-}
-body.kwg-in-world #hud .kwg-control-icon{
-  width:auto!important;min-width:0!important;height:36px!important;
-  padding:0 12px!important;display:inline-flex!important;align-items:center;
-  justify-content:center;gap:8px;border-radius:7px!important;
-  font-size:10px!important;font-weight:800!important;letter-spacing:.035em!important;
-  white-space:nowrap!important;text-transform:none!important;
-}
-body.kwg-in-world #hud .kwg-control-icon svg{width:17px!important;height:17px!important;flex:none}
-.kwg-hud-button-label{display:inline-block;font-size:10px;font-weight:800;line-height:1}
-body.kwg-in-world #room-info-label{
-  position:fixed!important;top:0!important;right:13px!important;left:auto!important;
-  z-index:31!important;box-sizing:border-box!important;
-  height:var(--kwg-topbar-height)!important;max-height:var(--kwg-topbar-height)!important;
-  min-height:0!important;margin:0!important;padding:5px 0!important;
-  display:flex!important;flex-direction:column!important;justify-content:center!important;
-  align-items:flex-end!important;gap:2px!important;
-  background:none!important;background-color:transparent!important;
-  border:0!important;border-radius:0!important;box-shadow:none!important;
-  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
-  filter:none!important;isolation:auto!important;overflow:hidden!important;
-  white-space:nowrap!important;line-height:1.2!important;
-}
-body.kwg-in-world #room-info-label::before,
-body.kwg-in-world #room-info-label::after{content:none!important;display:none!important}
-body.kwg-editing #kwg-world-viewport{
-  left:var(--kwg-left-dock)!important;right:0!important;
-  border-left:1px solid var(--studio-border)!important;border-right:0!important;
-}
-body.kwg-editing #build-toolbar,
-body.kwg-editing #kwg-settings-window,
-body.kwg-editing #kwg-properties-window{
-  left:0!important;right:auto!important;width:var(--kwg-left-dock)!important;
-  border-right:1px solid var(--studio-border)!important;border-left:0!important;
-}
-body.kwg-editing #build-toolbar{
-  top:var(--kwg-topbar-height)!important;
-  height:var(--kwg-toolbar-height)!important;
-}
-body.kwg-editing #kwg-settings-window{
-  top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height))!important;
-  height:var(--kwg-settings-height)!important;
-}
-body.kwg-editing #kwg-properties-window{
-  top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height) + var(--kwg-settings-height))!important;
-  height:calc(100dvh - var(--kwg-topbar-height) - var(--kwg-toolbar-height) - var(--kwg-settings-height))!important;
-}
-/* Toolbar and Settings each have their own horizontal resize divider. */
-#kwg-resize-toolbar{
-  top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height) - 5px)!important;
-  left:0!important;width:var(--kwg-left-dock)!important;
-}
-#kwg-resize-settings{
-  top:calc(var(--kwg-topbar-height) + var(--kwg-toolbar-height) + var(--kwg-settings-height) - 5px)!important;
-  left:0;width:var(--kwg-left-dock);height:10px;cursor:row-resize;
-}
-#kwg-resize-settings::after{left:0;right:0;top:4px;height:2px}
-#kwg-resize-right{display:none!important}
-body.kwg-editing #build-toolbar .kwg-icon-tools{margin-bottom:7px!important}
-.kwg-recolor-panel{
-  margin:8px 12px 10px;padding:11px 10px 9px;
-  background:#202e3d;border:1px solid #47617e;border-radius:7px;
-}
-.kwg-recolor-heading{
-  display:flex;align-items:center;gap:7px;
-  font-size:10px;font-weight:800;letter-spacing:.07em;
-  color:#d9eaff;margin-bottom:11px;
-}
-.kwg-recolor-heading-icon{font-size:15px;color:#64adff;line-height:1}
-.kwg-recolor-field{
-  display:flex;justify-content:space-between;align-items:center;gap:8px;
-  font-size:10px;color:#b9cde3;font-weight:700;margin:8px 0;
-}
-.kwg-recolor-color-wrap{display:flex;align-items:center;gap:7px}
-#kwg-recolor-color{
-  width:37px;height:29px;box-sizing:border-box;padding:3px;
-  border:1px solid #617b98;border-radius:5px;
-  background:#121f2d;cursor:pointer;
-}
-#kwg-recolor-color-value{font-size:10px;color:#e4f2ff;font-weight:700;font-variant-numeric:tabular-nums}
-#kwg-recolor-material{
-  width:124px;max-width:65%;min-width:0;
-  padding:7px 5px;border:1px solid #526c87;border-radius:5px;
-  background:#121e2c;color:#f0f7ff;font-size:10px;
-}
-.kwg-recolor-help{margin:10px 0 0;color:#91aecb;font-size:10px;line-height:1.45}
-@media(max-width:740px){
-  body.kwg-in-world #hud .kwg-control-icon{gap:5px;padding:0 7px!important}
-  .kwg-hud-button-label{font-size:9px}
-  body.kwg-in-world #room-info-label{max-width:30vw!important;right:7px!important}
-  body.kwg-in-world #room-info-label .kwg-world-label{font-size:8px}
-  body{--kwg-toolbar-height:225px;--kwg-settings-height:220px}
-  #kwg-recolor-material{width:100px}
-}
-@media(max-width:520px){
-  body.kwg-in-world #hud .kwg-control-icon{padding:0 6px!important}
-  .kwg-hud-button-label{font-size:8px}
-  body.kwg-in-world #room-info-label{max-width:24vw!important}
-}
-
-/* ================================================================
-   KWG V3.31 — BLOCKWORK UI
-   Compact voxel-inspired design language for every game screen.
-   Visual changes only: no world, account, inventory or save logic.
-   ================================================================ */
-:root{
-  --vx-bg:#0c1119;
-  --vx-panel:#18212d;
-  --vx-panel-hi:#202d3b;
-  --vx-inset:#101923;
-  --vx-line:#36485c;
-  --vx-line-soft:#293a4b;
-  --vx-text:#e8f0f9;
-  --vx-muted:#96a9bd;
-  --vx-blue:#5aa8ff;
-  --vx-blue-dark:#255f9a;
-  --vx-green:#49b88b;
-  --vx-gold:#edc86a;
-  --vx-danger:#dc7580;
-  --vx-pixel:2px;
-  --vx-space:8px;
-}
-html,body{background:var(--vx-bg);color:var(--vx-text)}
-body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Arial,sans-serif!important;font-size:12px;letter-spacing:0}
-button,input,select,textarea{font-family:inherit!important}
-button{touch-action:manipulation}
-button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{
-  outline:2px solid var(--vx-blue)!important;outline-offset:2px!important;
-}
-::selection{background:#326eab;color:white}
-*{scrollbar-width:thin;scrollbar-color:#49637f #111a25}
-::-webkit-scrollbar{width:8px;height:8px}
-::-webkit-scrollbar-track{background:#111a25}
-::-webkit-scrollbar-thumb{background:#3e556e;border:2px solid #111a25}
-/* Rectangular, layered surfaces with small square edge accents. */
-.overlay-screen{background:radial-gradient(ellipse at 50% 25%,#1a2b3c 0,#0b121b 65%)!important}
-.card,.customizer-card,#admin-card{
-  box-sizing:border-box;background:var(--vx-panel)!important;
-  border:1px solid var(--vx-line)!important;border-top:3px solid var(--vx-blue)!important;
-  border-radius:2px!important;box-shadow:6px 6px 0 #070c12,0 18px 45px rgba(0,0,0,.32)!important;
-  color:var(--vx-text)!important;
-}
-#auth-screen .card{width:min(380px,calc(100vw - 32px));padding:23px!important}
-#auth-screen .card h2{
-  display:flex;align-items:center;justify-content:center;gap:10px;
-  font-size:21px!important;letter-spacing:.035em!important;
-}
-#auth-screen .card h2::before,.kwg-brand-block h2::before{
-  content:'';display:inline-block;flex:none;width:21px;height:21px;
-  background:linear-gradient(135deg,#7ec5ff 0 49%,#377dc3 50%);
-  box-shadow:inset -4px -4px 0 #24558a,3px 3px 0 #091b2e;
-  border:1px solid #b1dcff;transform:rotate(0deg);
-}
-#auth-screen .card p{font-size:10px!important;letter-spacing:.11em;text-transform:uppercase;color:var(--vx-muted)!important}
-.card input,.card select,.card textarea,
-#admin-card input,#admin-card select,#admin-card textarea,
-#profile-bio-input,.admin-store-form input,.admin-store-form select,
-#world-chat-input,#kwg-info-title,#kwg-info-description{
-  box-sizing:border-box;background:var(--vx-inset)!important;color:var(--vx-text)!important;
-  border:1px solid #40556b!important;border-radius:2px!important;
-  box-shadow:inset 0 2px 0 rgba(0,0,0,.18)!important;
-  font-size:12px!important;line-height:1.35!important;
-}
-.card input,.card select,.card textarea{padding:9px 10px!important}
-.card input:focus,#admin-card input:focus{border-color:var(--vx-blue)!important;outline:none!important}
-input::placeholder,textarea::placeholder{color:#788da4!important}
-.submit-btn,.join-btn,.store-buy-btn,.admin-action,.admin-delete,
-#notifications-read-btn,#notifications-clear-btn,.profile-friend-actions button{
-  border:1px solid #5d9cdb!important;border-bottom:3px solid #1c4a78!important;
-  background:#2b6ca8!important;color:#f6faff!important;
-  border-radius:2px!important;box-shadow:none!important;
-  text-transform:uppercase!important;letter-spacing:.055em!important;
-  font-size:10px!important;font-weight:800!important;
-  padding:9px 12px!important;min-height:32px;
-  transition:background .12s,border-color .12s;
-}
-.submit-btn:hover,.join-btn:hover,.admin-action:hover,.store-buy-btn:not(:disabled):hover{
-  background:#367fbe!important;border-color:#80bfff!important;
-}
-.submit-btn:active,.join-btn:active,.admin-action:active{transform:translateY(1px)!important;box-shadow:none!important}
-.submit-btn.secondary{background:#257c60!important;border-color:#4abf96!important;border-bottom-color:#185840!important}
-.submit-btn.secondary:hover{background:#309776!important}
-.submit-btn.danger,.admin-delete{background:#913d4c!important;border-color:#d77989!important;border-bottom-color:#652b37!important}
-button:disabled{opacity:.52!important;cursor:not-allowed!important;filter:saturate(.5)}
-.error-msg{font-size:11px!important;color:#ff8c91!important;line-height:1.5}
-.close-btn{
-  width:25px;height:25px;right:11px!important;top:10px!important;
-  display:flex;align-items:center;justify-content:center;
-  background:#263648;border:1px solid #526781;border-radius:2px;
-  font-size:17px!important;color:#d4e1ef!important;line-height:1;
-}
-.close-btn:hover{background:#753a49!important;color:#fff!important}
-/* Dashboard shell and global navigation */
-#home-main-card{
-  width:min(980px,calc(100vw - 28px))!important;max-width:calc(100vw - 28px)!important;
-  max-height:calc(100dvh - 24px)!important;padding:16px!important;
-  border-top-width:3px!important;
-}
-.kwg-dashboard-header{padding:1px 2px 12px!important;gap:12px!important;border-bottom:1px solid var(--vx-line)!important}
-.kwg-brand-block h2{
-  display:flex;align-items:center;gap:10px;
-  font-size:18px!important;letter-spacing:.03em!important;
-}
-.kwg-brand-block h2::before{width:17px;height:17px;box-shadow:inset -3px -3px 0 #24558a,2px 2px 0 #091b2e}
-.kwg-userline{font-size:10px!important;letter-spacing:.04em!important;margin-top:3px!important;color:var(--vx-muted)!important}
-.kwg-userline #logged-user-display{color:#a4d1ff!important}
-.kwg-account-tools{gap:6px!important}
-.kwg-coin-pill,.kwg-store-balance,.coin-badge{
-  background:#273025!important;color:var(--vx-gold)!important;
-  border:1px solid #726743!important;border-left:3px solid var(--vx-gold)!important;
-  border-radius:2px!important;box-shadow:none!important;
-  font-size:11px!important;min-height:32px!important;padding:0 10px!important;
-}
-.kwg-icon-tool{width:33px!important;height:33px!important;background:#243244!important;border:1px solid #4a6078!important;border-radius:2px!important}
-.kwg-icon-nav{
-  margin:10px 0 13px!important;padding:4px!important;gap:4px!important;
-  background:#111a25!important;border:1px solid var(--vx-line)!important;
-  border-radius:2px!important;
-}
-.kwg-icon-nav .home-tab{
-  width:39px!important;min-width:39px!important;height:37px!important;
-  border:1px solid transparent!important;border-radius:2px!important;
-}
-.kwg-icon-nav .home-tab:hover{background:#25384b!important;border-color:#526e8b!important}
-.kwg-icon-nav .home-tab.active{
-  background:#294f72!important;color:#b9ddff!important;
-  border-color:#619dd7!important;box-shadow:inset 0 -3px 0 #83bfff!important;
-}
-.kwg-icon-nav .nav-glyph.nav-svg,.kwg-icon-nav .nav-svg svg{width:21px!important;height:21px!important}
-.kwg-icon-nav .nav-label{
-  top:calc(100% + 6px)!important;padding:5px 7px!important;
-  background:#1c2a39!important;border:1px solid #5b7897!important;
-  border-radius:2px!important;box-shadow:3px 3px 0 #090e15!important;
-}
-/* Shared page hierarchy: compact title strips, not oversized hero banners. */
-.kwg-page-heading,.friends-header,.profile-hero{
-  background:#202e3d!important;border:1px solid var(--vx-line)!important;
-  border-left:3px solid var(--vx-blue)!important;border-radius:2px!important;
-  box-shadow:none!important;
-}
-.kwg-page-heading{margin:0 0 11px!important;padding:12px 14px!important;align-items:center!important}
-.kwg-page-heading h2,.friends-header h1{
-  font-size:18px!important;font-weight:850!important;letter-spacing:.035em!important;margin:2px 0 0!important;
-}
-.kwg-page-heading p{font-size:10px!important;margin:4px 0 0!important;color:#9eb0c5!important}
-.profile-kicker{font-size:9px!important;letter-spacing:.13em!important;color:#86b9ee!important}
-.home-section h3,.profile-panel-title,.kwg-style-title{
-  font-size:10px!important;font-weight:850!important;letter-spacing:.09em!important;color:#c3d3e5!important;
-}
-/* Home / Worlds: tight information density, consistent block cards. */
-#home-pane .home-profile-grid{gap:10px!important}
-#home-pane .home-section,.profile-panel,#avatar-editor-pane .inventory-panel,
-.profile-stat,.profile-stats,.friends-summary{
-  background:#18232f!important;border:1px solid var(--vx-line)!important;
-  border-radius:2px!important;box-shadow:none!important;
-}
-#home-pane .home-section{padding:11px!important}
-#home-pane .home-section h3{margin:0 0 9px!important;padding:0 0 8px!important;border-bottom:1px solid var(--vx-line-soft)!important}
-#home-pane .home-avatar-preview,#avatar-editor-pane .avatar-preview-large,.profile-avatar-preview{
-  background:linear-gradient(145deg,#1b2b3a 25%,#0c151e 25% 50%,#162535 50% 75%,#0c151e 75%)!important;
-  background-size:26px 26px!important;border:1px solid #4b6078!important;
-  border-radius:2px!important;box-shadow:none!important;
-}
-#home-pane .home-avatar-preview{min-height:185px}
-.room-list-container{
-  border:1px solid var(--vx-line)!important;background:#111b26!important;
-  border-radius:2px!important;padding:5px!important;margin:9px 0!important;
-  scrollbar-width:thin;
-}
-.room-card,#home-pane .room-card,#home-pane .home-inventory-card,
-.profile-showcase-world,.profile-showcase-picker-item{
-  border:1px solid #354a60!important;border-radius:2px!important;
-  background:#1d2a39!important;box-shadow:none!important;
-  margin-bottom:5px!important;padding:8px!important;gap:9px!important;
-}
-.room-card:hover{background:#24364a!important;border-color:#5d88b3!important}
-.room-title{color:#b6d9ff!important;font-size:12px!important;letter-spacing:.015em!important}
-.room-meta,.room-description{font-size:10px!important;color:#98acc2!important;line-height:1.4!important}
-.kwg-world-card-thumb{border:1px solid #526983!important;border-radius:1px!important;background:#0d1824!important}
-.kwg-world-card-actions{gap:5px!important}
-#worlds-pane .home-toolbar{padding:7px 0!important;font-size:10px!important;color:#b7c9da!important}
-#worlds-pane .home-toolbar select{background:#101a25!important;color:#dceafb!important;border:1px solid #526983!important;border-radius:2px!important;padding:6px!important}
-/* Profile / friends / notifications */
-.profile-shell,.friends-shell{gap:10px!important}
-.profile-hero{padding:12px!important;gap:12px!important;min-height:0!important}
-.profile-identity h1{font-size:22px!important;line-height:1.15!important;letter-spacing:.02em!important}
-.profile-avatar-preview{min-height:185px!important}
-.profile-stats{gap:5px!important;background:transparent!important;border:0!important}
-.profile-stat{padding:10px!important}
-.profile-stat strong{font-size:18px!important;color:#c9e3ff!important}
-.profile-stat span{font-size:9px!important;letter-spacing:.07em!important}
-.profile-panel{padding:12px!important;min-height:110px!important}
-.profile-panel-title{padding:0 0 8px!important;margin:0 0 10px!important;border-bottom:1px solid var(--vx-line)!important}
-.profile-bio,.profile-joined,.profile-edit-note{font-size:11px!important;color:#a9bacd!important}
-.friends-header{padding:12px 14px!important}
-.friends-header h1{font-size:18px!important}
-.friend-row,.friend-card,.friends-list > div{
-  border-radius:2px!important;box-shadow:none!important;
-}
-.notifications-panel{
-  background:#192533!important;border:1px solid #4a617b!important;
-  border-top:3px solid var(--vx-blue)!important;border-radius:2px!important;
-  box-shadow:5px 5px 0 #0a1119!important;
-}
-.notifications-head{padding:11px!important;background:#202e3d!important;border-bottom:1px solid #41576e!important}
-.notifications-head h2{font-size:15px!important;letter-spacing:.035em!important}
-.notifications-list{scrollbar-width:thin}
-.notification-row,.notification-item{border-radius:2px!important}
-.friend-badge,.nav-badge{border-radius:2px!important;background:#b74f64!important;color:#fff!important}
-/* Store and avatar: compact rectangular cards and segmented tabs */
-#store-pane .store-tabs,#avatar-editor-pane .inventory-tabs{
-  gap:4px!important;padding:4px!important;margin:0 0 10px!important;
-  border:1px solid var(--vx-line)!important;background:#101a25!important;border-radius:2px!important;
-}
-#store-pane .store-tab,#avatar-editor-pane .inventory-tab{
-  padding:7px 9px!important;border-radius:2px!important;
-  font-size:10px!important;font-weight:800!important;letter-spacing:.02em!important;
-}
-#store-pane .store-tab.active,#avatar-editor-pane .inventory-tab.active{
-  background:#2a5479!important;border:1px solid #6aa9e6!important;
-  box-shadow:inset 0 -2px 0 #8dc8ff!important;color:#e7f4ff!important;
-}
-#store-items-grid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr))!important;gap:7px!important}
-#store-items-grid .store-item-card{
-  background:#1b2938!important;border:1px solid #40566d!important;
-  padding:8px!important;border-radius:2px!important;box-shadow:none!important;
-  min-height:135px!important;gap:6px!important;
-}
-#store-items-grid .store-item-card:hover{border-color:#75a8d9!important;transform:none!important;background:#24364a!important}
-.store-item-preview,.inventory-thumb,.kwg-clothing-preview{
-  background:#101b28!important;border:1px solid #344b63!important;
-  border-radius:1px!important;
-}
-.store-item-name{font-size:11px!important;color:#c6e2ff!important;letter-spacing:0!important}
-.store-item-price{font-size:11px!important;color:var(--vx-gold)!important}
-#store-items-grid .store-item-card button{padding:7px!important;font-size:10px!important;border-radius:2px!important}
-#avatar-editor-pane .avatar-editor-layout{grid-template-columns:minmax(215px,300px) minmax(0,1fr)!important;gap:10px!important}
-#avatar-editor-pane .avatar-preview-large{height:405px!important}
-#avatar-editor-pane .inventory-panel{padding:9px!important}
-#avatar-inventory-grid{grid-template-columns:repeat(auto-fill,minmax(95px,1fr))!important;gap:6px!important}
-#avatar-inventory-grid .inventory-card,.kwg-native-card,.kwg-native-color{
-  background:#1b2938!important;border:1px solid #3c526a!important;
-  border-radius:2px!important;box-shadow:none!important;padding:7px!important;
-}
-#avatar-inventory-grid .inventory-card:hover,.kwg-native-card:hover{border-color:#75a8d9!important}
-#avatar-inventory-grid .inventory-card.selected,.kwg-native-card.selected{
-  border-color:#85c3ff!important;box-shadow:inset 0 0 0 1px #85c3ff!important;
-  background:#294a69!important;color:#e7f3ff!important;
-}
-.inventory-thumb{height:68px!important;margin-bottom:5px!important}
-.inventory-name{font-size:10px!important;letter-spacing:0!important}
-.kwg-native-card{min-height:112px!important}
-.kwg-clothing-preview{height:76px!important}
-.kwg-style-group{padding:8px!important;background:#14202c!important;border:1px solid #344b62!important;border-radius:2px!important}
-.kwg-style-btn{padding:7px 6px!important;border:1px solid #445b73!important;border-radius:2px!important}
-.kwg-style-btn.active{background:#28557f!important;color:#e3f3ff!important;border-color:#77b7ef!important}
-/* All modal families, admin tooling, and native input controls */
-.modal{background:rgba(5,10,17,.83)!important}
-.customizer-card{padding:16px!important;max-width:calc(100vw - 30px)!important}
-.customizer-preview-container{border:1px solid #425971!important;border-radius:2px!important}
-#admin-card{padding:14px!important}
-.admin-section{border-top:1px solid var(--vx-line)!important;padding-top:12px!important;margin-top:12px!important}
-.admin-row,.admin-store-form{
-  background:#14202c!important;border:1px solid #344a60!important;
-  border-radius:2px!important;padding:8px!important;margin-bottom:5px!important;
-}
-.admin-searchbar{gap:6px!important}
-.admin-searchbar input{min-height:33px!important}
-.admin-search-note{font-size:10px!important;color:#98aabf!important}
-/* World play bar / chat / Studio panes use the same voxel geometry. */
-body.kwg-in-world #hud{
-  padding:5px 9px!important;gap:5px!important;
-}
-body.kwg-editing #hud{
-  background:#192634!important;border-bottom:1px solid #4b637c!important;
-  box-shadow:none!important;
-}
-body.kwg-in-world:not(.kwg-editing) #hud{background:transparent!important;box-shadow:none!important}
-body.kwg-in-world #hud .kwg-control-icon{
-  height:32px!important;min-height:32px!important;padding:0 10px!important;
-  border:1px solid #4d6985!important;border-bottom:2px solid #253d56!important;
-  background:#253b51!important;border-radius:2px!important;
-  font-size:10px!important;letter-spacing:.025em!important;box-shadow:none!important;
-}
-body.kwg-in-world #hud .kwg-control-icon:hover{background:#345779!important;border-color:#77b7ef!important;transform:none!important}
-body.kwg-in-world #hud #toggle-edit-btn.active{background:#285f91!important;border-color:#8fc5ff!important}
-body.kwg-in-world #hud #leave-world-btn{background:#382a35!important;border-color:#765061!important}
-body.kwg-in-world #room-info-label{font-size:12px!important;letter-spacing:.02em!important}
-#room-info-label .kwg-world-label{font-size:9px!important;color:#8aa5c0!important}
-body.kwg-in-world #save-status{border-radius:2px!important;font-size:10px!important}
-body.kwg-in-world:not(.kwg-editing) #world-chat{
-  background:#172432!important;border:1px solid #49627c!important;
-  border-radius:2px!important;box-shadow:4px 4px 0 rgba(4,9,15,.55)!important;
-}
-body.kwg-in-world #world-chat-header{
-  background:#26384b!important;border-bottom:1px solid #486079!important;
-  font-size:10px!important;padding:9px 11px!important;
-}
-body.kwg-in-world #world-chat-messages{font-size:11px!important;padding:10px!important}
-body.kwg-in-world #world-chat-form{padding:7px!important;gap:6px!important;background:#1a2a3a!important}
-body.kwg-in-world #world-chat-input{padding:8px!important;border-radius:2px!important}
-body.kwg-in-world #world-chat-send{padding:7px 11px!important;border-radius:2px!important;font-size:10px!important}
-body.kwg-editing #build-toolbar,body.kwg-editing #kwg-settings-window,body.kwg-editing #kwg-properties-window{
-  background:#17232f!important;border-color:#435b73!important;
-}
-body.kwg-editing .kwg-panel-title{
-  min-height:35px!important;padding:0 10px!important;
-  background:#263647!important;border-bottom:1px solid #526b83!important;
-  font-size:10px!important;letter-spacing:.08em!important;
-}
-.kwg-panel-title-icon{width:17px!important;height:17px!important;flex-basis:17px!important;background:#344d67!important;border-radius:2px!important;font-size:11px!important}
-body.kwg-editing #build-toolbar .kwg-icon-tools{gap:5px!important;margin:9px 9px 6px!important}
-body.kwg-editing #build-toolbar .kwg-icon-tools button{
-  height:37px!important;min-height:37px!important;
-  border:1px solid #48627d!important;border-radius:2px!important;
-  background:#233449!important;padding:7px!important;
-}
-body.kwg-editing #build-toolbar .kwg-icon-tools button:hover{background:#34516c!important;border-color:#83bfff!important}
-body.kwg-editing #build-toolbar .kwg-icon-tools button.active{background:#2a5c8a!important;border-color:#8cc7ff!important;box-shadow:inset 0 -2px 0 #9bd2ff!important}
-body.kwg-editing .kwg-editor-shortcuts{margin:0 9px 8px!important;font-size:10px!important}
-body.kwg-editing .kwg-editor-shortcuts kbd{border-radius:1px!important;background:#263a4d!important}
-body.kwg-editing #part-properties-container{padding:10px!important}
-body.kwg-editing #no-selection-msg{border-radius:2px!important;background:#202e3c!important;padding:13px!important}
-body.kwg-editing .tool-row{padding:6px 0!important}
-body.kwg-editing .tool-row input,body.kwg-editing .tool-row select{
-  border-radius:2px!important;background:#101a25!important;border-color:#4a6179!important;
-}
-body.kwg-editing .kwg-settings-tabs{padding:8px 9px 6px!important;gap:4px!important}
-body.kwg-editing .kwg-settings-tabs button{
-  border-radius:2px!important;padding:7px 5px!important;font-size:10px!important;
-}
-body.kwg-editing .kwg-settings-tabs button.active{background:#2c587f!important;border-color:#6da8e0!important;color:#fff!important}
-body.kwg-editing #kwg-settings-environment,body.kwg-editing #kwg-settings-info{padding:8px 10px 16px!important}
-body.kwg-editing .kwg-info-camera-button{border-radius:2px!important;background:#2c669b!important}
-body.kwg-editing #kwg-info-title,body.kwg-editing #kwg-info-description{border-radius:2px!important}
-body.kwg-editing #kwg-world-viewport-title{
-  height:33px!important;background:#243548!important;border-bottom:1px solid #506b87!important;
-  padding:0 10px!important;font-size:10px!important;
-}
-body.kwg-editing #kwg-world-canvas{top:33px!important;bottom:21px!important}
-body.kwg-editing #kwg-scene-footer{
-  height:21px!important;background:#202e3e!important;border-top:1px solid #425a73!important;
-  font-size:9px!important;
-}
-#part-counter{border-radius:2px!important;background:#2a425a!important;border-color:#5b7793!important;padding:4px 7px!important}
-.kwg-scene-dot{border-radius:1px!important;box-shadow:none!important}
-.kwg-recolor-panel{margin:7px 9px!important;padding:9px!important;border-radius:2px!important;background:#223447!important}
-#kwg-recolor-color,#kwg-recolor-material{border-radius:2px!important}
-.kwg-recolor-heading{margin-bottom:8px!important}
-/* Preserve admin tab security/visibility even when styling all nav items. */
-.kwg-icon-nav .home-tab.admin-home-tab{display:none!important}
-body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inline-flex!important}
-/* Compact responsive rules; keep controls reachable on smaller screens. */
-@media(max-width:760px){
-  #home-main-card{padding:10px!important}
-  #avatar-editor-pane .avatar-editor-layout{grid-template-columns:1fr!important}
-  #avatar-editor-pane .avatar-preview-large{height:285px!important}
-  .kwg-page-heading{padding:10px!important}
-  .profile-hero{grid-template-columns:1fr!important}
-  .profile-avatar-preview{height:210px!important}
-  #store-items-grid{grid-template-columns:repeat(auto-fill,minmax(128px,1fr))!important}
-  body.kwg-in-world #hud .kwg-control-icon{padding:0 6px!important}
-}
-@media(max-width:480px){
-  .kwg-brand-block h2{font-size:15px!important}
-  .kwg-icon-nav{gap:2px!important}
-  .kwg-icon-nav .home-tab{width:35px!important;min-width:35px!important;height:34px!important}
-  .kwg-icon-nav .nav-glyph.nav-svg,.kwg-icon-nav .nav-svg svg{width:19px!important;height:19px!important}
-  .room-card{align-items:flex-start!important}
-  .kwg-world-card-thumb{width:76px!important;min-width:76px!important}
-  .kwg-world-card-actions{flex-direction:column!important}
-  .kwg-page-heading h2{font-size:16px!important}
-  #world-chat{width:min(300px,calc(100vw - 20px))!important}
-  .kwg-hud-button-label{font-size:8px!important}
-  #room-info-label .kwg-world-label{display:none!important}
-}
-@media(prefers-reduced-motion:reduce){
-  .submit-btn,.join-btn,.store-item-card,.home-tab,.kwg-control-icon{transition:none!important}
-}
-
-
-/* ================================================================
-   KWG V3.32 — RETRO PIXEL ARCADE
-   A full-game, pixel-art UI skin: sharp edges, arcade typography,
-   hard-offset shadows, stepped borders and 8-bit accent colors.
-   Presentation only. No changes to gameplay or saving.
-   ================================================================ */
-:root{
-  --vx-bg:#101422;--vx-panel:#202b3b;--vx-panel-hi:#2b3a4d;
-  --vx-inset:#131d2b;--vx-line:#60778c;--vx-line-soft:#394e64;
-  --vx-text:#f1f5e7;--vx-muted:#aec2c8;
-  --vx-blue:#69c9ed;--vx-blue-dark:#287b9e;
-  --vx-green:#9ce078;--vx-gold:#f9cb65;--vx-danger:#ff8496;
-  --g-bg:#101422;--studio-bg:#101422;--studio-surface:#202b3b;
-  --studio-raised:#2b3a4d;--studio-border:#60778c;
-  --studio-separator:#394e64;--studio-text:#f1f5e7;
-  --studio-muted:#aec2c8;--studio-accent:#69c9ed;
-}
-html,body{
-  font-family:'Pixelify Sans','Courier New',monospace!important;
-  font-size:14px!important;letter-spacing:.02em!important;
-  color:var(--vx-text)!important;
-  background:#101422!important;
-}
-button,input,select,textarea{
-  font-family:'Pixelify Sans','Courier New',monospace!important;
-  letter-spacing:.015em!important;
-}
-button{font-weight:700!important}
-button,button:hover,button:focus-visible{border-radius:0!important}
-::selection{background:#5b8a98;color:#fff}
-*{scrollbar-width:thin;scrollbar-color:#66809b #152131}
-::-webkit-scrollbar-track{background:#152131}
-::-webkit-scrollbar-thumb{background:#66809b;border:2px solid #152131}
-.overlay-screen{
-  background-color:#101422!important;
-  background-image:
-    linear-gradient(90deg,rgba(130,178,188,.045) 1px,transparent 1px),
-    linear-gradient(rgba(130,178,188,.045) 1px,transparent 1px),
-    radial-gradient(ellipse at 50% 30%,#243a4b 0%,#101422 70%)!important;
-  background-size:22px 22px,22px 22px,auto!important;
-}
-.card,.customizer-card,#admin-card,.home-section,.home-welcome,
-.profile-hero,.kwg-page-heading,.home-inventory-card,
-.inventory-card,.store-item-card,.room-card,.world-card{
-  border-radius:0!important;
-  background:#202b3b!important;
-  border:2px solid #66829a!important;
-  box-shadow:5px 5px 0 #080d16!important;
-}
-.card,.customizer-card,#admin-card{border-top:4px solid #9ce078!important}
-.home-section,.home-welcome,.profile-hero,.kwg-page-heading{
-  border-color:#4c647a!important;
-}
-#auth-screen .card h2,.kwg-brand-block h2,
-.kwg-page-heading h2,.home-welcome h2,
-.home-section h3,.profile-hero h2,
-#admin-card h2,#admin-card h3,
-.modal h2,.customizer-card h2{
-  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
-  line-height:1.75!important;letter-spacing:0!important;
-  color:#f7f5df!important;
-  text-shadow:2px 2px 0 #101827!important;
-}
-#auth-screen .card h2,.kwg-brand-block h2{font-size:15px!important}
-.kwg-page-heading h2,.home-welcome h2,.profile-hero h2{font-size:13px!important}
-.home-section h3,#admin-card h3{font-size:10px!important}
-#auth-screen .card h2::before,.kwg-brand-block h2::before{
-  width:20px!important;height:20px!important;
-  border:2px solid #f0f4da!important;
-  background:linear-gradient(135deg,#a6eb85 0 49%,#4b9a78 50%)!important;
-  box-shadow:inset -4px -4px 0 #286e5c,3px 3px 0 #0b1420!important;
-}
-#auth-screen input,.card input,.card textarea,.card select,
-#home-main-card input,#home-main-card textarea,#home-main-card select,
-.customizer-card input,.customizer-card select,.customizer-card textarea,
-#admin-card input,#admin-card select,#admin-card textarea{
-  border:2px solid #5c788f!important;
-  background:#111c2b!important;color:#f0f5e9!important;
-  border-radius:0!important;box-shadow:inset 3px 3px 0 #0b1420!important;
-  font-size:13px!important;
-}
-button:focus-visible,a:focus-visible,input:focus-visible,
-textarea:focus-visible,select:focus-visible{
-  outline:2px dashed #f9cb65!important;outline-offset:3px!important;
-}
-.home-tab,.inventory-tab,.store-tab,.home-action,.logout-btn,
-.admin-action,.admin-delete,.store-buy-btn,
-.kwg-native-card,.kwg-style-btn,.world-like-btn,
-#auth-screen button,.card button,.customizer-card button,
-#admin-card button{
-  border-radius:0!important;
-  border:2px solid #6b91a9!important;
-  border-bottom:4px solid #314c63!important;
-  background:#2c4256!important;color:#eaf3e5!important;
-  box-shadow:2px 2px 0 #101622!important;
-  text-transform:uppercase!important;
-  font-size:12px!important;
-  transition:background .08s linear,transform .08s linear!important;
-}
-.home-tab:hover,.inventory-tab:hover,.store-tab:hover,.home-action:hover,
-.admin-action:hover,.kwg-native-card:hover,.kwg-style-btn:hover,
-#auth-screen button:hover,.card button:hover,.customizer-card button:hover{
-  background:#3b5a70!important;transform:translateY(-1px)!important;
-}
-.home-tab.active,.inventory-tab.active,.store-tab.active,
-.kwg-native-card.selected,.kwg-style-btn.active,
-#avatar-editor-pane .inventory-tab.active,#store-pane .store-tab.active{
-  background:#2b695e!important;border-color:#a4e88c!important;
-  border-bottom-color:#467b56!important;color:#e7ffe0!important;
-  box-shadow:inset 0 0 0 1px #8cdb7d!important;
-}
-.home-action,.store-buy-btn,.kwg-info-camera-button{
-  background:#2a806e!important;border-color:#a4e88c!important;
-  border-bottom:4px solid #28594f!important;color:#f0ffe9!important;
-}
-.logout-btn,.admin-delete{background:#7e394b!important;border-color:#f2a1a6!important;border-bottom-color:#502634!important}
-.kwg-icon-nav{gap:5px!important}
-.kwg-icon-nav .home-tab{
-  background:#26394d!important;border:2px solid #607c95!important;
-  border-bottom:4px solid #314c63!important;
-  box-shadow:2px 2px 0 #0c1420!important;
-}
-.kwg-icon-nav .home-tab.active{
-  background:#2c705e!important;border-color:#a2e587!important;
-  border-bottom-color:#417a58!important;
-}
-.kwg-icon-nav .nav-label{font-size:10px!important;letter-spacing:.03em!important}
-.home-avatar-preview,.home-inventory-thumb,.inventory-thumb,
-.kwg-clothing-preview,.store-item-preview,.kwg-world-card-thumb,
-.customizer-preview-container,.avatar-preview-large{
-  border-radius:0!important;border:2px solid #4d6a80!important;
-  background:#142032!important;
-}
-#avatar-inventory-grid .inventory-card,.kwg-native-card,.kwg-native-color,
-#store-items-grid .store-item-card,.home-inventory-card{
-  border:2px solid #4c667e!important;
-  background:#25374a!important;box-shadow:3px 3px 0 #0b1420!important;
-  border-radius:0!important;
-}
-#avatar-inventory-grid .inventory-card.selected,.kwg-native-card.selected{
-  border-color:#a4e88c!important;background:#2b594d!important;
-  box-shadow:inset 0 0 0 2px #a4e88c,3px 3px 0 #0b1420!important;
-}
-.store-item-price,.world-like-btn.liked{color:#f9cb65!important}
-.modal{background:rgba(7,11,20,.87)!important}
-.admin-row,.admin-store-form,.kwg-style-group{
-  border-radius:0!important;border:2px solid #4b667d!important;
-  background:#19283a!important;
-}
-body.kwg-in-world #hud{
-  font-family:'Pixelify Sans','Courier New',monospace!important;
-}
-body.kwg-editing #hud{
-  background:#202b3b!important;border-bottom:3px solid #67829a!important;
-}
-body.kwg-in-world:not(.kwg-editing) #hud{
-  background:transparent!important;border:0!important;box-shadow:none!important;
-}
-body.kwg-in-world #hud .kwg-control-icon{
-  height:34px!important;min-height:34px!important;
-  border:2px solid #7595a8!important;border-bottom:4px solid #304d63!important;
-  background:#2b4055!important;color:#eff7e9!important;
-  border-radius:0!important;box-shadow:2px 2px 0 #0b1420!important;
-  font-size:12px!important;
-}
-body.kwg-in-world #hud .kwg-control-icon:hover{background:#395b72!important}
-body.kwg-in-world #hud #toggle-edit-btn.active{
-  background:#2d796b!important;border-color:#a4e88c!important;
-}
-body.kwg-in-world #hud #leave-world-btn{
-  background:#733747!important;border-color:#f1a0a8!important;
-}
-body.kwg-in-world #room-info-label{
-  font-family:'Pixelify Sans','Courier New',monospace!important;
-  font-size:14px!important;color:#f7f5df!important;
-  text-shadow:2px 2px 0 #101827!important;
-}
-#room-info-label .kwg-world-label{
-  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
-  font-size:7px!important;color:#b7d1d2!important;
-}
-body.kwg-in-world:not(.kwg-editing) #world-chat{
-  border:2px solid #6d8aa2!important;border-radius:0!important;
-  background:#202b3b!important;box-shadow:4px 4px 0 #0b1420!important;
-}
-body.kwg-in-world #world-chat-header{
-  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
-  font-size:9px!important;background:#30465a!important;
-  border-bottom:2px solid #68859b!important;
-  line-height:1.7!important;
-}
-body.kwg-in-world #world-chat-messages{font-size:14px!important}
-body.kwg-in-world #world-chat-form{background:#1a293a!important;border-top:2px solid #4e6a80!important}
-body.kwg-in-world #world-chat-input{
-  border:2px solid #56768c!important;background:#111e2d!important;
-  border-radius:0!important;font-size:13px!important;
-}
-body.kwg-in-world #world-chat-send{
-  border:2px solid #a4e88c!important;border-bottom:4px solid #4d7952!important;
-  background:#2d796b!important;border-radius:0!important;
-  font-size:12px!important;
-}
-body.kwg-editing #build-toolbar,body.kwg-editing #kwg-settings-window,
-body.kwg-editing #kwg-properties-window{
-  background:#202b3b!important;border-color:#627e95!important;
-  font-size:13px!important;
-}
-body.kwg-editing .kwg-panel-title{
-  min-height:38px!important;
-  background:#30465a!important;border-bottom:2px solid #7691a7!important;
-  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
-  font-size:9px!important;line-height:1.6!important;
-  letter-spacing:0!important;color:#f3f6e9!important;
-}
-body.kwg-editing .kwg-panel-title-icon{
-  background:#426078!important;color:#a4e88c!important;
-  border:1px solid #7595a8!important;border-radius:0!important;
-}
-body.kwg-editing #build-toolbar .kwg-icon-tools button{
-  border:2px solid #6b88a0!important;border-bottom:4px solid #36536a!important;
-  border-radius:0!important;background:#2c4358!important;
-  box-shadow:2px 2px 0 #111c2a!important;
-}
-body.kwg-editing #build-toolbar .kwg-icon-tools button.active{
-  background:#2c7968!important;border-color:#a4e88c!important;
-  box-shadow:inset 0 0 0 1px #a4e88c!important;
-}
-body.kwg-editing .kwg-editor-shortcuts kbd{
-  background:#31465a!important;border:2px solid #6a869e!important;
-  border-radius:0!important;
-}
-body.kwg-editing #no-selection-msg{
-  border:2px dashed #607e92!important;border-radius:0!important;
-  background:#1b2b3d!important;font-size:12px!important;
-}
-body.kwg-editing .tool-row label{font-size:12px!important;color:#c4d9d5!important}
-body.kwg-editing .tool-row input,body.kwg-editing .tool-row select,
-body.kwg-editing #kwg-info-title,body.kwg-editing #kwg-info-description{
-  background:#132132!important;border:2px solid #57758d!important;
-  border-radius:0!important;font-size:12px!important;
-}
-body.kwg-editing .kwg-settings-tabs button{
-  border:2px solid #57758d!important;border-bottom:4px solid #314d63!important;
-  border-radius:0!important;background:#2c4053!important;
-  font-size:12px!important;
-}
-body.kwg-editing .kwg-settings-tabs button.active{
-  background:#2d796b!important;border-color:#a4e88c!important;
-  color:#f0ffe9!important;
-}
-body.kwg-editing #kwg-world-viewport-title{
-  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
-  font-size:8px!important;
-  background:#2c4055!important;border-bottom:2px solid #6a879e!important;
-}
-body.kwg-editing #kwg-scene-footer{
-  background:#26394d!important;border-top:2px solid #536f86!important;
-  font-size:10px!important;
-}
-#part-counter{
-  background:#314d5c!important;color:#d6f8d0!important;
-  border:2px solid #7ca58e!important;border-radius:0!important;
-  font-family:'Pixelify Sans',monospace!important;font-size:12px!important;
-}
-.kwg-scene-dot{background:#a4e88c!important;border-radius:0!important}
-.kwg-recolor-panel{
-  border:2px solid #6b879f!important;background:#283d50!important;
-  border-radius:0!important;
-}
-#kwg-recolor-color,#kwg-recolor-material{border-radius:0!important}
-body.kwg-editing .kwg-info-camera-button{
-  background:#2d796b!important;border:2px solid #a4e88c!important;
-  border-bottom:4px solid #4d7952!important;border-radius:0!important;
-}
-.kwg-info-photo{border-radius:0!important;border:2px solid #5a7990!important}
-.kwg-info-hint{font-size:12px!important}
-.kwg-icon-nav .home-tab.admin-home-tab{display:none!important}
-body.kwg-admin-authenticated .kwg-icon-nav .home-tab.admin-home-tab{display:inline-flex!important}
-@media(max-width:760px){
-  #auth-screen .card h2,.kwg-brand-block h2{font-size:12px!important}
-  .kwg-page-heading h2,.home-welcome h2{font-size:10px!important}
-  body.kwg-editing .kwg-panel-title{font-size:7px!important}
-}
-@media(prefers-reduced-motion:reduce){
-  button,.home-tab,.inventory-tab,.store-tab{transition:none!important}
-}
-
-
-/* KWG V3.33 - 8-bit sound controls */
-#kwg-audio-dock{position:fixed;right:14px;bottom:14px;z-index:18000;font-family:'Pixelify Sans','Courier New',monospace}
-#kwg-audio-toggle{display:flex;align-items:center;gap:7px;min-height:35px;padding:6px 11px;cursor:pointer;
-  color:#f1f5e7;background:#263c51;border:2px solid #8baac0;border-bottom:4px solid #385b73;
-  box-shadow:3px 3px 0 #0a111c;font-size:12px;font-weight:700;letter-spacing:.04em}
-#kwg-audio-toggle:hover{background:#35566c}
-#kwg-audio-toggle[aria-expanded="true"]{border-color:#9ce078;background:#2d594e}
-#kwg-audio-toggle .kwg-audio-glyph{font-size:17px;line-height:1}
-#kwg-audio-menu{position:absolute;right:0;bottom:calc(100% + 9px);width:224px;padding:12px;
-  color:#f1f5e7;background:#202b3b;border:2px solid #7897ad;box-shadow:5px 5px 0 #0a111c}
-#kwg-audio-menu[hidden]{display:none!important}
-#kwg-audio-menu h3{margin:0 0 11px;font-family:'Press Start 2P','Pixelify Sans',monospace;font-size:9px;line-height:1.6;color:#9ce078}
-#kwg-audio-menu .kwg-audio-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0;font-size:13px}
-#kwg-audio-menu input[type=range]{width:100%;accent-color:#9ce078;cursor:pointer}
-#kwg-audio-menu input[type=checkbox]{width:17px;height:17px;accent-color:#9ce078;cursor:pointer}
-#kwg-audio-menu p{margin:8px 0 0;color:#b0c4d0;font-size:11px;line-height:1.35}
-body.kwg-thumbnail-camera #kwg-audio-dock{display:none!important}
-@media(max-width:650px){#kwg-audio-dock{right:7px;bottom:7px}#kwg-audio-toggle{font-size:11px;padding:5px 8px}}
-
-/* KWG V3.33.2 — Studio Settings field consistency.
-   Match Cloud Speed to World Name / Description input surfaces. */
-body.kwg-editing #kwg-settings-environment #cloud-speed-input{
-  box-sizing:border-box!important;
-  width:130px!important;
-  min-width:0!important;
-  max-width:57%!important;
-  height:36px!important;
-  padding:7px 10px!important;
-  border:2px solid #57758d!important;
-  border-radius:0!important;
-  background:#132132!important;
-  color:#f0f5e9!important;
-  font-family:'Pixelify Sans','Courier New',monospace!important;
-  font-size:12px!important;
-  line-height:1.3!important;
-  box-shadow:inset 3px 3px 0 #0b1420!important;
-  outline-offset:2px;
-}
-body.kwg-editing #kwg-settings-environment #cloud-speed-input:hover{
-  border-color:#83a6b9!important;
-}
-body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
-  outline:2px dashed #f9cb65!important;
-}
-
-    /* V3.34 — One consistent pixel loading dialog throughout KWG. */
-    #kwg-loading-overlay{
-      position:fixed;inset:0;z-index:25000;display:none;
-      align-items:center;justify-content:center;
-      background:rgba(8,13,24,.74);backdrop-filter:blur(2px);
-      padding:20px;box-sizing:border-box;cursor:wait;
+  const masked=new Set();
+  for(const match of folded.matchAll(KWG_BLOCKED_REGEX)){
+    const start=match.index+match[1].length;
+    const end=start+match[2].length;
+    for(let j=start;j<end;j++){
+      const bounds=offsets[j];if(!bounds)continue;
+      for(let k=bounds[0];k<bounds[1];k++)if(!/\s/.test(raw[k]))masked.add(k);
     }
-    #kwg-loading-overlay.kwg-visible{display:flex}
-    #kwg-loading-panel{
-      box-sizing:border-box;width:min(370px,100%);padding:20px;
-      background:#202b3b;border:3px solid #91b2c4;
-      border-top:5px solid #9ce078;box-shadow:7px 7px 0 #080d16;
-      color:#f1f5e7;font-family:'Pixelify Sans','Courier New',monospace;
-    }
-    #kwg-loading-kicker{
-      margin:0 0 12px;color:#9ce078;
-      font-family:'Press Start 2P','Pixelify Sans',monospace;
-      font-size:9px;line-height:1.7;letter-spacing:0;
-    }
-    #kwg-loading-title{
-      margin:0 0 12px;color:#f1f5e7;
-      font-size:17px;line-height:1.3;font-weight:700;
-      text-transform:uppercase;
-    }
-    #kwg-loading-track{
-      position:relative;overflow:hidden;height:22px;
-      background:#111c2b;border:2px solid #718ea3;
-      box-shadow:inset 2px 2px 0 #080d16;
-    }
-    #kwg-loading-fill{
-      height:100%;width:0%;background:#9ce078;
-      box-shadow:inset 0 -4px 0 #5c9e67;
-      transition:width .14s steps(8,end);
-    }
-    #kwg-loading-overlay.kwg-indeterminate #kwg-loading-fill{
-      width:40%;
-      background:repeating-linear-gradient(90deg,#9ce078 0 14px,#76bba0 14px 28px);
-      animation:kwgPixelProgress 1.25s steps(18,end) infinite;
-      transition:none;
-    }
-    @keyframes kwgPixelProgress{
-      from{transform:translateX(-105%)}
-      to{transform:translateX(260%)}
-    }
-    #kwg-loading-footer{
-      margin-top:9px;display:flex;justify-content:space-between;gap:10px;
-      color:#b6cbd0;font-size:12px;line-height:1.35;
-    }
-    #kwg-loading-percent{color:#f9cb65;font-weight:700;font-variant-numeric:tabular-nums}
-    @media(prefers-reduced-motion:reduce){
-      #kwg-loading-overlay.kwg-indeterminate #kwg-loading-fill{
-        animation:kwgPixelProgress 3s steps(8,end) infinite;
-      }
-    }
-
-/* V3.34.1 — Notifications is a real dashboard page, not a floating popover. */
-#notifications-pane{width:100%;min-width:0}
-#notifications-pane .notifications-panel{
-  position:static!important;
-  top:auto!important;right:auto!important;left:auto!important;
-  width:100%!important;max-width:none!important;max-height:none!important;
-  overflow:visible!important;
-  display:block!important;box-sizing:border-box!important;
-  background:#202b3b!important;
-  border:2px solid #66829a!important;border-top:4px solid #9ce078!important;
-  border-radius:0!important;box-shadow:5px 5px 0 #080d16!important;
-}
-#notifications-pane .notifications-head{
-  padding:16px!important;
-  background:#27394b!important;
-  border-bottom:2px solid #526e83!important;
-  align-items:center;flex-wrap:wrap;
-}
-#notifications-pane .notifications-head h2{
-  font-family:'Press Start 2P','Pixelify Sans',monospace!important;
-  font-size:12px!important;line-height:1.8!important;
-  color:#f1f5e7!important;text-shadow:2px 2px 0 #101827!important;
-}
-#notifications-pane .notifications-head-actions{display:flex;flex-wrap:wrap;gap:8px}
-#notifications-pane .notifications-head-actions button,
-#notifications-pane .notification-open{
-  padding:8px 11px!important;
-  background:#2c4256!important;
-  color:#f1f5e7!important;
-  border:2px solid #6b91a9!important;border-bottom:4px solid #314c63!important;
-  border-radius:0!important;box-shadow:2px 2px 0 #101622!important;
-  font-family:'Pixelify Sans','Courier New',monospace!important;
-  font-size:12px!important;letter-spacing:.015em!important;
-}
-#notifications-pane .notifications-head-actions button:hover,
-#notifications-pane .notification-open:hover{background:#3b5a70!important}
-#notifications-pane .notifications-list{
-  max-height:min(62vh,620px)!important;overflow-y:auto!important;
-  background:#192535!important;
-}
-#notifications-pane .notification-row{
-  grid-template-columns:9px minmax(0,1fr) auto!important;
-  align-items:center!important;gap:12px!important;
-  padding:15px 16px!important;
-  border-bottom:2px solid #34485b!important;
-  border-radius:0!important;background:#202e40!important;
-}
-#notifications-pane .notification-row.unread{background:#294356!important}
-#notifications-pane .notification-dot{
-  width:9px;height:9px;margin:0;background:#637e8e;
-  border-radius:0!important;box-shadow:none!important;
-}
-#notifications-pane .notification-row.unread .notification-dot{
-  background:#9ce078;box-shadow:none!important;
-}
-#notifications-pane .notification-message{
-  color:#f1f5e7!important;font-size:14px!important;line-height:1.5!important;
-  overflow-wrap:anywhere;
-}
-#notifications-pane .notification-time{
-  color:#adc4cc!important;font-size:12px!important;margin-top:5px!important;
-}
-#notifications-pane .notifications-empty{
-  padding:50px 20px!important;font-size:14px!important;color:#adc4cc!important;
-}
-@media(max-width:550px){
-  #notifications-pane .notifications-head{align-items:flex-start!important}
-  #notifications-pane .notifications-head-actions{width:100%}
-  #notifications-pane .notifications-head-actions button{flex:1;min-width:120px}
-  #notifications-pane .notification-row{grid-template-columns:9px minmax(0,1fr)!important}
-  #notifications-pane .notification-open{grid-column:2;justify-self:start}
+  }
+  // Numbers are masked even when embedded in otherwise permitted words.
+  for(let i=0;i<raw.length;i++)if(/\p{N}/u.test(raw[i]))masked.add(i);
+  return raw.split('').map((ch,i)=>masked.has(i)?'*':ch).join('');
 }
 
-/* V3.36: Copy/paste RGB values in one field throughout KWG. */
-.kwg-rgb-control{
-  display:inline-flex!important;align-items:center!important;gap:7px!important;
-  min-width:0;max-width:100%;vertical-align:middle;
+function cleanUsername(v) {
+  return String(v || '').trim().slice(0, 16);
 }
-.kwg-rgb-control > input[type="color"]{
-  flex:0 0 35px!important;width:35px!important;min-width:35px!important;
-  height:35px!important;box-sizing:border-box!important;
-  padding:3px!important;background:#132132!important;
-  border:2px solid #57758d!important;border-radius:0!important;
-  cursor:pointer!important;
+function cleanWorldName(v) {
+  return String(v || '').trim().slice(0, 20);
 }
-.kwg-rgb-control .kwg-rgb-field{
-  box-sizing:border-box!important;flex:1 1 126px!important;
-  width:126px!important;min-width:0!important;max-width:165px!important;
-  height:35px!important;padding:6px 8px!important;
-  background:#132132!important;color:#f0f5e9!important;
-  border:2px solid #57758d!important;border-radius:0!important;
-  box-shadow:inset 3px 3px 0 #0b1420!important;
-  font-family:'Pixelify Sans','Courier New',monospace!important;
-  font-size:13px!important;letter-spacing:0!important;
-  text-align:left!important;
+function validColor(v) {
+  return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
 }
-.kwg-rgb-control .kwg-rgb-field:focus{outline:2px solid #9ce078!important;outline-offset:1px!important}
-.kwg-rgb-control .kwg-rgb-field.kwg-rgb-invalid{border-color:#e27c76!important}
-body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
-  width:126px!important;max-width:165px!important;height:35px!important;
+function cleanStoreItemId(v) {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
-#avatar-editor-pane .kwg-avatar-colors .kwg-rgb-control{
-  display:flex!important;flex-wrap:nowrap!important;width:100%!important;
+function sanitizeAppearance(a = {}) {
+  return {
+    hat: ['none','black_tophat','blue_tophat','red_tophat','pink_tophat','pink_bow','blue_bow','white_bow','black_cat_ears','pink_cat_ears'].includes(a.hat) ? a.hat : defaultAppearance.hat,
+    headShape: ['sphere','cube','cylinder','headless'].includes(a.headShape) ? a.headShape : defaultAppearance.headShape,
+    headColor: validColor(a.headColor) ? a.headColor : defaultAppearance.headColor,
+    torsoColor: validColor(a.torsoColor) ? a.torsoColor : defaultAppearance.torsoColor,
+    leftArmColor: validColor(a.leftArmColor) ? a.leftArmColor : defaultAppearance.leftArmColor,
+    rightArmColor: validColor(a.rightArmColor) ? a.rightArmColor : defaultAppearance.rightArmColor,
+    leftLegColor: validColor(a.leftLegColor) ? a.leftLegColor : defaultAppearance.leftLegColor,
+    rightLegColor: validColor(a.rightLegColor) ? a.rightLegColor : defaultAppearance.rightLegColor,
+    eyesItemId: cleanStoreItemId(a.eyesItemId),
+    mouthItemId: cleanStoreItemId(a.mouthItemId),
+    torsoDecalItemId: cleanStoreItemId(a.torsoDecalItemId),
+    hatItemId: cleanStoreItemId(a.hatItemId),
+    headShapeItemId: cleanStoreItemId(a.headShapeItemId)
+  };
 }
-#avatar-editor-pane .kwg-avatar-colors .kwg-rgb-control input[type="color"]{
-  flex:0 0 34px!important;width:34px!important;height:34px!important;
+
+function rowToStoreItem(row) {
+  return {
+    id: Number(row.id),
+    category: row.category,
+    name: row.name,
+    price: Number(row.price || 0),
+    assetUrl: row.asset_url,
+    assetKind: row.asset_kind,
+    metadata: row.metadata || {},
+    isVisible: !!row.is_visible
+  };
 }
-#avatar-editor-pane .kwg-avatar-colors .kwg-rgb-field{
-  flex:1 1 auto!important;width:100%!important;max-width:none!important;
-  height:34px!important;font-size:12px!important;
+
+async function validateAppearanceForUser(userId, rawAppearance = {}) {
+  const app = sanitizeAppearance(rawAppearance);
+  const slots = [
+    ['eyesItemId', 'eyes'],
+    ['mouthItemId', 'mouth'],
+    ['torsoDecalItemId', 'torso_decal'],
+    ['hatItemId', 'hat'],
+    ['headShapeItemId', 'head_shape']
+  ];
+  const ids = [...new Set(slots.map(([slot]) => app[slot]).filter(Boolean))];
+  if (!ids.length) return app;
+
+  const r = await pool.query(`
+    SELECT s.id, s.category
+    FROM store_items s
+    JOIN user_store_items o ON o.item_id=s.id
+    WHERE o.user_id=$1 AND s.id = ANY($2::bigint[])
+  `, [userId, ids]);
+  const owned = new Map(r.rows.map(row => [Number(row.id), row.category]));
+  for (const [slot, category] of slots) {
+    const id = app[slot];
+    if (id && owned.get(id) !== category) app[slot] = null;
+  }
+  return app;
 }
-#kwg-recolor-panel .kwg-recolor-color-wrap .kwg-rgb-control{flex:1}
-#kwg-recolor-panel .kwg-recolor-color-wrap .kwg-rgb-field{width:125px!important}
-#save-status{display:none!important}
-</style>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
-<style>
-.kwg-clothing-preview{height:95px;width:100%;display:flex;align-items:center;justify-content:center;background:#131e2c;border:1px solid #30435c;margin-bottom:7px;color:#a5b3c5;font-size:10px}.kwg-clothing-preview canvas,.kwg-clothing-preview img{max-width:100%;max-height:100%;object-fit:contain}.kwg-native-card{min-height:135px!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:center!important}.kwg-native-card span{text-align:center}
-</style>
-<style>
-/* V3.41: Compact retro Place preset controls. */
-#kwg-place-panel{margin:7px 9px!important;padding:9px!important;border:2px solid #48677e!important;border-radius:0!important;background:#223447!important}
-#kwg-place-panel .kwg-recolor-field{margin-bottom:8px}
-#kwg-place-panel select,#kwg-place-panel input[type="number"]{min-width:0;max-width:100%;box-sizing:border-box;background:#0c1b2a;color:#e9f4ff;border:2px solid #56748e;border-radius:0;padding:5px;font-family:inherit;font-size:11px}
-#kwg-place-panel input[type="color"]{height:30px;width:64px;border-radius:0}
-#kwg-place-panel input[type="checkbox"]{width:17px;height:17px;accent-color:#49d2f1}
-#kwg-place-panel input[type="number"]{width:90px;min-height:32px;text-align:center;font-variant-numeric:tabular-nums}
-body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;text-align:center;font-variant-numeric:tabular-nums}
-#kwg-place-panel .kwg-place-section-label{margin:11px 0 5px;font-size:10px;font-weight:800;letter-spacing:.08em;color:#9ecce9}
-#kwg-place-panel .kwg-place-number-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
-#kwg-place-panel .kwg-place-number-grid label{font-size:10px;color:#c7e4f7;display:flex;flex-direction:column;gap:3px}
-</style>
-</head>
-<body>
-  <div id="kwg-loading-overlay" role="status" aria-live="polite" aria-atomic="true" aria-label="Loading" aria-hidden="true">
-    <div id="kwg-loading-panel">
-      <div id="kwg-loading-kicker">KWG / LOADING</div>
-      <div id="kwg-loading-title">LOADING...</div>
-      <div id="kwg-loading-track" role="progressbar" aria-label="Loading progress" aria-valuemin="0" aria-valuemax="100">
-        <div id="kwg-loading-fill"></div>
-      </div>
-      <div id="kwg-loading-footer">
-        <span id="kwg-loading-description">Please wait</span>
-        <span id="kwg-loading-percent">...</span>
-      </div>
-    </div>
-  </div>
+async function resolveAppearanceAssets(app = {}) {
+  const slotToCategory = {
+    eyesItemId: 'eyes',
+    mouthItemId: 'mouth',
+    torsoDecalItemId: 'torso_decal',
+    hatItemId: 'hat',
+    headShapeItemId: 'head_shape'
+  };
+  const ids = [...new Set(Object.keys(slotToCategory).map(k => cleanStoreItemId(app[k])).filter(Boolean))];
+  if (!ids.length) return {};
+  const r = await pool.query(`
+    SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible
+    FROM store_items WHERE id = ANY($1::bigint[])
+  `, [ids]);
+  const byId = new Map(r.rows.map(row => [Number(row.id), rowToStoreItem(row)]));
+  const out = {};
+  for (const [slot, category] of Object.entries(slotToCategory)) {
+    const id = cleanStoreItemId(app[slot]);
+    const item = id ? byId.get(id) : null;
+    if (item && item.category === category) out[category] = item;
+  }
+  return out;
+}
 
+function storeStorageConfigured() {
+  return !!(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY && SUPABASE_STORE_BUCKET);
+}
 
-  <!-- Persistent retro sound controls (available on login, home, and in worlds). -->
-  <div id="kwg-audio-dock">
-    <div id="kwg-audio-menu" role="group" aria-label="Sound settings" hidden>
-      <h3>♪ SOUND SETTINGS</h3>
-      <label class="kwg-audio-row" for="kwg-audio-enabled"><span>Sound effects</span><input id="kwg-audio-enabled" type="checkbox" checked></label>
-      <label class="kwg-audio-row" for="kwg-audio-volume"><span>Volume</span><output id="kwg-audio-volume-label">35%</output></label>
-      <input id="kwg-audio-volume" type="range" min="0" max="100" step="5" value="35" aria-label="Sound effects volume">
-      <p>8-bit sounds · settings saved on this device</p>
-    </div>
-    <button id="kwg-audio-toggle" type="button" aria-label="Sound settings" aria-expanded="false" aria-controls="kwg-audio-menu">
-      <span class="kwg-audio-glyph" id="kwg-audio-icon" aria-hidden="true">♫</span><span>SOUND</span>
-    </button>
-  </div>
+function storageHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    ...extra
+  };
+}
 
-  <!-- Game Notification Banner -->
-  <div id="game-toast"></div>
+async function ensureStoreBucket() {
+  if (!storeStorageConfigured()) throw new Error('Store uploads are not configured on the server yet.');
+  const bucketId = encodeURIComponent(SUPABASE_STORE_BUCKET);
+  const check = await fetch(`${SUPABASE_URL}/storage/v1/bucket/${bucketId}`, {
+    headers: storageHeaders()
+  });
+  if (check.ok) return;
+  if (check.status !== 404) throw new Error(`Could not check store bucket (${check.status}).`);
+  const create = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
+    method: 'POST',
+    headers: storageHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ id: SUPABASE_STORE_BUCKET, name: SUPABASE_STORE_BUCKET, public: true })
+  });
+  if (!create.ok && create.status !== 409) {
+    const text = await create.text().catch(() => '');
+    throw new Error(`Could not create store bucket (${create.status}) ${text}`.trim());
+  }
+}
 
-  <!-- Authentication Screen -->
-  <div id="auth-screen" class="overlay-screen">
-    <div class="card">
-      <h2 style="margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: 1px;">KWG 3D Online</h2>
-      <p style="font-size: 12px; color: #aaa; margin: 0 0 12px 0;">Account Authentication</p>
-      
-      <input type="text" id="auth-username" placeholder="Username" maxlength="16" />
-      <input type="password" id="auth-password" placeholder="Password" maxlength="32" />
+// World thumbnails are public JPEG screenshots; server validates the bytes and owns the upload.
+async function uploadWorldThumbnail(worldId, imageData) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    const err=new Error('Thumbnail storage is not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).');
+    err.clientMessage=err.message; throw err;
+  }
+  if (typeof imageData !== 'string' || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(imageData) || imageData.length>2400000) {
+    const err=new Error('Invalid thumbnail. Capture a new screenshot.');err.clientMessage=err.message;throw err;
+  }
+  const bytes=Buffer.from(imageData.slice('data:image/jpeg;base64,'.length),'base64');
+  if (bytes.length<100 || bytes.length>1500000 || bytes[0]!==0xff || bytes[1]!==0xd8 || bytes[bytes.length-2]!==0xff || bytes[bytes.length-1]!==0xd9) {
+    const err=new Error('Thumbnail must be a JPEG smaller than 1.5 MB.');err.clientMessage=err.message;throw err;
+  }
+  const bucket=encodeURIComponent(SUPABASE_THUMBNAIL_BUCKET);
+  const check=await fetch(`${SUPABASE_URL}/storage/v1/bucket/${bucket}`,{headers:storageHeaders()});
+  if (check.status===404) {
+    const created=await fetch(`${SUPABASE_URL}/storage/v1/bucket`,{method:'POST',headers:storageHeaders({'Content-Type':'application/json'}),body:JSON.stringify({id:SUPABASE_THUMBNAIL_BUCKET,name:SUPABASE_THUMBNAIL_BUCKET,public:true})});
+    if (!created.ok && created.status!==409) throw new Error(`Could not create thumbnail bucket (${created.status}).`);
+  } else if (!check.ok) throw new Error(`Could not check thumbnail bucket (${check.status}).`);
+  const key=`world-${Number(worldId)}/${Date.now()}-${crypto.randomBytes(6).toString('hex')}.jpg`;
+  const url=`${SUPABASE_URL}/storage/v1/object/${bucket}/${key}`;
+  const uploaded=await fetch(url,{method:'POST',headers:storageHeaders({'Content-Type':'image/jpeg','x-upsert':'false'}),body:bytes});
+  if (!uploaded.ok) throw new Error(`Thumbnail upload failed (${uploaded.status}).`);
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${key}`;
+}
 
-      <button id="auth-login-btn" class="submit-btn">Login</button>
-      <button id="auth-register-btn" class="submit-btn secondary">Register Account</button>
-      <div id="auth-error-msg" class="error-msg"></div>
-    </div>
-  </div>
+function fileBufferFromSocket(value) {
+  if (!value) return null;
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof ArrayBuffer) return Buffer.from(value);
+  if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  if (value && value.type === 'Buffer' && Array.isArray(value.data)) return Buffer.from(value.data);
+  return null;
+}
 
-  <!-- Home Page Dashboard -->
-  <div id="home-screen" class="overlay-screen" style="display:none;">
-    <div class="card" id="home-main-card">
-      <div class="kwg-dashboard-header">
-        <div class="kwg-brand-block"><h2>KWG 3D Online</h2><div class="kwg-userline">Logged in as <span id="logged-user-display">User</span></div></div>
-        <div class="kwg-account-tools">
-          <div class="coin-badge kwg-coin-pill" title="Your coins" aria-label="Coins"><span class="kwg-tool-icon">◆</span><span id="home-coin-count">100</span></div>
-          <button id="logout-btn" class="logout-btn kwg-icon-tool" title="Log out" aria-label="Log out"><span aria-hidden="true">↪</span></button>
-        </div>
-      </div>
-      <div class="home-tabs kwg-icon-nav">
-        <button class="home-tab active" data-home-tab="home" title="Home" aria-label="Home"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11.2 12 4l9 7.2v8.3a.5.5 0 0 1-.5.5H15v-6H9v6H3.5a.5.5 0 0 1-.5-.5z"/></svg></span><span class="nav-label">Home</span></button>
-        <button class="home-tab" data-home-tab="profile" title="Profile" aria-label="Profile"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 21c.5-5 3.2-7.5 7.5-7.5s7 2.5 7.5 7.5z"/></svg></span><span class="nav-label">Profile</span></button>
-        <button class="home-tab" data-home-tab="friends" title="Friends" aria-label="Friends"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.8 20c.4-4.2 2.5-6.4 6.2-6.4s5.8 2.2 6.2 6.4z"/><path d="M14 14.5c4.2-.7 6.6 1.1 7.1 5.5h-4.4c-.2-2.2-1.1-4-2.7-5.5z"/></svg></span><span class="nav-label">Friends</span><span id="friend-request-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
-        <button class="home-tab" data-home-tab="worlds" title="Worlds" aria-label="Worlds"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.8 12h16.4M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5S14.4 18.1 12 20.5M12 3.5C9.6 5.9 8.4 8.7 8.4 12s1.2 6.1 3.6 8.5"/></svg></span><span class="nav-label">Worlds</span></button>
-        <button class="home-tab" data-home-tab="store" title="Store" aria-label="Store"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 9h14l-1 11H6z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></svg></span><span class="nav-label">Store</span></button>
-        <button class="home-tab" data-home-tab="avatar" title="Avatar Editor" aria-label="Avatar Editor"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.5"/><path d="M7 11.5h10l1.5 9H5.5z"/><path d="M8 14 4 17M16 14l4 3"/></svg></span><span class="nav-label">Avatar</span></button>
-        <button id="notifications-btn" class="home-tab notifications-tab" data-home-tab="notifications" type="button" title="Notifications" aria-label="Notifications"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 17h12l-1.5-2.2V10a4.5 4.5 0 0 0-9 0v4.8z"/><path d="M10 19.5a2.2 2.2 0 0 0 4 0"/></svg></span><span class="nav-label">Notifications</span><span id="notification-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
-        <button class="home-tab admin-home-tab" data-home-tab="admin" title="Admin" aria-label="Admin" style="display:none"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14 5.1l2.9-.3.7 2.8 2.5 1.5-1.1 2.7 1.1 2.7-2.5 1.5-.7 2.8-2.9-.3L12 21l-2-2.1-2.9.3-.7-2.8-2.5-1.5L5 12.2 3.9 9.5 6.4 8l.7-2.8 2.9.3z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="nav-label">Admin</span></button>
-      </div>
-      <div id="home-pane" class="home-pane active"><div class="kwg-page-heading"><div><div class="profile-kicker">DASHBOARD</div><h2>HOME</h2><p>Your worlds, avatar, and collection at a glance.</p></div></div><div class="home-profile-grid"><div class="home-section"><h3>YOUR AVATAR</h3><div id="home-avatar-preview" class="home-avatar-preview"></div></div><div style="display:grid;gap:14px"><div class="home-section"><h3>YOUR WORLDS</h3><div id="home-owned-worlds" class="room-list-container home-owned-worlds"></div></div><div class="home-section"><h3>YOUR INVENTORY</h3><div id="home-inventory-grid" class="home-inventory-grid"></div></div></div></div></div>
-      <div id="notifications-pane" class="home-pane"><section id="notifications-panel" class="notifications-panel">
-        <div class="notifications-head">
-          <div><div class="profile-kicker">SOCIAL</div><h2>NOTIFICATIONS</h2></div>
-          <div class="notifications-head-actions">
-            <button id="notifications-read-btn" type="button">MARK ALL READ</button>
-            <button id="notifications-clear-btn" type="button">CLEAR</button>
-          </div>
-        </div>
-        <div id="notifications-list" class="notifications-list"></div>
-      </section></div>
-      <div id="profile-pane" class="home-pane">
-        <div class="profile-shell">
-          <div class="profile-hero">
-            <div id="profile-avatar-preview" class="profile-avatar-preview"><div class="profile-avatar-placeholder">AVATAR</div></div>
-            <div class="profile-identity">
-              <div class="profile-kicker">PLAYER PROFILE</div>
-              <h1 id="profile-username">PLAYER</h1>
-              <div id="profile-status" class="profile-status offline"><span class="profile-status-dot"></span><span>OFFLINE</span></div>
-              <div id="profile-joined" class="profile-joined"></div>
-              <div class="profile-action-row">
-                <button id="profile-join-world-btn" class="submit-btn profile-join-btn" style="display:none">JOIN WORLD</button>
-                <div id="profile-friend-actions" class="profile-friend-actions"></div>
-              </div>
-            </div>
-          </div>
-          <div class="profile-stats">
-            <div class="profile-stat"><strong id="profile-stat-worlds">0</strong><span>WORLDS</span></div>
-            <div class="profile-stat"><strong id="profile-stat-likes">0</strong><span>LIKES GIVEN</span></div>
-            <div class="profile-stat"><strong id="profile-stat-items">0</strong><span>ITEMS OWNED</span></div>
-          </div>
-          <div class="profile-grid">
-            <section class="profile-panel">
-              <div class="profile-panel-title">ABOUT</div>
-              <div id="profile-bio-view" class="profile-bio"></div>
-              <div id="profile-edit-area" style="display:none">
-                <textarea id="profile-bio-input" maxlength="300" placeholder="Tell other players about yourself..."></textarea>
-                <div class="profile-edit-note"><span id="profile-bio-count">0</span>/300</div>
-                <div class="profile-panel-title profile-showcase-editor-title">CHOOSE SHOWCASE WORLDS <span>(UP TO 3)</span></div>
-                <div id="profile-showcase-picker" class="profile-showcase-picker"></div>
-                <button id="profile-save-btn" class="submit-btn">SAVE PROFILE</button>
-              </div>
-            </section>
-            <section class="profile-panel">
-              <div class="profile-panel-title">SHOWCASED WORLDS</div>
-              <div id="profile-showcase-worlds" class="profile-showcase-worlds"></div>
-            </section>
-          </div>
-        </div>
-      </div>
-      <div id="friends-pane" class="home-pane">
-        <div class="friends-shell">
-          <div class="friends-header">
-            <div><div class="profile-kicker">SOCIAL</div><h1>FRIENDS</h1></div>
-            <div id="friends-summary" class="friends-summary">0 FRIENDS</div>
-          </div>
-          <section id="incoming-friends-section" class="profile-panel">
-            <div class="profile-panel-title">FRIEND REQUESTS</div>
-            <div id="incoming-friends-list" class="friends-list"></div>
-          </section>
-          <section class="profile-panel">
-            <div class="profile-panel-title">YOUR FRIENDS</div>
-            <div id="friends-list" class="friends-list"></div>
-          </section>
-          <section class="profile-panel">
-            <div class="profile-panel-title">SENT REQUESTS</div>
-            <div id="outgoing-friends-list" class="friends-list"></div>
-          </section>
-        </div>
-      </div>
-      <div id="worlds-pane" class="home-pane">
-        <div class="home-toolbar"><strong>SORT:</strong><select id="world-sort"><option value="recent">Most Recent</option><option value="liked">Most Liked</option></select></div>
-        <div id="room-list" class="room-list-container"></div>
-        <button id="open-create-world-btn" class="submit-btn secondary">+ Create New World</button>
-        <button id="open-store-btn" class="submit-btn" style="display:none;">STORE</button>
-        <button id="open-admin-btn" style="display:none;"></button>
-        <div id="home-error-msg" class="error-msg"></div>
-      </div>
-      <div id="store-pane" class="home-pane">
-        <div class="kwg-page-heading store-topbar"><div><div class="profile-kicker">COSMETICS</div><h2>STORE</h2><p>Build your collection with coins.</p></div><span class="coin-badge kwg-store-balance"><span class="kwg-tool-icon">◆</span><span id="store-coin-count">100</span></span></div>
-        <div class="store-tabs"><button class="store-tab active" data-store-category="eyes">Eyes</button><button class="store-tab" data-store-category="mouth">Mouths</button><button class="store-tab" data-store-category="torso_decal">Shirts / Decals</button><button class="store-tab" data-store-category="hat">Hats</button><button class="store-tab" data-store-category="head_shape">Head Shapes</button></div>
-        <div id="store-items-grid"></div><div id="store-message" class="error-msg"></div>
-      </div>
-      <div id="avatar-editor-pane" class="home-pane">
-        <div class="kwg-page-heading"><div><div class="profile-kicker">CUSTOMIZE</div><h2>AVATAR EDITOR</h2><p>Equip cosmetics and tune your character colors.</p></div></div>
-        <div class="avatar-editor-layout">
-          <div><div id="avatar-editor-preview" class="avatar-preview-large"><div class="preview-hint">Drag to rotate • releases back to front</div></div><button id="save-avatar-editor-btn" class="submit-btn">SAVE APPEARANCE</button></div>
-          <div class="inventory-panel">
-          <div class="kwg-body-style-panel" style="display:none">
-            <div class="kwg-style-group"><div class="kwg-style-title">SHIRT TYPE</div><div class="kwg-style-buttons"><button type="button" class="kwg-style-btn" data-shirt-style="short">SHORT SLEEVE</button><button type="button" class="kwg-style-btn" data-shirt-style="long">LONG SLEEVE</button></div></div>
-            <div class="kwg-style-group"><div class="kwg-style-title">BOTTOM TYPE</div><div class="kwg-style-buttons"><button type="button" class="kwg-style-btn" data-bottom-style="pants">PANTS</button><button type="button" class="kwg-style-btn" data-bottom-style="shorts">SHORTS</button><button type="button" class="kwg-style-btn" data-bottom-style="skirt">SKIRT</button></div></div>
-          </div>
-          <div class="inventory-tabs kwg-avatar-tabs"><button class="inventory-tab active" data-inv-category="hat">HATS</button><button class="inventory-tab" data-inv-category="head_shape">HEADS</button><button class="inventory-tab" data-inv-category="skin">SKIN</button><button class="inventory-tab" data-inv-category="shirts">SHIRTS</button><button class="inventory-tab" data-inv-category="pants">PANTS</button><button class="inventory-tab" data-inv-category="shoes">SHOES</button></div><div id="avatar-native-options" class="avatar-native-options" style="display:none"></div><div id="avatar-inventory-grid"></div>
-          <div class="color-grid kwg-avatar-colors" style="display:none">
-<label><span>SKIN</span><input type="color" id="av-skin-color"></label>
-<label><span>SHIRT</span><input type="color" id="av-shirt-color"></label>
-<label><span>PANTS</span><input type="color" id="av-pants-color"></label>
-<label><span>SHOES</span><input type="color" id="av-shoes-color"></label>
-<label><span>HAIR</span><input type="color" id="av-hair-color"></label>
-</div></div>
-        </div>
-      </div>
-      <div id="admin-pane" class="home-pane"></div>
-    </div>
-  </div>
+function cleanUploadMeta(category, raw = {}) {
+  const clamp = (v, min, max, fallback) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+  };
+  if (category === 'hat' || category === 'head_shape') {
+    return {
+      size: clamp(raw.size, 0.05, 10, 1),
+      offsetX: clamp(raw.offsetX, -5, 5, 0),
+      offsetY: clamp(raw.offsetY, -5, 5, 0),
+      offsetZ: clamp(raw.offsetZ, -5, 5, 0)
+    };
+  }
+  return {};
+}
 
-  <!-- Create World Modal -->
-  <div id="create-world-modal" class="modal">
-    <div class="card" style="position: relative;">
-      <span class="close-btn" id="close-create-world">X</span>
-      <h3 style="margin: 0 0 10px 0; text-transform: uppercase;">Create World</h3>
-      <input type="text" id="new-world-name" placeholder="World Name (e.g. MyCastle)" maxlength="20" />
-      <label style="display:block;margin-top:10px;font-size:12px;font-weight:bold;color:#aaa;">STARTING TEMPLATE</label>
-      <select id="new-world-template" style="width:100%;margin-top:5px;padding:10px;background:#1f1f1f;color:white;border:1px solid #555;border-radius:4px;">
-        <option value="blank">Blank Baseplate</option>
-      </select>
-      <div style="font-size:11px;color:#888;margin-top:5px;">Templates are starting copies. Editing your new world will not change the template.</div>
-      <button id="confirm-create-world-btn" class="submit-btn">Build & Launch</button>
-      <div id="create-world-error" class="error-msg"></div>
-    </div>
-  </div>
-
-  <!-- Game HUD -->
-  <div id="hud">
-    <button class="hud-btn kwg-control-icon" id="toggle-edit-btn" title="Enable Edit Mode" aria-label="Enable Edit Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M5 15l10-10 4 4-10 10H5zM13 7l4 4"/></svg><span class="kwg-hud-button-label" id="kwg-edit-mode-label">EDIT</span></button>
-    <button class="hud-btn kwg-control-icon" id="respawn-btn" title="Respawn" aria-label="Respawn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 1-3-6M20 4v7h-7"/></svg><span class="kwg-hud-button-label">RESPAWN</span></button>
-    <button class="hud-btn kwg-control-icon" id="leave-world-btn" title="Leave World" aria-label="Leave World"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg><span class="kwg-hud-button-label">LEAVE</span></button>
-    <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
-  </div>
-
-  <div id="room-info-label"><span class="kwg-world-label">CURRENT WORLD</span><span id="current-room-text">Default World</span></div>
-
-
-  <!-- Per-world chat -->
-  <div id="world-chat">
-    <div id="world-chat-header">World Chat</div>
-    <div id="world-chat-messages"></div>
-    <form id="world-chat-form">
-      <input id="world-chat-input" maxlength="300" autocomplete="off" placeholder="Type a message..." />
-      <button id="world-chat-send" type="submit">SEND</button>
-    </form>
-  </div>
-
-  <!-- Admin management panel -->
-  <div id="admin-panel">
-    <div id="admin-card">
-      <span class="close-btn" id="close-admin-panel">X</span>
-      <h3 style="margin:0;text-transform:uppercase;">Admin Management</h3>
-      <button id="admin-refresh-btn" class="admin-action" style="margin:10px 0 0 0;">REFRESH SEARCHES</button>
-      <div class="admin-section">
-        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">SEARCH ACCOUNTS</div>
-        <div class="admin-searchbar"><input id="admin-user-search" maxlength="50" autocomplete="off" placeholder="Username..." /><button id="admin-user-search-btn" class="admin-action">SEARCH</button></div>
-        <div class="admin-search-note">Up to 25 matching accounts are loaded at a time.</div>
-        <div id="admin-users-list"><div class="admin-search-note">Type a username to search.</div></div>
-      </div>
-      <div class="admin-section">
-        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">SEARCH WORLDS</div>
-        <div class="admin-searchbar"><input id="admin-world-search" maxlength="80" autocomplete="off" placeholder="World name or owner..." /><button id="admin-world-search-btn" class="admin-action">SEARCH</button></div>
-        <div class="admin-search-note">Up to 25 matching worlds are loaded at a time.</div>
-        <div id="admin-worlds-list"><div class="admin-search-note">Type a world name or owner to search.</div></div>
-      </div>
-      <div class="admin-section">
-        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">STORE ITEMS</div>
-        <div class="admin-store-form">
-          <label>Category
-            <select id="admin-store-category">
-              <option value="eyes">Eyes (image)</option>
-              <option value="mouth">Mouth (image)</option>
-              <option value="torso_decal">Shirt / Torso Decal (image)</option>
-              <option value="hat">Hat (GLB mesh)</option>
-              <option value="head_shape">Head Shape (GLB mesh)</option>
-            </select>
-          </label>
-          <label>Item Name<input id="admin-store-name" maxlength="40" placeholder="Cool Sunglasses"></label>
-          <label>Price (coins)<input id="admin-store-price" type="number" min="0" step="1" value="25"></label>
-          <label>Asset File<input id="admin-store-file" type="file" accept=".png,.jpg,.jpeg,.webp"></label>
-          <label style="flex-direction:row;align-items:center;gap:8px;">Available Now<input id="admin-store-visible" type="checkbox" checked style="width:18px;height:18px;"></label>
-          <div id="admin-store-config-note">Uploads use Supabase Storage. The service-role key stays on the server and is never sent to players.</div>
-          <div id="admin-mesh-fit-fields" style="display:none;">
-            <label>Size<input id="admin-store-size" type="number" step="0.05" value="1"></label>
-            <label>Offset X<input id="admin-store-offset-x" type="number" step="0.05" value="0"></label>
-            <label>Offset Y<input id="admin-store-offset-y" type="number" step="0.05" value="0"></label>
-            <label>Offset Z<input id="admin-store-offset-z" type="number" step="0.05" value="0"></label>
-          </div>
-          <div id="admin-fit-preview" class="admin-fit-preview"><div class="admin-fit-preview-note">LIVE FIT PREVIEW • drag to rotate</div></div>
-          <button id="admin-store-upload-btn" class="submit-btn" type="button">UPLOAD STORE ITEM</button>
-        </div>
-        <div id="admin-store-items-list"></div>
-      </div>
-      <div id="admin-error" class="error-msg"></div>
-    </div>
-  </div>
-
-  <!-- Build Toolbar -->
-  <div id="build-toolbar">
-    <div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">✦</span><span>TOOLBAR</span></div>
-
-    <div class="mode-grid kwg-icon-tools">
-<button id="tool-select-btn" title="Select one part" aria-label="Select" onclick="setBuildSubTool('select')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 3 14 9-7 1-3 7z"/></svg></button>
-<button id="tool-place-btn" title="Place" aria-label="Place" onclick="setBuildSubTool('place')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M4 12h16"/></svg></button>
-<button id="tool-move-btn" title="Move" aria-label="Move" onclick="setBuildSubTool('move')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4"/></svg></button>
-<button id="tool-scale-btn" title="Scale" aria-label="Scale" onclick="setBuildSubTool('scale')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10V4h6M20 14v6h-6M4 4l7 7M20 20l-7-7"/></svg></button>
-<button id="tool-recolor-btn" title="Recolor parts with the chosen color and material" aria-label="Recolor" onclick="setBuildSubTool('recolor')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z"/><path d="m5 3 5 5"/><path d="M2 21h16"/><path d="M19 16s-2 2.2-2 3.5a2 2 0 0 0 4 0c0-1.3-2-3.5-2-3.5Z"/></svg></button>
-<button id="tool-delete-btn" title="Remove" aria-label="Remove" onclick="setBuildSubTool('delete')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7"/></svg></button>
-    </div>
-
-    <section id="kwg-place-panel" class="kwg-recolor-panel kwg-place-panel" aria-label="Place tool preset properties" style="display:none">
-      <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">+</span> PLACE PRESETS</div>
-      <p class="kwg-recolor-help" style="margin:0 0 10px">New parts use these properties automatically.</p>
-      <label class="kwg-recolor-field"><span>Shape</span><select id="kwg-place-shape"><option value="box">Cube / Box</option><option value="wedge">Wedge</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option></select></label>
-      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option><option value="spawn">Spawn</option></select></label>
-      <label class="kwg-recolor-field"><span>Material</span><select id="kwg-place-material"><option value="grid">Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
-      <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-place-color" value="#888888" aria-label="Place preset color"></span></label>
-      <label class="kwg-recolor-field"><span>Transparency (0–1)</span><input type="number" id="kwg-place-transparency" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Place transparency, 0 to 1"></label>
-      <label class="kwg-recolor-field"><span>Can Collide</span><input type="checkbox" id="kwg-place-collide" checked></label>
-      <p class="kwg-recolor-help">Click a surface to place a part with these presets.</p>
-    </section>
-    <section id="kwg-recolor-panel" class="kwg-recolor-panel" aria-label="Recolor brush settings" style="display:none">
-      <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">●</span> RECOLOR BRUSH</div>
-      <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-recolor-color" value="#4b9cff" aria-label="Brush color"></span></label>
-      <label class="kwg-recolor-field"><span>Material</span><select id="kwg-recolor-material" aria-label="Brush material"><option value="grid" selected>Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
-      <p class="kwg-recolor-help">Click any part in the 3D view to apply both.</p>
-    </section>
-    <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>R</kbd> Rotate 90° horizontally</div><div><kbd>T</kbd> Rotate 90° vertically</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div><div><kbd>Shift</kbd> + <kbd>D</kbd> Duplicate part</div></details>
-    <!-- Selected Part Properties UI -->
-    <div id="part-properties-container">
-      <div style="border-top: 2px solid #444; margin: 8px 0 10px 0; padding-top: 8px;">
-        <div style="font-weight: bold; color: #5bc0de; margin-bottom: 6px; text-align: center; text-transform: uppercase; font-size: 11px;">Part Properties</div>
-        
-        <div id="no-selection-msg" style="color: #aaa; text-align: center; font-style: italic; font-size: 11px; margin: 10px 0;">No part selected</div>
-
-        <div id="selected-part-fields" style="display: none;">
-          <div class="tool-row">
-            <label>Shape:</label>
-            <select id="block-shape-select">
-              <option value="box">Cube / Box</option>
-              <option value="wedge">Wedge</option>
-              <option value="sphere">Sphere</option>
-              <option value="cylinder">Cylinder</option>
-            </select>
-          </div>
-
-          <div class="tool-row">
-            <label>Block Type:</label>
-            <select id="block-action-select">
-              <option value="normal">Normal Solid Block</option>
-              <option value="kill">Kill Part</option>
-              <option value="checkpoint">Checkpoint</option>
-              <option value="spawn">Spawn</option>
-            </select>
-          </div>
-
-          <div class="tool-row">
-            <label>Material:</label>
-            <select id="block-material-select">
-              <option value="grid" selected>Grid Pattern</option>
-              <option value="brick">Brick Wall</option>
-              <option value="wood">Wood Planks</option>
-            </select>
-          </div>
-
-          <div class="tool-row">
-            <label>Block Color:</label>
-            <input type="color" id="block-color-input" value="#888888">
-          </div>
-
-          <div class="tool-row">
-            <label>Transparency:</label>
-            <input type="number" id="block-transparency-input" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Part transparency, 0 to 1">
-          </div>
-
-          <div class="tool-row">
-            <label>Can Collide:</label>
-            <input type="checkbox" id="block-collidable-checkbox" checked>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- General World Settings -->
-    <div style="border-top: 2px solid #444; margin-top: 8px; padding-top: 8px;">
-      <div style="font-weight: bold; color: #5bc0de; margin-bottom: 6px; text-align: center; text-transform: uppercase; font-size: 11px;">World Environment</div>
-      
-      <div class="tool-row">
-        <label>Sky Color:</label>
-        <input type="color" id="sky-color-input" value="#1e1e7b">
-      </div>
-
-      <div class="tool-row">
-        <label>Clouds Enabled:</label>
-        <input type="checkbox" id="clouds-enabled-checkbox" checked>
-      </div>
-
-      <div class="tool-row">
-        <label>Cloud Speed:</label>
-        <input type="number" id="cloud-speed-input" value="1.0" step="0.1" min="0" max="10">
-      </div>
-
-      <div class="tool-row">
-        <label>Cloud Color:</label>
-        <input type="color" id="cloud-color-input" value="#ffffff">
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // --- SOCKET.IO BACKEND CONNECTION ---
-    const socket = (typeof io !== 'undefined') ? io() : null;
-
-    // V3.34 — Shared loading dialog. Only real completed save requests receive
-    // numeric percentages; other requests use an indeterminate animated bar.
-    const kwgLoadingEvents=new Set([
-      'login','register','resume_session','get_worlds','join_world','create_world',
-      'get_world_templates','get_store','buy_store_item','save_appearance',
-      'update_appearance','toggle_world_like','delete_own_world',
-      'admin_search_users','admin_search_worlds','admin_make_world_template',
-      'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user',
-      'get_profile','update_profile','get_friends','send_friend_request',
-      'respond_friend_request','cancel_friend_request','remove_friend',
-      'mark_notifications_read','clear_notifications'
+async function uploadStoreAsset({ category, fileName, mimeType, buffer }) {
+  await ensureStoreBucket();
+  const isImage = ['eyes','mouth','torso_decal'].includes(category);
+  const lowerName = String(fileName || '').toLowerCase();
+  let ext;
+  let contentType;
+  if (isImage) {
+    const allowed = new Map([
+      ['image/png', 'png'],
+      ['image/jpeg', 'jpg'],
+      ['image/webp', 'webp']
     ]);
-    const kwgLoadingLabels={
-      login:'SIGNING IN',register:'CREATING ACCOUNT',resume_session:'RESTORING SESSION',
-      get_worlds:'LOADING WORLDS',join_world:'LOADING WORLD',create_world:'CREATING WORLD',
-      get_world_templates:'LOADING TEMPLATES',get_store:'LOADING STORE',
-      buy_store_item:'PURCHASING ITEM',save_appearance:'SAVING AVATAR',
-      update_appearance:'SAVING AVATAR',toggle_world_like:'UPDATING WORLD',
-      delete_own_world:'DELETING WORLD',get_profile:'LOADING PROFILE',
-      update_profile:'SAVING PROFILE',get_friends:'LOADING FRIENDS',
-      get_notifications:'LOADING NOTIFICATIONS'
-    };
-    const kwgLoadingOverlay=document.getElementById('kwg-loading-overlay');
-    const kwgLoadingTitle=document.getElementById('kwg-loading-title');
-    const kwgLoadingDescription=document.getElementById('kwg-loading-description');
-    const kwgLoadingPercent=document.getElementById('kwg-loading-percent');
-    const kwgLoadingFill=document.getElementById('kwg-loading-fill');
-    const kwgLoadingTrack=document.getElementById('kwg-loading-track');
-    const kwgLoadingTasks=new Map();
-    let kwgLoadingSerial=0,kwgLoadingShowTimer=null,kwgLoadingHideTimer=null;
-    let kwgLoadingVisibleSince=0;
-    function renderKWGLoading(){
-      clearTimeout(kwgLoadingShowTimer);
-      clearTimeout(kwgLoadingHideTimer);
-      if(!kwgLoadingTasks.size){
-        if(!kwgLoadingOverlay.classList.contains('kwg-visible'))return;
-        // Keep the popup visible briefly to avoid a distracting flash.
-        const elapsed=performance.now()-kwgLoadingVisibleSince;
-        kwgLoadingHideTimer=setTimeout(()=>{
-          if(kwgLoadingTasks.size){renderKWGLoading();return;}
-          kwgLoadingOverlay.classList.remove('kwg-visible','kwg-indeterminate');
-          delete kwgLoadingOverlay.dataset.shown;
-          kwgLoadingOverlay.setAttribute('aria-hidden','true');
-          document.body.classList.remove('kwg-loading');
-        },Math.max(0,360-elapsed));
-        return;
-      }
-      let chosen=null;
-      for(const task of kwgLoadingTasks.values())
-        if(!chosen || task.priority>chosen.priority || (task.priority===chosen.priority && task.id>chosen.id))chosen=task;
-      const paint=()=>{
-        if(!kwgLoadingTasks.size)return;
-        kwgLoadingOverlay.classList.add('kwg-visible');
-        kwgLoadingOverlay.setAttribute('aria-hidden','false');
-        document.body.classList.add('kwg-loading');
-        if(!kwgLoadingVisibleSince || !kwgLoadingOverlay.dataset.shown){
-          kwgLoadingVisibleSince=performance.now();kwgLoadingOverlay.dataset.shown='1';
-        }
-        kwgLoadingTitle.textContent=chosen.title;
-        kwgLoadingDescription.textContent=chosen.description;
-        const measured=typeof chosen.progress==='number';
-        kwgLoadingOverlay.classList.toggle('kwg-indeterminate',!measured);
-        kwgLoadingPercent.textContent=measured?Math.round(chosen.progress)+'%':'...';
-        kwgLoadingFill.style.width=measured?chosen.progress+'%':'';
-        if(measured)kwgLoadingTrack.setAttribute('aria-valuenow',String(Math.round(chosen.progress)));
-        else kwgLoadingTrack.removeAttribute('aria-valuenow');
-      };
-      if(kwgLoadingOverlay.classList.contains('kwg-visible'))paint();
-      else kwgLoadingShowTimer=setTimeout(paint,chosen.immediate?0:160);
+    ext = allowed.get(String(mimeType || '').toLowerCase());
+    if (!ext) {
+      if (lowerName.endsWith('.png')) { ext = 'png'; contentType = 'image/png'; }
+      else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) { ext = 'jpg'; contentType = 'image/jpeg'; }
+      else if (lowerName.endsWith('.webp')) { ext = 'webp'; contentType = 'image/webp'; }
     }
-    function beginKWGLoading(title,opts={}){
-      const id=++kwgLoadingSerial;
-      kwgLoadingTasks.set(id,{
-        id,title,description:opts.description||'Please wait',
-        progress:typeof opts.progress==='number'?Math.max(0,Math.min(100,opts.progress)):null,
-        priority:opts.priority||0,immediate:!!opts.immediate
-      });
-      renderKWGLoading();
-      return {
-        update(progress,description){
-          const task=kwgLoadingTasks.get(id);if(!task)return;
-          if(typeof progress==='number')task.progress=Math.max(0,Math.min(100,progress));
-          if(description!==undefined)task.description=description;
-          renderKWGLoading();
-        },
-        end(){kwgLoadingTasks.delete(id);renderKWGLoading();}
-      };
-    }
-    if(socket){
-      const kwgOriginalSocketEmit=socket.emit.bind(socket);
-      socket.emit=function(eventName,...args){
-        const i=args.length-1;
-        if(!kwgLoadingEvents.has(eventName)||i<0||typeof args[i]!=='function')
-          return kwgOriginalSocketEmit(eventName,...args);
-        const task=beginKWGLoading(kwgLoadingLabels[eventName]||
-          (eventName.startsWith('admin_')?'LOADING ADMIN DATA':'LOADING'),{
-          description:eventName==='join_world'?'Preparing your world':'Syncing with server',
-          priority:eventName==='join_world'?30:10
-        });
-        const ack=args[i];
-        let done=false;
-        const finish=(...values)=>{
-          if(done)return;
-          done=true;
-          try{return ack(...values);}
-          finally{task.end();}
-        };
-        const timer=setTimeout(()=>finish({success:false,message:'Request timed out.'}),15000);
-        args[i]=(...values)=>{clearTimeout(timer);return finish(...values);};
-        try{return kwgOriginalSocketEmit(eventName,...args);}
-        catch(error){clearTimeout(timer);task.end();throw error;}
-      };
-    }
+    contentType = contentType || String(mimeType || '').toLowerCase();
+    if (!ext) throw new Error('Eyes, mouths, and torso decals must be PNG, JPG, or WebP images.');
+    if (buffer.length > 3 * 1024 * 1024) throw new Error('Image files must be 3 MB or smaller.');
+  } else {
+    if (!lowerName.endsWith('.glb')) throw new Error('Hat and head shape meshes must be .glb files.');
+    ext = 'glb';
+    contentType = 'model/gltf-binary';
+    if (buffer.length > 8 * 1024 * 1024) throw new Error('Mesh files must be 8 MB or smaller.');
+  }
 
+  const pathName = `${category}/${Date.now()}-${crypto.randomBytes(8).toString('hex')}.${ext}`;
+  const encodedPath = pathName.split('/').map(encodeURIComponent).join('/');
+  const bucketId = encodeURIComponent(SUPABASE_STORE_BUCKET);
+  const upload = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucketId}/${encodedPath}`, {
+    method: 'POST',
+    headers: storageHeaders({
+      'Content-Type': contentType || 'application/octet-stream',
+      'x-upsert': 'false'
+    }),
+    body: buffer
+  });
+  if (!upload.ok) {
+    const text = await upload.text().catch(() => '');
+    throw new Error(`Asset upload failed (${upload.status}) ${text}`.trim());
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucketId}/${encodedPath}`;
+}
 
-    // KWG V3.33: Tiny original procedural arcade sounds (no audio downloads or server).
-    // The AudioContext is initialized only after a real user gesture (browser autoplay rules).
-    const kwgAudio = (() => {
-      const storageKey = 'kwg_pixel_sfx_v1';
-      let settings = {enabled:true, volume:35};
-      try {
-        const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
-        if(saved && typeof saved==='object'){
-          if(typeof saved.enabled==='boolean')settings.enabled=saved.enabled;
-          if(Number.isFinite(Number(saved.volume)))settings.volume=Math.max(0,Math.min(100,Number(saved.volume)));
-        }
-      }catch(_){}
-      let context=null;
-      let lastSoundAt=0;
-      function getContext(){
-        if(!context){
-          const AC=window.AudioContext||window.webkitAudioContext;
-          if(!AC)return null;
-          try{context=new AC();}catch(_){return null;}
-        }
-        if(context.state==='suspended')context.resume().catch(()=>{});
-        return context;
-      }
-      function tone(ctx,at,freq,duration,type='square',gain=.14,endFreq){
-        const osc=ctx.createOscillator();
-        const amp=ctx.createGain();
-        osc.type=type;
-        osc.frequency.setValueAtTime(Math.max(40,freq),at);
-        if(endFreq)osc.frequency.exponentialRampToValueAtTime(Math.max(40,endFreq),at+duration);
-        amp.gain.setValueAtTime(.0001,at);
-        amp.gain.exponentialRampToValueAtTime(Math.max(.0002,gain*settings.volume/100),at+.008);
-        amp.gain.exponentialRampToValueAtTime(.0001,at+duration);
-        osc.connect(amp);amp.connect(ctx.destination);
-        osc.start(at);osc.stop(at+duration+.012);
-        osc.onended=()=>{osc.disconnect();amp.disconnect();};
-      }
-      const patterns={
-        click:[[540,.038,'square',.075,600]],
-        tab:[[390,.038,'triangle',.12,520],[560,.046,'square',.065,610]],
-        select:[[650,.045,'triangle',.12,740]],
-        place:[[235,.045,'square',.14,310],[360,.055,'triangle',.10,410]],
-        recolor:[[480,.05,'triangle',.13,670],[730,.045,'square',.07,820]],
-        remove:[[350,.052,'square',.13,240],[220,.07,'triangle',.12,140]],
-        success:[[500,.065,'triangle',.16,650],[760,.11,'square',.10,840]],
-        error:[[220,.09,'square',.12,165],[160,.11,'square',.10,110]],
-        join:[[320,.075,'square',.12,440],[500,.085,'triangle',.15,660],[720,.12,'square',.10,850]],
-        leave:[[700,.065,'triangle',.10,520],[490,.09,'square',.10,280]],
-        respawn:[[280,.09,'triangle',.13,420],[480,.09,'triangle',.12,690]],
-        // V3.38: Descending 8-bit defeat jingle for kill parts and falling.
-        death:[[560,.11,'square',.18,390],[390,.12,'square',.17,260],[260,.16,'sawtooth',.13,120],[125,.19,'triangle',.16,55]],
-        chat:[[760,.05,'sine',.18,930]],
-        capture:[[210,.025,'square',.14,145],[860,.045,'triangle',.13,990]],
-        toggle:[[450,.04,'square',.09,560]]
-      };
-      function play(name){
-        if(!settings.enabled||settings.volume<=0||document.hidden)return;
-        const now=performance.now();
-        if(now-lastSoundAt<28)return; // prevent overlapping double-click event sounds
-        const ctx=getContext();if(!ctx)return;
-        lastSoundAt=now;
-        let at=ctx.currentTime+.006;
-        for(const [freq,duration,type,gain,endFreq] of (patterns[name]||patterns.click)){
-          tone(ctx,at,freq,duration,type,gain,endFreq);
-          at+=duration*.78;
-        }
-      }
-      // V3.39.1: Clearer, louder crunchy pixel footsteps, generated in Web Audio.
-      // Use a separate path from menu SFX so normal footsteps never mute clicks.
-      let footstepIndex=0;
-      function footstep(){
-        if(!settings.enabled||settings.volume<=0||document.hidden)return;
-        const ctx=getContext();if(!ctx)return;
-        const at=ctx.currentTime+.004;
-        const length=.085;
-        const buffer=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*length),ctx.sampleRate);
-        const samples=buffer.getChannelData(0);
-        // Short filtered noise sounds like a retro boot scuff, not a musical beep.
-        for(let i=0;i<samples.length;i++){
-          const t=i/samples.length;
-          samples[i]=(Math.random()*2-1)*(1-t)*(1-t);
-        }
-        const source=ctx.createBufferSource();source.buffer=buffer;
-        const filter=ctx.createBiquadFilter();filter.type='lowpass';
-        filter.frequency.value=footstepIndex++%2?1050:1350;
-        const amp=ctx.createGain();
-        amp.gain.setValueAtTime(.0001,at);
-        amp.gain.linearRampToValueAtTime(.44*settings.volume/100,at+.008);
-        amp.gain.exponentialRampToValueAtTime(.0001,at+length);
-        source.connect(filter);filter.connect(amp);amp.connect(ctx.destination);
-        source.start(at);source.stop(at+length+.005);
-        source.onended=()=>{source.disconnect();filter.disconnect();amp.disconnect();};
-      }
-      function save(){
-        try{localStorage.setItem(storageKey,JSON.stringify(settings));}catch(_){}
-      }
-      function setEnabled(value){settings.enabled=!!value;save();}
-      function setVolume(value){settings.volume=Math.max(0,Math.min(100,Number(value)||0));save();}
-      return {play,footstep,setEnabled,setVolume,get enabled(){return settings.enabled;},get volume(){return settings.volume;}};
-    })();
-    const kwgSoundToggle=document.getElementById('kwg-audio-toggle');
-    const kwgSoundMenu=document.getElementById('kwg-audio-menu');
-    const kwgSoundEnabled=document.getElementById('kwg-audio-enabled');
-    const kwgSoundVolume=document.getElementById('kwg-audio-volume');
-    const kwgSoundVolumeLabel=document.getElementById('kwg-audio-volume-label');
-    function syncKWGAudioUI(){
-      kwgSoundEnabled.checked=kwgAudio.enabled;
-      kwgSoundVolume.value=String(kwgAudio.volume);
-      kwgSoundVolumeLabel.textContent=kwgAudio.volume+'%';
-      document.getElementById('kwg-audio-icon').textContent=kwgAudio.enabled&&kwgAudio.volume>0?'♫':'×';
-      kwgSoundToggle.title=kwgAudio.enabled?'Sound settings':'Sound effects muted';
-    }
-    syncKWGAudioUI();
-    kwgSoundToggle.addEventListener('click',e=>{
-      e.stopPropagation();
-      const open=kwgSoundMenu.hidden;
-      kwgSoundMenu.hidden=!open;
-      kwgSoundToggle.setAttribute('aria-expanded',String(open));
-      if(open)kwgAudio.play('toggle');
-    });
-    kwgSoundMenu.addEventListener('click',e=>e.stopPropagation());
-    kwgSoundEnabled.addEventListener('change',()=>{
-      kwgAudio.setEnabled(kwgSoundEnabled.checked);syncKWGAudioUI();
-      if(kwgAudio.enabled)kwgAudio.play('success');
-    });
-    kwgSoundVolume.addEventListener('input',()=>{
-      kwgAudio.setVolume(kwgSoundVolume.value);syncKWGAudioUI();
-    });
-    kwgSoundVolume.addEventListener('change',()=>kwgAudio.play('select'));
-    document.addEventListener('pointerdown',e=>{
-      if(e.target.closest?.('#kwg-audio-dock'))return;
-      if(!kwgSoundMenu.hidden){
-        kwgSoundMenu.hidden=true;kwgSoundToggle.setAttribute('aria-expanded','false');
-      }
-    },true);
-    document.addEventListener('keydown',e=>{
-      if(e.key==='Escape'&&!kwgSoundMenu.hidden){
-        kwgSoundMenu.hidden=true;kwgSoundToggle.setAttribute('aria-expanded','false');
-      }
-    });
-    // One delegated listener covers existing and dynamically generated game buttons.
-    document.addEventListener('click',e=>{
-      const button=e.target.closest?.('button');
-      if(!button||button.closest('#kwg-audio-dock')||button.disabled)return;
-      if(button.matches('.home-tab,.inventory-tab,.store-tab,[data-kwg-setting]'))kwgAudio.play('tab');
-      else if(button.matches('#respawn-btn'))kwgAudio.play('respawn');
-      else if(button.matches('#leave-world-btn'))kwgAudio.play('leave');
-      else if(button.matches('#toggle-edit-btn'))kwgAudio.play('toggle');
-      else if(button.matches('#kwg-camera-capture'))kwgAudio.play('capture');
-      else if(button.matches('#kwg-camera-use,#save-avatar-editor-btn'))kwgAudio.play('success');
-      else if(button.matches('[id^="tool-"][id$="-btn"]'))kwgAudio.play('select');
-      else kwgAudio.play('click');
-    },true);
-    document.addEventListener('change',e=>{
-      if(e.target.matches?.('select:not(#kwg-audio-volume),input[type="checkbox"]:not(#kwg-audio-enabled)'))
-        kwgAudio.play('select');
-    });
+const socketsByUser = new Map();
+const playersBySocket = new Map();
 
-    let currentWorldName = null;
-    let loggedInUsername = null;
-    let localPlayerAvatar = null;
-    let currentCheckpoint = null;
-    let cloudRotationSpeedMultiplier = 1.0;
-    let currentWorldData = null;
-    let isAdmin = false;
-    let canEditCurrentWorld = false;
-    let chatMessagesLoaded = false;
-    let coinBalance = 100;
-    let storeItems = [];
-    let ownedStoreItems = [];
-    let activeStoreCategory = 'eyes';
-    let equippedCosmetics = {};
-    
-    const otherPlayers = {};
+function requireAuth(socket, cb) {
+  if (!socket.user) {
+    if (cb) cb({ success: false, message: 'You must be logged in.' });
+    return false;
+  }
+  return true;
+}
+function requireAdmin(socket, cb) {
+  if (!requireAuth(socket, cb)) return false;
+  if (!(socket.user.isAdmin || socket.user.is_admin)) {
+    cb && cb({ success: false, message: 'Admin access required.' });
+    return false;
+  }
+  return true;
+}
 
-    let isRightClicking = false;
-    let camOrbitAngleX = 0; 
-    let camOrbitAngleY = 0; 
-    let lastMouseX = 0;
-    let lastMouseY = 0;
-
-    let toastTimeout = null;
-    function showToast(msg, duration = 2500) {
-      const toast = document.getElementById('game-toast');
-      if (!toast) return;
-      toast.textContent = msg;
-      toast.style.display = 'block';
-      if(/failed|could not|error|denied|limit reached|cannot|not allowed|timed out/i.test(String(msg)))
-        kwgAudio.play('error');
-      else if(/saved|success|ready|copied|purchased|sent|created/i.test(String(msg)))
-        kwgAudio.play('success');
-      if (toastTimeout) clearTimeout(toastTimeout);
-      toastTimeout = setTimeout(() => {
-        toast.style.display = 'none';
-      }, duration);
-    }
-
-    function updateCoinDisplays() {
-      const home = document.getElementById('home-coin-count');
-      const store = document.getElementById('store-coin-count');
-      if (home) home.textContent = String(coinBalance);
-      if (store) store.textContent = String(coinBalance);
-    }
-
-    function storeCategoryLabel(category) {
-      return ({ eyes:'Eyes', mouth:'Mouths', torso_decal:'Shirts / Decals', hat:'Hats', head_shape:'Head Shapes' })[category] || category;
-    }
-
-    function ownedStoreIdSet() {
-      return new Set(ownedStoreItems.map(item => Number(item.id)));
-    }
-
-    function itemById(id) {
-      id = Number(id);
-      return ownedStoreItems.find(item => Number(item.id) === id) || storeItems.find(item => Number(item.id) === id) || null;
-    }
-
-    function cosmeticsForAppearance(app = {}) {
-      const result = {};
-      const slots = [
-        ['eyesItemId','eyes'], ['mouthItemId','mouth'], ['torsoDecalItemId','torso_decal'],
-        ['hatItemId','hat'], ['headShapeItemId','head_shape']
-      ];
-      for (const [slot, category] of slots) {
-        const item = itemById(app[slot]);
-        if (item && item.category === category) result[category] = item;
-      }
-      return result;
-    }
-
-    function setStoreMessage(message, isError = false) {
-      const el = document.getElementById('store-message');
-      if (!el) return;
-      el.style.color = isError ? '#e74c3c' : '#2ecc71';
-      el.textContent = message || '';
-    }
-
-    function renderStoreItems() {
-      const grid = document.getElementById('store-items-grid');
-      if (!grid) return;
-      grid.innerHTML = '';
-      const owned = ownedStoreIdSet();
-      const items = storeItems.filter(item => item.category === activeStoreCategory);
-      if (!items.length) {
-        const empty = document.createElement('div');
-        empty.style.cssText = 'grid-column:1/-1;color:#aaa;padding:20px;text-align:center;border:2px dashed #444;';
-        empty.textContent = `No ${storeCategoryLabel(activeStoreCategory).toLowerCase()} are available right now.`;
-        grid.appendChild(empty);
-        return;
-      }
-      for (const item of items) {
-        const card = document.createElement('div');
-        card.className = 'store-item-card';
-        const preview = document.createElement('div');
-        preview.className = 'store-item-preview';
-        if (item.assetKind === 'image') {
-          const img = document.createElement('img');
-          img.src = item.assetUrl;
-          img.alt = item.name;
-          preview.appendChild(img);
-        } else {
-          renderMeshThumbnail(preview, item);
-        }
-        const name = document.createElement('div');
-        name.className = 'store-item-name';
-        name.textContent = item.name;
-        const price = document.createElement('div');
-        price.className = 'store-item-price';
-        price.textContent = Number(item.price) === 0 ? 'FREE' : `🪙 ${item.price}`;
-        const button = document.createElement('button');
-        button.className = 'store-buy-btn';
-        if (owned.has(Number(item.id))) {
-          button.textContent = 'OWNED';
-          button.disabled = true;
-        } else {
-          button.textContent = Number(item.price) === 0 ? 'GET' : 'BUY';
-          button.disabled = coinBalance < Number(item.price || 0);
-          button.addEventListener('click', () => {
-            setStoreMessage('Purchasing...');
-            button.disabled = true;
-            socket.emit('buy_store_item', { itemId: item.id }, (res) => {
-              if (!res || !res.success) {
-                setStoreMessage((res && res.message) || 'Purchase failed.', true);
-                button.disabled = false;
-                return;
-              }
-              coinBalance = Number(res.coins ?? coinBalance);
-              updateCoinDisplays();
-              setStoreMessage(res.alreadyOwned ? 'You already own that item.' : `${item.name} added to your inventory!`);
-              refreshStoreData();
-            });
-          });
-        }
-        card.append(preview,name,price,button);
-        grid.appendChild(card);
-      }
-    }
-
-    function refreshCustomizerStoreOptions() {
-      const configs = [
-        ['cfg-eyes','eyes','None'],
-        ['cfg-mouth','mouth','None'],
-        ['cfg-torso-decal','torso_decal','None']
-      ];
-      for (const [id, category, noneLabel] of configs) {
-        const select = document.getElementById(id);
-        if (!select) continue;
-        const previous = select.value;
-        select.innerHTML = '';
-        const none = document.createElement('option');
-        none.value = 'none';
-        none.textContent = noneLabel;
-        select.appendChild(none);
-        ownedStoreItems.filter(item => item.category === category).forEach(item => {
-          const opt = document.createElement('option');
-          opt.value = `store:${item.id}`;
-          opt.textContent = item.name;
-          select.appendChild(opt);
-        });
-        if ([...select.options].some(o => o.value === previous)) select.value = previous;
-      }
-
-      const hat = document.getElementById('cfg-hat');
-      if (hat) {
-        [...hat.querySelectorAll('option[data-store-item]')].forEach(o => o.remove());
-        ownedStoreItems.filter(item => item.category === 'hat').forEach(item => {
-          const opt = document.createElement('option');
-          opt.value = `store:${item.id}`;
-          opt.textContent = `${item.name} (Owned)`;
-          opt.dataset.storeItem = '1';
-          hat.appendChild(opt);
-        });
-      }
-      const head = document.getElementById('cfg-head-shape');
-      if (head) {
-        [...head.querySelectorAll('option[data-store-item]')].forEach(o => o.remove());
-        ownedStoreItems.filter(item => item.category === 'head_shape').forEach(item => {
-          const opt = document.createElement('option');
-          opt.value = `store:${item.id}`;
-          opt.textContent = `${item.name} (Owned)`;
-          opt.dataset.storeItem = '1';
-          head.appendChild(opt);
-        });
-      }
-    }
-
-    function refreshStoreData(done) {
-      if (!loggedInUsername) return;
-      socket.emit('get_store', (res) => {
-        if (!res || !res.success) {
-          setStoreMessage((res && res.message) || 'Could not load the store.', true);
-          if (done) done(res);
-          return;
-        }
-        coinBalance = Number(res.coins || 0);
-        storeItems = Array.isArray(res.items) ? res.items : [];
-        ownedStoreItems = Array.isArray(res.ownedItems) ? res.ownedItems : [];
-        updateCoinDisplays();
-        refreshCustomizerStoreOptions();
-        renderStoreItems();
-        if (done) done(res);
-      });
-    }
-
-    let playerAppearance = JSON.parse(localStorage.getItem('sp_player_appearance')) || {
-      hat: 'none',
-      headShape: 'sphere',
-      headColor: '#f1c40f',
-      torsoColor: '#3388ff',
-      leftArmColor: '#3388ff',
-      rightArmColor: '#3388ff',
-      leftLegColor: '#1c2833',
-      rightLegColor: '#1c2833',
-      eyesItemId: null,
-      mouthItemId: null,
-      torsoDecalItemId: null,
-      hatItemId: null,
-      headShapeItemId: null
-    };
-
-    // --- AUTHENTICATION LISTENERS ---
-    const authErrorMsg = document.getElementById('auth-error-msg');
-    let sessionToken = localStorage.getItem('kwg_session_token') || '';
-
-    function finishAuthentication(res) {
-      loggedInUsername = res.username;
-      setTimeout(refreshFriendBadge,100);
-      setTimeout(refreshNotifications,150);
-      isAdmin = !!res.isAdmin;
-      document.body.classList.toggle('kwg-admin-authenticated', isAdmin);
-      if (res.sessionToken) { sessionToken = res.sessionToken; localStorage.setItem('kwg_session_token', sessionToken); }
-      document.querySelectorAll('.admin-home-tab').forEach(el => el.style.display = isAdmin ? 'inline-flex' : 'none');
-      if (res.appearance) playerAppearance = res.appearance;
-      coinBalance = Number(res.coins ?? 100);
-      updateCoinDisplays();
-      refreshStoreData();
-      document.getElementById('auth-screen').style.display = 'none';
-      document.getElementById('home-screen').style.display = 'flex';
-      document.getElementById('logged-user-display').textContent = filterKWGUserText(loggedInUsername);
-      switchHomeTab('home');
-      renderHomeOverview();
-    }
-
-    document.getElementById('auth-login-btn').addEventListener('click', () => {
-      const username = document.getElementById('auth-username').value;
-      const password = document.getElementById('auth-password').value;
-      authErrorMsg.textContent = '';
-      socket.emit('login', { username, password }, (res) => res.success ? finishAuthentication(res) : (authErrorMsg.textContent = res.message));
-    });
-
-    document.getElementById('auth-register-btn').addEventListener('click', () => {
-      const username = document.getElementById('auth-username').value;
-      const password = document.getElementById('auth-password').value;
-      authErrorMsg.textContent = '';
-      socket.emit('register', { username, password }, (res) => res.success ? finishAuthentication(res) : (authErrorMsg.textContent = res.message));
-    });
-
-    document.getElementById('logout-btn').addEventListener('click', () => {
-      const oldToken = sessionToken;
-      localStorage.removeItem('kwg_session_token'); sessionToken = '';
-      socket.emit('logout', {token:oldToken}, () => location.reload());
-    });
-
-    if (sessionToken) {
-      socket.emit('resume_session', {token:sessionToken}, (res) => {
-        if (res && res.success) finishAuthentication(res);
-        else { localStorage.removeItem('kwg_session_token'); sessionToken=''; }
-      });
-    }
-
-    // --- STORE UI ---
-    document.getElementById('open-store-btn').addEventListener('click', () => switchHomeTab('store'));
-    document.querySelectorAll('.store-tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        activeStoreCategory = btn.dataset.storeCategory;
-        document.querySelectorAll('.store-tab').forEach(b => b.classList.toggle('active', b === btn));
-        renderStoreItems();
-      });
-    });
-
-    // --- PART COUNT SYSTEM ---
-    function updatePartCounter() {
-      if (!currentWorldData || !currentWorldData.blocks) return;
-      const count = Object.keys(currentWorldData.blocks).length;
-      const counter = document.getElementById('part-counter');
-      if(counter)counter.textContent = `${count.toLocaleString()} / 1,400 parts`;
-    }
-
-    // --- PROCEDURAL TEXTURE GENERATOR ---
-    const textureCache = {};
-    function getMaterialTexture(matType) {
-      if (!['grid','brick','wood','kill','checkpoint','spawn','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
-      if (textureCache[matType]) return textureCache[matType];
-
-      const canvas = document.createElement('canvas');
-      canvas.width = 128; canvas.height = 128;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 128, 128);
-
-      if (matType === 'grid') {
-        ctx.strokeStyle = '#888888'; ctx.lineWidth = 4;
-        ctx.strokeRect(0, 0, 128, 128);
-      } else if (matType === 'brick') {
-        ctx.strokeStyle = '#666666'; ctx.lineWidth = 3;
-        ctx.strokeRect(0, 0, 128, 64); ctx.strokeRect(0, 64, 128, 64);
-        ctx.beginPath();
-        ctx.moveTo(64, 0); ctx.lineTo(64, 64);
-        ctx.moveTo(32, 64); ctx.lineTo(32, 128);
-        ctx.moveTo(96, 64); ctx.lineTo(96, 128);
-        ctx.stroke();
-      } else if (matType === 'wood') {
-        ctx.fillStyle = '#eeeeee'; ctx.fillRect(0, 0, 128, 128);
-        ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 3;
-        for (let y = 0; y <= 128; y += 32) {
-          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(128, y); ctx.stroke();
-        }
-      } else if (matType === 'kill') {
-        // A tileable pixel skull-and-crossbones stamp. Its repeat/UV scaling
-        // uses the exact same path as Grid Pattern, including resized parts.
-        ctx.fillStyle = '#343a43';
-        ctx.lineCap = 'square';
-        ctx.lineWidth = 11;
-        ctx.beginPath();
-        ctx.moveTo(32, 102); ctx.lineTo(96, 55);
-        ctx.moveTo(32, 55); ctx.lineTo(96, 102);
-        ctx.stroke();
-        // Squared bone ends, deliberately drawn as pixels rather than emojis.
-        [[25,47],[93,47],[25,94],[93,94]].forEach(([x,y])=>{
-          ctx.fillRect(x,y,12,12);
-        });
-        // Skull silhouette and jaw.
-        ctx.fillRect(42, 19, 44, 12);
-        ctx.fillRect(35, 30, 58, 31);
-        ctx.fillRect(43, 60, 42, 14);
-        ctx.fillRect(49, 74, 30, 8);
-        // Negative-space eye sockets, nose and teeth.
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(45, 40, 13, 13);
-        ctx.fillRect(70, 40, 13, 13);
-        ctx.fillRect(61, 54, 7, 7);
-        ctx.fillRect(54, 69, 5, 10);
-        ctx.fillRect(63, 69, 5, 10);
-        ctx.fillRect(72, 69, 5, 10);
-      } else if (matType === 'checkpoint') {
-        // Tileable pixel-art checkpoint marker: a flag and check mark.
-        // White tile lets the part's yellow tint color the whole surface.
-        ctx.fillStyle='#343a43';
-        ctx.fillRect(33,22,10,85); // flag pole
-        ctx.fillRect(28,103,24,9); // stand
-        ctx.fillRect(43,22,57,10);
-        ctx.fillRect(90,32,10,37);
-        ctx.fillRect(43,64,57,9);
-        // A chunky pixel check on the flag.
-        ctx.fillRect(53,43,10,10);
-        ctx.fillRect(63,53,10,10);
-        ctx.fillRect(73,43,10,10);
-        ctx.fillRect(83,33,10,10);
-      } else if (matType === 'spawn') {
-        // Repeatable pixel-art PLAY button, tinted purple by the part color.
-        ctx.fillStyle='#343a43';
-        ctx.fillRect(24,24,80,80);
-        ctx.fillStyle='#ffffff';
-        ctx.fillRect(32,32,64,64);
-        ctx.fillStyle='#343a43';
-        ctx.fillRect(45,40,12,48);
-        ctx.fillRect(57,46,12,36);
-        ctx.fillRect(69,52,12,24);
-        ctx.fillRect(81,58,9,12);
-      } else if (matType === 'yellow_flag') {
-        ctx.fillStyle = '#f1c40f'; ctx.fillRect(0, 0, 128, 128);
-        ctx.fillStyle = '#f39c12'; ctx.beginPath(); ctx.arc(64, 64, 30, 0, Math.PI * 2); ctx.fill();
-      } else if (matType === 'checker_flag') {
-        const size = 32;
-        for (let r = 0; r < 4; r++) {
-          for (let c = 0; c < 4; c++) {
-            ctx.fillStyle = (r + c) % 2 === 0 ? '#ffffff' : '#111111';
-            ctx.fillRect(c * size, r * size, size, size);
-          }
-        }
-      }
-
-      const texture = new THREE.CanvasTexture(canvas);
-      if (matType !== 'yellow_flag' && matType !== 'checker_flag') {
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-      }
-      textureCache[matType] = texture;
-      return texture;
-    }
-
-    // --- DASHBOARD NAVIGATION ---
-    function makeWorldCard(w) {
-      const card = document.createElement('div');
-      card.className = 'room-card';
-      card.innerHTML = `<div class="kwg-world-card-thumb"><span>NO PHOTO</span></div><div class="room-info"><span class="room-title"></span><span class="room-description"></span><span class="room-meta"></span></div><div class="kwg-world-card-actions"><button class="world-like-btn ${w.likedByMe ? 'liked' : ''}">${w.likedByMe ? '♥' : '♡'} ${w.likes || 0}</button><button class="join-btn">Enter</button></div>`;
-      card.querySelector('.room-title').textContent = filterKWGUserText(w.displayName || w.name);
-      card.querySelector('.room-description').textContent = filterKWGUserText(w.description || 'Explore this world');
-      card.querySelector('.room-meta').textContent = `By ${filterKWGUserText(w.ownerUsername || 'Unknown')} • ${w.onlineCount} online • ♥ ${w.likes || 0}`;
-      if (w.thumbnailUrl && /^https:\/\//i.test(w.thumbnailUrl)) {
-        const img=document.createElement('img');img.src=w.thumbnailUrl;img.alt=`Preview of ${filterKWGUserText(w.displayName||w.name)}`;img.loading='lazy';
-        card.querySelector('.kwg-world-card-thumb').replaceChildren(img);
-      }
-      card.querySelector('.join-btn').addEventListener('click', () => joinSelectedWorld(w.name));
-      card.querySelector('.world-like-btn').addEventListener('click', () => socket.emit('toggle_world_like',{worldName:w.name},res=>{ if(res?.success){ renderRoomList(); renderHomeOverview(); } }));
-      if ((w.ownerUsername || '').toLowerCase() === (loggedInUsername || '').toLowerCase()) {
-        const actions=card.lastElementChild;
-        const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE';
-        del.title='Delete your world permanently';
-        del.onclick=()=>{ if(confirm(`Permanently delete your world "${w.name}"? This cannot be undone.`)) socket.emit('delete_own_world',{worldName:w.name},res=>{ if(res?.success){renderRoomList();renderHomeOverview();} else alert(res?.message||'Could not delete world.'); }); };
-        actions.insertBefore(del, actions.querySelector('.join-btn'));
-      }
-      return card;
-    }
-
-    function renderRoomList() {
-      const sort = document.getElementById('world-sort')?.value || 'recent';
-      socket.emit('get_worlds', {sort}, (res) => {
-        if (!res.success) return;
-        const listElem = document.getElementById('room-list'); listElem.innerHTML = '';
-        res.worlds.forEach(w => listElem.appendChild(makeWorldCard(w)));
-      });
-    }
-
-    function renderHomeAvatar() {
-      const box=document.getElementById('home-avatar-preview'); if(!box)return;
-      box.innerHTML='<div style="color:#888">LOADING AVATAR...</div>';
-      const draw=()=>{ try { const avatar=buildBlockyAvatar(playerAppearance,cosmeticsForAppearance(playerAppearance)); thumbImageFromObject(box,avatar); } catch(e){ console.warn('Home avatar preview failed:',e); box.textContent='AVATAR PREVIEW UNAVAILABLE'; } };
-      draw();
-      // Uploaded GLB cosmetics attach asynchronously, so redraw once after they have had time to load.
-      setTimeout(draw,700);
-    }
-
-    function renderHomeInventory() {
-      const grid=document.getElementById('home-inventory-grid'); if(!grid)return; grid.innerHTML='';
-      if(!ownedStoreItems.length){grid.innerHTML='<div style="grid-column:1/-1;color:#888;padding:12px">No purchased items yet. Visit the Store to build your inventory.</div>';return;}
-      ownedStoreItems.forEach(item=>{
-        const card=document.createElement('div');card.className='home-inventory-card';
-        const thumb=document.createElement('div');thumb.className='home-inventory-thumb';
-        if(item.assetKind==='image'){const img=document.createElement('img');img.src=item.assetUrl||'';img.alt=item.name||'';thumb.appendChild(img);}
-        else if(item.assetKind==='glb') renderMeshThumbnail(thumb,item); else thumb.textContent='ITEM';
-        const name=document.createElement('div');name.className='home-inventory-name';name.textContent=item.name||'Unnamed Item';
-        card.append(thumb,name);grid.appendChild(card);
-      });
-    }
-
-    function renderHomeOverview() {
-      refreshStoreData(()=>{renderHomeInventory();renderHomeAvatar();});
-      socket.emit('get_worlds', {sort:'recent'}, (res) => {
-        if (!res?.success) return;
-        const box=document.getElementById('home-owned-worlds'); if(!box)return; box.innerHTML='';
-        const mine=res.worlds.filter(w=>(w.ownerUsername||'').toLowerCase()===(loggedInUsername||'').toLowerCase());
-        mine.forEach(w=>box.appendChild(makeWorldCard(w)));
-        if(!mine.length) box.innerHTML='<div style="color:#888;padding:10px">You do not own any worlds yet. Create one from the Worlds tab!</div>';
-      });
-    }
-    document.getElementById('world-sort').addEventListener('change', renderRoomList);
-    document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click',()=>switchHomeTab(b.dataset.goTab)));
-
-    function joinSelectedWorld(roomName) {
-      isEditMode = false;
-      buildSubTool = null;
-      document.body.classList.remove('kwg-editing');
-      updateEditorCursor();
-      currentWorldName = roomName;
-      currentCheckpoint = null;
-      canEditCurrentWorld = false;
-
-      socket.emit('join_world', { worldName: roomName, appearance: playerAppearance }, (res) => {
-        if (!res.success) {
-          alert(res.message);
-          return;
-        }
-
-        document.getElementById('home-screen').style.display = 'none';
-        document.getElementById('create-world-modal').style.display = 'none';
-        document.body.classList.add('kwg-in-world');
-        kwgAudio.play('join');
-        requestAnimationFrame(resizeWorldViewport);
-        document.getElementById('hud').style.display = 'flex';
-        document.getElementById('room-info-label').style.display = 'block';
-        document.getElementById('current-room-text').textContent = filterKWGUserText(res.worldData?.displayName || roomName);
-        canEditCurrentWorld = !!res.canEdit;
-        if (res.selfAppearance) playerAppearance = res.selfAppearance;
-        equippedCosmetics = res.selfCosmetics || cosmeticsForAppearance(playerAppearance);
-        const editBtn = document.getElementById('toggle-edit-btn');
-        editBtn.style.display = canEditCurrentWorld ? 'block' : 'none';
-        editBtn.title = canEditCurrentWorld ? 'Edit this world' : 'Only the world owner or an admin can edit this world';
-
-        loadWorldData(res.worldData, res.players, res.selfId, res.selfSpawn);
-        resetWorldInfoEditor(res.worldData,roomName);
-        document.getElementById('world-chat').style.display = 'block';
-        startWorldIdleWatch();
-        loadWorldChat();
-      });
-    }
-
-    const createModal = document.getElementById('create-world-modal');
-    document.getElementById('open-create-world-btn').addEventListener('click', () => {
-      document.getElementById('new-world-name').value = '';
-      document.getElementById('create-world-error').textContent = '';
-      document.getElementById('home-screen').style.display = 'none';
-      const templateSelect = document.getElementById('new-world-template');
-      templateSelect.innerHTML = '<option value="blank">Blank Baseplate</option>';
-      socket.emit('get_world_templates', (res) => {
-        if (res?.success) (res.templates || []).forEach(t => {
-          const opt=document.createElement('option'); opt.value=t.id; opt.textContent=filterKWGUserText(t.name); templateSelect.appendChild(opt);
-        });
-      });
-      createModal.style.display = 'flex';
-    });
-
-    document.getElementById('close-create-world').addEventListener('click', () => {
-      createModal.style.display = 'none';
-      document.getElementById('home-screen').style.display = 'flex';
-    });
-
-    document.getElementById('confirm-create-world-btn').addEventListener('click', () => {
-      const name = document.getElementById('new-world-name').value.trim();
-      if (!name) {
-        document.getElementById('create-world-error').textContent = 'Please enter a world name.';
-        return;
-      }
-      const templateId = document.getElementById('new-world-template').value || 'blank';
-      socket.emit('create_world', { name, templateId }, (res) => {
-        if (res.success) {
-          createModal.style.display = 'none';
-          joinSelectedWorld(name);
-        } else {
-          document.getElementById('create-world-error').textContent = res.message;
-        }
-      });
-    });
-
-    // --- WORLD SAVE STATUS ---
-    // Every editor write is tracked until the server acknowledges it.
-    let pendingWorldSaves = 0;
-
-    function updateSaveStatusUI() {
-      const el = document.getElementById('save-status');
-      const leaveBtn = document.getElementById('leave-world-btn');
-      if (!el) return;
-      if (pendingWorldSaves > 0) {
-        el.style.display = 'flex';
-        el.textContent = pendingWorldSaves === 1 ? 'Saving change...' : `Saving ${pendingWorldSaves} changes...`;
-        if (leaveBtn) {
-          leaveBtn.title = 'Saving changes…';
-          leaveBtn.style.opacity = '0.65';
-        }
-      } else {
-        el.style.display = 'flex';
-        el.textContent = 'All changes saved';
-        if (leaveBtn) {
-          leaveBtn.title = 'Leave World';
-          leaveBtn.style.opacity = '1';
-        }
-        clearTimeout(updateSaveStatusUI.hideTimer);
-        updateSaveStatusUI.hideTimer = setTimeout(() => {
-          if (pendingWorldSaves === 0 && el) el.style.display = 'none';
-        }, 1200);
-      }
-    }
-
-    // Stage changes locally during Edit Mode. Commit sequentially on exit.
-    const stagedWorldEdits=[];
-    let worldCommitInProgress=false;
-    function emitWorldSave(eventName, payload, callback) {
-      if(isEditMode && canEditCurrentWorld){
-        stagedWorldEdits.push({eventName,payload:JSON.parse(JSON.stringify(payload)),callback});
-        return;
-      }
-      pendingWorldSaves++;
-      updateSaveStatusUI();
-      socket.emit(eventName, payload, (res) => {
-        pendingWorldSaves=Math.max(0,pendingWorldSaves-1);
-        updateSaveStatusUI();
-        if(callback)callback(res);
-      });
-    }
-    socket.on('world_info_updated', info=>{
-      if(!info || info.worldName!==currentWorldName)return;
-      if(currentWorldData)Object.assign(currentWorldData,{displayName:info.displayName,description:info.description,thumbnailUrl:info.thumbnailUrl});
-      document.getElementById('current-room-text').textContent=filterKWGUserText(info.displayName||currentWorldName);
-      if(!isEditMode)resetWorldInfoEditor(currentWorldData,currentWorldName);
-    });
-    function stageWorldSettings(settings){
-      if(isEditMode && canEditCurrentWorld){
-        stagedWorldEdits.push({eventName:'world_settings_update',payload:{worldName:currentWorldName,settings:JSON.parse(JSON.stringify(settings))}});
-      }else socket.emit('world_settings_update',{worldName:currentWorldName,settings});
-    }
-    // V3.40: Batch editor writes. Previously each change waited for a separate
-    // full PostgreSQL world read/write; 100 edits now use one atomic world write.
-    // World info (including thumbnail upload) is kept as its own save operation.
-    async function commitStagedWorldEdits(){
-      if(worldCommitInProgress)return false;
-      if(kwgFreeCamera.active) stopWorldThumbnailCamera();
-      if(prepareWorldInfoSave()===false)return false;
-      worldCommitInProgress=true;
-      const totalEdits=stagedWorldEdits.length;
-      const saveLoading=beginKWGLoading('SAVING WORLD',{
-        description:totalEdits?`Saving 0 of ${totalEdits} changes`:'Checking world changes',
-        progress:totalEdits?0:100,priority:100,immediate:true
-      });
-      try{
-        while(stagedWorldEdits.length){
-          const status=document.getElementById('save-status');
-          if(status){status.style.display='flex';status.textContent=`Saving ${stagedWorldEdits.length} changes…`;}
-          const first=stagedWorldEdits[0];
-          // Keep event order. Save the largest contiguous group of block and
-          // environment edits together, stopping before world_info_update.
-          const batch=[];
-          if(first.eventName==='block_update'||first.eventName==='world_settings_update'){
-            for(const edit of stagedWorldEdits){
-              if(batch.length>=100)break;
-              if(edit.eventName!=='block_update'&&edit.eventName!=='world_settings_update')break;
-              batch.push(edit);
-            }
-          }
-          const isBatch=batch.length>0;
-          const count=isBatch?batch.length:1;
-          const eventName=isBatch?'world_edits_batch':first.eventName;
-          const payload=isBatch?{
-            worldName:currentWorldName,
-            edits:batch.map(edit=>({eventName:edit.eventName,payload:edit.payload}))
-          }:first.payload;
-          const res=await new Promise(resolve=>{
-            const timer=setTimeout(()=>resolve({success:false,message:'Save timed out. Check your connection and retry.'}),25000);
-            socket.emit(eventName,payload,r=>{clearTimeout(timer);resolve(r);});
-          });
-          if(!res?.success){
-            showToast('Save failed: '+(res?.message||'Please retry Save & Exit.'),6000);
-            return false; // Keep all unacknowledged changes staged for retry.
-          }
-          // Only discard edits after the server confirms its database write.
-          const completed=stagedWorldEdits.splice(0,count);
-          for(const edit of completed){
-            if(edit.eventName==='world_info_update') {
-              if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl});
-              kwgInfoOriginal={displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl};
-              kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
-              document.getElementById('current-room-text').textContent=filterKWGUserText(res.displayName);
-              refreshWorldInfoThumbnail();
-            }
-            if(edit.callback)edit.callback(res);
-          }
-          saveLoading.update(
-            Math.round(((totalEdits-stagedWorldEdits.length)/totalEdits)*100),
-            `Saved ${totalEdits-stagedWorldEdits.length} of ${totalEdits} changes`
-          );
-        }
-        const status=document.getElementById('save-status');
-        if(status){status.textContent='All changes saved';setTimeout(()=>{if(!stagedWorldEdits.length&&status)status.style.display='none';},1400);}
-        return true;
-      }finally{
-        saveLoading.end();
-        worldCommitInProgress=false;
-      }
-    }
-
-    // --- 10 MINUTE IN-WORLD IDLE TIMEOUT ---
-    const WORLD_IDLE_LIMIT_MS = 10 * 60 * 1000;
-    let worldLastActivityAt = Date.now();
-    let worldIdleTimer = null;
-
-    function noteWorldActivity() {
-      if (!currentWorldName) return;
-      worldLastActivityAt = Date.now();
-    }
-
-    ['pointerdown','pointermove','keydown','wheel','touchstart'].forEach(type => {
-      window.addEventListener(type, noteWorldActivity, {passive:true});
-    });
-
-    function startWorldIdleWatch() {
-      worldLastActivityAt = Date.now();
-      clearInterval(worldIdleTimer);
-      worldIdleTimer = setInterval(() => {
-        if (!currentWorldName) return;
-        if (!isEditMode && Date.now() - worldLastActivityAt >= WORLD_IDLE_LIMIT_MS) {
-          clearInterval(worldIdleTimer);
-          worldIdleTimer = null;
-          performLeaveWorld();
-          setTimeout(() => {
-            alert('You were disconnected from the world because you were idle for 10 minutes.');
-          }, 50);
-        }
-      }, 5000);
-    }
-
-    function performLeaveWorld() {
-      clearInterval(worldIdleTimer);
-      worldIdleTimer = null;
-      socket.emit('leave_world');
-
-      if (localPlayerAvatar) { scene.remove(localPlayerAvatar); localPlayerAvatar = null; }
-      for (const id in otherPlayers) {
-        scene.remove(otherPlayers[id].mesh);
-        delete otherPlayers[id];
-      }
-      selectBlock(null);
-      for (const id in worldBlocks) { scene.remove(worldBlocks[id]); delete worldBlocks[id]; }
-      if (previewMesh) { scene.remove(previewMesh); previewMesh = null; }
-
-      stopWorldThumbnailCamera();
-      currentWorldName = null;
-      resetWorldInfoEditor(null,null);
-      stagedWorldEdits.length=0;
-
-      document.body.classList.remove('kwg-in-world');
-      requestAnimationFrame(resizeWorldViewport);
-      document.getElementById('hud').style.display = 'none';
-      document.getElementById('world-chat').style.display = 'none';
-      document.getElementById('world-chat-messages').innerHTML = '';
-      document.getElementById('room-info-label').style.display = 'none';
-      document.getElementById('build-toolbar').style.display = 'none';
-      document.getElementById('kwg-properties-window')?.style.setProperty('display','none');
-      document.getElementById('kwg-settings-window')?.classList.remove('kwg-open');
-      document.body.classList.remove('kwg-editing');
-      document.getElementById('home-screen').style.display = 'flex';
-
-      isEditMode = false;
-      buildSubTool = null;
-      document.body.classList.remove('kwg-editing');
-      updateEditorCursor();
-      const recolorPanel=document.getElementById('kwg-recolor-panel');
-      if(recolorPanel)recolorPanel.style.display='none';
-      const placePanel=document.getElementById('kwg-place-panel');
-      if(placePanel)placePanel.style.display='none';
-      ['select','place','move','scale','recolor','delete'].forEach(tool=>{
-        document.getElementById(`tool-${tool}-btn`)?.classList.remove('active');
-      });
-      document.getElementById('toggle-edit-btn').classList.remove('active');
-      document.getElementById('kwg-edit-mode-label').textContent='EDIT';
-      renderRoomList();
-    }
-
-    document.getElementById('leave-world-btn').addEventListener('click', async () => {
-      if(worldCommitInProgress)return;
-      if(isEditMode){if(!(await commitStagedWorldEdits()))return;}
-      if (pendingWorldSaves > 0) {
-        const leaveAnyway = confirm(
-          `There ${pendingWorldSaves === 1 ? 'is' : 'are'} still ${pendingWorldSaves} unsaved ${pendingWorldSaves === 1 ? 'change' : 'changes'} being saved.\n\nThe server has not finished saving them yet. Leaving now could lose those changes. Are you sure you want to leave?`
-        );
-        if (!leaveAnyway) return;
-      }
-      performLeaveWorld();
-    });
-
-    document.getElementById('respawn-btn').addEventListener('click', () => {
-      respawnPlayer();
-    });
-
-
-    // KWG V3.35 — User-generated text filter. Server is authoritative;
-    // client uses the same filter for optimistic previews and legacy content.
-    // Account passwords, internal IDs and numeric game data must NOT be filtered.
-    const KWG_BLOCKED_TERMS = [
-      'fuck','fack','fucks','fucker','fuckers','fucking','motherfucker','motherfucking',
-      'shit','shits','shitty','bullshit','bitch','bitches','bitching',
-      'ass','asshole','assholes','dumbass','jackass','bastard','bastards',
-      'damn','damned','hell','crap','piss','pissed','pissing',
-      'dick','dicks','dickhead','cock','cocks','cocksucker','pussy','cunt','cunts',
-      'slut','sluts','whore','whores','wtf','stfu',
-      'nigger','niggers','nigga','niggas','faggot','faggots','fag','fags',
-      'kike','kikes','spic','spics','chink','chinks','gook','gooks',
-      'wetback','wetbacks','beaner','beaners','raghead','ragheads',
-      'paki','pakis','tranny','trannies','retard','retards','retarded',
-      'dyke','dykes','coon','coons'
-    ];
-    const KWG_BLOCKED_REGEX = new RegExp(
-      '(^|[^a-z])(' + KWG_BLOCKED_TERMS
-        .sort((a,b)=>b.length-a.length)
-        .map(term=>term.split('').join('[\\s._-]{0,3}'))
-        .join('|') + ')(?![a-z])','gi'
+async function migrate() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id BIGSERIAL PRIMARY KEY,
+      username VARCHAR(16) UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      appearance JSONB NOT NULL DEFAULT '{}'::jsonb,
+      is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+      coins INTEGER NOT NULL DEFAULT 100,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    function filterKWGUserText(value){
-      const raw=String(value??'');
-      if(!raw)return raw;
-      // Map common leetspeak and Unicode accents to comparable letters while
-      // keeping an index for masking the exact characters in the original text.
-      const map={'0':'o','1':'i','3':'e','4':'a','5':'s','7':'t','@':'a','$':'s',
-        '!':'i','|':'i','€':'e','£':'l','+':'t','а':'a','е':'e','о':'o',
-        'р':'p','с':'c','х':'x','у':'y','і':'i'};
-      let folded='',offsets=[];
-      for(let i=0;i<raw.length;){
-        const ch=String.fromCodePoint(raw.codePointAt(i));
-        const trailingPunctuation=['!','@','$'].includes(ch) && !/[a-z]/i.test(raw[i+ch.length]||'');
-        const plain=(trailingPunctuation?ch:(map[ch]||ch.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase()));
-        for(const unit of plain){folded+=unit;offsets.push([i,i+ch.length]);}
-        i+=ch.length;
-      }
-      const masked=new Set();
-      for(const match of folded.matchAll(KWG_BLOCKED_REGEX)){
-        const start=match.index+match[1].length;
-        const end=start+match[2].length;
-        for(let j=start;j<end;j++){
-          const bounds=offsets[j];if(!bounds)continue;
-          for(let k=bounds[0];k<bounds[1];k++)if(!/\s/.test(raw[k]))masked.add(k);
-        }
-      }
-      // Numbers are masked even when embedded in otherwise permitted words.
-      for(let i=0;i<raw.length;i++)if(/\p{N}/u.test(raw[i]))masked.add(i);
-      return raw.split('').map((ch,i)=>masked.has(i)?'*':ch).join('');
-    }
-    
-    // --- PER-WORLD CHAT ---
-    function escapeChatText(value) {
-      const div = document.createElement('div');
-      div.textContent = value;
-      return div.innerHTML;
-    }
+    CREATE TABLE IF NOT EXISTS worlds (
+      id BIGSERIAL PRIMARY KEY,
+      name VARCHAR(20) UNIQUE NOT NULL,
+      owner_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id BIGSERIAL PRIMARY KEY,
+      world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+      user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      username VARCHAR(16) NOT NULL,
+      message VARCHAR(300) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
-    function appendChatMessage(msg) {
-      const box = document.getElementById('world-chat-messages');
-      if (!box) return;
-      const row = document.createElement('div');
-      row.className = 'chat-line';
-      const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
-      row.innerHTML = `<span class="chat-name">${escapeChatText(filterKWGUserText(msg.username || 'Player'))}:</span> ${escapeChatText(filterKWGUserText(msg.message || ''))}<span class="chat-time">${escapeChatText(time)}</span>`;
-      row.querySelector('.chat-name').dataset.profileUsername=String(msg.username||'Player');
-      box.appendChild(row);
-      while (box.children.length > 100) box.removeChild(box.firstChild);
-      box.scrollTop = box.scrollHeight;
-    }
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 100;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(300) NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS showcased_world_ids BIGINT[] NOT NULL DEFAULT '{}'::bigint[];
+    CREATE TABLE IF NOT EXISTS friendships (
+      requester_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      addressee_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status VARCHAR(16) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (requester_id, addressee_id),
+      CHECK (requester_id <> addressee_id)
+    );
+    CREATE INDEX IF NOT EXISTS friendships_requester_idx ON friendships(requester_id,status);
+    CREATE INDEX IF NOT EXISTS friendships_addressee_idx ON friendships(addressee_id,status);
+    CREATE TABLE IF NOT EXISTS notifications (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      type VARCHAR(40) NOT NULL,
+      message VARCHAR(240) NOT NULL,
+      is_read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id,created_at DESC);
+    CREATE INDEX IF NOT EXISTS notifications_unread_idx ON notifications(user_id,is_read);
 
-    function loadWorldChat() {
-      if (!currentWorldName) return;
-      socket.emit('get_world_chat', { worldName: currentWorldName }, (res) => {
-        if (!res || !res.success) return;
-        const box = document.getElementById('world-chat-messages');
-        box.innerHTML = '';
-        (res.messages || []).forEach(appendChatMessage);
-        chatMessagesLoaded = true;
-      });
-    }
+    CREATE TABLE IF NOT EXISTS store_items (
+      id BIGSERIAL PRIMARY KEY,
+      category VARCHAR(32) NOT NULL CHECK (category IN ('eyes','mouth','torso_decal','hat','head_shape')),
+      name VARCHAR(40) NOT NULL,
+      price INTEGER NOT NULL CHECK (price >= 0),
+      asset_url TEXT NOT NULL,
+      asset_kind VARCHAR(16) NOT NULL CHECK (asset_kind IN ('image','glb')),
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      is_visible BOOLEAN NOT NULL DEFAULT TRUE,
+      created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
-    const worldChatInput = document.getElementById('world-chat-input');
-    worldChatInput.addEventListener('focus', () => {
-      ['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright',' '].forEach(k => keys[k]=false);
-    });
+    CREATE TABLE IF NOT EXISTS user_store_items (
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      item_id BIGINT NOT NULL REFERENCES store_items(id) ON DELETE CASCADE,
+      purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, item_id)
+    );
 
-    document.getElementById('world-chat-form').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const input = document.getElementById('world-chat-input');
-      const message = input.value.trim();
-      if (!message || !currentWorldName) return;
+    CREATE TABLE IF NOT EXISTS world_templates (
+      id BIGSERIAL PRIMARY KEY,
+      name VARCHAR(40) UNIQUE NOT NULL,
+      source_world_id BIGINT REFERENCES worlds(id) ON DELETE SET NULL,
+      data JSONB NOT NULL,
+      created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
-      // Optimistic chat: show the message immediately in grey while the server
-      // is saving/sending it, similar to modern chat apps.
-      const box = document.getElementById('world-chat-messages');
-      const pending = document.createElement('div');
-      pending.className = 'chat-line chat-pending';
-      pending.innerHTML = `<span class="chat-name">${escapeChatText(filterKWGUserText(loggedInUsername || 'You'))}:</span> ${escapeChatText(filterKWGUserText(message))}<span class="chat-time"></span>`;
-      pending.querySelector('.chat-name').dataset.profileUsername=String(loggedInUsername||'You');
-      box.appendChild(pending);
-      box.scrollTop = box.scrollHeight;
-      input.value = '';
-      kwgAudio.play('chat');
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
-      socket.emit('send_world_chat', { worldName: currentWorldName, message }, (res) => {
-        if (pending.parentNode) pending.remove();
-        if (!res || !res.success) {
-          input.value = message;
-          showToast((res && res.message) || 'Could not send message.');
-        }
-      });
-    });
+    CREATE TABLE IF NOT EXISTS world_likes (
+      world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (world_id, user_id)
+    );
 
-    socket.on('world_chat_message', (msg) => {
-      if (msg.worldName === currentWorldName) {
-        appendChatMessage(msg);
-        showKWGChatBubble(msg.username,msg.message);
-      }
-    });
+    CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS world_likes_world_idx ON world_likes(world_id);
+    CREATE INDEX IF NOT EXISTS chat_world_created_idx ON chat_messages(world_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS store_items_category_visible_idx ON store_items(category, is_visible, created_at DESC);
+    CREATE INDEX IF NOT EXISTS user_store_items_user_idx ON user_store_items(user_id);
+  `);
 
-    socket.on('account_deleted', () => {
-      localStorage.removeItem('kwg_session_token');
-      alert('Your account was permanently deleted by an administrator.');
-      window.location.reload();
-    });
+  await pool.query('DELETE FROM auth_sessions WHERE expires_at <= NOW()');
 
-    socket.on('admin_kicked', () => {
-      localStorage.removeItem('kwg_session_token');
-      alert('You were kicked from the game by an administrator.');
-      window.location.reload();
-    });
-
-    socket.on('world_chat_cleared', ({worldName}) => {
-      if (worldName !== currentWorldName) return;
-      document.getElementById('world-chat-messages').innerHTML = '';
-      showToast('World chat was cleared by an administrator.');
-    });
-
-    socket.on('world_deleted', ({worldName}) => {
-      if (worldName !== currentWorldName) return;
-      alert('This world was permanently deleted by an administrator.');
-      document.getElementById('leave-world-btn').click();
-    });
-
-    // --- ADMIN MANAGEMENT ---
-    function setAdminMessage(message, isError = false) {
-      const el = document.getElementById('admin-error');
-      el.style.color = isError ? '#e74c3c' : '#2ecc71';
-      el.textContent = message || '';
-    }
-
-    function adminRequest(eventName, payload, successMessage) {
-      setAdminMessage('Working...');
-      socket.emit(eventName, payload, (res) => {
-        if (!res || !res.success) {
-          setAdminMessage((res && res.message) || 'Admin action failed.', true);
-          return;
-        }
-        setAdminMessage(successMessage || 'Done.');
-        refreshAdminPanel(false);
-        refreshStoreData();
-        renderRoomList();
-      });
-    }
-
-    function renderAdminUsers(rows) {
-      const users = document.getElementById('admin-users-list');
-      users.innerHTML = '';
-      if (!rows.length) { users.innerHTML = '<div class="admin-search-note">No matching accounts.</div>'; return; }
-      rows.forEach(u => {
-        const row = document.createElement('div'); row.className = 'admin-row';
-        const info = document.createElement('span'); const name = document.createElement('b'); name.textContent = filterKWGUserText(u.username); info.appendChild(name);
-        const meta = document.createElement('small'); meta.style.marginLeft = '7px'; meta.className = u.online ? 'admin-status-online' : 'admin-status-offline';
-        meta.textContent = `${u.isAdmin ? 'ADMIN' : 'USER'} • ${u.online ? 'ONLINE' : 'OFFLINE'} • 🪙 ${u.coins ?? 0}`; info.appendChild(meta); row.appendChild(info);
-        const actions = document.createElement('div'); actions.className = 'admin-actions';
-        if (!u.isAdmin) {
-          if (u.online) { const kick=document.createElement('button'); kick.className='admin-action warn'; kick.textContent='KICK'; kick.onclick=()=>{if(confirm(`Kick "${u.username}" from the game?`)) adminRequest('admin_kick_user',{username:u.username},`${u.username} was kicked.`)}; actions.appendChild(kick); }
-          const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE ACCOUNT'; del.onclick=()=>{if(confirm(`Permanently delete account "${u.username}"? This cannot be undone.`)) adminRequest('admin_delete_user',{username:u.username},`${u.username} was permanently deleted.`)}; actions.appendChild(del);
-        }
-        row.appendChild(actions); users.appendChild(row);
-      });
-    }
-
-    function renderAdminWorlds(rows) {
-      const worlds = document.getElementById('admin-worlds-list'); worlds.innerHTML='';
-      if (!rows.length) { worlds.innerHTML = '<div class="admin-search-note">No matching worlds.</div>'; return; }
-      rows.forEach(w => {
-        const row=document.createElement('div'); row.className='admin-row'; const info=document.createElement('span'); const name=document.createElement('b'); name.textContent=w.name; info.appendChild(name);
-        const meta=document.createElement('small'); meta.style.cssText='color:#aaa;margin-left:7px;'; meta.textContent=`owner: ${w.ownerUsername || 'unknown'} • ${w.onlineCount || 0} online • ${w.chatCount || 0} messages`; info.appendChild(meta); row.appendChild(info);
-        const actions=document.createElement('div'); actions.className='admin-actions';
-        const clear=document.createElement('button'); clear.className='admin-action warn'; clear.textContent='CLEAR CHAT'; clear.onclick=()=>{if(confirm(`Permanently clear all chat messages in "${w.name}"?`)) adminRequest('admin_clear_world_chat',{worldName:w.name},`Chat cleared for ${w.name}.`)}; actions.appendChild(clear);
-        const templ=document.createElement('button'); templ.className='admin-action'; templ.textContent='MAKE TEMPLATE'; templ.onclick=()=>{const templateName=prompt('Template name:',w.name); if(templateName) adminRequest('admin_make_world_template',{worldName:w.name,templateName},`${w.name} is now available as the "${templateName}" template.`)}; actions.appendChild(templ);
-        const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE WORLD'; del.onclick=()=>{if(confirm(`Permanently delete world "${w.name}"? This cannot be undone.`)) adminRequest('admin_delete_world',{worldName:w.name},`${w.name} was permanently deleted.`)}; actions.appendChild(del);
-        row.appendChild(actions); worlds.appendChild(row);
-      });
-    }
-
-    function searchAdminUsers() {
-      if (!isAdmin) return;
-      const query=document.getElementById('admin-user-search').value.trim();
-      if (!query) { document.getElementById('admin-users-list').innerHTML='<div class="admin-search-note">Type a username to search.</div>'; return; }
-      document.getElementById('admin-users-list').innerHTML='<div class="admin-search-note">Searching...</div>';
-      socket.emit('admin_search_users',{query},res=>{ if(!res||!res.success){setAdminMessage((res&&res.message)||'User search failed.',true);return;} renderAdminUsers(res.users||[]); });
-    }
-
-    function searchAdminWorlds() {
-      if (!isAdmin) return;
-      const query=document.getElementById('admin-world-search').value.trim();
-      if (!query) { document.getElementById('admin-worlds-list').innerHTML='<div class="admin-search-note">Type a world name or owner to search.</div>'; return; }
-      document.getElementById('admin-worlds-list').innerHTML='<div class="admin-search-note">Searching...</div>';
-      socket.emit('admin_search_worlds',{query},res=>{ if(!res||!res.success){setAdminMessage((res&&res.message)||'World search failed.',true);return;} renderAdminWorlds(res.worlds||[]); });
-    }
-
-    function refreshAdminPanel(clearMessage = true) {
-      if (!isAdmin) return;
-      if (clearMessage) setAdminMessage('');
-      searchAdminUsers(); searchAdminWorlds(); refreshAdminStoreItems();
-    }
-
-    function refreshAdminStoreItems() {
-      if (!isAdmin) return;
-      socket.emit('admin_store_list', (res) => {
-        const list = document.getElementById('admin-store-items-list');
-        const note = document.getElementById('admin-store-config-note');
-        if (!res || !res.success) {
-          list.innerHTML = '<div style="color:#e74c3c;">Could not load store items.</div>';
-          return;
-        }
-        note.textContent = res.uploadConfigured
-          ? 'Supabase Storage uploads are configured.'
-          : 'Uploads are not configured yet. We will add SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY on Render when we test uploads.';
-        list.innerHTML = '';
-        if (!(res.items || []).length) {
-          list.innerHTML = '<div style="color:#888;padding:8px;">No uploaded store items yet.</div>';
-          return;
-        }
-        (res.items || []).forEach(item => {
-          const row = document.createElement('div');
-          row.className = 'admin-row';
-          const info = document.createElement('span');
-          const name = document.createElement('b');
-          name.textContent = item.name;
-          const meta = document.createElement('small');
-          meta.style.cssText = 'color:#aaa;margin-left:7px;';
-          meta.textContent = `${storeCategoryLabel(item.category)} • 🪙 ${item.price} • ${item.isVisible ? 'VISIBLE' : 'HIDDEN'}`;
-          info.append(name,meta);
-          const actions = document.createElement('div');
-          actions.className = 'admin-actions';
-          const toggle = document.createElement('button');
-          toggle.className = item.isVisible ? 'admin-action warn' : 'admin-action';
-          toggle.textContent = item.isVisible ? 'HIDE' : 'SHOW';
-          toggle.addEventListener('click', () => {
-            adminRequest('admin_store_set_visible', {itemId:item.id,isVisible:!item.isVisible}, `${item.name} is now ${item.isVisible ? 'hidden' : 'visible'}.`);
-          });
-          actions.appendChild(toggle);
-          row.append(info,actions);
-          list.appendChild(row);
-        });
-      });
-    }
-
-    function updateAdminStoreUploadFields() {
-      const category = document.getElementById('admin-store-category').value;
-      const isMesh = category === 'hat' || category === 'head_shape';
-      document.getElementById('admin-mesh-fit-fields').style.display = isMesh ? 'grid' : 'none';
-      document.getElementById('admin-store-file').accept = isMesh ? '.glb,model/gltf-binary' : '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp';
-      const fit=document.getElementById('admin-fit-preview'); if(fit) fit.style.display=isMesh?'block':'none';
-    }
-
-    document.getElementById('admin-store-category').addEventListener('change', updateAdminStoreUploadFields);
-    updateAdminStoreUploadFields();
-
-    document.getElementById('admin-store-upload-btn').addEventListener('click', async () => {
-      const button = document.getElementById('admin-store-upload-btn');
-      const category = document.getElementById('admin-store-category').value;
-      const name = document.getElementById('admin-store-name').value.trim();
-      const price = Number(document.getElementById('admin-store-price').value);
-      const file = document.getElementById('admin-store-file').files[0];
-      const isVisible = document.getElementById('admin-store-visible').checked;
-      if (!name) return setAdminMessage('Enter an item name.', true);
-      if (!Number.isInteger(price) || price < 0) return setAdminMessage('Price must be a whole number of coins.', true);
-      if (!file) return setAdminMessage('Choose an asset file.', true);
-      const isImage = ['eyes','mouth','torso_decal'].includes(category);
-      if (file.size > (isImage ? 3 : 8) * 1024 * 1024) return setAdminMessage(`${isImage ? 'Images' : 'Meshes'} are too large.`, true);
-
-      const metadata = {
-        size: Number(document.getElementById('admin-store-size').value),
-        offsetX: Number(document.getElementById('admin-store-offset-x').value),
-        offsetY: Number(document.getElementById('admin-store-offset-y').value),
-        offsetZ: Number(document.getElementById('admin-store-offset-z').value)
+  // Older multiplayer worlds could be created completely empty. The editor places
+  // parts onto existing surfaces, so seed a baseplate only when a world has zero blocks.
+  const emptyWorlds = await pool.query(`SELECT id,data FROM worlds`);
+  for (const row of emptyWorlds.rows) {
+    const data = row.data || {};
+    data.blocks = data.blocks || {};
+    if (Object.keys(data.blocks).length === 0) {
+      data.blocks.baseplate = {
+        id:'baseplate', shape:'box', actionType:'normal', material:'grid', color:'#555555',
+        transparency:0, canCollide:true, anchored:true,
+        x:0, y:-0.5, z:0, scaleX:250, scaleY:1, scaleZ:250
       };
-      if (category === 'hat' && !['size','offsetX','offsetY','offsetZ'].every(k => Number.isFinite(metadata[k]))) {
-        return setAdminMessage('Hat size and all three offsets are required.', true);
-      }
-
-      button.disabled = true;
-      button.textContent = 'UPLOADING...';
-      setAdminMessage('Uploading store asset...');
-      try {
-        const fileData = await file.arrayBuffer();
-        socket.emit('admin_store_create', {
-          category,name,price,isVisible,metadata,
-          fileName:file.name,mimeType:file.type,fileData
-        }, (res) => {
-          button.disabled = false;
-          button.textContent = 'UPLOAD STORE ITEM';
-          if (!res || !res.success) {
-            setAdminMessage((res && res.message) || 'Upload failed.', true);
-            return;
-          }
-          document.getElementById('admin-store-name').value = '';
-          document.getElementById('admin-store-file').value = '';
-          setAdminMessage(`${res.item.name} was added to the store.`);
-          refreshAdminStoreItems();
-          refreshStoreData();
-        });
-      } catch (err) {
-        button.disabled = false;
-        button.textContent = 'UPLOAD STORE ITEM';
-        setAdminMessage('Could not read that file.', true);
-      }
-    });
-
-    document.getElementById('open-admin-btn').addEventListener('click', () => {
-      if (!isAdmin) return;
-      switchHomeTab('admin');
-    });
-    document.getElementById('admin-refresh-btn').addEventListener('click', () => refreshAdminPanel());
-    document.getElementById('admin-user-search-btn').addEventListener('click', searchAdminUsers);
-    document.getElementById('admin-world-search-btn').addEventListener('click', searchAdminWorlds);
-    document.getElementById('admin-user-search').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchAdminUsers(); } });
-    document.getElementById('admin-world-search').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchAdminWorlds(); } });
-    document.getElementById('close-admin-panel').addEventListener('click', () => {
-      switchHomeTab('home');
-    });
-
-    // --- THREE.JS SCENE SETUP ---
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1e1e7b);
-
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    // The world renderer now belongs to a real viewport pane, not the full browser window.
-    // Keeping the canvas in its own pane prevents sidebars from covering the 3D view.
-    const kwgWorldViewport = document.createElement('section');
-    kwgWorldViewport.id = 'kwg-world-viewport';
-    kwgWorldViewport.setAttribute('aria-label','3D World Viewer');
-    kwgWorldViewport.innerHTML = '<div id="kwg-world-viewport-title"><span class="kwg-scene-heading"><span class="kwg-scene-dot"></span> SCENE VIEW</span><span class="kwg-scene-stats"><span id="part-counter">0 / 1400 parts</span></span></div><div id="kwg-world-canvas"></div><div id="kwg-scene-footer"><span>WORLD EDITOR</span><span>Changes save with Save & Exit</span></div>';
-    document.body.appendChild(kwgWorldViewport);
-    const kwgWorldCanvasHost = document.getElementById('kwg-world-canvas');
-    kwgWorldCanvasHost.appendChild(renderer.domElement);
-    function resizeWorldViewport() {
-      const rect = kwgWorldCanvasHost.getBoundingClientRect();
-      const width = Math.max(1,Math.round(rect.width));
-      const height = Math.max(1,Math.round(rect.height));
-      if(renderer.domElement.width === width && renderer.domElement.height === height &&
-         Math.abs(camera.aspect-width/height)<0.0001) return;
-      camera.aspect = width/height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(width,height,false);
-    }
-    // Pointer positions must use the canvas rectangle after the viewport has moved/resized.
-    function updateWorldMouseFromPointer(e) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      if(rect.width < 1 || rect.height < 1) return false;
-      mouse.x = ((e.clientX-rect.left)/rect.width)*2-1;
-      mouse.y = -((e.clientY-rect.top)/rect.height)*2+1;
-      return true;
-    }
-    window.addEventListener('resize',resizeWorldViewport);
-    if(typeof ResizeObserver !== 'undefined') new ResizeObserver(resizeWorldViewport).observe(kwgWorldCanvasHost);
-    resizeWorldViewport();
-
-    const light = new THREE.DirectionalLight(0xffffff, 1.1);
-    light.position.set(15, 30, 20);
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0x707070));
-
-    const spawnMarkerGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 16);
-    const spawnMarkerMat = new THREE.MeshBasicMaterial({ color: 0x8e44ad, wireframe: true });
-    const spawnMarker = new THREE.Mesh(spawnMarkerGeo, spawnMarkerMat);
-    spawnMarker.position.set(0, 0.05, 0);
-    spawnMarker.visible=false; // V3.42: real Spawn parts replace the old marker.
-
-    // --- CIRCULATING SKY CLOUDS SYSTEM ---
-    const cloudsGroup = new THREE.Group();
-    scene.add(cloudsGroup);
-
-    let cloudsMaterial = new THREE.MeshLambertMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.85,
-      depthTest: true,
-      depthWrite: true
-    });
-
-    function createBlockyCloudsSystem() {
-      while (cloudsGroup.children.length > 0) {
-        cloudsGroup.remove(cloudsGroup.children[0]);
-      }
-
-      const numCloudClusters = 16;
-      const radius = 55;
-
-      for (let i = 0; i < numCloudClusters; i++) {
-        const cluster = new THREE.Group();
-        const angle = (i / numCloudClusters) * Math.PI * 2;
-        
-        const dist = radius + (Math.random() * 20 - 10);
-        const yHeight = 12 + (Math.random() * 4);
-
-        cluster.position.x = Math.cos(angle) * dist;
-        cluster.position.z = Math.sin(angle) * dist;
-        cluster.position.y = yHeight;
-
-        const numBlocks = 6 + Math.floor(Math.random() * 6);
-        for (let b = 0; b < numBlocks; b++) {
-          const w = 4 + Math.random() * 5;
-          const h = 1.8 + Math.random() * 1.5;
-          const d = 4 + Math.random() * 5;
-
-          const blockMesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cloudsMaterial);
-          blockMesh.position.set(
-            (Math.random() - 0.5) * 8,
-            (Math.random() - 0.5) * 1.2,
-            (Math.random() - 0.5) * 8
-          );
-          cluster.add(blockMesh);
-        }
-
-        cloudsGroup.add(cluster);
-      }
-    }
-
-    createBlockyCloudsSystem();
-
-    function updateCloudsAppearance(enabled, hexColor) {
-      cloudsGroup.visible = enabled !== false;
-      if (hexColor) {
-        cloudsMaterial.color.set(hexColor);
-      }
-    }
-
-    // --- HAT CREATOR HELPER ---
-    function createHatMesh(hatType) {
-      if (!hatType || hatType === 'none') return null;
-      const group = new THREE.Group();
-
-      if (hatType.includes('tophat')) {
-        let hatColor = 0x111111;
-        if (hatType === 'blue_tophat') hatColor = 0x2980b9;
-        if (hatType === 'red_tophat') hatColor = 0xc0392b;
-        if (hatType === 'pink_tophat') hatColor = 0xe84393;
-
-        const hatMat = new THREE.MeshLambertMaterial({ color: hatColor });
-        const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.04, 16), hatMat);
-        brim.position.y = 0;
-        const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.45, 16), hatMat);
-        crown.position.y = 0.23;
-
-        group.add(brim, crown);
-        group.position.y = 2.37;
-      } else if (hatType.includes('bow')) {
-        let bowColor = 0xe84393;
-        if (hatType === 'blue_bow') bowColor = 0x3498db;
-        if (hatType === 'white_bow') bowColor = 0xf5f5f5;
-
-        const bowMat = new THREE.MeshLambertMaterial({ color: bowColor });
-        const center = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), bowMat);
-        
-        const leftWing = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.3, 12), bowMat);
-        leftWing.rotation.z = -Math.PI / 2; leftWing.position.x = -0.15;
-        const rightWing = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.3, 12), bowMat);
-        rightWing.rotation.z = Math.PI / 2; rightWing.position.x = 0.15;
-
-        group.add(center, leftWing, rightWing);
-        group.position.set(0, 2.35, 0.28);
-      } else if (hatType.includes('cat_ears')) {
-        let earColor = 0x111111;
-        if (hatType === 'pink_cat_ears') earColor = 0xe84393;
-
-        const earMat = new THREE.MeshLambertMaterial({ color: earColor });
-        const innerMat = new THREE.MeshLambertMaterial({ color: 0xffb6c1 });
-
-        const leftEar = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.25, 4), earMat);
-        leftEar.position.set(-0.2, 2.45, 0); leftEar.rotation.z = 0.15;
-        const rightEar = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.25, 4), earMat);
-        rightEar.position.set(0.2, 2.45, 0); rightEar.rotation.z = -0.15;
-
-        const leftInner = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 4), innerMat);
-        leftInner.position.set(-0.2, 2.44, 0.02); leftInner.rotation.z = 0.15;
-        const rightInner = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 4), innerMat);
-        rightInner.position.set(0.2, 2.44, 0.02); rightInner.rotation.z = -0.15;
-
-        group.add(leftEar, rightEar, leftInner, rightInner);
-      }
-
-      return group;
-    }
-
-    // --- AVATAR BUILDER + STORE COSMETICS ---
-    const cosmeticTextureCache = new Map();
-    const cosmeticGLBCache = new Map();
-
-    function loadCosmeticTexture(url, onLoad) {
-      if (!url) return;
-      if (cosmeticTextureCache.has(url)) {
-        onLoad(cosmeticTextureCache.get(url));
-        return;
-      }
-      const loader = new THREE.TextureLoader();
-      loader.setCrossOrigin('anonymous');
-      loader.load(url, (texture) => {
-        cosmeticTextureCache.set(url, texture);
-        onLoad(texture);
-      }, undefined, (err) => console.warn('Cosmetic texture failed to load:', url, err));
-    }
-
-    function addImageCosmetic(parent, item, width, height, x, y, z) {
-      if (!item || item.assetKind !== 'image' || !item.assetUrl) return;
-      loadCosmeticTexture(item.assetUrl, (texture) => {
-        const mat = new THREE.MeshBasicMaterial({
-          map: texture,
-          transparent: true,
-          alphaTest: 0.02,
-          depthWrite: false,
-          side: THREE.DoubleSide
-        });
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
-        plane.position.set(x, y, z);
-        plane.renderOrder = 5;
-        parent.add(plane);
-      });
-    }
-
-    function loadGLBScene(url, onLoad) {
-      if (!url || !THREE.GLTFLoader) return;
-      const cached = cosmeticGLBCache.get(url);
-      if (cached) {
-        onLoad(cached.clone(true));
-        return;
-      }
-      const loader = new THREE.GLTFLoader();
-      loader.load(url, (gltf) => {
-        cosmeticGLBCache.set(url, gltf.scene);
-        onLoad(gltf.scene.clone(true));
-      }, undefined, (err) => console.warn('Cosmetic GLB failed to load:', url, err));
-    }
-
-    function loadGLBClone(url) {
-      return new Promise((resolve, reject) => {
-        if (!url || !THREE.GLTFLoader) { reject(new Error('GLB loader unavailable')); return; }
-        const cached = cosmeticGLBCache.get(url);
-        if (cached) { resolve(cached.clone(true)); return; }
-        const loader = new THREE.GLTFLoader();
-        loader.load(url, (gltf) => {
-          cosmeticGLBCache.set(url, gltf.scene);
-          resolve(gltf.scene.clone(true));
-        }, undefined, reject);
-      });
-    }
-
-    function attachNormalizedGLB(anchor, item, targetSize) {
-      if (!item || item.assetKind !== 'glb' || !item.assetUrl) return;
-      loadGLBScene(item.assetUrl, (model) => {
-        const meta = item.metadata || {};
-        model.updateMatrixWorld(true);
-        let box = new THREE.Box3().setFromObject(model);
-        const sourceSize = new THREE.Vector3();
-        box.getSize(sourceSize);
-        const maxDim = Math.max(sourceSize.x, sourceSize.y, sourceSize.z, 0.0001);
-        const userSize = Number.isFinite(Number(meta.size)) ? Number(meta.size) : 1;
-        model.scale.multiplyScalar((targetSize / maxDim) * userSize);
-        model.updateMatrixWorld(true);
-
-        box = new THREE.Box3().setFromObject(model);
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        model.position.sub(center);
-        model.position.x += Number(meta.offsetX) || 0;
-        model.position.y += Number(meta.offsetY) || 0;
-        model.position.z += Number(meta.offsetZ) || 0;
-        anchor.add(model);
-      });
-    }
-
-    function makeFaceTexture(kind,style){const cv=document.createElement('canvas');cv.width=256;cv.height=128;const x=cv.getContext('2d');x.clearRect(0,0,256,128);x.strokeStyle='#171b21';x.fillStyle='#171b21';x.lineWidth=14;x.lineCap='round';x.lineJoin='round';if(kind==='eyes'){if(style==='classic'){x.fillRect(58,38,22,30);x.fillRect(176,38,22,30)}else if(style==='friendly'){x.beginPath();x.arc(68,52,16,0,Math.PI*2);x.arc(188,52,16,0,Math.PI*2);x.fill();x.fillStyle='#fff';x.beginPath();x.arc(73,46,5,0,Math.PI*2);x.arc(193,46,5,0,Math.PI*2);x.fill()}else if(style==='cool'){x.beginPath();x.moveTo(45,58);x.lineTo(91,48);x.moveTo(165,48);x.lineTo(211,58);x.stroke()}else if(style==='happy'){x.beginPath();x.arc(68,62,22,Math.PI,Math.PI*2);x.arc(188,62,22,Math.PI,Math.PI*2);x.stroke()}}else{if(style==='smile'){x.beginPath();x.arc(128,35,50,.2,Math.PI-.2);x.stroke()}else if(style==='grin'){x.fillStyle='#fff';x.fillRect(76,42,104,42);x.strokeRect(76,42,104,42)}else if(style==='neutral'){x.beginPath();x.moveTo(84,62);x.lineTo(172,62);x.stroke()}else if(style==='surprised'){x.beginPath();x.arc(128,63,25,0,Math.PI*2);x.stroke()}}const t=new THREE.CanvasTexture(cv);t.needsUpdate=true;return t}
-    function addBuiltinFace(group,app,hasHead,customEyes,customMouth){
-      if(!hasHead)return;
-      const shape=app.headShape||'sphere';
-      const add=(kind,style,width,height,y)=>{
-        if(!style||style==='none')return;
-        const texture=makeFaceTexture(kind,style);
-        const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,alphaTest:.05,side:THREE.DoubleSide});
-        const half=width/2, top=y+height/2, bottom=y-height/2;
-        const cols=18,rows=8,verts=[],uvs=[],indices=[];
-        for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){
-          const u=i/cols,v=j/rows,x=(u-.5)*width,yy=bottom+v*height;
-          let z=.326;
-          if(shape==='sphere'){
-            const dy=yy-2.04;
-            z=Math.sqrt(Math.max(.001,.37*.37-x*x-dy*dy))+.004;
-          }else if(shape==='cylinder'){
-            z=Math.sqrt(Math.max(.001,.35*.35-x*x))+.004;
-          }
-          verts.push(x,yy,z);uvs.push(u,v);
-        }
-        for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
-          const k=j*(cols+1)+i;indices.push(k,k+1,k+cols+1,k+1,k+cols+2,k+cols+1);
-        }
-        const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geo.setIndex(indices);geo.computeVertexNormals();
-        group.add(new THREE.Mesh(geo,material));
-      };
-      if(!customEyes)add('eyes',app.builtinEyes||'none',.45,.19,2.115);
-      if(!customMouth)add('mouth',app.builtinMouth||'none',.31,.13,1.94);
-    }
-    function addBuiltinHair(group,app,headShape,customHead){if(customHead||headShape==='headless')return;const s=app.hairStyle||'classic';if(s==='none')return;const mat=new THREE.MeshLambertMaterial({color:app.hairColor||'#3a261b'});const add=(g,x,y,z)=>{const m=new THREE.Mesh(g,mat);m.position.set(x,y,z);group.add(m)};if(s==='classic')add(new THREE.SphereGeometry(.382,20,12,0,Math.PI*2,0,Math.PI*.30),0,2.07,0);else if(s==='sidepart'){add(new THREE.BoxGeometry(.64,.13,.63),0,2.34,0);add(new THREE.BoxGeometry(.14,.18,.60),-.25,2.26,0)}else if(s==='spiky'){add(new THREE.BoxGeometry(.62,.10,.60),0,2.32,0);[-.22,0,.22].forEach(x=>add(new THREE.ConeGeometry(.10,.24,4),x,2.48,0))}else if(s==='bob'){add(new THREE.BoxGeometry(.64,.12,.61),0,2.34,0);add(new THREE.BoxGeometry(.12,.34,.58),-.28,2.21,0);add(new THREE.BoxGeometry(.12,.34,.58),.28,2.21,0)}else if(s==='mohawk')add(new THREE.BoxGeometry(.13,.32,.62),0,2.48,0);else if(s==='flattop')add(new THREE.BoxGeometry(.58,.20,.56),0,2.41,0);else if(s==='ponytail'){add(new THREE.BoxGeometry(.62,.11,.60),0,2.34,0);add(new THREE.SphereGeometry(.14,12,10),0,2.20,-.41);add(new THREE.BoxGeometry(.15,.38,.15),0,1.99,-.42)}}
-    function buildBlockyAvatar(app, cosmetics = {}) {
-      const group = new THREE.Group();
-
-      // V3.21 semantic colors. Legacy fields remain fallback-compatible with existing saved accounts/server schema.
-      const skinColor = app.skinColor || app.headColor || '#d9a679';
-      const shirtColor = app.shirtColor || app.torsoColor || '#3b82d0';
-      const pantsColor = app.pantsColor || app.leftLegColor || '#263447';
-      const shoesColor = app.shoesColor || '#15191f';
-      const shirtStyle=app.shirtStyle||'short';
-      const bottomStyle=app.bottomStyle||'pants';
-      const hairColor = app.hairColor || '#3a261b';
-      const skinMat = new THREE.MeshLambertMaterial({color:skinColor});
-      const shirtMat = new THREE.MeshLambertMaterial({color:shirtColor});
-      const pantsMat = new THREE.MeshLambertMaterial({color:pantsColor});
-      const shoeMat = new THREE.MeshLambertMaterial({color:shoesColor});
-      const hairMat = new THREE.MeshLambertMaterial({color:hairColor});
-
-      // More polished stylized proportions: narrower waist, shoulders, hands, lower legs and shoes.
-      const leftLegPivot=new THREE.Group(); leftLegPivot.position.set(-0.205,0.82,0);
-      const rightLegPivot=new THREE.Group(); rightLegPivot.position.set(0.205,0.82,0);
-      const upperLegGeo=new THREE.BoxGeometry(0.34,0.48,0.38);
-      const lowerLegGeo=new THREE.BoxGeometry(0.31,0.34,0.34);
-      const shoeGeo=new THREE.BoxGeometry(0.34,0.18,0.48);
-      const shoeStyle=app.shoeStyle||'shoes';
-      function makeLeg(pivot){
-        const upper=new THREE.Mesh(upperLegGeo,bottomStyle==='shorts'?pantsMat:pantsMat); upper.position.set(0,-0.22,0); pivot.add(upper);
-        const lower=new THREE.Mesh(lowerLegGeo,bottomStyle==='shorts'?skinMat:pantsMat); lower.position.set(0,-0.62,0); pivot.add(lower);
-        if(shoeStyle==='sandals'){
-          const sole=new THREE.Mesh(new THREE.BoxGeometry(.35,.075,.49),shoeMat);sole.position.set(0,-.89,.055);pivot.add(sole);
-          const foot=new THREE.Mesh(new THREE.BoxGeometry(.29,.105,.38),skinMat);foot.position.set(0,-.81,.065);pivot.add(foot);
-          const strap=new THREE.Mesh(new THREE.BoxGeometry(.35,.065,.105),shoeMat);strap.position.set(0,-.76,.13);pivot.add(strap);
-        }else{const shoe=new THREE.Mesh(shoeGeo,shoeMat);shoe.position.set(0,-.84,.055);pivot.add(shoe);}
-      }
-      makeLeg(leftLegPivot); makeLeg(rightLegPivot); group.add(leftLegPivot,rightLegPivot);
-
-      // Layered torso gives the body a cleaner shoulder-to-waist silhouette.
-      const torso=new THREE.Mesh(new THREE.BoxGeometry(0.78,0.78,0.43),shirtMat);
-      torso.position.set(0,1.30,0); group.add(torso);
-      const shoulders=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.20,0.45),shirtMat);
-      shoulders.position.set(0,1.60,0); group.add(shoulders);
-      const waist=new THREE.Mesh(new THREE.BoxGeometry(0.67,0.18,0.39),pantsMat);
-      waist.position.set(0,0.86,0); group.add(waist);
-      if(bottomStyle==='skirt'){
-        const skirt=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.53,0.62,4,1,false,Math.PI/4),pantsMat);
-        skirt.position.set(0,0.62,0); skirt.rotation.y=Math.PI/4; group.add(skirt);
-      }
-      addImageCosmetic(group,cosmetics.torso_decal,0.72,0.72,0,1.30,0.255);
-
-      // Shirt sleeves + exposed forearms/hands.
-      const leftArmPivot=new THREE.Group(); leftArmPivot.position.set(-0.60,1.58,0);
-      const rightArmPivot=new THREE.Group(); rightArmPivot.position.set(0.60,1.58,0);
-      function makeArm(pivot){
-        const sleeve=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.34,0.34),shirtMat); sleeve.position.set(0,-0.14,0); pivot.add(sleeve);
-        const forearm=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.38,0.28),shirtStyle==='long'?shirtMat:skinMat); forearm.position.set(0,-0.48,0); pivot.add(forearm);
-        const hand=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.20,0.30),skinMat); hand.position.set(0,-0.76,0); pivot.add(hand);
-      }
-      makeArm(leftArmPivot); makeArm(rightArmPivot); group.add(leftArmPivot,rightArmPivot);
-
-      // Purchased custom GLB heads still override built-in geometry.
-      const customHead=cosmetics.head_shape;
-      const headShape=app.headShape||'sphere';
-      const hasHead=!!customHead||headShape!=='headless';
-      if(customHead){
-        const anchor=new THREE.Group(); anchor.position.set(0,2.04,0); group.add(anchor); attachNormalizedGLB(anchor,customHead,0.72);
-      } else if(headShape!=='headless'){
-        let headGeo;
-        if(headShape==='sphere') headGeo=new THREE.SphereGeometry(0.37,20,16);
-        else if(headShape==='cylinder') headGeo=new THREE.CylinderGeometry(0.34,0.35,0.64,20);
-        else headGeo=new THREE.BoxGeometry(0.63,0.63,0.63);
-        const head=new THREE.Mesh(headGeo,skinMat); head.position.set(0,2.04,0); group.add(head);
-
-        // Hair removed from avatar rendering.
-      }
-
-      if(hasHead){
-        // Facial features removed from avatar rendering.
-      }
-      if(cosmetics.hat){
-        const hatAnchor=new THREE.Group(); hatAnchor.position.set(0,2.38,0); group.add(hatAnchor); attachNormalizedGLB(hatAnchor,cosmetics.hat,0.9);
-      } else {
-        const hatMesh=createHatMesh(app.hat); if(hatMesh) group.add(hatMesh);
-      }
-
-      group.userData.limbs={leftArm:leftArmPivot,rightArm:rightArmPivot,leftLeg:leftLegPivot,rightLeg:rightLegPivot,torso};
-      return group;
-    }
-
-    // V3.35 — Pixel-style nametags and camera-facing chat bubbles.
-    // Name tags sit above even the taller hats; bubbles stack above the tags.
-    function kwgSpriteFromCanvas(canvas,width,height){
-      const texture=new THREE.CanvasTexture(canvas);
-      texture.minFilter=THREE.LinearFilter;
-      texture.magFilter=THREE.LinearFilter;
-      const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:true});
-      const sprite=new THREE.Sprite(material);
-      sprite.scale.set(width,height,1);
-      sprite.renderOrder=8;
-      return sprite;
-    }
-    function createNameTagSprite(name){
-      const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
-      const ctx=canvas.getContext('2d');
-      ctx.clearRect(0,0,512,96);
-      ctx.fillStyle='#0a1422';ctx.fillRect(6,9,500,78);
-      ctx.fillStyle='#7c9db1';ctx.fillRect(6,9,500,5);ctx.fillRect(6,82,500,5);
-      ctx.fillRect(6,9,5,78);ctx.fillRect(501,9,5,78);
-      ctx.fillStyle='#9ce078';ctx.fillRect(16,20,8,56);
-      const label=filterKWGUserText(String(name||'PLAYER')).toUpperCase().slice(0,24);
-      let size=39;
-      do{ctx.font=`700 ${size}px "Pixelify Sans", monospace`;size-=2;}
-      while(ctx.measureText(label).width>450&&size>21);
-      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#f1f5e7';
-      ctx.fillText(label,264,49);
-      const sprite=kwgSpriteFromCanvas(canvas,1.95,.365);
-      sprite.name='kwg-name-tag';sprite.position.set(0,3.14,0);
-      return sprite;
-    }
-    function wrapKWGBubbleText(value){
-      const words=filterKWGUserText(String(value||'')).replace(/\s+/g,' ').trim().split(' ');
-      const lines=[];let line='';
-      for(let word of words){
-        while(word.length>25){
-          if(line){lines.push(line);line='';}
-          lines.push(word.slice(0,25));word=word.slice(25);
-        }
-        const combined=line?line+' '+word:word;
-        if(combined.length>25&&line){lines.push(line);line=word;}
-        else line=combined;
-      }
-      if(line)lines.push(line);
-      if(lines.length>3){lines.length=3;lines[2]=lines[2].slice(0,22)+'...';}
-      return lines;
-    }
-    function makeKWGChatBubble(message){
-      const lines=wrapKWGBubbleText(message);
-      if(!lines.length)return null;
-      const canvas=document.createElement('canvas');canvas.width=512;canvas.height=192;
-      const ctx=canvas.getContext('2d');ctx.clearRect(0,0,512,192);
-      // Compact classic white speech bubble with a crisp, pixel-square outline.
-      // Drawn at full canvas resolution so the 3D sprite remains readable.
-      ctx.fillStyle='#111827';
-      ctx.fillRect(17,13,478,141);             // dark square outline
-      ctx.fillStyle='#ffffff';
-      ctx.fillRect(23,19,466,129);             // white interior
-      ctx.fillStyle='#111827';
-      ctx.fillRect(239,154,35,12);             // pixel tail outline
-      ctx.fillRect(250,166,15,11);
-      ctx.fillStyle='#ffffff';
-      ctx.fillRect(245,148,23,12);             // tail connects to white bubble
-      ctx.fillRect(245,154,23,7);
-      ctx.fillRect(254,161,7,8);
-      ctx.fillStyle='#17202b';
-      ctx.font='700 32px "Pixelify Sans", monospace';
-      ctx.textAlign='center';ctx.textBaseline='middle';
-      const spacing=38;const startY=84-(lines.length-1)*spacing/2;
-      lines.forEach((line,i)=>ctx.fillText(line,256,startY+i*spacing,435));
-      const sprite=kwgSpriteFromCanvas(canvas,2.12,.80);
-      sprite.name='kwg-chat-bubble';sprite.position.set(0,3.85,0);
-      return sprite;
-    }
-    function disposeKWGSprite(sprite){
-      if(!sprite)return;
-      if(sprite.parent)sprite.parent.remove(sprite);
-      if(sprite.material){sprite.material.map?.dispose();sprite.material.dispose();}
-    }
-    function showKWGChatBubble(username,message){
-      if(!currentWorldName||!username||!message)return;
-      const isSelf=String(username).toLowerCase()===String(loggedInUsername||'').toLowerCase();
-      const avatar=isSelf?localPlayerAvatar:
-        Object.values(otherPlayers).find(p=>String(p.username||'').toLowerCase()===String(username).toLowerCase())?.mesh;
-      if(!avatar)return;
-      const previous=avatar.userData.kwgBubble;
-      if(previous)disposeKWGSprite(previous);
-      const bubble=makeKWGChatBubble(message);
-      if(!bubble)return;
-      avatar.add(bubble);avatar.userData.kwgBubble=bubble;
-      setTimeout(()=>{
-        if(avatar.userData.kwgBubble===bubble){
-          disposeKWGSprite(bubble);avatar.userData.kwgBubble=null;
-        }
-      },6000);
-    }
-
-    // --- ANIMATION CONTROLLER FOR RUN / JUMP / IDLE ---
-    // Exact same limb animation used by indexSingle.html.
-    function animateLimbs(avatar, isMoving) {
-      const limbs = avatar.userData.limbs;
-      if (!limbs) return;
-
-      if (isMoving) {
-        // Slightly slower stride animation, shared by local and remote avatars.
-        avatar.userData.walkClock = (avatar.userData.walkClock || 0) + 0.15;
-        const angle = Math.sin(avatar.userData.walkClock) * 0.65;
-        limbs.leftLeg.rotation.x = angle;
-        limbs.rightLeg.rotation.x = -angle;
-        limbs.leftArm.rotation.x = -angle;
-        limbs.rightArm.rotation.x = angle;
-      } else {
-        limbs.leftLeg.rotation.x *= 0.75;
-        limbs.rightLeg.rotation.x *= 0.75;
-        limbs.leftArm.rotation.x *= 0.75;
-        limbs.rightArm.rotation.x *= 0.75;
-      }
-    }
-
-    function updateAvatarAnimations(avatarMesh, isMoving, isGrounded, delta, walkClockOverride, verticalVelocity = 0) {
-      if (!avatarMesh || !avatarMesh.userData || !avatarMesh.userData.limbs) return;
-      const limbs=avatarMesh.userData.limbs;
-      const smooth=(current,target,speed=0.16)=>current+(target-current)*speed;
-
-      if (!isGrounded) {
-        // Smooth airborne silhouette: arms lift while rising, then open slightly while falling.
-        const rising = verticalVelocity > 0.004;
-        const armTarget = rising ? -1.05 : -0.55;
-        const legTarget = rising ? 0.38 : -0.18;
-        limbs.leftArm.rotation.x=smooth(limbs.leftArm.rotation.x,armTarget,0.18);
-        limbs.rightArm.rotation.x=smooth(limbs.rightArm.rotation.x,armTarget,0.18);
-        limbs.leftLeg.rotation.x=smooth(limbs.leftLeg.rotation.x,legTarget,0.18);
-        limbs.rightLeg.rotation.x=smooth(limbs.rightLeg.rotation.x,-legTarget*0.45,0.18);
-        return;
-      }
-
-      if (walkClockOverride !== undefined && isMoving) {
-        avatarMesh.userData.walkClock = walkClockOverride;
-        const angle = Math.sin(walkClockOverride) * 0.65;
-        limbs.leftLeg.rotation.x = smooth(limbs.leftLeg.rotation.x, angle, 0.28);
-        limbs.rightLeg.rotation.x = smooth(limbs.rightLeg.rotation.x, -angle, 0.28);
-        limbs.leftArm.rotation.x = smooth(limbs.leftArm.rotation.x, -angle, 0.28);
-        limbs.rightArm.rotation.x = smooth(limbs.rightArm.rotation.x, angle, 0.28);
-      } else {
-        animateLimbs(avatarMesh, isMoving);
-      }
-    }
-
-    // --- MULTIPLAYER PLAYER SYNC ---
-    socket.on('player_joined', (pData) => {
-      if (pData.id === socket.id) return;
-      const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
-      mesh.add(createNameTagSprite(pData.username || 'Player'));
-      mesh.position.set(pData.x, pData.y, pData.z);
-      scene.add(mesh);
-      otherPlayers[pData.id] = { mesh, username: pData.username };
-    });
-
-    socket.on('player_appearance_updated', (pData) => {
-      const p = otherPlayers[pData.id];
-      if (!p) return;
-      const currentPos = p.mesh.position.clone();
-      const currentRot = p.mesh.rotation.y;
-      scene.remove(p.mesh);
-      const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
-      mesh.add(createNameTagSprite(pData.username || p.username || 'Player'));
-      mesh.position.copy(currentPos);
-      mesh.rotation.y = currentRot;
-      scene.add(mesh);
-      p.mesh = mesh;
-      p.username = pData.username || p.username;
-    });
-
-    socket.on('player_moved', (pData) => {
-      const p = otherPlayers[pData.id];
-      if (!p) return;
-      p.mesh.position.set(pData.x, pData.y, pData.z);
-      p.mesh.rotation.y = pData.rotationY;
-
-      updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
-    });
-
-    socket.on('player_left', (id) => {
-      if (otherPlayers[id]) {
-        scene.remove(otherPlayers[id].mesh);
-        delete otherPlayers[id];
-      }
-    });
-
-    // --- CUSTOM WEDGE GEOMETRY HELPER ---
-    function createWedgeGeometry() {
-      const geom = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-        -0.5, -0.5, -0.5,   0.5, -0.5, -0.5,   0.5, -0.5,  0.5,
-        -0.5, -0.5, -0.5,   0.5, -0.5,  0.5,  -0.5, -0.5,  0.5,
-        -0.5, -0.5, -0.5,  -0.5,  0.5, -0.5,   0.5,  0.5, -0.5,
-        -0.5, -0.5, -0.5,   0.5,  0.5, -0.5,   0.5, -0.5, -0.5,
-        -0.5, -0.5, -0.5,  -0.5, -0.5,  0.5,  -0.5,  0.5, -0.5,
-         0.5, -0.5, -0.5,   0.5,  0.5, -0.5,   0.5, -0.5,  0.5,
-        -0.5,  0.5, -0.5,  -0.5, -0.5,  0.5,   0.5, -0.5,  0.5,
-        -0.5,  0.5, -0.5,   0.5, -0.5,  0.5,   0.5,  0.5, -0.5
-      ]);
-      const normals = new Float32Array([
-        0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0,
-        0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1,
-        -1,0,0, -1,0,0, -1,0,0,
-        1,0,0, 1,0,0, 1,0,0,
-        -0.707, 0.707, 0, -0.707, 0.707, 0, -0.707, 0.707, 0,
-        -0.707, 0.707, 0, -0.707, 0.707, 0, -0.707, 0.707, 0
-      ]);
-      const uvs = new Float32Array([
-        0,0, 1,0, 1,1,  0,0, 1,1, 0,1,
-        0,0, 0,1, 1,1,  0,0, 1,1, 1,0,
-        0,0, 1,0, 0,1,  0,0, 0,1, 1,1,
-        0,0, 0,1, 1,1, 0,0, 1,1, 1,0
-      ]);
-
-      geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      geom.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-      geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 3));
-      return geom;
-    }
-
-    // --- WORLD & BLOCK OBJECT MANAGEMENT ---
-    const worldBlocks = {};
-
-    function createFlagMesh(blockData, isPreview = false) {
-      const group = new THREE.Group();
-      
-      const baseGeo = new THREE.CylinderGeometry(0.6, 0.7, 0.2, 16);
-      const transparency = blockData.transparency || 0;
-      const baseMat = new THREE.MeshLambertMaterial({ 
-        color: blockData.actionType === 'finish' ? 0x222222 : 0x7f8c8d,
-        transparent: transparency > 0, 
-        opacity: 1.0 - transparency
-      });
-      const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-      baseMesh.position.y = 0.1;
-      group.add(baseMesh);
-
-      const poleGeo = new THREE.CylinderGeometry(0.06, 0.06, 2.5, 12);
-      const poleMat = new THREE.MeshLambertMaterial({ 
-        color: 0xdddddd,
-        transparent: transparency > 0, 
-        opacity: 1.0 - transparency
-      });
-      const poleMesh = new THREE.Mesh(poleGeo, poleMat);
-      poleMesh.position.y = 1.25;
-      group.add(poleMesh);
-
-      const flagGeo = new THREE.PlaneGeometry(1.0, 0.6);
-      const texType = blockData.actionType === 'finish' ? 'checker_flag' : 'yellow_flag';
-      const flagMat = new THREE.MeshLambertMaterial({ 
-        map: getMaterialTexture(texType),
-        side: THREE.DoubleSide,
-        transparent: transparency > 0, 
-        opacity: 1.0 - transparency
-      });
-      const flagCloth = new THREE.Mesh(flagGeo, flagMat);
-      
-      flagCloth.position.set(0.5, 1.1, 0);
-      group.add(flagCloth);
-
-      group.position.set(blockData.x || 0, blockData.y || 0, blockData.z || 0);
-
-      group.userData = {
-        isBlock: !isPreview,
-        blockId: blockData.id,
-        shape: 'box',
-        actionType: blockData.actionType,
-        canCollide: blockData.canCollide !== false,
-        anchored: true,
-        transparency: transparency,
-        flagCloth: flagCloth
-      };
-
-      if (isPreview) {
-        group.traverse((child) => {
-          if (child.isMesh && child.material) {
-            child.material = child.material.clone();
-            child.material.transparent = true;
-            child.material.opacity = Math.max(0.2, transparency);
-          }
-        });
-        const wireGeo = new THREE.BoxGeometry(1.2, 2.7, 1.2);
-        const wireMat = new THREE.MeshBasicMaterial({ color: 0x3388ff, wireframe: true });
-        const outline = new THREE.Mesh(wireGeo, wireMat);
-        outline.position.y = 1.25;
-        group.add(outline);
-      }
-
-      return group;
-    }
-
-    // KWG V3.42.2: Tile in physical part units, including curved surfaces.
-    // The texture UVs belong to each mesh geometry, not to the shared texture.
-    function applyPartFaceTiling(geometry, blockData) {
-      const sx=Math.max(.001,Math.abs(Number(blockData.scaleX)||1));
-      const sy=Math.max(.001,Math.abs(Number(blockData.scaleY)||1));
-      const sz=Math.max(.001,Math.abs(Number(blockData.scaleZ)||1));
-      const uv=geometry.getAttribute('uv');
-      if(!uv)return;
-      const shape=blockData.shape||'box';
-      // Approximate ellipse circumference in world units (Ramanujan).
-      // Used by cylinder sides and sphere meridians/equators.
-      const ellipseLength=(diameterA,diameterB)=>{
-        const a=diameterA*.5,b=diameterB*.5;
-        const h=((a-b)/(a+b))**2;
-        return Math.PI*(a+b)*(1+3*h/(10+Math.sqrt(4-3*h)));
-      };
-      if(shape==='box'||shape==='baseplate'){
-        const faceTiles=[
-          [sz,sy],[sz,sy],[sx,sz],[sx,sz],[sx,sy],[sx,sy]
-        ];
-        for(let face=0;face<6;face++){
-          const [u,v]=faceTiles[face];
-          for(let c=0;c<4;c++){
-            const i=face*4+c;
-            uv.setXY(i,uv.getX(i)*u,uv.getY(i)*v);
-          }
-        }
-      }else if(shape==='wedge'){
-        // Project each triangle onto its *actual* surface dimensions.
-        // The sloped roof uses its diagonal world length, not its height
-        // or depth independently. Both triangles share the same origin.
-        const pos=geometry.getAttribute('position');
-        const slopeLength=Math.hypot(sy,sz);
-        for(let i=0;i<uv.count;i++){
-          const tri=Math.floor(i/3);
-          const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);
-          let u,v;
-          if(tri<2){ // bottom, XZ
-            u=(x+.5)*sx;v=(z+.5)*sz;
-          }else if(tri<4){ // back, XY
-            u=(x+.5)*sx;v=(y+.5)*sy;
-          }else if(tri<6){ // triangular end caps, ZY
-            u=(z+.5)*sz;v=(y+.5)*sy;
-          }else{ // inclined face, X and diagonal ZY
-            u=(x+.5)*sx;v=(z+.5)*slopeLength;
-          }
-          uv.setXY(i,u,v);
-        }
-      }else if(shape==='cylinder'){
-        const pos=geometry.getAttribute('position');
-        const normal=geometry.getAttribute('normal');
-        // One texture repeat per world unit of circumference/height.
-        const around=ellipseLength(sx,sz);
-        for(let i=0;i<uv.count;i++){
-          if(Math.abs(normal.getY(i))>.9){
-            // Flat cap: world-space X/Z projection.
-            uv.setXY(i,(pos.getX(i)+.5)*sx,(pos.getZ(i)+.5)*sz);
-          }else{
-            uv.setXY(i,uv.getX(i)*around,uv.getY(i)*sy);
-          }
-        }
-      }else if(shape==='sphere'){
-        // UVs on spheres follow longitude/latitude, so measure the
-        // equator and pole-to-pole arc in world units instead of treating
-        // the entire sphere as a single square texture tile.
-        const around=ellipseLength(sx,sz);
-        const vertical=ellipseLength(Math.max(sx,sz),sy)*.5;
-        for(let i=0;i<uv.count;i++){
-          uv.setXY(i,uv.getX(i)*around,uv.getY(i)*vertical);
-        }
-      }
-      uv.needsUpdate=true;
-    }
-
-    function buildBlockMesh(blockData, isPreview = false) {
-      if (blockData.actionType === 'finish') {
-        return createFlagMesh(blockData, isPreview);
-      }
-
-      let geo;
-      if (blockData.shape === 'sphere') geo = new THREE.SphereGeometry(0.5, 16, 16);
-      else if (blockData.shape === 'cylinder') geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
-      else if (blockData.shape === 'wedge') geo = createWedgeGeometry();
-      else geo = new THREE.BoxGeometry(1, 1, 1);
-      applyPartFaceTiling(geo, blockData);
-
-      const mapTexture = getMaterialTexture(blockData.actionType === 'kill' ? 'kill' : blockData.actionType === 'checkpoint' ? 'checkpoint' : blockData.actionType === 'spawn' ? 'spawn' : (blockData.material || 'grid'));
-      const isUncollidable = blockData.canCollide === false;
-      const transparency = blockData.transparency || 0;
-      const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
-
-      const matOptions = { 
-        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : blockData.actionType === 'spawn' ? '#a86cff' : '#888888'),
-        transparent: isUncollidable || transparency > 0,
-        opacity: opacityVal
-      };
-      
-      if (mapTexture) {
-        const tex = mapTexture.clone();
-        tex.needsUpdate = true;
-        // UVs are already scaled per face by applyPartFaceTiling().
-        // Do NOT repeat the whole texture here: that makes a 1x1 end
-        // show as many icons as the long side of a stretched part.
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(1, 1);
-        matOptions.map = tex;
-      }
-
-      if (blockData.actionType === 'kill') matOptions.emissive = 0x220808;
-
-      const mat = new THREE.MeshLambertMaterial(matOptions);
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(blockData.x || 0, blockData.y || 0, blockData.z || 0);
-      mesh.scale.set(blockData.scaleX || 1, blockData.scaleY || 1, blockData.scaleZ || 1);
-      mesh.rotation.y = Number(blockData.rotationY) || 0;
-      mesh.rotation.x = Number(blockData.rotationX) || 0;
-
-      mesh.userData = { 
-        isBlock: !isPreview, 
-        blockId: blockData.id, 
-        shape: blockData.shape || 'box',
-        actionType: blockData.actionType || 'normal',
-        canCollide: blockData.canCollide !== false,
-        anchored: true,
-        transparency: transparency
-      };
-
-      if (isPreview) {
-        mesh.material = mesh.material.clone();
-        mesh.material.transparent = true;
-        mesh.material.opacity = Math.max(0.2, transparency);
-
-        let outlineGeo = geo;
-        const wireMat = new THREE.MeshBasicMaterial({ color: 0x3388ff, wireframe: true });
-        const outlineMesh = new THREE.Mesh(outlineGeo, wireMat);
-        mesh.add(outlineMesh);
-      }
-
-      return mesh;
-    }
-
-    function loadWorldData(world, initialPlayers, selfId, selfSpawn) {
-      currentWorldData = world;
-      if (localPlayerAvatar) { scene.remove(localPlayerAvatar); localPlayerAvatar = null; }
-      for (const id in otherPlayers) {
-        scene.remove(otherPlayers[id].mesh);
-        delete otherPlayers[id];
-      }
-      selectBlock(null);
-      for (const id in worldBlocks) { scene.remove(worldBlocks[id]); delete worldBlocks[id]; }
-
-      const skyHex = world.skyColor || '#1e1e7b';
-      scene.background.set(skyHex);
-      document.getElementById('sky-color-input').value = skyHex; kwgSyncRGBField('sky-color-input');
-
-      const cloudsEnabled = world.cloudsEnabled !== false;
-      const cloudSpeed = (world.cloudSpeed !== undefined) ? world.cloudSpeed : 1.0;
-      const cloudColorHex = world.cloudColor || '#ffffff';
-
-      document.getElementById('clouds-enabled-checkbox').checked = cloudsEnabled;
-      document.getElementById('cloud-speed-input').value = cloudSpeed;
-      document.getElementById('cloud-color-input').value = cloudColorHex; kwgSyncRGBField('cloud-color-input');
-      cloudRotationSpeedMultiplier = parseFloat(cloudSpeed) || 0;
-
-      updateCloudsAppearance(cloudsEnabled, cloudColorHex);
-
-      // The server selects each player's join spawn so other players see
-      // the exact same starting position. Older servers still fall back locally.
-      const initialSpawn=selfSpawn&&Number.isFinite(selfSpawn.x)&&Number.isFinite(selfSpawn.y)&&Number.isFinite(selfSpawn.z)
-        ?selfSpawn:kwgChooseSpawnPosition(world);
-      spawnMarker.position.set(initialSpawn.x,initialSpawn.y,initialSpawn.z);
-
-      localPlayerAvatar = buildBlockyAvatar(playerAppearance, equippedCosmetics);
-      localPlayerAvatar.add(createNameTagSprite(loggedInUsername || 'Player'));
-      localPlayerAvatar.position.set(initialSpawn.x, initialSpawn.y, initialSpawn.z);
-      localPlayerAvatar.userData.walkClock = 0;
-      scene.add(localPlayerAvatar);
-
-      for (const pId in initialPlayers) {
-        if (pId !== selfId) {
-          const pData = initialPlayers[pId];
-          const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
-          mesh.add(createNameTagSprite(pData.username || 'Player'));
-          mesh.position.set(pData.x, pData.y, pData.z);
-          scene.add(mesh);
-          otherPlayers[pId] = { mesh, username: pData.username };
-        }
-      }
-
-      for (const bId in world.blocks) {
-        const mesh = buildBlockMesh(world.blocks[bId]);
-        scene.add(mesh);
-        worldBlocks[bId] = mesh;
-      }
-      
-      updatePartCounter();
-    }
-
-    // --- REALTIME MULTIPLAYER BUILDING SYNC LISTENERS ---
-    socket.on('block_updated', ({ action, blockData, blockId }) => {
-      if (!currentWorldData) return;
-
-      if (action === 'add' || action === 'update') {
-        currentWorldData.blocks[blockData.id] = blockData;
-        if (worldBlocks[blockData.id]) scene.remove(worldBlocks[blockData.id]);
-        const mesh = buildBlockMesh(blockData);
-        scene.add(mesh);
-        worldBlocks[blockData.id] = mesh;
-      } else if (action === 'delete') {
-        delete currentWorldData.blocks[blockId];
-        if (worldBlocks[blockId]) {
-          scene.remove(worldBlocks[blockId]);
-          delete worldBlocks[blockId];
-        }
-        if (selectedBlockId === blockId) selectBlock(null);
-      }
-      updatePartCounter();
-    });
-
-    socket.on('world_settings_updated', (settings) => {
-      if (!currentWorldData) return;
-      Object.assign(currentWorldData, settings);
-
-      if (settings.skyColor) {
-        scene.background.set(settings.skyColor);
-        document.getElementById('sky-color-input').value = settings.skyColor; kwgSyncRGBField('sky-color-input');
-      }
-      if (settings.spawnPoint) {
-        spawnMarker.position.set(settings.spawnPoint.x, settings.spawnPoint.y, settings.spawnPoint.z);
-      }
-      if (settings.cloudsEnabled !== undefined || settings.cloudColor) {
-        updateCloudsAppearance(settings.cloudsEnabled !== false, settings.cloudColor || document.getElementById('cloud-color-input').value);
-      }
-    });
-
-    // --- EDIT MODE CONTROLS & GIZMOS & SELECTION OUTLINES ---
-    let isEditMode = false;
-    let buildSubTool = null;
-    let previewMesh = null;
-    let selectedBlockId = null;
-    const selectedBlockIds = new Set();
-    let marqueeStart = null;
-    let groupDragStart = null;
-    const marquee = document.createElement('div');
-    marquee.style.cssText = 'position:fixed;display:none;pointer-events:none;z-index:2000;border:1px solid #44c8ff;background:rgba(40,150,255,.15);box-shadow:0 0 0 1px #163b5d inset;';
-    document.body.appendChild(marquee);
-    function selectionCenter() {
-      const box = new THREE.Box3();
-      selectedBlockIds.forEach(id => { if(worldBlocks[id]) box.expandByObject(worldBlocks[id]); });
-      return box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
-    }
-    function refreshGroupSelection() {
-      clearSelectionOutline();
-      selectedBlockIds.forEach(id => {
-        const mesh = worldBlocks[id]; if (!mesh) return;
-        const tmp = new THREE.Group();
-        drawBlockOutline(mesh,tmp,0x00d2ff);
-        while(tmp.children.length) selectionOutlineGroup.add(tmp.children[0]);
-      });
-      const count = selectedBlockIds.size;
-      const msg = document.getElementById('no-selection-msg');
-      if(msg && count > 1) { msg.textContent = count + ' parts selected'; msg.style.display = 'block'; }
-      if(count > 1) document.getElementById('selected-part-fields').style.display='none';
-    }
-    function setGroupSelection(ids) {
-      selectedBlockIds.clear();
-      ids.filter(id => worldBlocks[id] && id !== 'baseplate').forEach(id=>selectedBlockIds.add(id));
-      selectedBlockId = selectedBlockIds.size ? selectedBlockIds.values().next().value : null;
-      updatePartPropertiesUI(); refreshGroupSelection();
-      if(selectedBlockId && ['move','scale'].includes(buildSubTool)) buildGizmosForBlock(worldBlocks[selectedBlockId]);
-      else clearGizmos();
-    }
-    function updateMarquee(x,y) {
-      if(!marqueeStart)return;
-      const a=marqueeStart;
-      marquee.style.display='block'; marquee.style.left=Math.min(a.x,x)+'px';marquee.style.top=Math.min(a.y,y)+'px';
-      marquee.style.width=Math.abs(x-a.x)+'px';marquee.style.height=Math.abs(y-a.y)+'px';
-    }
-    function finishMarquee(x,y) {
-      if(!marqueeStart)return;
-      const a=marqueeStart;marqueeStart=null;marquee.style.display='none';
-      if(Math.hypot(x-a.x,y-a.y)<7)return;
-      const left=Math.min(a.x,x),right=Math.max(a.x,x),top=Math.min(a.y,y),bottom=Math.max(a.y,y);
-      const ids=[];const v=new THREE.Vector3();
-      Object.entries(worldBlocks).forEach(([id,mesh])=>{
-        if(id==='baseplate')return;
-        const box=new THREE.Box3().setFromObject(mesh), corners=[];
-        for(const xx of [box.min.x,box.max.x])for(const yy of [box.min.y,box.max.y])for(const zz of [box.min.z,box.max.z]){
-          v.set(xx,yy,zz).project(camera);corners.push({x:renderer.domElement.getBoundingClientRect().left+(v.x+1)*renderer.domElement.getBoundingClientRect().width/2,y:renderer.domElement.getBoundingClientRect().top+(1-v.y)*renderer.domElement.getBoundingClientRect().height/2,z:v.z});
-        }
-        if(corners.some(c=>c.z>=-1&&c.z<=1&&c.x>=left&&c.x<=right&&c.y>=top&&c.y<=bottom))ids.push(id);
-      });
-      setGroupSelection(ids);
-    }
-    function redrawEditedPart(id) {
-      if(worldBlocks[id])scene.remove(worldBlocks[id]);
-      const mesh=buildBlockMesh(currentWorldData.blocks[id]);scene.add(mesh);worldBlocks[id]=mesh;
-    }
-    function saveEditedParts(ids, before) {
-      ids.forEach(id=>{const b=currentWorldData?.blocks[id];if(b && JSON.stringify(b)!==JSON.stringify(before[id]))
-        emitWorldSave('block_update',{worldName:currentWorldName,action:'update',blockData:b},r=>{if(r&&!r.success)showToast('Could not save changes');});});
-    }
-
-    let hoveredBlockId = null;
-    const gizmoGroup = new THREE.Group();
-    scene.add(gizmoGroup);
-
-    const hoverOutlineGroup = new THREE.Group();
-    scene.add(hoverOutlineGroup);
-    const selectionOutlineGroup = new THREE.Group();
-    scene.add(selectionOutlineGroup);
-
-    let activeDragAxis = null; 
-    let dragPlane = null;
-    let dragOffsetVector = new THREE.Vector3();
-    let initialDragBlockState = null;
-
-    const toggleEditBtn = document.getElementById('toggle-edit-btn');
-    const buildToolbar = document.getElementById('build-toolbar');
-    // V3.27: separate compact editor panels, preserving the original field handlers.
-    const editorPropertiesWindow = document.createElement('div');
-    editorPropertiesWindow.id = 'kwg-properties-window';
-    editorPropertiesWindow.className = 'kwg-editor-panel';
-    editorPropertiesWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">☷</span><span>PROPERTIES</span></div>';
-    document.body.appendChild(editorPropertiesWindow);
-    const partPropertiesNode = document.getElementById('part-properties-container');
-    editorPropertiesWindow.appendChild(partPropertiesNode);
-    const editorSettingsWindow = document.createElement('div');
-    editorSettingsWindow.id = 'kwg-settings-window';
-    editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save with Save & Exit.</div></div>';
-    document.body.appendChild(editorSettingsWindow);
-    const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
-    if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
-    const settingsToggle = document.createElement('button');
-    settingsToggle.id = 'kwg-open-settings'; settingsToggle.type='button'; settingsToggle.textContent='⚙ SETTINGS';
-    settingsToggle.style.display = "none"; buildToolbar.appendChild(settingsToggle);
-    settingsToggle.addEventListener('click',()=>editorSettingsWindow.classList.toggle('kwg-open'));
-    document.getElementById('kwg-close-settings').addEventListener('click',()=>editorSettingsWindow.classList.remove('kwg-open'));
-    editorSettingsWindow.querySelectorAll('[data-kwg-setting]').forEach(btn=>btn.addEventListener('click',()=>{
-      editorSettingsWindow.querySelectorAll('[data-kwg-setting]').forEach(b=>b.classList.toggle('active',b===btn));
-      editorSettingsWindow.querySelector('#kwg-settings-environment').style.display=btn.dataset.kwgSetting==='environment'?'block':'none';
-      editorSettingsWindow.querySelector('#kwg-settings-info').style.display=btn.dataset.kwgSetting==='info'?'block':'none';
-    }));
-    // ===== V3.28: World Info editor and free-camera thumbnails =====
-    let kwgInfoOriginal={displayName:'',description:'',thumbnailUrl:''};
-    let kwgInfoDraft={displayName:'',description:'',thumbnailUrl:'',thumbnailData:null};
-    const kwgInfoTitle=document.getElementById('kwg-info-title');
-    const kwgInfoDescription=document.getElementById('kwg-info-description');
-    function resetWorldInfoEditor(world,worldId){
-      kwgInfoOriginal={displayName:String(world?.displayName||worldId||''),description:String(world?.description||''),thumbnailUrl:String(world?.thumbnailUrl||'')};
-      kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
-      kwgInfoTitle.value=kwgInfoDraft.displayName;
-      kwgInfoDescription.value=kwgInfoDraft.description;
-      document.getElementById('kwg-info-char-count').textContent=`${kwgInfoDraft.description.length} / 300`;
-      refreshWorldInfoThumbnail();
-    }
-    function refreshWorldInfoThumbnail(){
-      const img=document.getElementById('kwg-info-photo-img');
-      const empty=document.getElementById('kwg-info-photo-empty');
-      const src=kwgInfoDraft.thumbnailData||kwgInfoDraft.thumbnailUrl;
-      img.style.display=src?'block':'none';empty.style.display=src?'none':'block';
-      if(src)img.src=src;else img.removeAttribute('src');
-      document.getElementById('kwg-info-camera-btn').textContent=src?'RETAKE THUMBNAIL':'SET THUMBNAIL';
-    }
-    kwgInfoTitle.addEventListener('input',()=>{kwgInfoDraft.displayName=kwgInfoTitle.value;});
-    kwgInfoDescription.addEventListener('input',()=>{
-      kwgInfoDraft.description=kwgInfoDescription.value;
-      document.getElementById('kwg-info-char-count').textContent=`${kwgInfoDraft.description.length} / 300`;
-    });
-    function prepareWorldInfoSave(){
-      if(!currentWorldName || !canEditCurrentWorld)return;
-      const title=kwgInfoDraft.displayName.trim();
-      const description=kwgInfoDraft.description.trim();
-      const changed=title!==kwgInfoOriginal.displayName || description!==kwgInfoOriginal.description || !!kwgInfoDraft.thumbnailData;
-      const idx=stagedWorldEdits.findIndex(x=>x.eventName==='world_info_update');
-      if(!changed){if(idx>=0)stagedWorldEdits.splice(idx,1);return true;}
-      if(!title){showToast('World name cannot be empty');return false;}
-      const payload={worldName:currentWorldName,displayName:title,description};
-      if(kwgInfoDraft.thumbnailData)payload.thumbnailData=kwgInfoDraft.thumbnailData;
-      const item={eventName:'world_info_update',payload};
-      if(idx>=0)stagedWorldEdits[idx]=item;else stagedWorldEdits.push(item);
-      return true;
-    }
-
-    const kwgCameraUI=document.createElement('div');
-    kwgCameraUI.id='kwg-thumbnail-camera-ui';
-    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Hold right mouse button and drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong><div class="kwg-camera-help">W A S D move relative to view · Q / E down/up · Shift faster · Hold right-click to look · Scroll to zoom</div></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div><div class="kwg-info-hint">Your photo saves with Save & Exit.</div></div></div>`;
-    document.body.appendChild(kwgCameraUI);
-    const kwgCameraDragzone=kwgCameraUI.querySelector('.kwg-camera-dragzone');
-    const kwgFreeCamera={active:false,reviewing:false,keys:new Set(),yaw:0,pitch:0,dragging:false,lastX:0,lastY:0,photo:null};
-    const kwgCamDirection=new THREE.Vector3();
-    function startWorldThumbnailCamera(){
-      if(!isEditMode || !canEditCurrentWorld || !currentWorldName)return;
-      kwgFreeCamera.active=true;kwgFreeCamera.reviewing=false;kwgFreeCamera.photo=null;
-      kwgFreeCamera.keys.clear();kwgFreeCamera.dragging=false;
-      const d=new THREE.Vector3();camera.getWorldDirection(d);
-      kwgFreeCamera.yaw=Math.atan2(-d.x,-d.z);
-      kwgFreeCamera.pitch=Math.asin(Math.max(-.99,Math.min(.99,d.y)));
-      kwgCameraUI.style.display='block';
-      kwgCameraUI.querySelector('#kwg-camera-review').style.display='none';
-      document.body.classList.add('kwg-thumbnail-camera');
-      isRightClicking=false;
-      requestAnimationFrame(resizeWorldViewport);
-    }
-    function stopWorldThumbnailCamera(){
-      kwgFreeCamera.active=false;kwgFreeCamera.reviewing=false;kwgFreeCamera.dragging=false;
-      kwgFreeCamera.keys.clear();kwgCameraUI.style.display='none';
-      document.body.classList.remove('kwg-thumbnail-camera');
-      requestAnimationFrame(resizeWorldViewport);
-    }
-    function updateWorldThumbnailCamera(delta){
-      if(!kwgFreeCamera.active || kwgFreeCamera.reviewing)return;
-      const cam=kwgFreeCamera;
-      const dir=kwgCamDirection.set(-Math.sin(cam.yaw)*Math.cos(cam.pitch),Math.sin(cam.pitch),-Math.cos(cam.yaw)*Math.cos(cam.pitch));
-      camera.lookAt(camera.position.clone().add(dir));
-      const right=new THREE.Vector3(Math.cos(cam.yaw),0,-Math.sin(cam.yaw));
-      // Fly in the direction the camera is actually facing, including up/down pitch.
-      const forward=dir.clone();
-      const velocity=new THREE.Vector3();
-      if(cam.keys.has('w')||cam.keys.has('arrowup'))velocity.add(forward);
-      if(cam.keys.has('s')||cam.keys.has('arrowdown'))velocity.sub(forward);
-      if(cam.keys.has('d')||cam.keys.has('arrowright'))velocity.add(right);
-      if(cam.keys.has('a')||cam.keys.has('arrowleft'))velocity.sub(right);
-      if(cam.keys.has('e')||cam.keys.has(' '))velocity.y++;
-      if(cam.keys.has('q'))velocity.y--;
-      if(velocity.lengthSq()>0)camera.position.addScaledVector(velocity.normalize(),delta*(cam.keys.has('shift')?35:12));
-    }
-    document.getElementById('kwg-info-camera-btn').addEventListener('click',startWorldThumbnailCamera);
-    kwgCameraDragzone.addEventListener('contextmenu',e=>{
-      if(kwgFreeCamera.active)e.preventDefault();
-    });
-    kwgCameraDragzone.addEventListener('pointerdown',e=>{
-      if(e.button!==2 || !kwgFreeCamera.active || kwgFreeCamera.reviewing)return;
-      e.preventDefault();kwgFreeCamera.dragging=true;kwgFreeCamera.lastX=e.clientX;kwgFreeCamera.lastY=e.clientY;
-      kwgCameraDragzone.setPointerCapture(e.pointerId);
-    });
-    kwgCameraDragzone.addEventListener('pointermove',e=>{
-      if(!kwgFreeCamera.dragging)return;
-      if((e.buttons & 2)===0){kwgFreeCamera.dragging=false;return;}
-      kwgFreeCamera.yaw-=(e.clientX-kwgFreeCamera.lastX)*.004;
-      kwgFreeCamera.pitch=Math.max(-1.45,Math.min(1.45,kwgFreeCamera.pitch-(e.clientY-kwgFreeCamera.lastY)*.004));
-      kwgFreeCamera.lastX=e.clientX;kwgFreeCamera.lastY=e.clientY;
-    });
-    const stopCameraDrag=()=>{kwgFreeCamera.dragging=false;};
-    kwgCameraDragzone.addEventListener('pointerup',stopCameraDrag);
-    kwgCameraDragzone.addEventListener('pointercancel',stopCameraDrag);
-    kwgCameraDragzone.addEventListener('lostpointercapture',stopCameraDrag);
-    kwgCameraDragzone.addEventListener('wheel',e=>{
-      if(!kwgFreeCamera.active || kwgFreeCamera.reviewing)return;
-      e.preventDefault();const d=new THREE.Vector3();camera.getWorldDirection(d);
-      camera.position.addScaledVector(d,e.deltaY<0?3:-3);
-    },{passive:false});
-    window.addEventListener('keydown',e=>{
-      if(!kwgFreeCamera.active)return;
-      if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();stopWorldThumbnailCamera();return;}
-      const k=e.key.toLowerCase();
-      if(['w','a','s','d','q','e','shift',' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){
-        e.preventDefault();e.stopImmediatePropagation();kwgFreeCamera.keys.add(k);
-      }
-    },true);
-    window.addEventListener('keyup',e=>{
-      if(!kwgFreeCamera.active)return;
-      kwgFreeCamera.keys.delete(e.key.toLowerCase());
-    },true);
-    window.addEventListener('blur',()=>kwgFreeCamera.keys.clear());
-    function captureWorldThumbnail(){
-      const hidden=[spawnMarker,gizmoGroup,hoverOutlineGroup,selectionOutlineGroup,localPlayerAvatar,previewMesh,...Object.values(otherPlayers).map(p=>p.mesh)].filter(Boolean);
-      const was=hidden.map(o=>o.visible);
-      const previousAspect=camera.aspect;
-      const w=960,h=540;
-      const target=new THREE.WebGLRenderTarget(w,h,{depthBuffer:true});
-      const pixels=new Uint8Array(w*h*4);
-      try{
-        hidden.forEach(o=>o.visible=false);
-        camera.aspect=w/h;camera.updateProjectionMatrix();
-        renderer.setRenderTarget(target);renderer.render(scene,camera);
-        renderer.readRenderTargetPixels(target,0,0,w,h,pixels);
-      }finally{
-        renderer.setRenderTarget(null);target.dispose();camera.aspect=previousAspect;camera.updateProjectionMatrix();
-        hidden.forEach((o,i)=>o.visible=was[i]);
-      }
-      const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
-      const ctx=canvas.getContext('2d');const frame=ctx.createImageData(w,h);
-      for(let y=0;y<h;y++)frame.data.set(pixels.subarray((h-1-y)*w*4,(h-y)*w*4),y*w*4);
-      ctx.putImageData(frame,0,0);
-      return canvas.toDataURL('image/jpeg',.79);
-    }
-    kwgCameraUI.querySelector('#kwg-camera-cancel').addEventListener('click',stopWorldThumbnailCamera);
-    kwgCameraUI.querySelector('#kwg-camera-capture').addEventListener('click',()=>{
-      try{
-        const photo=captureWorldThumbnail();
-        if(photo.length>2200000){showToast('Screenshot too large. Please try again.');return;}
-        kwgFreeCamera.photo=photo;kwgFreeCamera.reviewing=true;
-        kwgCameraUI.querySelector('#kwg-camera-preview').src=photo;
-        kwgCameraUI.querySelector('#kwg-camera-review').style.display='flex';
-      }catch(err){console.error('Thumbnail capture:',err);showToast('Could not capture thumbnail. Try again.');}
-    });
-    kwgCameraUI.querySelector('#kwg-camera-retake').addEventListener('click',()=>{
-      kwgFreeCamera.reviewing=false;kwgFreeCamera.photo=null;
-      kwgCameraUI.querySelector('#kwg-camera-review').style.display='none';
-    });
-    kwgCameraUI.querySelector('#kwg-camera-use').addEventListener('click',()=>{
-      if(!kwgFreeCamera.photo)return;
-      kwgInfoDraft.thumbnailData=kwgFreeCamera.photo;
-      refreshWorldInfoThumbnail();stopWorldThumbnailCamera();
-      showToast('Thumbnail ready — use Save & Exit to save');
-    });
-
-    let kwgCopiedPart = null;
-    window.addEventListener('keydown', e=>{
-      if(!isEditMode || !canEditCurrentWorld || e.altKey || e.metaKey || e.repeat || kwgFreeCamera.active) return;
-      const tag=document.activeElement?.tagName;
-      if(['INPUT','TEXTAREA','SELECT'].includes(tag)||document.activeElement?.isContentEditable) return;
-      const k=e.key.toLowerCase();
-      // Browsers reserve Ctrl+T for a new tab and Ctrl+R for reload.
-      // Plain R/T are safe in Studio; copy/paste still require Ctrl.
-      if(e.ctrlKey ? !['c','v'].includes(k) : !['r','t'].includes(k))return;
-      e.preventDefault();
-      e.stopPropagation();
-      const b=selectedBlockId && currentWorldData?.blocks?.[selectedBlockId];
-      if(k==='c') {if(b){kwgCopiedPart=JSON.parse(JSON.stringify(b));showToast('Part copied');}return;}
-      if(k==='v') {
-        if(!kwgCopiedPart || !currentWorldData)return;
-        if(Object.keys(currentWorldData.blocks).length>=1400){showToast('Part limit reached');return;}
-        const copy=JSON.parse(JSON.stringify(kwgCopiedPart));
-        copy.id='copy_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-        copy.x=(Number(copy.x)||0)+2;copy.z=(Number(copy.z)||0)+2;
-        currentWorldData.blocks[copy.id]=copy;redrawEditedPart(copy.id);selectBlock(worldBlocks[copy.id]);updatePartCounter();
-        emitWorldSave('block_update',{worldName:currentWorldName,action:'add',blockData:copy},r=>{if(r&&!r.success)showToast('Could not save pasted part');});
-        return;
-      }
-      if(!b)return;
-      if(k==='r')b.rotationY=((Number(b.rotationY)||0)+Math.PI/2)%(Math.PI*2);
-      if(k==='t')b.rotationX=((Number(b.rotationX)||0)+Math.PI/2)%(Math.PI*2);
-      redrawEditedPart(selectedBlockId);selectBlock(worldBlocks[selectedBlockId]);
-      emitWorldSave('block_update',{worldName:currentWorldName,action:'update',blockData:b},r=>{if(r&&!r.success)showToast('Could not save rotation');});
-    });
-
-
-    // Studio-style splitters. Layout values live only for this editing session;
-    // reopening Edit Mode always restores the CSS defaults for the screen size.
-    const studioResizers = [
-      ['kwg-resize-left','left'],
-      ['kwg-resize-settings','settings'],
-      ['kwg-resize-toolbar','toolbar']
-    ];
-    const studioDefaultProperties = ['--kwg-left-dock','--kwg-right-dock','--kwg-toolbar-height','--kwg-settings-height'];
-    function resetStudioDockSizes() {
-      studioDefaultProperties.forEach(name=>document.body.style.removeProperty(name));
-      requestAnimationFrame(resizeWorldViewport);
-    }
-    function studioDockPixels(name) {
-      return parseFloat(getComputedStyle(document.body).getPropertyValue(name)) || 0;
-    }
-    function clampStudioDocks(side, requested) {
-      const vw=window.innerWidth;
-      const left=studioDockPixels('--kwg-left-dock');
-      const right=studioDockPixels('--kwg-right-dock');
-      const minLeft=vw<=620?100:140;
-      const minRight=vw<=620?105:155;
-      const minViewport=vw<=620?105:220;
-      if(side==='left')return Math.max(minLeft,Math.min(requested,Math.min(520,vw-right-minViewport)));
-      if(side==='right')return Math.max(minRight,Math.min(requested,Math.min(560,vw-left-minViewport)));
-      const available=window.innerHeight-studioDockPixels('--kwg-topbar-height');
-      if(side==='toolbar')return Math.max(150,Math.min(requested,available-studioDockPixels('--kwg-settings-height')-125));
-      if(side==='settings')return Math.max(135,Math.min(requested,available-studioDockPixels('--kwg-toolbar-height')-125));
-      return requested;
-    }
-    studioResizers.forEach(([id,side])=>{
-      const grip=document.createElement('div');
-      grip.id=id;
-      grip.className='kwg-studio-resizer';
-      grip.setAttribute('role','separator');
-      grip.setAttribute('aria-label',side==='left'?'Resize editor sidebar width':side==='settings'?'Resize Settings and Properties heights':'Resize Toolbar and Settings heights');
-      grip.title=side==='left'?'Drag to resize editor sidebar':side==='settings'?'Drag to resize Settings and Properties':'Drag to resize Toolbar and Settings';
-      document.body.appendChild(grip);
-      grip.addEventListener('pointerdown',e=>{
-        if(!isEditMode || e.button!==0)return;
-        e.preventDefault();
-        e.stopPropagation();
-        grip.setPointerCapture(e.pointerId);
-        grip.classList.add('kwg-resizing');
-        document.body.classList.add('kwg-studio-dragging',side==='left'?'kwg-drag-cols':'kwg-drag-rows');
-      });
-      grip.addEventListener('pointermove',e=>{
-        if(!grip.hasPointerCapture(e.pointerId)||!isEditMode)return;
-        let prop,value;
-        if(side==='left'){prop='--kwg-left-dock';value=e.clientX;}
-        else if(side==='settings'){prop='--kwg-settings-height';value=e.clientY-studioDockPixels('--kwg-topbar-height')-studioDockPixels('--kwg-toolbar-height');}
-        else {prop='--kwg-toolbar-height';value=e.clientY-studioDockPixels('--kwg-topbar-height');}
-        document.body.style.setProperty(prop,clampStudioDocks(side,value)+'px');
-        resizeWorldViewport();
-      });
-      function finishStudioResize(){
-        grip.classList.remove('kwg-resizing');
-        document.body.classList.remove('kwg-studio-dragging','kwg-drag-cols','kwg-drag-rows');
-        resizeWorldViewport();
-      }
-      grip.addEventListener('pointerup',finishStudioResize);
-      grip.addEventListener('pointercancel',finishStudioResize);
-      grip.addEventListener('lostpointercapture',finishStudioResize);
-    });
-    window.addEventListener('resize',()=>{
-      if(!isEditMode)return;
-      // Keep the viewport usable if the browser becomes narrower during editing.
-      ['left'].forEach(side=>{
-        const prop='--kwg-left-dock';
-        if(document.body.style.getPropertyValue(prop))
-          document.body.style.setProperty(prop,clampStudioDocks(side,studioDockPixels(prop))+'px');
-      });
-      resizeWorldViewport();
-    });
-
-    toggleEditBtn.addEventListener('click', async () => {
-      if(worldCommitInProgress)return;
-      if(isEditMode && !(await commitStagedWorldEdits()))return;
-      if (!canEditCurrentWorld) { showToast('Only the world owner or an admin can edit this world.'); return; }
-      isEditMode = !isEditMode;
-      resetStudioDockSizes();
-      toggleEditBtn.setAttribute('aria-label',isEditMode?'Save & Exit':'Enable Edit Mode');
-      toggleEditBtn.title=isEditMode?'Save & Exit':'Enable Edit Mode';
-      toggleEditBtn.classList.toggle('active', isEditMode);
-      document.getElementById('kwg-edit-mode-label').textContent=isEditMode?'SAVE & EXIT':'EDIT';
-      buildToolbar.style.display = isEditMode ? 'block' : 'none';
-      editorPropertiesWindow.style.display = isEditMode ? 'block' : 'none';
-      editorSettingsWindow.classList.toggle('kwg-open',isEditMode);
-      document.body.classList.toggle('kwg-editing',isEditMode);
-      requestAnimationFrame(resizeWorldViewport);
-      if (!isEditMode) {
-        buildSubTool = null;
-        const recolorPanel=document.getElementById('kwg-recolor-panel');
-        if(recolorPanel)recolorPanel.style.display='none';
-      const placePanel=document.getElementById('kwg-place-panel');
-      if(placePanel)placePanel.style.display='none';
-        ['select','place','move','scale','recolor','delete'].forEach(tool=>{
-          document.getElementById(`tool-${tool}-btn`)?.classList.remove('active');
-        });
-      }
-      updateEditorCursor();
-      if (!isEditMode) {
-        selectBlock(null);
-        if (previewMesh) previewMesh.visible = false;
-      } else {
-        updatePartPropertiesUI();
-      }
-    });
-
-    // Editor cursors are generated locally as tiny SVGs, so no uploaded icon files are needed.
-    // They intentionally use a chunky white/black style to match KWG's blocky UI.
-    const editorCursorSvgs = {
-      select: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M10 4h5v10h2V9h4v5h2v-3h4v11l-6 7H11l-6-8v-6h4l3 5V4z" fill="white" stroke="black" stroke-width="2" stroke-linejoin="miter"/></svg>`,
-      place: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M13 3h6v10h10v6H19v10h-6V19H3v-6h10z" fill="white" stroke="black" stroke-width="2"/></svg>`,
-      move: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M16 2l6 7h-4v5h5V10l7 6-7 6v-4h-5v5h4l-6 7-6-7h4v-5H9v4l-7-6 7-6v4h5V9h-4z" fill="white" stroke="black" stroke-width="1.8" stroke-linejoin="miter"/></svg>`,
-      scale: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M4 13V4h9l-3 3 5 5-3 3-5-5-3 3zm24 6v9h-9l3-3-5-5 3-3 5 5z" fill="white" stroke="black" stroke-width="2" stroke-linejoin="miter"/></svg>`,
-      recolor: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="m15 3 11 11-11 11L4 14Z" fill="white" stroke="black" stroke-width="2"/><path d="M6 3l10 10" stroke="black" stroke-width="2"/><path d="M2 29h24" stroke="white" stroke-width="3"/><path d="M2 29h24" stroke="black" stroke-width="1"/></svg>`,
-      delete: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><path d="M9 9h14l-1 19H10L9 9zm-3-5h7V2h6v2h7v4H6z" fill="white" stroke="black" stroke-width="2" stroke-linejoin="miter"/><path d="M14 13v10M18 13v10" stroke="black" stroke-width="2"/></svg>`
-    };
-
-    function svgCursor(svg, hotX = 16, hotY = 16) {
-      return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${hotX} ${hotY}, auto`;
-    }
-
-    const editorCursors = {
-      select: svgCursor(editorCursorSvgs.select, 10, 4),
-      place: svgCursor(editorCursorSvgs.place),
-      scale: svgCursor(editorCursorSvgs.scale),
-      move: svgCursor(editorCursorSvgs.move),
-      recolor: svgCursor(editorCursorSvgs.recolor, 6, 7),
-      delete: svgCursor(editorCursorSvgs.delete)
-    };
-
-    function updateEditorCursor() {
-      renderer.domElement.style.cursor = isEditMode
-        ? (editorCursors[buildSubTool] || 'default')
-        : 'default';
-    }
-
-    function setBuildSubTool(tool) {
-      buildSubTool = buildSubTool === tool ? null : tool;
-      tool = buildSubTool;
-      if(!tool){clearHoverOutline();clearSelectionOutline();}
-      else if(selectedBlockId&&worldBlocks[selectedBlockId])updateSelectionOutline(worldBlocks[selectedBlockId]);
-      updateEditorCursor();
-      const recolorPanel=document.getElementById('kwg-recolor-panel');
-      if(recolorPanel)recolorPanel.style.display=tool==='recolor'?'block':'none';
-      const placePanel=document.getElementById('kwg-place-panel');
-      if(placePanel)placePanel.style.display=tool==='place'?'block':'none';
-      ['select', 'place', 'scale', 'move', 'recolor', 'delete'].forEach(t => {
-        const btn = document.getElementById(`tool-${t}-btn`);
-        if (btn) btn.classList.toggle('active', t === tool);
-      });
-
-      if (tool !== 'scale' && tool !== 'move') {
-        clearGizmos();
-      }
-      if (tool === 'place') {
-        updatePreviewMesh();
-      } else if (previewMesh) {
-        previewMesh.visible = false;
-      }
-
-      if (selectedBlockId && worldBlocks[selectedBlockId]) {
-        if (tool === 'scale' || tool === 'move') {
-          buildGizmosForBlock(worldBlocks[selectedBlockId]);
-        }
-      }
-    }
-
-    function selectBlock(blockMesh) {
-      if (!blockMesh) {
-        selectedBlockId = null;
-        selectedBlockIds.clear();
-        clearGizmos();
-        clearHoverOutline();
-        clearSelectionOutline();
-        updatePartPropertiesUI();
-        return;
-      }
-
-      selectedBlockId = blockMesh.userData.blockId;
-      selectedBlockIds.clear(); selectedBlockIds.add(selectedBlockId);
-      clearHoverOutline();
-      updateSelectionOutline(blockMesh);
-
-      if (buildSubTool === 'scale' || buildSubTool === 'move') {
-        buildGizmosForBlock(blockMesh);
-      } else {
-        clearGizmos();
-      }
-
-      updatePartPropertiesUI();
-    }
-
-    function updatePartPropertiesUI() {
-      const noSelMsg = document.getElementById('no-selection-msg');
-      const partFields = document.getElementById('selected-part-fields');
-
-      if (selectedBlockId && currentWorldData && currentWorldData.blocks[selectedBlockId]) {
-        const block = currentWorldData.blocks[selectedBlockId];
-        noSelMsg.style.display = 'none';
-        partFields.style.display = 'block';
-
-        document.getElementById('block-shape-select').value = (!block.shape || block.shape === 'baseplate') ? 'box' : block.shape;
-        document.getElementById('block-action-select').value = ['normal','kill','checkpoint','spawn'].includes(block.actionType) ? block.actionType : 'normal';
-        document.getElementById('block-material-select').value = ['grid','brick','wood'].includes(block.material) ? block.material : 'grid';
-        document.getElementById('block-color-input').value = block.color || '#888888'; kwgSyncRGBField('block-color-input');
-        document.getElementById('block-transparency-input').value = block.transparency !== undefined ? block.transparency : 0;
-        document.getElementById('block-collidable-checkbox').checked = block.canCollide !== false;
-      } else {
-        noSelMsg.style.display = 'block';
-        partFields.style.display = 'none';
-      }
-    }
-
-    function applySelectedPartPropertyChange() {
-      if(!kwgTransparencyInputReady('block-transparency-input'))return;
-      if (!isEditMode || !selectedBlockId || !currentWorldName || !currentWorldData) return;
-      if (!currentWorldData.blocks[selectedBlockId]) return;
-
-      const blockData = currentWorldData.blocks[selectedBlockId];
-      blockData.shape = document.getElementById('block-shape-select').value;
-      const nextType=document.getElementById('block-action-select').value;
-      if(nextType!==blockData.actionType){
-        if(nextType==='checkpoint')document.getElementById('block-color-input').value='#f4cf45';
-        if(nextType==='spawn')document.getElementById('block-color-input').value='#a86cff';
-        if(nextType==='kill')document.getElementById('block-color-input').value='#d95757';
-        kwgSyncRGBField('block-color-input');
-      }
-      blockData.actionType=nextType;
-      blockData.material = document.getElementById('block-material-select').value;
-      blockData.color = document.getElementById('block-color-input').value;
-      blockData.transparency = kwgTransparencyValue('block-transparency-input');
-      blockData.canCollide = document.getElementById('block-collidable-checkbox').checked;
-
-      emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
-
-      if (worldBlocks[selectedBlockId]) {
-        scene.remove(worldBlocks[selectedBlockId]);
-      }
-      const updatedMesh = buildBlockMesh(blockData);
-      scene.add(updatedMesh);
-      worldBlocks[selectedBlockId] = updatedMesh;
-
-      updateSelectionOutline(updatedMesh);
-      if (buildSubTool === 'scale' || buildSubTool === 'move') {
-        buildGizmosForBlock(updatedMesh);
-      }
-    }
-
-    ['block-shape-select', 'block-action-select', 'block-material-select', 'block-color-input', 'block-transparency-input', 'block-collidable-checkbox'].forEach(id => {
-      const elem = document.getElementById(id);
-      elem.addEventListener('change', applySelectedPartPropertyChange);
-      elem.addEventListener('input', applySelectedPartPropertyChange);
-    });
-
-    ['block-transparency-input','kwg-place-transparency'].forEach(id=>{
-      document.getElementById(id).addEventListener('blur',()=>{
-        const before=document.getElementById(id).value;
-        kwgNormalizeTransparencyInput(id);
-        if(id==='block-transparency-input' && before!==document.getElementById(id).value){
-          applySelectedPartPropertyChange();
-        }
-        if(id==='kwg-place-transparency'&&isEditMode&&buildSubTool==='place'){
-          updatePreviewMesh();
-        }
-      });
-    });
-
-    function clearGizmos() {
-      while (gizmoGroup.children.length > 0) {
-        gizmoGroup.remove(gizmoGroup.children[0]);
-      }
-    }
-
-    function clearOutlineGroup(group) {
-      while (group.children.length > 0) group.remove(group.children[0]);
-    }
-
-    function clearHoverOutline() {
-      hoveredBlockId = null;
-      clearOutlineGroup(hoverOutlineGroup);
-    }
-
-    function clearSelectionOutline() {
-      clearOutlineGroup(selectionOutlineGroup);
-    }
-
-    function drawBlockOutline(targetMesh, group, color) {
-      clearOutlineGroup(group);
-      if (!targetMesh || !isEditMode) return;
-
-      targetMesh.traverse((child) => {
-        if (!child.isMesh || !child.geometry) return;
-        const edgesGeo = new THREE.EdgesGeometry(child.geometry, 15);
-        const outlineMat = new THREE.LineBasicMaterial({
-          color,
-          depthTest: false,
-          transparent: true,
-          opacity: 1
-        });
-        const lineSegments = new THREE.LineSegments(edgesGeo, outlineMat);
-        lineSegments.renderOrder = 998;
-        lineSegments.position.copy(child.position);
-        lineSegments.rotation.copy(child.rotation);
-        lineSegments.scale.copy(child.scale);
-
-        if (child.parent && child.parent !== scene) {
-          const subGroup = new THREE.Group();
-          subGroup.position.copy(targetMesh.position);
-          subGroup.rotation.copy(targetMesh.rotation);
-          subGroup.scale.copy(targetMesh.scale);
-          subGroup.add(lineSegments);
-          group.add(subGroup);
-        } else {
-          lineSegments.position.copy(targetMesh.position);
-          lineSegments.rotation.copy(targetMesh.rotation);
-          lineSegments.scale.copy(targetMesh.scale);
-          group.add(lineSegments);
-        }
-      });
-    }
-
-    function updateSelectionOutline(targetMesh) {
-      clearSelectionOutline();
-      if(!isEditMode||!buildSubTool)return;
-      drawBlockOutline(targetMesh, selectionOutlineGroup, 0x00d2ff);
-    }
-
-    function updateHoverOutline(targetMesh) {
-      clearHoverOutline();
-      if (!targetMesh || !isEditMode || !buildSubTool) return;
-      hoveredBlockId = targetMesh.userData.blockId;
-      if (hoveredBlockId === selectedBlockId) return;
-      drawBlockOutline(targetMesh, hoverOutlineGroup, 0x3388ff);
-    }
-
-    // Scale handles operate along the part's rotated LOCAL axes. Move handles
-    // intentionally remain world-aligned so moving a rotated part stays intuitive.
-    function kwgPartAxis(mesh, axisName, localScale){
-      const axis=axisName.endsWith('x')?new THREE.Vector3(1,0,0):
-        axisName.endsWith('y')?new THREE.Vector3(0,1,0):new THREE.Vector3(0,0,1);
-      if(localScale)axis.applyQuaternion(mesh.quaternion);
-      return axis.normalize();
-    }
-    function kwgPartAxisLength(mesh, axisName, localScale){
-      if(localScale){
-        const axis=axisName.slice(-1);
-        return axis==='x'?mesh.scale.x:axis==='y'?mesh.scale.y:mesh.scale.z;
-      }
-      const bounds=new THREE.Box3().setFromObject(mesh);
-      const dims=new THREE.Vector3();bounds.getSize(dims);
-      return axisName.endsWith('x')?dims.x:axisName.endsWith('y')?dims.y:dims.z;
-    }
-
-    function buildGizmosForBlock(blockMesh) {
-      clearGizmos();
-      if (!blockMesh) return;
-      selectedBlockId = blockMesh.userData.blockId;
-      refreshGroupSelection();
-
-      const box = new THREE.Box3().setFromObject(blockMesh);
-      if(selectedBlockIds.size>1){box.makeEmpty();selectedBlockIds.forEach(id=>{if(worldBlocks[id])box.expandByObject(worldBlocks[id]);});}
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-
-      const offsetDistX = size.x / 2 + 0.6;
-      const offsetDistY = size.y / 2 + 0.6;
-      const offsetDistZ = size.z / 2 + 0.6;
-
-      const arrowColor = (buildSubTool === 'scale') ? 0x3388ff : 0x27ae60;
-      const arrowGeo = new THREE.ConeGeometry(0.25, 0.6, 8);
-
-      const directions = [
-        { name: 'px', pos: new THREE.Vector3(center.x + offsetDistX, center.y, center.z), rot: new THREE.Vector3(0, 0, -Math.PI / 2) },
-        { name: 'nx', pos: new THREE.Vector3(center.x - offsetDistX, center.y, center.z), rot: new THREE.Vector3(0, 0, Math.PI / 2) },
-        { name: 'py', pos: new THREE.Vector3(center.x, center.y + offsetDistY, center.z), rot: new THREE.Vector3(0, 0, 0) },
-        { name: 'ny', pos: new THREE.Vector3(center.x, center.y - offsetDistY, center.z), rot: new THREE.Vector3(Math.PI, 0, 0) },
-        { name: 'pz', pos: new THREE.Vector3(center.x, center.y, center.z + offsetDistZ), rot: new THREE.Vector3(Math.PI / 2, 0, 0) },
-        { name: 'nz', pos: new THREE.Vector3(center.x, center.y, center.z - offsetDistZ), rot: new THREE.Vector3(-Math.PI / 2, 0, 0) }
-      ];
-
-      if(buildSubTool === 'rotate') {
-        const radius=Math.max(size.x,size.z)/2+1.1;
-        const ring=new THREE.Mesh(new THREE.TorusGeometry(radius,.09,8,64),new THREE.MeshBasicMaterial({color:0xffb347,depthTest:false}));
-        ring.rotation.x=Math.PI/2;ring.position.copy(center);ring.renderOrder=999;
-        ring.userData={isGizmoArrow:true,axis:'ry',baseGizmoScale:1};gizmoGroup.add(ring);
-        return;
-      }
-      directions.forEach(d => {
-        const mat = new THREE.MeshBasicMaterial({ color: arrowColor, depthTest: false });
-        const arrow = new THREE.Mesh(arrowGeo, mat);
-        if(buildSubTool==='scale' && selectedBlockIds.size<=1){
-          const direction=kwgPartAxis(blockMesh,d.name,true);
-          const sign=d.name.startsWith('n')?-1:1;
-          const half=kwgPartAxisLength(blockMesh,d.name,true)/2;
-          arrow.position.copy(blockMesh.position).addScaledVector(direction,sign*(half+0.6));
-          arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.multiplyScalar(sign));
-        }else{
-          arrow.position.copy(d.pos);
-          arrow.rotation.set(d.rot.x, d.rot.y, d.rot.z);
-        }
-        arrow.renderOrder = 999;
-        arrow.userData = { isGizmoArrow: true, axis: d.name, baseGizmoScale: 1 };
-        gizmoGroup.add(arrow);
-      });
-    }
-
-    function updateGizmoScreenScale() {
-      if (!camera || gizmoGroup.children.length === 0 || !selectedBlockId || !worldBlocks[selectedBlockId]) return;
-
-      const selectedMesh = worldBlocks[selectedBlockId];
-      const box = new THREE.Box3().setFromObject(selectedMesh);
-      if(selectedBlockIds.size>1){box.makeEmpty();selectedBlockIds.forEach(id=>{if(worldBlocks[id])box.expandByObject(worldBlocks[id]);});}
-      if(buildSubTool==='rotate')return;
-      const center = new THREE.Vector3();
-      const size = new THREE.Vector3();
-      box.getCenter(center);
-      box.getSize(size);
-
-      const distance = camera.position.distanceTo(center);
-      const s = Math.max(1, Math.min(12, distance / 10));
-
-      // Grow the handles AND their spacing together. This keeps the six arrows
-      // visually separated even when a tiny part is being edited far away.
-      const offsets = {
-        px: new THREE.Vector3(size.x / 2 + 0.6 * s, 0, 0),
-        nx: new THREE.Vector3(-(size.x / 2 + 0.6 * s), 0, 0),
-        py: new THREE.Vector3(0, size.y / 2 + 0.6 * s, 0),
-        ny: new THREE.Vector3(0, -(size.y / 2 + 0.6 * s), 0),
-        pz: new THREE.Vector3(0, 0, size.z / 2 + 0.6 * s),
-        nz: new THREE.Vector3(0, 0, -(size.z / 2 + 0.6 * s))
-      };
-
-      gizmoGroup.children.forEach((arrow) => {
-        arrow.scale.setScalar(s);
-        const axisName=arrow.userData.axis;
-        if(buildSubTool==='scale' && selectedBlockIds.size<=1){
-          const direction=kwgPartAxis(selectedMesh,axisName,true);
-          const sign=axisName.startsWith('n')?-1:1;
-          const half=kwgPartAxisLength(selectedMesh,axisName,true)/2;
-          arrow.position.copy(selectedMesh.position).addScaledVector(direction,sign*(half+0.6*s));
-          arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.multiplyScalar(sign));
-        }else{
-          const offset=offsets[axisName];
-          if(offset)arrow.position.copy(center).add(offset);
-        }
-      });
-    }
-
-    // Place presets are shared by the preview and the actual placed part.
-    // Reading them in one place prevents the preview from disagreeing with
-    // what gets saved to the server.
-    // Transparency fields use a number instead of a slider.
-    // Clamp committed values to 0–1; ignore unfinished typing.
-    function kwgTransparencyValue(id){
-      const raw=document.getElementById(id).value.trim();
-      const n=Number(raw);
-      return raw!=='' && Number.isFinite(n) ? Math.max(0,Math.min(1,n)) : 0;
-    }
-    function kwgTransparencyInputReady(id){
-      const el=document.getElementById(id);
-      const raw=el.value.trim();
-      const n=Number(raw);
-      return raw!=='' && Number.isFinite(n) && n>=0 && n<=1;
-    }
-    function kwgNormalizeTransparencyInput(id){
-      const el=document.getElementById(id);
-      el.value=String(kwgTransparencyValue(id));
-    }
-    function kwgPlacePreset(){
-      const value=id=>document.getElementById(id).value;
-      return {
-        shape:value('kwg-place-shape'),
-        actionType:value('kwg-place-type'),
-        material:value('kwg-place-material'),
-        color:value('kwg-place-color'),
-        transparency:kwgTransparencyValue('kwg-place-transparency'),
-        canCollide:document.getElementById('kwg-place-collide').checked,
-        anchored:true,
-        scaleX:1,scaleY:1,scaleZ:1,
-        rotationX:0,rotationY:0
-      };
-    }
-    const kwgPlacePresetFields=[
-      'kwg-place-shape','kwg-place-type','kwg-place-material',
-      'kwg-place-color','kwg-place-transparency','kwg-place-collide'
-    ];
-    let kwgLastPlaceType='normal';
-    kwgPlacePresetFields.forEach(id=>{
-      const element=document.getElementById(id);
-      element.addEventListener('input',()=>{
-        if(id==='kwg-place-type'){
-          const type=element.value;
-          const colorInput=document.getElementById('kwg-place-color');
-          if(type!==kwgLastPlaceType){
-            if(type==='checkpoint')colorInput.value='#f4cf45';
-            else if(type==='spawn')colorInput.value='#a86cff';
-            else if(type==='kill')colorInput.value='#d95757';
-            else if(kwgLastPlaceType!=='normal')colorInput.value='#888888';
-            kwgLastPlaceType=type;
-            kwgSyncRGBField('kwg-place-color');
-          }
-        }
-        if(isEditMode&&buildSubTool==='place')updatePreviewMesh();
-      });
-      element.addEventListener('change',()=>{
-        if(isEditMode&&buildSubTool==='place')updatePreviewMesh();
-      });
-    });
-
-    function updatePreviewMesh() {
-      if (previewMesh) scene.remove(previewMesh);
-      if (!isEditMode || buildSubTool !== 'place') return;
-
-      previewMesh = buildBlockMesh(kwgPlacePreset(), true);
-      previewMesh.visible = false;
-      scene.add(previewMesh);
-    }
-
-    document.getElementById('sky-color-input').addEventListener('input', (e) => {
-      const color = e.target.value;
-      scene.background.set(color);
-      if (currentWorldName) {
-        stageWorldSettings({ skyColor: color });
-      }
-    });
-
-    document.getElementById('clouds-enabled-checkbox').addEventListener('change', (e) => {
-      const enabled = e.target.checked;
-      updateCloudsAppearance(enabled, document.getElementById('cloud-color-input').value);
-      if (currentWorldName) {
-        stageWorldSettings({ cloudsEnabled: enabled });
-      }
-    });
-
-    document.getElementById('cloud-speed-input').addEventListener('input', (e) => {
-      const spd = parseFloat(e.target.value);
-      cloudRotationSpeedMultiplier = isNaN(spd) ? 0 : spd;
-      if (currentWorldName) {
-        stageWorldSettings({ cloudSpeed: cloudRotationSpeedMultiplier });
-      }
-    });
-
-    document.getElementById('cloud-color-input').addEventListener('input', (e) => {
-      const color = e.target.value;
-      updateCloudsAppearance(document.getElementById('clouds-enabled-checkbox').checked, color);
-      if (currentWorldName) {
-        stageWorldSettings({ cloudColor: color });
-      }
-    });
-
-
-    // V3.36: Every game color swatch has one copy/paste friendly RGB field.
-    // Native color inputs remain as optional swatches; RGB text is the primary editor.
-    function kwgHexToRGB(hex){
-      const m=/^#([0-9a-f]{6})$/i.exec(String(hex||''));
-      if(!m)return '0, 0, 0';
-      return [0,2,4].map(i=>parseInt(m[1].slice(i,i+2),16)).join(', ');
-    }
-    function kwgRGBToHex(text){
-      const value=String(text||'').trim();
-      if(/^#?[0-9a-f]{6}$/i.test(value))return '#'+value.replace('#','').toLowerCase();
-      const inner=value.replace(/^rgb\s*\(/i,'').replace(/\)\s*$/,'');
-      const chunks=inner.split(/\s*,\s*/);
-      if(chunks.length!==3)return null;
-      const nums=chunks.map(v=>Number(v.trim()));
-      if(nums.some(n=>!Number.isInteger(n)||n<0||n>255))return null;
-      return '#'+nums.map(n=>n.toString(16).padStart(2,'0')).join('');
-    }
-    function kwgSyncRGBField(colorId){
-      const swatch=document.getElementById(colorId);
-      const field=document.getElementById(colorId+'-rgb');
-      if(!swatch||!field)return;
-      if(document.activeElement!==field)field.value=kwgHexToRGB(swatch.value);
-      field.classList.remove('kwg-rgb-invalid');
-    }
-    function kwgInstallRGBFields(){
-      document.querySelectorAll('input[type="color"]').forEach(swatch=>{
-        if(!swatch.id||document.getElementById(swatch.id+'-rgb'))return;
-        const wrapper=document.createElement('span');
-        wrapper.className='kwg-rgb-control';
-        swatch.parentNode.insertBefore(wrapper,swatch);
-        wrapper.appendChild(swatch);
-        swatch.setAttribute('title','Choose a color');
-        const field=document.createElement('input');
-        field.type='text';
-        field.id=swatch.id+'-rgb';
-        field.className='kwg-rgb-field';
-        field.setAttribute('aria-label',(swatch.getAttribute('aria-label')||swatch.id.replace(/[-_]/g,' '))+' RGB color');
-        field.setAttribute('autocomplete','off');
-        field.setAttribute('spellcheck','false');
-        field.setAttribute('inputmode','text');
-        field.placeholder='R, G, B';
-        field.value=kwgHexToRGB(swatch.value);
-        field.title='Copy or paste an RGB color: 30, 30, 123';
-        wrapper.appendChild(field);
-        const commit=()=>{
-          const hex=kwgRGBToHex(field.value);
-          if(!hex){
-            field.classList.add('kwg-rgb-invalid');
-            return false;
-          }
-          field.classList.remove('kwg-rgb-invalid');
-          field.value=kwgHexToRGB(hex);
-          if(swatch.value.toLowerCase()!==hex){
-            swatch.value=hex;
-            swatch.dispatchEvent(new Event('input',{bubbles:true}));
-          }
-          return true;
-        };
-        field.addEventListener('input',()=>{
-          const hex=kwgRGBToHex(field.value);
-          field.classList.toggle('kwg-rgb-invalid',field.value.trim().length>0&&!hex);
-          if(hex)commit();
-        });
-        field.addEventListener('change',commit);
-        field.addEventListener('keydown',event=>{
-          if(event.key==='Enter'){event.preventDefault();commit();field.blur();}
-        });
-        field.addEventListener('blur',()=>{
-          if(!commit()){field.value=kwgHexToRGB(swatch.value);field.classList.remove('kwg-rgb-invalid');}
-        });
-        swatch.addEventListener('input',()=>kwgSyncRGBField(swatch.id));
-        swatch.addEventListener('change',()=>kwgSyncRGBField(swatch.id));
-      });
-    }
-    kwgInstallRGBFields();
-
-    // --- PLACEMENT CURSOR ALIGNMENT ---
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    function getTargetVoxelPosition(hit) {
-      let hitObj = hit.object;
-      while (hitObj.parent && hitObj.parent !== scene && !hitObj.userData.isBlock) {
-        hitObj = hitObj.parent;
-      }
-
-      const worldNormal = hit.face.normal.clone().applyQuaternion(hitObj.quaternion).normalize();
-      
-      const gridX = Math.floor(hit.point.x - worldNormal.x * 0.001) + (worldNormal.x > 0.5 ? 1 : (worldNormal.x < -0.5 ? -1 : 0));
-      const gridY = Math.floor(hit.point.y - worldNormal.y * 0.001) + (worldNormal.y > 0.5 ? 1 : (worldNormal.y < -0.5 ? -1 : 0));
-      const gridZ = Math.floor(hit.point.z - worldNormal.z * 0.001) + (worldNormal.z > 0.5 ? 1 : (worldNormal.z < -0.5 ? -1 : 0));
-
-      return {
-        x: gridX + 0.5,
-        y: gridY + 0.5,
-        z: gridZ + 0.5,
-        key: `${gridX}_${gridY}_${gridZ}`
-      };
-    }
-
-    // --- GIZMO ARROW DRAGGING (MOVE / SCALE) ---
-    let isDraggingPart = false;
-    let draggedPartId = null;
-
-    window.addEventListener('pointermove', (e) => {
-      if (pointerIsOverKWGUI(e.target, e.clientX, e.clientY) && !isDraggingPart && !isRightClicking) {
-        clearHoverOutline();
-        if (previewMesh) previewMesh.visible = false;
-        return;
-      }
-      updateWorldMouseFromPointer(e);
-      raycaster.setFromCamera(mouse, camera);
-
-      
-      if (isDraggingPart && draggedPartId && activeDragAxis && (buildSubTool === 'move' || buildSubTool === 'scale')) {
-        const intersectionPoint = new THREE.Vector3();
-        const hitDragPlane=raycaster.ray.intersectPlane(dragPlane, intersectionPoint);
-
-        if (hitDragPlane && currentWorldData && currentWorldData.blocks[draggedPartId]) {
-          const blockData = currentWorldData.blocks[draggedPartId];
-          const initBlock = initialDragBlockState;
-          const diff = intersectionPoint.clone().sub(dragOffsetVector);
-          const isCtrlHeld = e.ctrlKey;
-          const minScaleX = 1;
-          const minScaleY = 1;
-          const minScaleZ = 1;
-
-          if (buildSubTool === 'scale') {
-            const localScale=selectedBlockIds.size<=1;
-            const initialMesh=worldBlocks[draggedPartId];
-            // Project the mouse displacement onto the part's rotated local axis.
-            // This prevents a 90-degree rotation from scaling the wrong dimension.
-            const axis=kwgPartAxis(initialMesh,activeDragAxis,localScale);
-            const sign=activeDragAxis.startsWith('n')?-1:1;
-            const delta=Math.round(diff.dot(axis)*sign);
-            const dimension=activeDragAxis.slice(-1);
-            const property=dimension==='x'?'scaleX':dimension==='y'?'scaleY':'scaleZ';
-            const oldSize=Number(initBlock[property])||1;
-            const newSize=Math.max(1,oldSize+delta*(isCtrlHeld?2:1));
-            blockData.scaleX=Number(initBlock.scaleX)||1;
-            blockData.scaleY=Number(initBlock.scaleY)||1;
-            blockData.scaleZ=Number(initBlock.scaleZ)||1;
-            blockData[property]=newSize;
-            blockData.x=initBlock.x;
-            blockData.y=initBlock.y;
-            blockData.z=initBlock.z;
-            if(!isCtrlHeld){
-              // Move the center along the *rotated* axis so the opposite face
-              // stays anchored. Ctrl keeps the center fixed for symmetric scale.
-              const centerShift=sign*(newSize-oldSize)/2;
-              blockData.x+=axis.x*centerShift;
-              blockData.y+=axis.y*centerShift;
-              blockData.z+=axis.z*centerShift;
-            }
-          } else if (buildSubTool === 'move') {
-            // Snap the drag DELTA, not the absolute block center. Placement uses
-            // half-unit centers (e.g. 0.5, 1.5), so rounding absolute positions
-            // would jump the block onto a different grid on the first move.
-            let newX = initBlock.x;
-            let newY = initBlock.y;
-            let newZ = initBlock.z;
-
-            if (activeDragAxis === 'px' || activeDragAxis === 'nx') {
-              newX = initBlock.x + Math.round(diff.x);
-            } else if (activeDragAxis === 'py' || activeDragAxis === 'ny') {
-              newY = initBlock.y + Math.round(diff.y);
-            } else if (activeDragAxis === 'pz' || activeDragAxis === 'nz') {
-              newZ = initBlock.z + Math.round(diff.z);
-            }
-
-            blockData.x = newX;
-            blockData.y = newY;
-            blockData.z = newZ;
-          }
-
-          // Update the part visually while dragging, but do NOT save on every
-          // pointer movement. The final changed state is saved once on release.
-          scene.remove(worldBlocks[draggedPartId]);
-          const updated = buildBlockMesh(blockData);
-          scene.add(updated);
-          worldBlocks[draggedPartId] = updated;
-          if(groupDragStart && groupDragStart.ids.length>1){
-            const origin=groupDragStart.before[draggedPartId];
-            const sx=(blockData.scaleX||1)/(origin.scaleX||1),sy=(blockData.scaleY||1)/(origin.scaleY||1),sz=(blockData.scaleZ||1)/(origin.scaleZ||1);
-            const dx=blockData.x-origin.x,dy=blockData.y-origin.y,dz=blockData.z-origin.z;
-            groupDragStart.ids.forEach(id=>{
-              if(id===draggedPartId)return;
-              const b=currentWorldData.blocks[id], o=groupDragStart.before[id];if(!b)return;
-              if(buildSubTool==='move'){b.x=o.x+dx;b.y=o.y+dy;b.z=o.z+dz;}
-              else {b.scaleX=Math.max(1,Math.round((o.scaleX||1)*sx));b.scaleY=Math.max(1,Math.round((o.scaleY||1)*sy));b.scaleZ=Math.max(1,Math.round((o.scaleZ||1)*sz));}
-              redrawEditedPart(id);
-            });
-          }
-          buildGizmosForBlock(updated);
-        }
-        return;
-      }
-
-      if (isRightClicking) {
-        const deltaX = e.clientX - lastMouseX;
-        const deltaY = e.clientY - lastMouseY;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-
-        camOrbitAngleY -= deltaX * 0.005;
-        camOrbitAngleX += deltaY * 0.005; 
-        
-        const maxPitch = Math.PI / 2 - 0.05;
-        camOrbitAngleX = Math.max(-maxPitch, Math.min(maxPitch, camOrbitAngleX));
-
-        if (localPlayerAvatar) {
-          localPlayerAvatar.rotation.y = camOrbitAngleY;
-        }
-      }
-
-      if (isEditMode && buildSubTool) {
-        raycaster.setFromCamera(mouse, camera);
-        const interactableObjects = Object.values(worldBlocks);
-        const intersects = raycaster.intersectObjects(interactableObjects, true);
-
-        if (intersects.length > 0) {
-          let hitObj = intersects[0].object;
-          while (hitObj.parent && hitObj.parent !== scene && !hitObj.userData.isBlock) {
-            hitObj = hitObj.parent;
-          }
-
-          if (hitObj.userData.isBlock) {
-            if (hitObj.userData.blockId === selectedBlockId) {
-              clearHoverOutline();
-            } else if (hitObj.userData.blockId !== hoveredBlockId) {
-              updateHoverOutline(hitObj);
-            }
-          }
-
-          if (buildSubTool === 'place') {
-            if (!previewMesh) updatePreviewMesh();
-            const target = getTargetVoxelPosition(intersects[0]);
-            previewMesh.position.set(target.x, target.y, target.z);
-            previewMesh.visible = true;
-          }
-        } else {
-          clearHoverOutline();
-          if (previewMesh) previewMesh.visible = false;
-        }
-      }
-    });
-
-    window.addEventListener('contextmenu', (e) => e.preventDefault());
-
-    window.addEventListener('pointerdown', (e) => {
-      if (pointerIsOverKWGUI(e.target, e.clientX, e.clientY)) return;
-      if (!currentWorldName || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.closest('#customizer-modal')) return;
-
-      if (e.button === 2) {
-        isRightClicking = true;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-
-        if (isEditMode && buildSubTool === 'delete') {
-          updateWorldMouseFromPointer(e);
-          raycaster.setFromCamera(mouse, camera);
-
-          const intersects = raycaster.intersectObjects(Object.values(worldBlocks), true);
-          if (intersects.length > 0) {
-            let hitObj = intersects[0].object;
-            while (hitObj.parent && hitObj.parent !== scene && !hitObj.userData.isBlock) {
-              hitObj = hitObj.parent;
-            }
-            if (hitObj.userData.isBlock) {
-              const blockId = hitObj.userData.blockId;
-              if (currentWorldData && currentWorldData.blocks[blockId]) {
-                if (blockId === 'baseplate') {
-                  showToast('The baseplate cannot be removed. You can resize it instead.');
-                  return;
-                }
-                delete currentWorldData.blocks[blockId];
-                kwgAudio.play('remove');
-                emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
-                scene.remove(worldBlocks[blockId]);
-                delete worldBlocks[blockId];
-                selectBlock(null);
-                if (previewMesh) previewMesh.visible = false;
-                updatePartCounter();
-              }
-            }
-          }
-        }
-        return;
-      }
-
-      if (e.button !== 0) return;
-      if (!isEditMode) return;
-
-      updateWorldMouseFromPointer(e);
-      raycaster.setFromCamera(mouse, camera);
-
-      if ((buildSubTool === 'scale' || buildSubTool === 'move') && gizmoGroup.children.length > 0) {
-        const gizmoIntersects = raycaster.intersectObjects(gizmoGroup.children, true);
-        if (gizmoIntersects.length > 0) {
-          activeDragAxis = gizmoIntersects[0].object.userData.axis;
-          groupDragStart={x:e.clientX,center:selectionCenter(),ids:[selectedBlockId],before:{}};
-          groupDragStart.ids.forEach(id=>groupDragStart.before[id]=JSON.parse(JSON.stringify(currentWorldData.blocks[id])));
-          draggedPartId = selectedBlockId;
-          isDraggingPart = true;
-          
-          if (currentWorldData && currentWorldData.blocks[selectedBlockId]) {
-            initialDragBlockState = JSON.parse(JSON.stringify(currentWorldData.blocks[selectedBlockId]));
-          }
-
-          const blockMesh = worldBlocks[selectedBlockId];
-          const blockCenter = new THREE.Vector3();
-          new THREE.Box3().setFromObject(blockMesh).getCenter(blockCenter);
-
-          let planeNormal = new THREE.Vector3();
-          if(buildSubTool==='scale' && selectedBlockIds.size<=1){
-            const axis=kwgPartAxis(blockMesh,activeDragAxis,true);
-            // The plane contains the rotated scale axis and faces the camera.
-            camera.getWorldDirection(planeNormal);
-            planeNormal.addScaledVector(axis,-planeNormal.dot(axis));
-            if(planeNormal.lengthSq()<0.001){
-              planeNormal.set(0,1,0).addScaledVector(axis,-axis.y);
-              if(planeNormal.lengthSq()<0.001)planeNormal.set(1,0,0);
-            }
-            planeNormal.normalize();
-          }else{
-            if (activeDragAxis.includes('x')) planeNormal.set(0, 0, 1);
-            else if (activeDragAxis.includes('y')) planeNormal.set(1, 0, 0);
-            else if (activeDragAxis.includes('z')) planeNormal.set(1, 0, 0);
-          }
-
-          dragPlane = new THREE.Plane();
-          dragPlane.setFromNormalAndCoplanarPoint(planeNormal, blockCenter);
-
-          dragOffsetVector = new THREE.Vector3();
-          if(!raycaster.ray.intersectPlane(dragPlane, dragOffsetVector)){
-            isDraggingPart=false;draggedPartId=null;activeDragAxis=null;dragPlane=null;
-            return;
-          }
-          return;
-        }
-      }
-
-      const allObjects = [...Object.values(worldBlocks)];
-      const intersects = raycaster.intersectObjects(allObjects, true);
-
-      if (intersects.length > 0) {
-        const hit = intersects[0];
-        let hitObj = hit.object;
-        while (hitObj.parent && hitObj.parent !== scene && !hitObj.userData.isBlock) {
-          hitObj = hitObj.parent;
-        }
-
-        if (!currentWorldData) return;
-
-        if (buildSubTool === 'place') {
-          if (Object.keys(currentWorldData.blocks).length >= 1400) {
-            alert("Part limit reached (1400/1400 parts).");
-            return;
-          }
-
-          const preset=kwgPlacePreset();
-          const voxelTarget = getTargetVoxelPosition(hit);
-          const targetPos = { x: voxelTarget.x, y: voxelTarget.y, z: voxelTarget.z };
-          const blockKey = `${voxelTarget.key}_${Date.now()}`;
-
-          const blockData = {
-            id: blockKey,
-            ...preset,
-            x: targetPos.x,
-            y: targetPos.y,
-            z: targetPos.z
-          };
-
-          currentWorldData.blocks[blockKey] = blockData;
-          kwgAudio.play('place');
-          emitWorldSave('block_update', { worldName: currentWorldName, action: 'add', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
-
-          const mesh = buildBlockMesh(blockData);
-          scene.add(mesh);
-          worldBlocks[blockKey] = mesh;
-          updatePreviewMesh();
-          updatePartCounter();
-          selectBlock(mesh);
-        } else if (hitObj.userData.isBlock) {
-          const blockId = hitObj.userData.blockId;
-
-          if (buildSubTool === 'select' || buildSubTool === 'scale' || buildSubTool === 'move' || buildSubTool === 'recolor') {
-            if(!selectedBlockIds.has(blockId)||selectedBlockIds.size===0)selectBlock(hitObj);
-            if(buildSubTool==='recolor') {
-              const color=document.getElementById('kwg-recolor-color').value;
-              const material=document.getElementById('kwg-recolor-material').value;
-              const b=currentWorldData.blocks[blockId];
-              if(b && (b.color!==color || (b.material||'grid')!==material)){
-                b.color=color;
-                b.material=material;
-                kwgAudio.play('recolor');
-                redrawEditedPart(blockId);
-                selectBlock(worldBlocks[blockId]);
-                emitWorldSave('block_update',{worldName:currentWorldName,action:'update',blockData:b},r=>{if(r&&!r.success)showToast('Could not save recolor');});
-              }
-            }
-          } else if (buildSubTool === 'delete') {
-            if (blockId === 'baseplate') {
-              showToast('The baseplate cannot be removed. You can resize it instead.');
-              return;
-            }
-            delete currentWorldData.blocks[blockId];
-            kwgAudio.play('remove');
-            emitWorldSave('block_update', { worldName: currentWorldName, action: 'delete', blockId }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
-            scene.remove(worldBlocks[blockId]);
-            delete worldBlocks[blockId];
-            selectBlock(null);
-            updatePartCounter();
-          }
-        }
-      } else {
-        if(buildSubTool==='select'){selectBlock(null);return;}
-        if (!activeDragAxis && !isDraggingPart) {
-          selectBlock(null);
-        }
-      }
-    });
-
-    window.addEventListener('pointerup', (e) => {
-      if (e.button === 2) {
-        isRightClicking = false;
-      }
-
-      
-      const savedGroupDrag=!!groupDragStart;
-      if(groupDragStart){saveEditedParts(groupDragStart.ids,groupDragStart.before);groupDragStart=null;refreshGroupSelection();}
-      // Move/scale saves once per completed drag, and only when something
-      // actually changed. Clicking an arrow without moving creates zero saves.
-      if (isDraggingPart && !savedGroupDrag && draggedPartId && initialDragBlockState &&
-          currentWorldData && currentWorldData.blocks[draggedPartId]) {
-        const finalBlock = currentWorldData.blocks[draggedPartId];
-        if (JSON.stringify(finalBlock) !== JSON.stringify(initialDragBlockState)) {
-          emitWorldSave(
-            'block_update',
-            { worldName: currentWorldName, action: 'update', blockData: finalBlock },
-            (r) => { if (r && !r.success) showToast('Could not save changes'); }
-          );
-        }
-      }
-
-      activeDragAxis = null;
-      isDraggingPart = false;
-      draggedPartId = null;
-      initialDragBlockState = null;
-      dragPlane = null;
-    });
-
-    // --- HOME TABS + AVATAR EDITOR V2 ---
-    let avatarEditorCategory = 'hat';
-    let avatarDraft = null;
-    let editorScene, editorCamera, editorRenderer, editorMesh;
-    let editorDragging = false, editorLastX = 0, editorTargetRotation = 0;
-
-    function switchHomeTab(name) {
-      const pageName=({home:'HOME',worlds:'WORLDS',store:'STORE',avatar:'AVATAR',
-        friends:'FRIENDS',profile:'PROFILE',notifications:'NOTIFICATIONS',
-        admin:'ADMIN'})[name]||String(name).toUpperCase();
-      const pageLoading=beginKWGLoading('OPENING '+pageName,{
-        description:'Preparing page',priority:20,immediate:true
-      });
-      // A short transition makes even cached pages feel consistent; network
-      // requests get their own loader and keep it up until their acknowledgements.
-      setTimeout(()=>pageLoading.end(),430);
-      document.querySelectorAll('.home-tab').forEach(b => b.classList.toggle('active', b.dataset.homeTab === name));
-      document.querySelectorAll('.home-pane').forEach(p => p.classList.remove('active'));
-      const paneId = name === 'avatar' ? 'avatar-editor-pane' : name + '-pane';
-      const pane = document.getElementById(paneId); if (pane) pane.classList.add('active');
-      if (name === 'store') { setStoreMessage('Loading...'); refreshStoreData(() => { setStoreMessage(''); renderStoreItems(); }); }
-      if (name === 'avatar') openAvatarEditor();
-      if (name === 'worlds') renderRoomList();
-      if (name === 'home') renderHomeOverview();
-      if (name === 'profile') loadProfile(loggedInUsername);
-      if (name === 'friends') loadFriends();
-      if (name === 'notifications') { renderNotifications(); refreshNotifications(true); }
-      if (name === 'admin' && isAdmin) { const pane=document.getElementById('admin-pane'); const card=document.getElementById('admin-card'); if(card && card.parentElement!==pane) pane.appendChild(card); refreshAdminPanel(); }
-    }
-    document.querySelectorAll('.home-tab').forEach(b => b.addEventListener('click', () => switchHomeTab(b.dataset.homeTab)));
-
-
-    let viewedProfile = null;
-
-    function formatProfileDate(value) {
-      if (!value) return '';
-      try { return new Date(value).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}); }
-      catch { return ''; }
-    }
-
-    function renderProfileAvatar(appearance) {
-      const box=document.getElementById('profile-avatar-preview');
-      if(!box)return;
-      box.innerHTML='<div class="profile-avatar-placeholder">LOADING AVATAR...</div>';
-      const draw=()=>{
-        try{
-          const avatar=buildBlockyAvatar(appearance || {},cosmeticsForAppearance(appearance || {}));
-          thumbImageFromObject(box,avatar);
-        }catch(e){console.warn('Profile avatar preview failed:',e);box.innerHTML='<div class="profile-avatar-placeholder">AVATAR UNAVAILABLE</div>';}
-      };
-      draw(); setTimeout(draw,700);
-    }
-
-    function renderProfileWorldCard(world) {
-      const row=document.createElement('div'); row.className='profile-world-card';
-      const info=document.createElement('div');
-      info.innerHTML=`<div class="profile-world-name">${escapeChatText(filterKWGUserText(world.displayName||world.name))}</div><div class="profile-world-meta">♥ ${Number(world.likeCount||0)} LIKES</div>`;
-      const btn=document.createElement('button'); btn.textContent='VIEW';
-      btn.addEventListener('click',()=>{switchHomeTab('worlds');});
-      row.append(info,btn); return row;
-    }
-
-    function renderProfile(profile) {
-      viewedProfile=profile;
-      document.getElementById('profile-username').textContent=filterKWGUserText(profile.username);
-      document.getElementById('profile-joined').textContent='JOINED '+formatProfileDate(profile.createdAt).toUpperCase();
-      document.getElementById('profile-stat-worlds').textContent=profile.stats?.worlds ?? 0;
-      document.getElementById('profile-stat-likes').textContent=profile.stats?.likesGiven ?? 0;
-      document.getElementById('profile-stat-items').textContent=profile.stats?.inventory ?? 0;
-
-      const status=document.getElementById('profile-status');
-      status.classList.toggle('online',!!profile.online);
-      status.innerHTML=`<span class="profile-status-dot"></span><span>${profile.online ? (profile.currentWorld ? 'ONLINE · '+escapeChatText(filterKWGUserText(profile.currentWorld)) : 'ONLINE') : 'OFFLINE'}</span>`;
-
-      const join=document.getElementById('profile-join-world-btn');
-      if(profile.currentWorld && profile.currentWorld!==currentWorldName){
-        join.style.display='block'; join.textContent='JOIN '+profile.currentWorld;
-        join.onclick=()=>joinWorld(profile.currentWorld);
-      }else join.style.display='none';
-
-      const bio=document.getElementById('profile-bio-view');
-      bio.textContent=filterKWGUserText(profile.bio) || (profile.isOwnProfile ? 'You have not written an About Me yet.' : 'This player has not written an About Me yet.');
-
-      const friendActions=document.getElementById('profile-friend-actions');
-      friendActions.innerHTML='';
-      const rel=profile.friendship?.state || (profile.isOwnProfile?'self':'none');
-      const addAction=(label,fn,danger=false)=>{
-        const b=document.createElement('button'); b.className='submit-btn'+(danger?' danger':'');
-        b.textContent=label; b.addEventListener('click',fn); friendActions.appendChild(b);
-      };
-      if(rel==='none') addAction('ADD FRIEND',()=>friendAction('send_friend_request',profile.username));
-      if(rel==='outgoing') addAction('CANCEL REQUEST',()=>friendAction('cancel_friend_request',profile.username),true);
-      if(rel==='incoming'){
-        addAction('ACCEPT FRIEND',()=>friendAction('respond_friend_request',profile.username,{accept:true}));
-        addAction('DECLINE',()=>friendAction('respond_friend_request',profile.username,{accept:false}),true);
-      }
-      if(rel==='friends') addAction('REMOVE FRIEND',()=>friendAction('remove_friend',profile.username),true);
-
-            renderProfileAvatar(profile.appearance);
-
-      const showcase=document.getElementById('profile-showcase-worlds'); showcase.innerHTML='';
-      if(!profile.showcasedWorlds?.length) showcase.innerHTML='<div style="color:#6f7e92;padding:12px 0">No showcased worlds yet.</div>';
-      else profile.showcasedWorlds.forEach(w=>showcase.appendChild(renderProfileWorldCard(w)));
-
-      const edit=document.getElementById('profile-edit-area');
-      edit.style.display=profile.isOwnProfile?'block':'none';
-      if(profile.isOwnProfile){
-        const input=document.getElementById('profile-bio-input'); input.value=profile.bio||'';
-        document.getElementById('profile-bio-count').textContent=input.value.length;
-        const selected=new Set((profile.showcasedWorlds||[]).map(w=>Number(w.id)));
-        const picker=document.getElementById('profile-showcase-picker'); picker.innerHTML='';
-        if(!profile.ownedWorlds?.length) picker.innerHTML='<div style="color:#6f7e92">Create a world to showcase it here.</div>';
-        else profile.ownedWorlds.forEach(w=>{
-          const label=document.createElement('label'); label.className='profile-showcase-choice';
-          const check=document.createElement('input'); check.type='checkbox'; check.value=w.id; check.checked=selected.has(Number(w.id));
-          check.addEventListener('change',()=>{
-            const checked=[...picker.querySelectorAll('input:checked')];
-            if(checked.length>3){check.checked=false;showToast('You can showcase up to 3 worlds.');}
-          });
-          const text=document.createElement('span'); text.textContent=w.name;
-          label.append(check,text); picker.appendChild(label);
-        });
-      }
-    }
-
-
-
-    let kwgNotifications=[];
-
-    function timeAgo(value){
-      const ms=Date.now()-new Date(value).getTime();
-      if(!Number.isFinite(ms))return '';
-      const m=Math.max(0,Math.floor(ms/60000));
-      if(m<1)return 'JUST NOW';
-      if(m<60)return `${m}M AGO`;
-      const h=Math.floor(m/60);if(h<24)return `${h}H AGO`;
-      const d=Math.floor(h/24);if(d<7)return `${d}D AGO`;
-      return new Date(value).toLocaleDateString();
-    }
-
-    function updateNotificationBadge(n){
-      const b=document.getElementById('notification-badge');
-      if(!b)return;b.textContent=String(n||0);b.style.display=n?'inline-flex':'none';
-    }
-
-    function renderNotifications(){
-      const box=document.getElementById('notifications-list');box.innerHTML='';
-      if(!kwgNotifications.length){box.innerHTML='<div class="notifications-empty">You have no notifications yet.</div>';return;}
-      kwgNotifications.forEach(n=>{
-        const row=document.createElement('div');row.className='notification-row'+(n.isRead?'':' unread');
-        const dot=document.createElement('span');dot.className='notification-dot';
-        const body=document.createElement('div');
-        const msg=document.createElement('div');msg.className='notification-message';msg.textContent=filterKWGUserText(n.message);
-        const tm=document.createElement('div');tm.className='notification-time';tm.textContent=timeAgo(n.createdAt);
-        body.append(msg,tm);row.append(dot,body);
-        if(n.actorUsername){
-          const open=document.createElement('button');open.className='notification-open';open.textContent='PROFILE';
-          open.onclick=()=>{
-            if(!n.isRead) socket.emit('mark_notifications_read',{ids:[Number(n.id)]},()=>refreshNotifications());
-            openPlayerProfile(n.actorUsername);
-          };
-          row.append(open);
-        }
-        box.appendChild(row);
-      });
-    }
-
-    // Background checks (login + 20s polling) update only the unread badge.
-    // A user opening the Notifications page gets the shared loading dialog.
-    let kwgNotificationsRequestId=0;
-    function refreshNotifications(showLoading=false){
-      if(!loggedInUsername)return;
-      const requestId=++kwgNotificationsRequestId;
-      const loading=showLoading?beginKWGLoading('LOADING NOTIFICATIONS',{
-        description:'Fetching your notifications',priority:25,immediate:true
-      }):null;
-      let finished=false;
-      const timeout=loading?setTimeout(()=>{
-        if(!finished){finished=true;loading.end();}
-      },15000):null;
-      try{
-        socket.emit('get_notifications',{},res=>{
-          if(!finished){
-            finished=true;
-            if(timeout!==null)clearTimeout(timeout);
-            if(loading)loading.end();
-          }
-          if(!res?.success)return;
-          // Ignore older results arriving after a newer refresh.
-          if(requestId!==kwgNotificationsRequestId)return;
-          kwgNotifications=res.notifications||[];
-          updateNotificationBadge(res.unread||0);
-          // Render the page only if it is visible; otherwise cache the data.
-          if(document.getElementById('notifications-pane').classList.contains('active'))
-            renderNotifications();
-        });
-      }catch(error){
-        if(timeout!==null)clearTimeout(timeout);
-        if(loading)loading.end();
-        console.warn('Notification refresh failed:',error);
-      }
-    }
-    document.getElementById('notifications-read-btn').addEventListener('click',()=>{
-      socket.emit('mark_notifications_read',{},res=>{if(res?.success)refreshNotifications();});
-    });
-    document.getElementById('notifications-clear-btn').addEventListener('click',()=>{
-      socket.emit('clear_notifications',{},res=>{if(res?.success)refreshNotifications();});
-    });
-
-    function friendAction(eventName,username,extra={}) {
-      socket.emit(eventName,{username,...extra},res=>{
-        if(!res?.success){showToast(res?.message||'Friend action failed.');return;}
-        if(res.message)showToast(res.message);
-        else showToast('Friends updated.');
-        loadProfile(username);
-        refreshFriendBadge();
-      });
-    }
-
-    function friendRow(user,kind) {
-      const row=document.createElement('div'); row.className='friend-row';
-      const main=document.createElement('div'); main.className='friend-main';
-      const dot=document.createElement('span'); dot.className='friend-dot'+(user.online?' online':'');
-      const text=document.createElement('div');
-      const name=document.createElement('div'); name.className='friend-name'; name.textContent=filterKWGUserText(user.username);
-      name.addEventListener('click',()=>openPlayerProfile(user.username));
-      const presence=document.createElement('div'); presence.className='friend-presence';
-      if(kind==='friend') presence.textContent=user.online?(user.currentWorld?'ONLINE · '+user.currentWorld:'ONLINE'):'OFFLINE';
-      else presence.textContent=kind==='incoming'?'WANTS TO BE FRIENDS':'REQUEST SENT';
-      text.append(name,presence); main.append(dot,text);
-
-      const actions=document.createElement('div'); actions.className='friend-actions';
-      const button=(label,fn,danger=false)=>{
-        const b=document.createElement('button'); b.textContent=label;if(danger)b.className='danger';
-        b.onclick=fn;actions.appendChild(b);
-      };
-      if(kind==='friend'){
-        if(user.currentWorld)button('JOIN',()=>joinWorld(user.currentWorld));
-        button('PROFILE',()=>openPlayerProfile(user.username));
-        button('REMOVE',()=>friendListAction('remove_friend',user.username),true);
-      } else if(kind==='incoming'){
-        button('ACCEPT',()=>friendListAction('respond_friend_request',user.username,{accept:true}));
-        button('DECLINE',()=>friendListAction('respond_friend_request',user.username,{accept:false}),true);
-      } else {
-        button('CANCEL',()=>friendListAction('cancel_friend_request',user.username),true);
-      }
-      row.append(main,actions);return row;
-    }
-
-    function friendListAction(eventName,username,extra={}) {
-      socket.emit(eventName,{username,...extra},res=>{
-        if(!res?.success){showToast(res?.message||'Friend action failed.');return;}
-        showToast(res.message||'Friends updated.'); loadFriends();
-      });
-    }
-
-    function renderFriendList(id,items,kind,emptyText) {
-      const box=document.getElementById(id);box.innerHTML='';
-      if(!items?.length){box.innerHTML=`<div class="friends-empty">${emptyText}</div>`;return;}
-      items.forEach(u=>box.appendChild(friendRow(u,kind)));
-    }
-
-    function updateFriendBadge(n) {
-      const badge=document.getElementById('friend-request-badge');
-      if(!badge)return;
-      badge.textContent=String(n||0);badge.style.display=n?'inline-flex':'none';
-    }
-
-    function loadFriends() {
-      socket.emit('get_friends',{},res=>{
-        if(!res?.success){showToast(res?.message||'Could not load friends.');return;}
-        document.getElementById('friends-summary').textContent=`${res.friends.length} FRIEND${res.friends.length===1?'':'S'}`;
-        renderFriendList('friends-list',res.friends,'friend','No friends yet. Open a player profile to send a request.');
-        renderFriendList('incoming-friends-list',res.incoming,'incoming','No incoming friend requests.');
-        renderFriendList('outgoing-friends-list',res.outgoing,'outgoing','No sent friend requests.');
-        document.getElementById('incoming-friends-section').style.display=res.incoming.length?'block':'none';
-        updateFriendBadge(res.incoming.length);
-      });
-    }
-
-    function refreshFriendBadge() {
-      if(!loggedInUsername)return;
-      socket.emit('get_friends',{},res=>{if(res?.success)updateFriendBadge(res.incoming.length);});
-    }
-
-    function openPlayerProfile(username) {
-      username=String(username||'').trim();
-      if(!username)return;
-      switchHomeTab('profile');
-      loadProfile(username);
-    }
-
-    function loadProfile(username) {
-      if(!username)return;
-      socket.emit('get_profile',{username},res=>{
-        if(!res?.success){showToast(res?.message||'Could not load profile.');return;}
-        renderProfile(res.profile);
-      });
-    }
-
-    document.getElementById('profile-bio-input').addEventListener('input',e=>{
-      document.getElementById('profile-bio-count').textContent=e.target.value.length;
-    });
-    document.getElementById('profile-save-btn').addEventListener('click',()=>{
-      const ids=[...document.querySelectorAll('#profile-showcase-picker input:checked')].map(x=>Number(x.value));
-      socket.emit('update_profile',{bio:document.getElementById('profile-bio-input').value,showcaseWorldIds:ids},res=>{
-        if(!res?.success){showToast(res?.message||'Could not save profile.');return;}
-        showToast('Profile saved.'); loadProfile(loggedInUsername);
-      });
-    });
-
-        function makeNoneInventoryItem(category) { return {id:null, category, name:'None', assetKind:'none'}; }
-    const BUILTIN_HATS = [
-      {id:'builtin-hat-none', category:'hat', name:'None', assetKind:'builtin', builtinValue:'none'},
-      {id:'builtin-hat-tophat', category:'hat', name:'Black Top Hat', assetKind:'builtin', builtinValue:'tophat'},
-      {id:'builtin-hat-blue-tophat', category:'hat', name:'Blue Top Hat', assetKind:'builtin', builtinValue:'blue_tophat'},
-      {id:'builtin-hat-red-tophat', category:'hat', name:'Red Top Hat', assetKind:'builtin', builtinValue:'red_tophat'},
-      {id:'builtin-hat-pink-tophat', category:'hat', name:'Pink Top Hat', assetKind:'builtin', builtinValue:'pink_tophat'},
-      {id:'builtin-hat-bow', category:'hat', name:'Pink Bow', assetKind:'builtin', builtinValue:'bow'},
-      {id:'builtin-hat-blue-bow', category:'hat', name:'Blue Bow', assetKind:'builtin', builtinValue:'blue_bow'},
-      {id:'builtin-hat-white-bow', category:'hat', name:'White Bow', assetKind:'builtin', builtinValue:'white_bow'},
-      {id:'builtin-hat-cat-ears', category:'hat', name:'Black Cat Ears', assetKind:'builtin', builtinValue:'cat_ears'},
-      {id:'builtin-hat-pink-cat-ears', category:'hat', name:'Pink Cat Ears', assetKind:'builtin', builtinValue:'pink_cat_ears'}
-    ];
-    const BUILTIN_HEADS = [
-      {id:'builtin-head-sphere', category:'head_shape', name:'Sphere', assetKind:'builtin', builtinValue:'sphere'},
-      {id:'builtin-head-cube', category:'head_shape', name:'Cube', assetKind:'builtin', builtinValue:'cube'},
-      {id:'builtin-head-cylinder', category:'head_shape', name:'Cylinder', assetKind:'builtin', builtinValue:'cylinder'},
-      {id:'builtin-head-headless', category:'head_shape', name:'Headless', assetKind:'builtin', builtinValue:'headless'}
-    ];
-    const BUILTIN_EYES = [
-      {id:'builtin-eyes-none',category:'eyes',name:'None',assetKind:'builtin',builtinValue:'none'},
-      {id:'builtin-eyes-classic',category:'eyes',name:'Classic',assetKind:'builtin',builtinValue:'classic'},
-      {id:'builtin-eyes-friendly',category:'eyes',name:'Friendly',assetKind:'builtin',builtinValue:'friendly'},
-      {id:'builtin-eyes-cool',category:'eyes',name:'Cool',assetKind:'builtin',builtinValue:'cool'},
-      {id:'builtin-eyes-happy',category:'eyes',name:'Happy',assetKind:'builtin',builtinValue:'happy'}
-    ];
-    const BUILTIN_MOUTHS = [
-      {id:'builtin-mouth-none',category:'mouth',name:'None',assetKind:'builtin',builtinValue:'none'},
-      {id:'builtin-mouth-smile',category:'mouth',name:'Smile',assetKind:'builtin',builtinValue:'smile'},
-      {id:'builtin-mouth-grin',category:'mouth',name:'Grin',assetKind:'builtin',builtinValue:'grin'},
-      {id:'builtin-mouth-neutral',category:'mouth',name:'Neutral',assetKind:'builtin',builtinValue:'neutral'},
-      {id:'builtin-mouth-surprised',category:'mouth',name:'Surprised',assetKind:'builtin',builtinValue:'surprised'}
-    ];
-    const BUILTIN_HAIR=[{value:'none',name:'None'},{value:'classic',name:'Classic'},{value:'sidepart',name:'Side Part'},{value:'spiky',name:'Spiky'},{value:'bob',name:'Bob'},{value:'mohawk',name:'Mohawk'},{value:'flattop',name:'Flat Top'},{value:'ponytail',name:'Ponytail'}];
-    function selectedIdForCategory(cat) {
-      const slot={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'}[cat];
-      return avatarDraft ? avatarDraft[slot] : null;
-    }
-    function isInventoryItemSelected(item){
-      if(!avatarDraft)return false;
-      if(item.assetKind==='builtin'){
-        if(item.category==='hat') return !avatarDraft.hatItemId && (avatarDraft.hat||'none')===item.builtinValue;
-        if(item.category==='head_shape') return !avatarDraft.headShapeItemId && (avatarDraft.headShape||'sphere')===item.builtinValue;
-        if(item.category==='eyes') return !avatarDraft.eyesItemId && (avatarDraft.builtinEyes||'none')===item.builtinValue;
-        if(item.category==='mouth') return !avatarDraft.mouthItemId && (avatarDraft.builtinMouth||'none')===item.builtinValue;
-      }
-      return Number(item.id||0)===Number(selectedIdForCategory(item.category)||0);
-    }
-    function setDraftInventoryItem(item) {
-      const cat=item.category;
-      const slot={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'}[cat];
-      if(item.assetKind==='builtin'){
-        avatarDraft[slot]=null;
-        if(cat==='hat') avatarDraft.hat=item.builtinValue;
-        if(cat==='head_shape') avatarDraft.headShape=item.builtinValue;
-        if(cat==='eyes') avatarDraft.builtinEyes=item.builtinValue;
-        if(cat==='mouth') avatarDraft.builtinMouth=item.builtinValue;
-      } else {
-        avatarDraft[slot]=item.id?Number(item.id):null;
-        if(cat==='hat' && item.id) avatarDraft.hat='none';
-        if(cat==='head_shape' && item.id) avatarDraft.headShape='sphere';
-      }
-      renderAvatarInventory(); updateEditorAvatar();
-    }
-    function renderNativeAvatarOptions(){
-      const host=document.getElementById('avatar-native-options');
-      const grid=document.getElementById('avatar-inventory-grid');
-      const cat=avatarEditorCategory;
-      const native=['skin','shirts','pants','shoes'].includes(cat);
-      host.style.display=native?'grid':'none';grid.style.display=native?'none':'grid';host.innerHTML='';
-      if(!native)return false;
-      const option=(label,active,modify)=>{
-        const b=document.createElement('button');b.type='button';b.className='kwg-native-card'+(active?' selected':'');
-        const preview=document.createElement('div');preview.className='kwg-clothing-preview';
-        const look=Object.assign({},avatarDraft);modify(look);
-        try{thumbImageFromObject(preview,buildBlockyAvatar(look,{}));}catch(err){preview.textContent='NO PREVIEW';}
-        const title=document.createElement('span');title.textContent=label;b.append(preview,title);
-        b.onclick=()=>{modify(avatarDraft);renderNativeAvatarOptions();updateEditorAvatar()};host.appendChild(b);
-      };
-      const picker=(label,key,fallback,mirror)=>{
-        const w=document.createElement('label');w.className='kwg-native-color';
-        const title=document.createElement('span');title.textContent=label;
-        const input=document.createElement('input');input.type='color';input.value=avatarDraft[key]||fallback;
-        input.oninput=()=>{avatarDraft[key]=input.value;if(mirror)mirrorSemanticColors(avatarDraft);updateEditorAvatar();};
-        w.append(title,input);host.appendChild(w);
-      };
-      if(cat==='skin')picker('SKIN COLOR','skinColor',avatarDraft.headColor||'#d9a679',true);
-      if(cat==='shirts'){
-        for(const [style,label] of [['short','Short Sleeve'],['long','Long Sleeve']])option(label,(avatarDraft.shirtStyle||'short')===style,a=>a.shirtStyle=style);
-        picker('SHIRT COLOR','shirtColor','#3b82d0',true);
-        const designTitle=document.createElement('div');designTitle.className='kwg-shirt-design-heading';designTitle.textContent='SHIRT DESIGN';host.appendChild(designTitle);
-        const designs=document.createElement('div');designs.className='kwg-shirt-design-grid';host.appendChild(designs);
-        const designItems=[makeNoneInventoryItem('torso_decal'),...ownedStoreItems.filter(i=>i.category==='torso_decal')];
-        designItems.forEach(item=>{
-          const card=document.createElement('button');card.type='button';card.className='inventory-card'+(isInventoryItemSelected(item)?' selected':'');
-          const thumb=document.createElement('div');thumb.className='inventory-thumb';
-          if(item.assetKind==='image'&&item.assetUrl){const img=document.createElement('img');img.src=item.assetUrl;img.alt=item.name||'Shirt design';img.onerror=()=>{thumb.textContent='NO PREVIEW'};thumb.appendChild(img)}
-          else thumb.textContent='NONE';
-          const label=document.createElement('div');label.className='inventory-name';label.textContent=item.name||'None';card.append(thumb,label);
-          card.onclick=()=>{setDraftInventoryItem(item);};designs.appendChild(card);
-        });
-      }
-      if(cat==='pants'){
-        for(const [style,label] of [['pants','Pants'],['shorts','Shorts'],['skirt','Skirt']])option(label,(avatarDraft.bottomStyle||'pants')===style,a=>a.bottomStyle=style);
-        picker('PANTS COLOR','pantsColor','#263447',true);
-      }
-      if(cat==='shoes'){
-        for(const [style,label] of [['shoes','Shoes'],['sandals','Sandals']])option(label,(avatarDraft.shoeStyle||'shoes')===style,a=>a.shoeStyle=style);
-        picker('SHOE COLOR','shoesColor','#15191f',false);
-      }
-      return true;
-    }
-    function renderAvatarInventory() {
-      const grid=document.getElementById('avatar-inventory-grid'); if(!grid)return; grid.innerHTML=''; if(renderNativeAvatarOptions())return;
-      let items=[];
-      if(avatarEditorCategory==='hat') items=[...BUILTIN_HATS,...ownedStoreItems.filter(i=>i.category==='hat')];
-      else if(avatarEditorCategory==='head_shape') items=[...BUILTIN_HEADS,...ownedStoreItems.filter(i=>i.category==='head_shape')];
-      else if(avatarEditorCategory==='eyes') items=[...BUILTIN_EYES,...ownedStoreItems.filter(i=>i.category==='eyes')];
-      else if(avatarEditorCategory==='mouth') items=[...BUILTIN_MOUTHS,...ownedStoreItems.filter(i=>i.category==='mouth')];
-      else items=[makeNoneInventoryItem(avatarEditorCategory), ...ownedStoreItems.filter(i=>i.category===avatarEditorCategory && i.category!=='eyes' && i.category!=='mouth')];
-      items.forEach(item=>{
-        const card=document.createElement('button'); card.className='inventory-card'+(isInventoryItemSelected(item)?' selected':'');
-        const thumb=document.createElement('div'); thumb.className='inventory-thumb';
-        if(item && item.assetKind==='image'){const img=document.createElement('img');img.src=item.assetUrl||'';img.alt=item.name||'';thumb.appendChild(img);}
-        else if(item.assetKind==='glb') renderMeshThumbnail(thumb,item);
-        else if(item.assetKind==='builtin') renderBuiltinThumbnail(thumb,item);
-        else thumb.textContent='NONE';
-        const name=document.createElement('div');name.className='inventory-name';name.textContent=item.name||'Unnamed Item';
-        card.append(thumb,name); card.onclick=()=>setDraftInventoryItem(item); grid.appendChild(card);
-      });
-    }
-    document.querySelectorAll('.inventory-tab').forEach(b=>b.addEventListener('click',()=>{avatarEditorCategory=b.dataset.invCategory;document.querySelectorAll('.inventory-tab').forEach(x=>x.classList.toggle('active',x===b));renderAvatarInventory();}));
-
-    function initEditorPreview(){
-      const c=document.getElementById('avatar-editor-preview'); if(editorRenderer||!c)return;
-      editorScene=new THREE.Scene();editorScene.background=new THREE.Color(0x111111);
-      editorCamera=new THREE.PerspectiveCamera(42,c.clientWidth/c.clientHeight,.1,100);editorCamera.position.set(0,1.2,4);editorCamera.lookAt(0,1.1,0);
-      editorRenderer=new THREE.WebGLRenderer({antialias:true,alpha:false});editorRenderer.setSize(c.clientWidth,c.clientHeight);c.insertBefore(editorRenderer.domElement,c.firstChild);
-      editorScene.add(new THREE.AmbientLight(0xffffff,.8));const dl=new THREE.DirectionalLight(0xffffff,1.1);dl.position.set(4,8,6);editorScene.add(dl);
-      c.addEventListener('pointerdown',e=>{editorDragging=true;editorLastX=e.clientX;c.setPointerCapture?.(e.pointerId)});
-      c.addEventListener('pointermove',e=>{if(!editorDragging)return;editorTargetRotation+=(e.clientX-editorLastX)*.015;editorLastX=e.clientX;});
-      const release=()=>editorDragging=false;c.addEventListener('pointerup',release);c.addEventListener('pointercancel',release);
-      (function loop(){requestAnimationFrame(loop);if(editorMesh){if(editorDragging)editorMesh.rotation.y=editorTargetRotation;else{editorTargetRotation*=.82;editorMesh.rotation.y*=.82;if(Math.abs(editorMesh.rotation.y)<.002){editorMesh.rotation.y=0;editorTargetRotation=0;}}}editorRenderer.render(editorScene,editorCamera)})();
-    }
-    function updateEditorAvatar(){if(!editorScene||!avatarDraft)return;if(editorMesh)editorScene.remove(editorMesh);editorMesh=buildBlockyAvatar(avatarDraft,cosmeticsForAppearance(avatarDraft));editorMesh.rotation.y=editorTargetRotation;editorScene.add(editorMesh);}
-    function normalizeSemanticAppearance(app){app=app||{};app.skinColor=app.skinColor||app.headColor||'#d9a679';app.shirtColor=app.shirtColor||app.torsoColor||'#3b82d0';app.pantsColor=app.pantsColor||app.leftLegColor||'#263447';app.shoesColor=app.shoesColor||'#15191f';app.hairColor=app.hairColor||'#3a261b';return app;}
-    function mirrorSemanticColors(app){normalizeSemanticAppearance(app);app.headColor=app.skinColor;app.torsoColor=app.shirtColor;app.leftArmColor=app.skinColor;app.rightArmColor=app.skinColor;app.leftLegColor=app.pantsColor;app.rightLegColor=app.pantsColor;return app;}
-    function syncEditorColors(){normalizeSemanticAppearance(avatarDraft);[['av-skin-color','skinColor'],['av-shirt-color','shirtColor'],['av-pants-color','pantsColor'],['av-shoes-color','shoesColor'],['av-hair-color','hairColor']].forEach(([id,k])=>{document.getElementById(id).value=avatarDraft[k];kwgSyncRGBField(id);});}
-    function syncBodyStyleButtons(){if(!avatarDraft)return;avatarDraft.shirtStyle=avatarDraft.shirtStyle||'short';avatarDraft.bottomStyle=avatarDraft.bottomStyle||'pants';document.querySelectorAll('[data-shirt-style]').forEach(b=>b.classList.toggle('active',b.dataset.shirtStyle===avatarDraft.shirtStyle));document.querySelectorAll('[data-bottom-style]').forEach(b=>b.classList.toggle('active',b.dataset.bottomStyle===avatarDraft.bottomStyle));}
-    function openAvatarEditor(){refreshStoreData(()=>{avatarDraft=JSON.parse(JSON.stringify(playerAppearance));initEditorPreview();syncEditorColors();syncBodyStyleButtons();renderAvatarInventory();updateEditorAvatar();});}
-    document.querySelectorAll('[data-shirt-style]').forEach(b=>b.addEventListener('click',()=>{if(!avatarDraft)return;avatarDraft.shirtStyle=b.dataset.shirtStyle;syncBodyStyleButtons();updateEditorAvatar();}));
-    document.querySelectorAll('[data-bottom-style]').forEach(b=>b.addEventListener('click',()=>{if(!avatarDraft)return;avatarDraft.bottomStyle=b.dataset.bottomStyle;syncBodyStyleButtons();updateEditorAvatar();}));
-    [['av-skin-color','skinColor'],['av-shirt-color','shirtColor'],['av-pants-color','pantsColor'],['av-shoes-color','shoesColor'],['av-hair-color','hairColor']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{if(!avatarDraft)return;avatarDraft[k]=e.target.value;mirrorSemanticColors(avatarDraft);updateEditorAvatar();}));
-    document.getElementById('save-avatar-editor-btn').addEventListener('click',()=>{const b=document.getElementById('save-avatar-editor-btn');b.disabled=true;b.textContent='SAVING...';mirrorSemanticColors(avatarDraft);socket.emit('save_appearance',avatarDraft,res=>{b.disabled=false;b.textContent='SAVE APPEARANCE';if(!res||!res.success)return showToast((res&&res.message)||'Could not save appearance.');playerAppearance=res.appearance||avatarDraft;equippedCosmetics=res.cosmetics||cosmeticsForAppearance(playerAppearance);localStorage.setItem('sp_player_appearance',JSON.stringify(playerAppearance));avatarDraft=JSON.parse(JSON.stringify(playerAppearance));renderAvatarInventory();updateEditorAvatar();showToast('Appearance saved.');});});
-
-    // Thumbnail rendering reuses ONE offscreen WebGL renderer for every card.
-    // This avoids exhausting browser WebGL contexts and keeps the avatar/world renderers stable.
-    let thumbnailRenderer = null;
-    let thumbnailCanvas = null;
-    function getThumbnailRenderer(w, h) {
-      if (!thumbnailRenderer) {
-        thumbnailCanvas = document.createElement('canvas');
-        thumbnailRenderer = new THREE.WebGLRenderer({canvas:thumbnailCanvas, antialias:true, alpha:true, preserveDrawingBuffer:true});
-        thumbnailRenderer.setClearColor(0x000000, 0);
-      }
-      thumbnailRenderer.setSize(w, h, false);
-      return thumbnailRenderer;
-    }
-    function thumbImageFromObject(container,obj){
-      try {
-        const w=Math.max(container.clientWidth||150,80),h=Math.max(container.clientHeight||78,60);
-        const r=getThumbnailRenderer(w,h);
-        const sc=new THREE.Scene(); sc.add(new THREE.AmbientLight(0xffffff,1));
-        const dl=new THREE.DirectionalLight(0xffffff,1.2);dl.position.set(4,7,5);sc.add(dl);
-        const cam=new THREE.PerspectiveCamera(34,w/h,.01,100);
-        sc.add(obj); obj.updateMatrixWorld(true);
-        const box=new THREE.Box3().setFromObject(obj);
-        if(!box.isEmpty()){
-          const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
-          obj.position.sub(center); obj.updateMatrixWorld(true);
-          const maxDim=Math.max(size.x,size.y,size.z,.001);
-          cam.position.set(0,maxDim*.10,maxDim*2.35);cam.lookAt(0,0,0);
-          cam.near=Math.max(maxDim/100,.001);cam.far=maxDim*20;cam.updateProjectionMatrix();
-        }
-        r.render(sc,cam);
-        const img=document.createElement('img');img.alt='';img.src=thumbnailCanvas.toDataURL('image/png');
-        img.style.maxWidth='100%';img.style.maxHeight='100%';
-        container.innerHTML='';container.appendChild(img);
-      } catch (err) {
-        console.warn('Thumbnail render failed:', err);
-        container.textContent='NO PREVIEW';
-      }
-    }
-    function renderBuiltinThumbnail(container,item){
-      if(item.builtinValue==='none'||item.builtinValue==='headless'){container.textContent=item.builtinValue==='headless'?'HEADLESS':'NONE';return;}
-      if(item.category==='eyes'||item.category==='mouth'){
-        const canvas=document.createElement('canvas');canvas.width=160;canvas.height=110;
-        const ctx=canvas.getContext('2d');ctx.fillStyle='#cfa27d';ctx.fillRect(0,0,160,110);
-        const face=makeFaceTexture(item.category,item.builtinValue);
-        const image=face.image;ctx.drawImage(image,10,15,140,80);
-        const img=document.createElement('img');img.src=canvas.toDataURL('image/png');img.alt=item.name;img.style.cssText='width:100%;height:100%;object-fit:contain';container.appendChild(img);face.dispose();return;
-      }
-      let obj=null;
-      if(item.category==='hat')obj=createHatMesh(item.builtinValue,0xffff00);
-      else if(item.category==='head_shape'){
-        const mat=new THREE.MeshLambertMaterial({color:0xd9a679});
-        if(item.builtinValue==='sphere')obj=new THREE.Mesh(new THREE.SphereGeometry(.55,24,16),mat);
-        else if(item.builtinValue==='cube')obj=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),mat);
-        else if(item.builtinValue==='cylinder')obj=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,1,24),mat);
-      }
-      if(!obj){container.textContent='NO PREVIEW';return;}
-      try{thumbImageFromObject(container,obj)}catch(e){container.textContent='NO PREVIEW';}
-    }
-    // Close-up static thumbnails: GLB cosmetic only, never the full avatar.
-    function renderMeshThumbnail(container,item){
-      if (!container || !item || !item.assetUrl) { if(container) container.textContent='NO PREVIEW'; return; }
-      container.textContent='LOADING...';
-      loadGLBClone(item.assetUrl).then(obj=>{
-        const box=new THREE.Box3().setFromObject(obj);const size=box.getSize(new THREE.Vector3());
-        const maxDim=Math.max(size.x,size.y,size.z,.001);obj.scale.setScalar(1/maxDim);
-        thumbImageFromObject(container,obj);
-      }).catch(err=>{console.warn('GLB thumbnail failed:',err);container.textContent='NO PREVIEW';});
-    }
-
-    // Admin GLB live fitting preview before upload.
-    let fitScene,fitCamera,fitRenderer,fitAvatar,fitObjectUrl=null,fitDragging=false,fitLastX=0,fitRot=0;
-    function initAdminFitPreview(){const c=document.getElementById('admin-fit-preview');if(fitRenderer||!c)return;fitScene=new THREE.Scene();fitScene.background=new THREE.Color(0x0b0d10);fitCamera=new THREE.PerspectiveCamera(42,c.clientWidth/c.clientHeight,.1,100);fitCamera.position.set(0,1.2,4);fitCamera.lookAt(0,1.15,0);fitRenderer=new THREE.WebGLRenderer({antialias:true});fitRenderer.setSize(c.clientWidth,c.clientHeight);c.insertBefore(fitRenderer.domElement,c.firstChild);fitScene.add(new THREE.AmbientLight(0xffffff,.85));const l=new THREE.DirectionalLight(0xffffff,1.1);l.position.set(4,8,6);fitScene.add(l);c.addEventListener('pointerdown',e=>{fitDragging=true;fitLastX=e.clientX});window.addEventListener('pointermove',e=>{if(fitDragging){fitRot+=(e.clientX-fitLastX)*.015;fitLastX=e.clientX;if(fitAvatar)fitAvatar.rotation.y=fitRot;}});window.addEventListener('pointerup',()=>fitDragging=false);(function loop(){requestAnimationFrame(loop);fitRenderer.render(fitScene,fitCamera)})();}
-    function updateAdminFitPreview(){const cat=document.getElementById('admin-store-category').value,file=document.getElementById('admin-store-file').files[0],box=document.getElementById('admin-fit-preview');const mesh=cat==='hat'||cat==='head_shape';box.style.display=mesh?'block':'none';if(!mesh)return;initAdminFitPreview();if(fitAvatar)fitScene.remove(fitAvatar);const base={...playerAppearance,hat:'none',hatItemId:null,headShape:'sphere',headShapeItemId:null};fitAvatar=buildBlockyAvatar(base,{});fitAvatar.rotation.y=fitRot;fitScene.add(fitAvatar);if(!file)return;if(fitObjectUrl)URL.revokeObjectURL(fitObjectUrl);fitObjectUrl=URL.createObjectURL(file);const item={assetKind:'glb',assetUrl:fitObjectUrl,category:cat,metadata:{size:Number(document.getElementById('admin-store-size').value)||1,offsetX:Number(document.getElementById('admin-store-offset-x').value)||0,offsetY:Number(document.getElementById('admin-store-offset-y').value)||0,offsetZ:Number(document.getElementById('admin-store-offset-z').value)||0}};fitScene.remove(fitAvatar);fitAvatar=buildBlockyAvatar(base,{[cat]:item});fitAvatar.rotation.y=fitRot;fitScene.add(fitAvatar);}
-    document.getElementById('admin-store-file').addEventListener('change',updateAdminFitPreview);
-    ['admin-store-size','admin-store-offset-x','admin-store-offset-y','admin-store-offset-z'].forEach(id=>document.getElementById(id).addEventListener('input',updateAdminFitPreview));
-
-    function duplicateSelectedBlock() {
-      if (!isEditMode || !selectedBlockId || !currentWorldData?.blocks?.[selectedBlockId]) {
-        showToast('Select a part first.');
-        return;
-      }
-      const original=currentWorldData.blocks[selectedBlockId];
-      if (original.id === 'baseplate') {
-        showToast('The baseplate cannot be duplicated.');
-        return;
-      }
-      if (Object.keys(currentWorldData.blocks).length >= 1400) {
-        showToast('Part limit reached (1400/1400 parts).');
-        return;
-      }
-      const id=`duplicate_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
-      const copy=JSON.parse(JSON.stringify(original));
-      copy.id=id;
-      // Duplicate at the exact same transform as the original.
-      copy.x=Number(copy.x)||0;
-      currentWorldData.blocks[id]=copy;
-      emitWorldSave('block_update',{worldName:currentWorldName,action:'add',blockData:copy},r=>{
-        if (r && !r.success) {
-          delete currentWorldData.blocks[id];
-          if (worldBlocks[id]) { scene.remove(worldBlocks[id]); delete worldBlocks[id]; }
-          showToast(r.message || 'Could not duplicate part.');
-          updatePartCounter();
-        }
-      });
-      const mesh=buildBlockMesh(copy);
-      scene.add(mesh);
-      worldBlocks[id]=mesh;
-      selectBlock(mesh);
-      updatePartCounter();
-      showToast('Part duplicated.');
-    }
-
-    // --- ACCURATE SHAPE-SPECIFIC COLLISION & PHYSICS ENGINE ---
-    // Keep the exact single-player input/physics tuning.
-    const keys = {};
-    window.addEventListener('keydown', (e) => {
-      const key = (typeof e.key === 'string') ? e.key.toLowerCase() : '';
-      const activeTag = document.activeElement ? document.activeElement.tagName : '';
-      if (activeTag === 'INPUT' || activeTag === 'SELECT' || activeTag === 'TEXTAREA') return;
-
-      // Studio duplicate uses Shift+D, avoiding the browser's Ctrl+D bookmark
-      // shortcut while keeping plain D available for WASD movement.
-      if (isEditMode && canEditCurrentWorld && !kwgFreeCamera.active &&
-          e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey &&
-          key === 'd' && !e.repeat && !document.activeElement?.isContentEditable) {
-        e.preventDefault();
-        e.stopPropagation();
-        keys['d'] = false;
-        duplicateSelectedBlock();
-        return;
-      }
-
-      // Modifier keys and Studio rotation shortcuts never enter movement state.
-      if (isEditMode && (key === 'r' || key === 't')) return;
-      if (key !== 'control' && key !== 'meta' && key !== 'alt' && key !== 'shift') keys[key] = true;
-
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (isEditMode && selectedBlockId) {
-          e.preventDefault();
-          deleteSelectedBlock();
-        }
-      }
-
-    });
-    window.addEventListener('keyup', (e) => { const key = (typeof e.key === 'string') ? e.key.toLowerCase() : ''; if (key) keys[key] = false; });
-
-    let velocityY = 0;
-    const gravity = -0.001375;
-    const jumpStrength = 0.1175;
-    let isGrounded = false;
-    const maxStepHeight = 0.65;
-    let targetStepY = 0;
-
-    const moveSpeed = 0.09;
-    const turnSpeed = 0.04;
-    // Distance-based footsteps track actual avatar movement, not just held keys.
-    let kwgStepDistance=0;
-    let kwgLastStepAt=0;
-
-    const PLAYER_RADIUS = 0.35;
-    const PLAYER_HEIGHT = 2.3;
-
-    function getPlayerAABB(px, py, pz) {
-      return {
-        minX: px - PLAYER_RADIUS,
-        maxX: px + PLAYER_RADIUS,
-        minY: py,
-        maxY: py + PLAYER_HEIGHT,
-        minZ: pz - PLAYER_RADIUS,
-        maxZ: pz + PLAYER_RADIUS
-      };
-    }
-
-    // V3.39.4 — Collision bounds use the same XYZ Euler rotations as the
-    // Three.js block mesh. At 90-degree increments, these bounds are exact
-    // for rectangular parts, including combinations of Ctrl+R and Ctrl+T.
-    function kwgPartIsRotated(b){
-      const tau=Math.PI*2;
-      const x=((Number(b.rotationX)||0)%tau+tau)%tau;
-      const y=((Number(b.rotationY)||0)%tau+tau)%tau;
-      return Math.min(x,tau-x)>.00001 || Math.min(y,tau-y)>.00001;
-    }
-    function getBlockAABB(block) {
-      const bx=Number(block.x)||0,by=Number(block.y)||0,bz=Number(block.z)||0;
-      const hx=Math.max(.001,Math.abs(Number(block.scaleX)||1)/2);
-      const hy=Math.max(.001,Math.abs(Number(block.scaleY)||1)/2);
-      const hz=Math.max(.001,Math.abs(Number(block.scaleZ)||1)/2);
-      let ex=hx,ey=hy,ez=hz;
-      if(kwgPartIsRotated(block)){
-        // Mesh.rotation uses Euler XYZ; matrix columns are rotated local axes.
-        const m=new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(
-          Number(block.rotationX)||0,Number(block.rotationY)||0,0,'XYZ'
-        )).elements;
-        ex=Math.abs(m[0])*hx+Math.abs(m[4])*hy+Math.abs(m[8])*hz;
-        ey=Math.abs(m[1])*hx+Math.abs(m[5])*hy+Math.abs(m[9])*hz;
-        ez=Math.abs(m[2])*hx+Math.abs(m[6])*hy+Math.abs(m[10])*hz;
-      }
-      return {minX:bx-ex,maxX:bx+ex,minY:by-ey,maxY:by+ey,minZ:bz-ez,maxZ:bz+ez};
-    }
-    // For rotated curved/sloped shapes, raycast the actual transformed mesh
-    // instead of pretending its surface is still in the original orientation.
-    const kwgCollisionRaycaster=new THREE.Raycaster();
-    const kwgCollisionRayOrigin=new THREE.Vector3();
-    const kwgCollisionRayDirectionDown=new THREE.Vector3(0,-1,0);
-    const kwgCollisionRayDirectionUp=new THREE.Vector3(0,1,0);
-    function kwgRotatedSurfaceRayY(b,px,pz,fromY,direction,normalSign){
-      const mesh=worldBlocks[b.id];
-      if(!mesh)return null;
-      mesh.updateWorldMatrix(true,false);
-      kwgCollisionRayOrigin.set(px,fromY,pz);
-      kwgCollisionRaycaster.set(kwgCollisionRayOrigin,direction);
-      kwgCollisionRaycaster.near=0;
-      kwgCollisionRaycaster.far=2000;
-      const hits=kwgCollisionRaycaster.intersectObject(mesh,false);
-      for(const hit of hits){
-        if(!hit.face)continue;
-        const normal=hit.face.normal.clone().transformDirection(mesh.matrixWorld);
-        // A wedge remains walkable even when scaled into a steep ramp.
-        // Its slope must not disappear from floor detection after rotation.
-        const minUp=(b.shape==='wedge')?.005:.52;
-        if(normal.y*normalSign>minUp)return hit.point.y;
-      }
-      return null;
-    }
-
-    function checkAABBOverlap(boxA, boxB) {
-      return (
-        boxA.minX < boxB.maxX && boxA.maxX > boxB.minX &&
-        boxA.minY < boxB.maxY && boxA.maxY > boxB.minY &&
-        boxA.minZ < boxB.maxZ && boxA.maxZ > boxB.minZ
+      await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2', [JSON.stringify(data), row.id]);
+    }
+  }
+
+  const adminUsername = cleanUsername(process.env.ADMIN_USERNAME);
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (adminUsername && adminPassword) {
+    const hash = await bcrypt.hash(adminPassword, 12);
+    await pool.query(`
+      INSERT INTO users(username,password_hash,appearance,is_admin)
+      VALUES($1,$2,$3,true)
+      ON CONFLICT(username) DO UPDATE SET
+  password_hash = EXCLUDED.password_hash,
+  is_admin = true
+    `, [adminUsername, hash, JSON.stringify(defaultAppearance)]);
+  }
+}
+
+async function getWorldByName(name) {
+  const r = await pool.query('SELECT * FROM worlds WHERE name=$1', [name]);
+  return r.rows[0] || null;
+}
+
+function canEditWorld(socket, world) {
+  if (!socket.user || !world) return false;
+  return !!(socket.user.isAdmin || socket.user.is_admin || Number(world.owner_user_id) === Number(socket.user.id));
+}
+
+async function worldSummary(row) {
+  const room = `world:${row.name}`;
+  return {
+    name: row.name,
+    displayName: filterKWGUserText(String(row.data?.displayName || row.name).slice(0,40)),
+    description: filterKWGUserText(String(row.data?.description || '').slice(0,300)),
+    thumbnailUrl: String(row.data?.thumbnailUrl || ''),
+    onlineCount: io.sockets.adapter.rooms.get(room)?.size || 0,
+    ownerUsername: row.owner_username || null,
+    likes: Number(row.like_count || 0),
+    likedByMe: !!row.liked_by_me,
+    createdAt: row.created_at
+  };
+}
+
+function sessionTokenHash(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex');
+}
+async function createSession(userId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const hash = sessionTokenHash(token);
+  await pool.query(`INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,NOW() + INTERVAL '30 days')`, [hash,userId]);
+  return token;
+}
+async function loginSocketUser(socket, user) {
+  socket.user = user;
+  socket.user.isAdmin = !!user.is_admin;
+  socketsByUser.set(user.id, socket);
+}
+function authResponse(user, token) {
+  return {success:true,username:user.username,appearance:user.appearance,isAdmin:!!user.is_admin,coins:Number(user.coins || 0),sessionToken:token};
+}
+
+// Serialize world-data writes so rapid edits cannot overwrite one another.
+// Each world gets its own queue, so different worlds can still save in parallel.
+const worldSaveQueues = new Map();
+
+function queueWorldSave(worldName, task) {
+  const key = cleanWorldName(worldName).toLowerCase();
+  const previous = worldSaveQueues.get(key) || Promise.resolve();
+
+  const next = previous
+    .catch(() => {})
+    .then(task);
+
+  worldSaveQueues.set(key, next);
+
+  next.finally(() => {
+    if (worldSaveQueues.get(key) === next) worldSaveQueues.delete(key);
+  }).catch(() => {});
+
+  return next;
+}
+
+const worldJoinReservations = new Map();
+
+function worldPlayerCount(worldName) {
+  let count = 0;
+  for (const [, p] of playersBySocket) if (p.worldName === worldName) count++;
+  return count;
+}
+
+io.on('connection', (socket) => {
+  socket.on('register', async ({ username, password }, cb) => {
+    try {
+      username = cleanUsername(username);
+      password = String(password || '');
+      if (!/^[A-Za-z0-9_]{3,16}$/.test(username)) return cb({success:false,message:'Username must be 3-16 letters, numbers, or underscores.'});
+      if (/\*/.test(filterKWGUserText(username.replace(/[0-9]/g,'')))) return cb({success:false,message:'Please choose a different username.'});
+      if (password.length < 6 || password.length > 72) return cb({success:false,message:'Password must be 6-72 characters.'});
+
+      const existing = await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)', [username]);
+      if (existing.rowCount) return cb({success:false,message:'Username already exists.'});
+
+      const hash = await bcrypt.hash(password, 12);
+      const r = await pool.query(
+        `INSERT INTO users(username,password_hash,appearance) VALUES($1,$2,$3) RETURNING id,username,appearance,is_admin,coins`,
+        [username, hash, JSON.stringify(defaultAppearance)]
       );
+      const user = r.rows[0];
+      await loginSocketUser(socket, user);
+      const sessionToken = await createSession(user.id);
+      cb(authResponse(user, sessionToken));
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:'Registration failed.'});
     }
+  });
 
-    // --- SINGLE-PLAYER COLLISION MODEL (ported to multiplayer block data) ---
-    // This intentionally mirrors the old single-player controller instead of the
-    // experimental V3.8 contact-normal/traction system.
-
-    // V3.39.10: Use the same local-space rotation/scale transform for
-    // sphere FLOOR collision that the sphere side collider already uses.
-    // Unlike a mesh raycast, this continuous ellipsoid has no triangle gaps,
-    // and a 90-degree rotation cannot change the shape of its collision.
-    function kwgRotatedEllipsoidTopY(b,px,pz){
-      const bx=Number(b.x)||0,by=Number(b.y)||0,bz=Number(b.z)||0;
-      const rx=Math.max(.001,Math.abs(Number(b.scaleX)||1)*.5);
-      const ry=Math.max(.001,Math.abs(Number(b.scaleY)||1)*.5);
-      const rz=Math.max(.001,Math.abs(Number(b.scaleZ)||1)*.5);
-      const e=new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(
-        Number(b.rotationX)||0,Number(b.rotationY)||0,0,'XYZ'
-      )).invert().elements;
-      const x=px-bx,z=pz-bz;
-      // In local space, a world-vertical line becomes p(t)=p0+t*v.
-      // Solve (p.x/rx)^2+(p.y/ry)^2+(p.z/rz)^2=1 analytically.
-      const p0=e[0]*x+e[8]*z,p1=e[1]*x+e[9]*z,p2=e[2]*x+e[10]*z;
-      const v0=e[4],v1=e[5],v2=e[6];
-      const ir0=1/(rx*rx),ir1=1/(ry*ry),ir2=1/(rz*rz);
-      const a=v0*v0*ir0+v1*v1*ir1+v2*v2*ir2;
-      const halfB=p0*v0*ir0+p1*v1*ir1+p2*v2*ir2;
-      const c=p0*p0*ir0+p1*p1*ir1+p2*p2*ir2-1;
-      const discriminant=halfB*halfB-a*c;
-      if(discriminant<0)return null;
-      return by+(-halfB+Math.sqrt(Math.max(0,discriminant)))/a;
+  socket.on('login', async ({ username, password }, cb) => {
+    try {
+      const r = await pool.query('SELECT id,username,password_hash,appearance,is_admin,coins FROM users WHERE lower(username)=lower($1)', [cleanUsername(username)]);
+      const user = r.rows[0];
+      if (!user || !(await bcrypt.compare(String(password || ''), user.password_hash))) {
+        return cb({success:false,message:'Invalid username or password.'});
+      }
+      await loginSocketUser(socket, user);
+      const sessionToken = await createSession(user.id);
+      cb(authResponse(user, sessionToken));
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:'Login failed.'});
     }
+  });
 
-    function getPartSurfaceYFromData(b, px, pz, playerFeetY) {
-      const shape=b.shape || 'box';
-      if(kwgPartIsRotated(b)){
-        const bounds=getBlockAABB(b);
-        if(px<bounds.minX-.2||px>bounds.maxX+.2||pz<bounds.minZ-.2||pz>bounds.maxZ+.2)return null;
-        // Rectangular parts rotated by 90 degrees are still axis-aligned,
-        // with swapped dimensions; the top of the new bounds is the floor.
-        if(shape==='box'||shape==='baseplate'||b.actionType==='finish')
-          return bounds.maxY;
-        // Rotated ellipsoids use the exact same inverse-rotation geometry
-        // as their side collider, rather than a faceted mesh raycast.
-        // This prevents sinking through thin or squished sphere tops.
-        if(shape==='sphere')return kwgRotatedEllipsoidTopY(b,px,pz);
-        // Wedges and cylinders retain their working mesh-based floor logic.
-        return kwgRotatedSurfaceRayY(b,px,pz,
-          bounds.maxY+1,kwgCollisionRayDirectionDown,1);
-      }
-      const bx=Number(b.x)||0, by=Number(b.y)||0, bz=Number(b.z)||0;
-      const sx=Math.abs(Number(b.scaleX)||1), sy=Math.abs(Number(b.scaleY)||1), sz=Math.abs(Number(b.scaleZ)||1);
-      const hx=sx/2, hy=sy/2, hz=sz/2;
-      const lx=px-bx, lz=pz-bz;
+  socket.on('resume_session', async ({token} = {}, cb) => {
+    try {
+      const hash = sessionTokenHash(token);
+      const r = await pool.query(`
+        SELECT u.id,u.username,u.appearance,u.is_admin,u.coins
+        FROM auth_sessions s JOIN users u ON u.id=s.user_id
+        WHERE s.token_hash=$1 AND s.expires_at > NOW()
+      `,[hash]);
+      const user = r.rows[0];
+      if (!user) return cb({success:false,message:'Session expired.'});
+      await loginSocketUser(socket,user);
+      await pool.query(`UPDATE auth_sessions SET expires_at=NOW() + INTERVAL '30 days' WHERE token_hash=$1`,[hash]);
+      cb(authResponse(user, token));
+    } catch (e) { console.error(e); cb({success:false,message:'Could not restore session.'}); }
+  });
 
-      if (shape==='box' || shape==='baseplate' || b.actionType==='finish') {
-        if (Math.abs(lx)<=hx+0.2 && Math.abs(lz)<=hz+0.2) return by+hy;
-        return null;
-      }
-      if (shape==='cylinder') {
-        const d2=Math.pow(lx/(hx+0.1),2)+Math.pow(lz/(hz+0.1),2);
-        return d2<=1 ? by+hy : null;
-      }
-      if (shape==='sphere') {
-        const nx=lx/hx, nz=lz/hz, d2=nx*nx+nz*nz;
-        if (d2<=1) return by+hy*Math.sqrt(Math.max(0,1-d2));
-        return null;
-      }
-      if (shape==='wedge') {
-        if (Math.abs(lx)<=hx+0.2 && lz>=-hz-0.2 && lz<=hz+0.2) {
-          const clamped=Math.max(-hz,Math.min(hz,lz));
-          return by-(hy/hz)*clamped;
-        }
-      }
-      return null;
-    }
+  socket.on('logout', async ({token} = {}, cb) => {
+    try {
+      if (token) await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1',[sessionTokenHash(token)]);
+      if (socket.user) socketsByUser.delete(socket.user.id);
+      socket.user = null;
+      cb && cb({success:true});
+    } catch (e) { console.error(e); cb && cb({success:false}); }
+  });
 
-    function getGroundSurfaceUnderPlayerMP(px,py,pz,blocks) {
-      let highest=-Infinity, groundBlock=null;
-      // Sample the avatar's footprint, not just its center. Thin rotated
-      // ellipsoids otherwise lose ground contact at their outer rim.
-      const offsets=[[0,0],[.2,0],[-.2,0],[0,.2],[0,-.2],
-                     [.22,.22],[.22,-.22],[-.22,.22],[-.22,-.22]];
-      for (const b of blocks) {
-        if (b.canCollide===false) continue;
-        for (const [ox,oz] of offsets) {
-          const y=getPartSurfaceYFromData(b,px+ox,pz+oz,py);
-          if (y!==null && y<=py+maxStepHeight+0.1 && y>highest) {
-            highest=y; groundBlock=b;
-          }
-        }
-      }
-      return {floorY:highest,block:groundBlock};
-    }
+  socket.on('get_notifications', async (_, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const r=await pool.query(`
+        SELECT n.id,n.type,n.message,n.is_read AS "isRead",n.created_at AS "createdAt",
+               u.username AS "actorUsername"
+        FROM notifications n
+        LEFT JOIN users u ON u.id=n.actor_user_id
+        WHERE n.user_id=$1
+        ORDER BY n.created_at DESC
+        LIMIT 50
+      `,[socket.user.id]);
+      cb({success:true,notifications:r.rows,unread:r.rows.filter(x=>!x.isRead).length});
+    } catch(e){console.error(e);cb({success:false,message:'Could not load notifications.'});}
+  });
 
-    function checkPlayerIntersectingBlockData(b,pos) {
-      if(kwgPartIsRotated(b))return checkAABBOverlap(
-        getPlayerAABB(pos.x,pos.y,pos.z),getBlockAABB(b));
-      const shape=b.shape || 'box';
-      const bx=Number(b.x)||0, by=Number(b.y)||0, bz=Number(b.z)||0;
-      const sx=Math.abs(Number(b.scaleX)||1), sy=Math.abs(Number(b.scaleY)||1), sz=Math.abs(Number(b.scaleZ)||1);
-      const hx=sx/2,hy=sy/2,hz=sz/2, pr=0.38, ph=2.35;
-      if (pos.y+ph<by-hy || pos.y>by+hy) return false;
-      const pts=[
-        [pos.x,pos.y+0.2,pos.z],[pos.x,pos.y+ph*.5,pos.z],[pos.x,pos.y+ph-.2,pos.z],
-        [pos.x-pr,pos.y+.5,pos.z],[pos.x+pr,pos.y+.5,pos.z],
-        [pos.x,pos.y+.5,pos.z-pr],[pos.x,pos.y+.5,pos.z+pr]
-      ];
-      for (const [x,y,z] of pts) {
-        const lx=x-bx,ly=y-by,lz=z-bz;
-        let inside=false;
-        if (shape==='box'||shape==='baseplate'||b.actionType==='finish')
-          inside=Math.abs(lx)<=hx&&Math.abs(ly)<=hy&&Math.abs(lz)<=hz;
-        else if (shape==='sphere')
-          inside=Math.pow(lx/hx,2)+Math.pow(ly/hy,2)+Math.pow(lz/hz,2)<=1;
-        else if (shape==='cylinder')
-          inside=Math.abs(ly)<=hy&&(Math.pow(lx/hx,2)+Math.pow(lz/hz,2)<=1);
-        else if (shape==='wedge')
-          inside=Math.abs(lx)<=hx&&ly>=-hy&&lz>=-hz&&lz<=hz&&ly<=-(hy/hz)*lz;
-        if (inside) return true;
-      }
-      return false;
-    }
+  socket.on('mark_notifications_read', async ({ids} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const clean=[...new Set((Array.isArray(ids)?ids:[]).map(Number).filter(Number.isSafeInteger))];
+      if(clean.length) await pool.query(
+        'UPDATE notifications SET is_read=TRUE WHERE user_id=$1 AND id=ANY($2::bigint[])',
+        [socket.user.id,clean]
+      );
+      else await pool.query('UPDATE notifications SET is_read=TRUE WHERE user_id=$1',[socket.user.id]);
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not update notifications.'});}
+  });
 
-    // V3.37 — Hazard contact is checked before collision resolution, and again
-    // after ground snapping. Ordinary solid collision must not cancel a kill.
-    // Uses player capsule extents and block bounds so side/top/bottom contact
-    // is detected even when the player never enters the solid block volume.
-    function isPlayerTouchingSpecialPart(block,pos) {
-      if (!block || !pos) return false;
-      if(kwgPartIsRotated(block)){
-        const bounds=getBlockAABB(block);
-        const radius=PLAYER_RADIUS+.07,epsilon=.065;
-        if(pos.y+PLAYER_HEIGHT<bounds.minY-epsilon||pos.y>bounds.maxY+epsilon)return false;
-        const dx=Math.max(bounds.minX-pos.x,0,pos.x-bounds.maxX);
-        const dz=Math.max(bounds.minZ-pos.z,0,pos.z-bounds.maxZ);
-        return dx*dx+dz*dz<=(radius+epsilon)*(radius+epsilon);
-      }
-      const bx=Number(block.x)||0, by=Number(block.y)||0, bz=Number(block.z)||0;
-      const hx=Math.max(.005,Math.abs(Number(block.scaleX)||1)*.5);
-      const hy=Math.max(.005,Math.abs(Number(block.scaleY)||1)*.5);
-      const hz=Math.max(.005,Math.abs(Number(block.scaleZ)||1)*.5);
-      const radius=PLAYER_RADIUS + .07;
-      const foot=pos.y, head=pos.y+PLAYER_HEIGHT;
-      const epsilon=.065;
-      if (head < by-hy-epsilon || foot > by+hy+epsilon) return false;
-      const dx=Math.abs(pos.x-bx),dz=Math.abs(pos.z-bz);
-      const shape=block.shape||'box';
-      if(shape==='sphere') {
-        // Ellipsoid approximated at the closest point along player height.
-        const cy=Math.max(foot,Math.min(head,by));
-        const ny=(cy-by)/hy;
-        const section=Math.sqrt(Math.max(0,1-ny*ny));
-        const rx=hx*section+radius, rz=hz*section+radius;
-        return (dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)<=1;
-      }
-      if(shape==='cylinder') {
-        const rx=hx+radius,rz=hz+radius;
-        return (dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)<=1;
-      }
-      // For boxes and wedges, the block's bounding prism is a conservative
-      // contact shape. The physics engine already uses this approximation.
-      const nearX=Math.max(0,dx-hx),nearZ=Math.max(0,dz-hz);
-      return nearX*nearX+nearZ*nearZ<=(radius+epsilon)*(radius+epsilon);
-    }
-    function isPlayerTouchingKillPart(block,pos){
-      return !!block&&block.actionType==='kill'&&isPlayerTouchingSpecialPart(block,pos);
-    }
-    function touchesAnyKillPart(blocks,pos){
-      return blocks.some(b=>b.actionType==='kill'&&isPlayerTouchingKillPart(b,pos));
-    }
+  socket.on('clear_notifications', async (_, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      await pool.query('DELETE FROM notifications WHERE user_id=$1',[socket.user.id]);
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not clear notifications.'});}
+  });
 
-    // V3.39.6 — For rotated non-box shapes, test the ACTUAL triangles, not
-    // the surrounding rectangular AABB. The latter fills in the empty space
-    // above a wedge ramp and makes the avatar run in place.
-    const kwgShapeMoveDirection=new THREE.Vector3();
-    const kwgShapeRayOrigin=new THREE.Vector3();
-    const kwgShapeFaceNormal=new THREE.Vector3();
-    // V3.39.8 — Exact rotated ellipsoid sweep for flattened / stretched spheres.
-    // Mesh-ray samples can miss a thin sphere completely (or start inside it),
-    // especially after a 90-degree rotation. Use the actual three independent
-    // radii and inverse XYZ rotation for the horizontal player sweep instead.
-    function kwgResolveRotatedSphereSide(pos,b,previousX,previousZ,feet,head,pr){
-      const dx=pos.x-previousX,dz=pos.z-previousZ;
-      if(Math.abs(dx)+Math.abs(dz)<.000001)return;
-      const bounds=getBlockAABB(b);
-      if(bounds.maxY<feet-.01||bounds.minY>head+.01)return;
-      if(Math.min(previousX,pos.x)>bounds.maxX+pr ||
-         Math.max(previousX,pos.x)<bounds.minX-pr ||
-         Math.min(previousZ,pos.z)>bounds.maxZ+pr ||
-         Math.max(previousZ,pos.z)<bounds.minZ-pr)return;
-      const bx=Number(b.x)||0,by=Number(b.y)||0,bz=Number(b.z)||0;
-      // Player radius is horizontal; the ellipsoid's local radii must NOT
-      // collapse into a single radius when its axes are rotated.
-      const rx=Math.max(.001,Math.abs(Number(b.scaleX)||1)*.5)+pr;
-      const ry=Math.max(.001,Math.abs(Number(b.scaleY)||1)*.5)+.025;
-      const rz=Math.max(.001,Math.abs(Number(b.scaleZ)||1)*.5)+pr;
-      const inverse=new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(
-        Number(b.rotationX)||0,Number(b.rotationY)||0,0,'XYZ'
-      )).invert();
-      const e=inverse.elements;
-      function local(x,y,z){
-        x-=bx;y-=by;z-=bz;
-        return [e[0]*x+e[4]*y+e[8]*z,
-                e[1]*x+e[5]*y+e[9]*z,
-                e[2]*x+e[6]*y+e[10]*z];
-      }
-      function value(x,y,z){
-        const v=local(x,y,z);
-        return v[0]*v[0]/(rx*rx)+v[1]*v[1]/(ry*ry)+v[2]*v[2]/(rz*rz);
-      }
-      // Sample the portion of the player's body overlapping the sphere,
-      // including very thin flattened spheres (fixed-height samples alone
-      // can miss these after rotation).
-      const bottom=Math.max(feet+.06,bounds.minY+.01);
-      const top=Math.min(head-.08,bounds.maxY-.01);
-      if(top<bottom)return;
-      const heights=[bottom,(bottom+top)*.5,top];
-      if(top-bottom>.4){heights.push(bottom+(top-bottom)*.25,bottom+(top-bottom)*.75);}
-      let first=1.01,contactHeight=null;
-      for(const y of heights){
-        const p=local(previousX,y,previousZ);
-        const v=[e[0]*dx+e[8]*dz,e[1]*dx+e[9]*dz,e[2]*dx+e[10]*dz];
-        const a=v[0]*v[0]/(rx*rx)+v[1]*v[1]/(ry*ry)+v[2]*v[2]/(rz*rz);
-        const bb=2*(p[0]*v[0]/(rx*rx)+p[1]*v[1]/(ry*ry)+p[2]*v[2]/(rz*rz));
-        const c=p[0]*p[0]/(rx*rx)+p[1]*p[1]/(ry*ry)+p[2]*p[2]/(rz*rz)-1;
-        // Already overlapping: do not trap the player or teleport them out.
-        // Ground snapping handles standing on top of the ellipsoid.
-        if(c<=0||a<1e-12)continue;
-        const disc=bb*bb-4*a*c;
-        if(disc<0)continue;
-        const t=(-bb-Math.sqrt(disc))/(2*a);
-        if(t>=0&&t<=1&&t<first){first=t;contactHeight=y;}
-      }
-      if(contactHeight===null)return;
-      const safeT=Math.max(0,first-.002);
-      const cx=previousX+dx*safeT,cz=previousZ+dz*safeT;
-      const v=local(cx,contactHeight,cz);
-      // Ellipsoid gradient transformed back into world coordinates gives
-      // the actual sideways normal, including X/Y rotations.
-      const gx=v[0]/(rx*rx),gy=v[1]/(ry*ry),gz=v[2]/(rz*rz);
-      const nx=e[0]*gx+e[1]*gy+e[2]*gz;
-      const nz=e[8]*gx+e[9]*gy+e[10]*gz;
-      const nlen=Math.hypot(nx,nz);
-      if(nlen<.000001){pos.x=cx;pos.z=cz;return;}
-      const ux=nx/nlen,uz=nz/nlen;
-      const remaining=1-safeT;
-      const dot=dx*ux+dz*uz;
-      const slideX=(dx-Math.min(0,dot)*ux)*remaining;
-      const slideZ=(dz-Math.min(0,dot)*uz)*remaining;
-      const sx=cx+slideX,sz=cz+slideZ;
-      // A tangent approximation can re-enter a highly squashed ellipsoid.
-      // If it does, stay at the safe contact point for this frame.
-      if(heights.some(y=>value(sx,y,sz)<.999)){
-        pos.x=cx;pos.z=cz;
-      }else{
-        pos.x=sx;pos.z=sz;
-      }
-    }
+  socket.on('get_friends', async (_, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const uid=socket.user.id;
+      const accepted=await pool.query(`
+        SELECT u.id,u.username,u.appearance,f.updated_at AS "friendsSince"
+        FROM friendships f
+        JOIN users u ON u.id=CASE WHEN f.requester_id=$1 THEN f.addressee_id ELSE f.requester_id END
+        WHERE f.status='accepted' AND (f.requester_id=$1 OR f.addressee_id=$1)
+        ORDER BY lower(u.username)
+      `,[uid]);
+      const incoming=await pool.query(`
+        SELECT u.username,u.appearance,f.created_at AS "requestedAt"
+        FROM friendships f JOIN users u ON u.id=f.requester_id
+        WHERE f.addressee_id=$1 AND f.status='pending'
+        ORDER BY f.created_at DESC
+      `,[uid]);
+      const outgoing=await pool.query(`
+        SELECT u.username,u.appearance,f.created_at AS "requestedAt"
+        FROM friendships f JOIN users u ON u.id=f.addressee_id
+        WHERE f.requester_id=$1 AND f.status='pending'
+        ORDER BY f.created_at DESC
+      `,[uid]);
 
-    // V3.39.9: Exact finite elliptical cylinder sweep in rotated local space.
-    // Checks curved walls AND flat caps, including very flat cylinders.
-    function kwgResolveRotatedCylinderSide(pos,b,previousX,previousZ,feet,head,pr){
-      const dx=pos.x-previousX,dz=pos.z-previousZ;
-      if(Math.abs(dx)+Math.abs(dz)<.000001)return;
-      const bounds=getBlockAABB(b);
-      if(bounds.maxY<feet-.01||bounds.minY>head+.01)return;
-      if(Math.min(previousX,pos.x)>bounds.maxX+pr||
-         Math.max(previousX,pos.x)<bounds.minX-pr||
-         Math.min(previousZ,pos.z)>bounds.maxZ+pr||
-         Math.max(previousZ,pos.z)<bounds.minZ-pr)return;
-      const bx=Number(b.x)||0,by=Number(b.y)||0,bz=Number(b.z)||0;
-      const inverse=new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(
-        Number(b.rotationX)||0,Number(b.rotationY)||0,0,'XYZ'
-      )).invert();
-      const e=inverse.elements;
-      const rx=Math.max(.001,Math.abs(Number(b.scaleX)||1)*.5)+pr*Math.hypot(e[0],e[8]);
-      const hy=Math.max(.001,Math.abs(Number(b.scaleY)||1)*.5)+pr*Math.hypot(e[1],e[9]);
-      const rz=Math.max(.001,Math.abs(Number(b.scaleZ)||1)*.5)+pr*Math.hypot(e[2],e[10]);
-      function local(x,y,z){
-        x-=bx;y-=by;z-=bz;
-        return [e[0]*x+e[4]*y+e[8]*z,
-                e[1]*x+e[5]*y+e[9]*z,
-                e[2]*x+e[6]*y+e[10]*z];
-      }
-      function inside(x,y,z){
-        const p=local(x,y,z);
-        return Math.abs(p[1])<hy-.00001 &&
-               p[0]*p[0]/(rx*rx)+p[2]*p[2]/(rz*rz)<.99999;
-      }
-      const bottom=Math.max(feet+.065,bounds.minY+.01);
-      const top=Math.min(head-.08,bounds.maxY-.01);
-      if(top<bottom)return;
-      const heights=[bottom,(bottom+top)*.5,top];
-      if(top-bottom>.4)heights.push(bottom+(top-bottom)*.25,bottom+(top-bottom)*.75);
-      const v0=e[0]*dx+e[8]*dz,v1=e[1]*dx+e[9]*dz,v2=e[2]*dx+e[10]*dz;
-      let first=1.01,contactHeight=null,hitCap=false;
-      for(const y of heights){
-        const p=local(previousX,y,previousZ);
-        const radial=p[0]*p[0]/(rx*rx)+p[2]*p[2]/(rz*rz);
-        if(radial<=1&&Math.abs(p[1])<=hy)continue;
-        const a=v0*v0/(rx*rx)+v2*v2/(rz*rz);
-        const bb=2*(p[0]*v0/(rx*rx)+p[2]*v2/(rz*rz));
-        const c=radial-1;
-        let sideEnter=-Infinity,sideExit=Infinity;
-        if(a<1e-12){
-          if(c>0)continue;
-        }else{
-          const disc=bb*bb-4*a*c;
-          if(disc<0)continue;
-          const root=Math.sqrt(disc);
-          sideEnter=(-bb-root)/(2*a);
-          sideExit=(-bb+root)/(2*a);
-        }
-        let capEnter=-Infinity,capExit=Infinity;
-        if(Math.abs(v1)<1e-12){
-          if(Math.abs(p[1])>hy)continue;
-        }else{
-          const t0=(-hy-p[1])/v1,t1=(hy-p[1])/v1;
-          capEnter=Math.min(t0,t1);
-          capExit=Math.max(t0,t1);
-        }
-        const entry=Math.max(sideEnter,capEnter);
-        const exit=Math.min(sideExit,capExit);
-        if(entry>exit||exit<0||entry>1||entry<0)continue;
-        if(entry<first){
-          first=entry;contactHeight=y;hitCap=capEnter>sideEnter;
-        }
-      }
-      if(contactHeight===null)return;
-      const safeT=Math.max(0,first-.002);
-      const cx=previousX+dx*safeT,cz=previousZ+dz*safeT;
-      const p=local(cx,contactHeight,cz);
-      let gx,gy,gz;
-      if(hitCap){gx=0;gy=Math.sign(p[1])||1;gz=0;}
-      else{gx=p[0]/(rx*rx);gy=0;gz=p[2]/(rz*rz);}
-      const nx=e[0]*gx+e[1]*gy+e[2]*gz;
-      const nz=e[8]*gx+e[9]*gy+e[10]*gz;
-      const nlen=Math.hypot(nx,nz);
-      if(nlen<.000001){pos.x=cx;pos.z=cz;return;}
-      const ux=nx/nlen,uz=nz/nlen;
-      const remaining=1-safeT;
-      const dot=dx*ux+dz*uz;
-      const sx=cx+(dx-Math.min(0,dot)*ux)*remaining;
-      const sz=cz+(dz-Math.min(0,dot)*uz)*remaining;
-      if(heights.some(y=>inside(sx,y,sz))){
-        pos.x=cx;pos.z=cz;
-      }else{
-        pos.x=sx;pos.z=sz;
-      }
-    }
-
-    function kwgResolveRotatedShapeSide(pos,b,previousX,previousZ,feet,head,pr){
-      const mesh=worldBlocks[b.id];
-      if(!mesh)return;
-      const dx=pos.x-previousX,dz=pos.z-previousZ;
-      const distance=Math.hypot(dx,dz);
-      if(distance<.00001)return;
-      const bounds=getBlockAABB(b);
-      if(bounds.maxY<feet+.05||bounds.minY>head)return;
-      if(Math.min(previousX,pos.x)>bounds.maxX+pr+.1 ||
-         Math.max(previousX,pos.x)<bounds.minX-pr-.1 ||
-         Math.min(previousZ,pos.z)>bounds.maxZ+pr+.1 ||
-         Math.max(previousZ,pos.z)<bounds.minZ-pr-.1)return;
-      mesh.updateWorldMatrix(true,false);
-      const ux=dx/distance,uz=dz/distance;
-      kwgShapeMoveDirection.set(ux,0,uz);
-      const sampleHeights=[feet+.22,feet+.72,feet+1.45,head-.18];
-      let nearest=null;
-      // A ray from the avatar's previous position detects actual sloped,
-      // round, and triangular surfaces. Do not treat a walkable ramp as a wall.
-      for(const height of sampleHeights){
-        if(height<bounds.minY-.05||height>bounds.maxY+.05)continue;
-        kwgShapeRayOrigin.set(previousX,height,previousZ);
-        kwgCollisionRaycaster.set(kwgShapeRayOrigin,kwgShapeMoveDirection);
-        kwgCollisionRaycaster.near=0;
-        kwgCollisionRaycaster.far=distance+pr+.08;
-        for(const hit of kwgCollisionRaycaster.intersectObject(mesh,false)){
-          if(!hit.face)continue;
-          kwgShapeFaceNormal.copy(hit.face.normal).transformDirection(mesh.matrixWorld);
-          // Top-facing slopes are floors, handled by ground snapping. Only
-          // side faces or steep ramps should impede horizontal movement.
-          if(kwgShapeFaceNormal.y>((b.shape==='wedge')?.005:.52))continue;
-          const horizontalDot=ux*kwgShapeFaceNormal.x+uz*kwgShapeFaceNormal.z;
-          if(horizontalDot>=-.08)continue; // not entering this face
-          if(!nearest||hit.distance<nearest.distance){
-            nearest={distance:hit.distance,nx:kwgShapeFaceNormal.x,nz:kwgShapeFaceNormal.z};
-          }
-          break;
-        }
-      }
-      if(!nearest)return;
-      // Keep the player's radius outside the surface without ever ejecting
-      // them to the opposite side of a large shape.
-      const allowed=Math.max(0,Math.min(distance,nearest.distance-pr-.015));
-      const remain=distance-allowed;
-      const nx=nearest.nx,nz=nearest.nz;
-      const len=Math.hypot(nx,nz)||1;
-      const wallX=nx/len,wallZ=nz/len;
-      const inward=ux*wallX+uz*wallZ;
-      // Slide along the wall instead of freezing the entire movement.
-      const slideX=(ux-Math.min(0,inward)*wallX)*remain;
-      const slideZ=(uz-Math.min(0,inward)*wallZ)*remain;
-      pos.x=previousX+ux*allowed+slideX;
-      pos.z=previousZ+uz*allowed+slideZ;
-    }
-
-    function resolveHorizontalCollisionsMP(pos,blocks,previousX=pos.x,previousZ=pos.z) {
-      const pr=0.42, ph=2.35, feet=pos.y, head=feet+ph;
-      for (const b of blocks) {
-        if (b.canCollide===false) continue;
-        if(kwgPartIsRotated(b)){
-          const shape=b.shape||'box';
-          if(shape==='sphere'){
-            kwgResolveRotatedSphereSide(pos,b,previousX,previousZ,feet,head,pr);
-            continue;
-          }
-          if(shape==='cylinder'){
-            kwgResolveRotatedCylinderSide(pos,b,previousX,previousZ,feet,head,pr);
-            continue;
-          }
-          if(shape!=='box'&&shape!=='baseplate'&&
-             b.actionType!=='finish'){
-            kwgResolveRotatedShapeSide(pos,b,previousX,previousZ,feet,head,pr);
-            continue;
-          }
-          const bounds=getBlockAABB(b);
-          if(bounds.maxY<=feet+.05||bounds.minY>=head)continue;
-          const minX=bounds.minX-pr,maxX=bounds.maxX+pr;
-          const minZ=bounds.minZ-pr,maxZ=bounds.maxZ+pr;
-          if(pos.x>minX&&pos.x<maxX&&pos.z>minZ&&pos.z<maxZ){
-            // V3.39.5: A nearest-face correction can fling the avatar across
-            // a large rotated part. Instead, block the movement that entered
-            // the part and try sliding along its exposed face.
-            const wasInside=previousX>minX&&previousX<maxX&&
-                            previousZ>minZ&&previousZ<maxZ;
-            if(!wasInside){
-              const xBlocked=previousX<=minX||previousX>=maxX;
-              const zBlocked=previousZ<=minZ||previousZ>=maxZ;
-              if(xBlocked)pos.x=previousX;
-              if(zBlocked)pos.z=previousZ;
-              // If diagonal motion entered through a corner, both axes stop.
-              if(pos.x>minX&&pos.x<maxX&&pos.z>minZ&&pos.z<maxZ){
-                pos.x=previousX;
-                pos.z=previousZ;
-              }
-            }else{
-              // If already overlapping (e.g. a block was edited around the
-              // player), never push them across its entire width in one frame.
-              // Cancel inward movement, allowing them to walk back out.
-              const nearestX=Math.min(previousX-minX,maxX-previousX);
-              const nearestZ=Math.min(previousZ-minZ,maxZ-previousZ);
-              if(nearestX<=nearestZ){
-                const side=(previousX-minX<=maxX-previousX)?-1:1;
-                if((pos.x-previousX)*side<0)pos.x=previousX;
-              }else{
-                const side=(previousZ-minZ<=maxZ-previousZ)?-1:1;
-                if((pos.z-previousZ)*side<0)pos.z=previousZ;
-              }
-            }
-          }
-          continue;
-        }
-        const shape=b.shape||'box';
-        const bx=Number(b.x)||0,by=Number(b.y)||0,bz=Number(b.z)||0;
-        const sx=Math.abs(Number(b.scaleX)||1),sy=Math.abs(Number(b.scaleY)||1),sz=Math.abs(Number(b.scaleZ)||1);
-        const hx=sx/2,hy=sy/2,hz=sz/2;
-        if (by+hy<=feet+.05 || by-hy>=head) continue;
-        const lx=pos.x-bx,lz=pos.z-bz;
-
-        if (shape==='box'||shape==='baseplate'||b.actionType==='finish') {
-          const minX=bx-hx-pr,maxX=bx+hx+pr,minZ=bz-hz-pr,maxZ=bz+hz+pr;
-          if (pos.x>minX&&pos.x<maxX&&pos.z>minZ&&pos.z<maxZ) {
-            const vals=[pos.x-minX,maxX-pos.x,pos.z-minZ,maxZ-pos.z];
-            const m=Math.min(...vals);
-            if (m===vals[0]) pos.x=minX; else if (m===vals[1]) pos.x=maxX;
-            else if (m===vals[2]) pos.z=minZ; else pos.z=maxZ;
-          }
-        } else if (shape==='cylinder') {
-          const dist=Math.hypot(lx,lz);
-          let radius=hx;
-          if (hx!==hz&&dist>.0001) {
-            const a=Math.atan2(lz,lx);
-            radius=(hx*hz)/Math.sqrt(Math.pow(hz*Math.cos(a),2)+Math.pow(hx*Math.sin(a),2));
-          }
-          const minDist=radius+pr;
-          if (dist<minDist) {
-            if (dist>.0001) { pos.x=bx+(lx/dist)*minDist; pos.z=bz+(lz/dist)*minDist; }
-            else pos.x=bx+minDist;
-          }
-        } else if (shape==='sphere') {
-          const midY=Math.max(by-hy,Math.min(by+hy,feet+ph*.5));
-          const normY=(midY-by)/hy;
-          if (Math.abs(normY)<1) {
-            const rf=Math.sqrt(Math.max(0,1-normY*normY));
-            const rx=hx*rf,rz=hz*rf,dist=Math.hypot(lx,lz);
-            let radius=rx;
-            if (rx!==rz&&dist>.0001) {
-              const a=Math.atan2(lz,lx);
-              radius=(rx*rz)/Math.sqrt(Math.pow(rz*Math.cos(a),2)+Math.pow(rx*Math.sin(a),2));
-            }
-            const minDist=radius+pr;
-            if (dist<minDist) {
-              if (dist>.0001) { pos.x=bx+(lx/dist)*minDist; pos.z=bz+(lz/dist)*minDist; }
-              else pos.x=bx+minDist;
-            }
-          }
-        } else if (shape==='wedge') {
-          if (Math.abs(lx)<hx+pr&&lz>-hz-pr&&lz<hz+pr) {
-            const localFeet=feet-by;
-            const slopeY=-(hy/hz)*Math.max(-hz,Math.min(hz,lz));
-            if (localFeet<slopeY) {
-              if (lz<-hz+.05) pos.z=bz-hz-pr;
-              else if (Math.abs(lx)>hx-.05) pos.x=lx>0?bx+hx+pr:bx-hx-pr;
-              else {
-                const denom=Math.sqrt(hy*hy+hz*hz);
-                const planeDist=(hy*lz+hz*localFeet)/denom;
-                if (planeDist<pr) pos.z+=(pr-planeDist)*(hy/denom);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // V3.42: Spawn parts are the source of truth for join/respawn positions.
-    // No Spawn parts -> feet above the center of the baseplate, not the old
-    // invisible world.spawnPoint value. Each call independently randomizes.
-    function kwgChooseSpawnPosition(world){
-      const blocks=Object.values(world?.blocks||{});
-      const spawns=blocks.filter(b=>b&&b.actionType==='spawn');
-      if(spawns.length){
-        const chosen=spawns[Math.floor(Math.random()*spawns.length)];
-        const bounds=getBlockAABB(chosen);
-        const top=Number.isFinite(bounds.maxY)?bounds.maxY:(Number(chosen.y)||0)+.5;
-        return {x:Number(chosen.x)||0,y:top+.18,z:Number(chosen.z)||0};
-      }
-      const plate=blocks.find(b=>b.id==='baseplate');
-      if(plate){
-        const bounds=getBlockAABB(plate);
-        return {x:Number(plate.x)||0,y:bounds.maxY+.18,z:Number(plate.z)||0};
-      }
-      return {x:0,y:.18,z:0};
-    }
-
-    function respawnPlayer() {
-      if (localPlayerAvatar) {
-        // Keep earned checkpoints; otherwise choose a fresh random Spawn part.
-        // If a checkpoint was deleted, fall back to the Spawn parts instead.
-        const checkpointValid=currentCheckpoint&&currentWorldData?.blocks?.[currentCheckpoint.id]?.actionType==='checkpoint';
-        if(!checkpointValid)currentCheckpoint=null;
-        const spawnPos=currentCheckpoint||kwgChooseSpawnPosition(currentWorldData);
-        localPlayerAvatar.position.set(spawnPos.x,spawnPos.y,spawnPos.z);
-        velocityY = 0;
-      }
-    }
-
-    function triggerCheckpoint(block) {
-      if (currentCheckpoint && currentCheckpoint.id === block.id) return;
-      const bounds=getBlockAABB(block);
-      const surface=getPartSurfaceYFromData(block,block.x,block.z,bounds.maxY+1);
-      const safeY=surface===null?bounds.maxY:surface;
-      currentCheckpoint={id:block.id,x:block.x,y:safeY+.08,z:block.z};
-      showToast("Checkpoint Saved!");
-    }
-
-    let lastFinishTime = 0;
-    function triggerFinishLine() {
-      const now = Date.now();
-      if (now - lastFinishTime < 3000) return;
-      lastFinishTime = now;
-      showToast("🎉 WORLD FINISHED! GREAT JOB! 🎉", 4000);
-    }
-
-    let lastSendTime = 0;
-
-    function getVisualSurfaceY(b, x, z) {
-      const shape=b.shape || 'box';
-      if (shape === 'sphere') {
-        const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
-        const ry=Math.max(.001,Math.abs(b.scaleY||1)*.5);
-        const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
-        const dx=x-b.x,dz=z-b.z;
-        const q=(dx*dx)/(rx*rx)+(dz*dz)/(rz*rz);
-        if (q>1) return null;
-        return b.y+ry*Math.sqrt(Math.max(0,1-q));
-      }
-      if (shape === 'cylinder') {
-        const rx=Math.max(.001,Math.abs(b.scaleX||1)*.5);
-        const rz=Math.max(.001,Math.abs(b.scaleZ||1)*.5);
-        const dx=x-b.x,dz=z-b.z;
-        if ((dx*dx)/(rx*rx)+(dz*dz)/(rz*rz)>1) return null;
-        return b.y+Math.abs(b.scaleY||1)*.5;
-      }
-      if (shape === 'wedge') {
-        const box=getBlockAABB(b);
-        if (x<box.minX-PLAYER_RADIUS || x>box.maxX+PLAYER_RADIUS || z<box.minZ-PLAYER_RADIUS || z>box.maxZ+PLAYER_RADIUS) return null;
-        const sz=Math.max(.001,Math.abs(b.scaleZ||1));
-        const t=1-((Math.max(box.minZ,Math.min(box.maxZ,z))-box.minZ)/sz);
-        return box.minY+Math.max(0,Math.min(1,t))*Math.abs(b.scaleY||1);
-      }
-      const box=getBlockAABB(b);
-      if (x>=box.minX-PLAYER_RADIUS && x<=box.maxX+PLAYER_RADIUS && z>=box.minZ-PLAYER_RADIUS && z<=box.maxZ+PLAYER_RADIUS) return box.maxY;
-      return null;
-    }
-
-    function resolveCeilingCollisionMP(pos, oldFeetY, blocks) {
-      if (velocityY <= 0) return;
-
-      const ph = 2.35;
-      const oldHeadY = oldFeetY + ph;
-      const newHeadY = pos.y + ph;
-      let lowestCeiling = Infinity;
-
-      for (const b of blocks) {
-        if (b.canCollide === false) continue;
-        if(kwgPartIsRotated(b)){
-          const bounds=getBlockAABB(b);
-          if(pos.x<bounds.minX-.38||pos.x>bounds.maxX+.38||
-             pos.z<bounds.minZ-.38||pos.z>bounds.maxZ+.38)continue;
-          let undersideY=null;
-          const shape=b.shape||'box';
-          if(shape==='box'||shape==='baseplate'||b.actionType==='finish'){
-            undersideY=bounds.minY;
-          }else{
-            // Curved and sloped surfaces use the real rotated triangle mesh.
-            for(const [ox,oz] of [[0,0],[.25,0],[-.25,0],[0,.25],[0,-.25]]){
-              const y=kwgRotatedSurfaceRayY(b,pos.x+ox,pos.z+oz,
-                oldHeadY-.02,kwgCollisionRayDirectionUp,-1);
-              if(y!==null&&(undersideY===null||y<undersideY))undersideY=y;
-            }
-          }
-          if(undersideY!==null && oldHeadY<=undersideY+.02 &&
-             newHeadY>=undersideY-.02 && undersideY<lowestCeiling)
-            lowestCeiling=undersideY;
-          continue;
-        }
-
-        const shape = b.shape || 'box';
-        const bx = Number(b.x) || 0, by = Number(b.y) || 0, bz = Number(b.z) || 0;
-        const sx = Math.abs(Number(b.scaleX) || 1), sy = Math.abs(Number(b.scaleY) || 1), sz = Math.abs(Number(b.scaleZ) || 1);
-        const hx = sx / 2, hy = sy / 2, hz = sz / 2;
-        const lx = pos.x - bx, lz = pos.z - bz;
-
-        let undersideY = null;
-
-        // Boxes/baseplates/flags have a flat underside.
-        if (shape === 'box' || shape === 'baseplate' || b.actionType === 'finish') {
-          if (Math.abs(lx) <= hx + 0.38 && Math.abs(lz) <= hz + 0.38) undersideY = by - hy;
-        } else if (shape === 'cylinder') {
-          const d2 = Math.pow(lx / (hx + 0.38), 2) + Math.pow(lz / (hz + 0.38), 2);
-          if (d2 <= 1) undersideY = by - hy;
-        } else if (shape === 'sphere') {
-          // Bottom surface of the scaled sphere/ellipsoid at the player's X/Z.
-          const nx = lx / (hx + 0.38);
-          const nz = lz / (hz + 0.38);
-          const d2 = nx * nx + nz * nz;
-          if (d2 <= 1) undersideY = by - hy * Math.sqrt(Math.max(0, 1 - d2));
-        } else if (shape === 'wedge') {
-          // Wedges have a flat bottom even though their walkable top is sloped.
-          if (Math.abs(lx) <= hx + 0.38 && lz >= -hz - 0.38 && lz <= hz + 0.38) undersideY = by - hy;
-        }
-
-        // Swept head test prevents tunneling through thin ceilings.
-        if (undersideY !== null &&
-            oldHeadY <= undersideY + 0.02 &&
-            newHeadY >= undersideY - 0.02 &&
-            undersideY < lowestCeiling) {
-          lowestCeiling = undersideY;
-        }
-      }
-
-      if (lowestCeiling !== Infinity) {
-        pos.y = lowestCeiling - ph - 0.02;
-        velocityY = 0;
-        targetStepY = 0;
-      }
-    }
-
-    function updatePlayerPhysics(delta) {
-      if (!localPlayerAvatar || !currentWorldName) return;
-      const player=localPlayerAvatar;
-      const blocks=currentWorldData ? Object.values(currentWorldData.blocks) : [];
-
-      if (!isRightClicking) {
-        if (keys['a']||keys['arrowleft']) player.rotation.y+=turnSpeed;
-        if (keys['d']||keys['arrowright']) player.rotation.y-=turnSpeed;
-      }
-
-      const stepStartX=player.position.x,stepStartZ=player.position.z;
-      let moveDir=0;
-      if (keys['w']||keys['arrowup']) moveDir+=1;
-      if (keys['s']||keys['arrowdown']) moveDir-=1;
-      const isMoving=moveDir!==0;
-      // Remember contact before the physics engine pushes us out of solids.
-      let touchedHazard=!isEditMode && touchesAnyKillPart(blocks,player.position);
-
-      if (targetStepY!==0) {
-        const stepStep=targetStepY*.25;
-        player.position.y+=stepStep;
-        targetStepY-=stepStep;
-        if (Math.abs(targetStepY)<.001) targetStepY=0;
-      }
-
-      if (isMoving) {
-        const dx=Math.sin(player.rotation.y)*moveSpeed*moveDir;
-        const dz=Math.cos(player.rotation.y)*moveSpeed*moveDir;
-        player.position.x+=dx;
-        player.position.z+=dz;
-        if(!isEditMode && touchesAnyKillPart(blocks,player.position)) touchedHazard=true;
-
-        const ground=getGroundSurfaceUnderPlayerMP(player.position.x,player.position.y,player.position.z,blocks);
-        if (ground.floorY!==-Infinity && isGrounded) {
-          const stepUp=ground.floorY-player.position.y;
-          if (stepUp>0 && stepUp<=maxStepHeight) {
-            targetStepY+=stepUp;
-            player.position.y=ground.floorY;
-          }
-        }
-        resolveHorizontalCollisionsMP(player.position,blocks,stepStartX,stepStartZ);
-      }
-
-      if (keys[' ']&&isGrounded) {
-        velocityY=jumpStrength;
-        isGrounded=false;
-        targetStepY=0;
-      }
-
-      const oldFeetY = player.position.y;
-      player.position.y += velocityY;
-      resolveCeilingCollisionMP(player.position, oldFeetY, blocks);
-      velocityY += gravity;
-
-      const ground=getGroundSurfaceUnderPlayerMP(player.position.x,player.position.y,player.position.z,blocks);
-      if (ground.floorY!==-Infinity) {
-        // Use the previous feet height for a swept landing test. The feet
-        // can pass through a thin/steep ramp between animation frames;
-        // checking only their new height can miss the collision entirely.
-        const crossedSurface=oldFeetY>=ground.floorY-.08 &&
-          player.position.y<=ground.floorY+.08;
-        const closeToSurface=player.position.y>=ground.floorY-maxStepHeight-.08;
-        if (velocityY<=0 &&
-            player.position.y<=ground.floorY+.08 &&
-            (closeToSurface||crossedSurface)) {
-          player.position.y=ground.floorY;
-          velocityY=0;
-          isGrounded=true;
-        } else if (velocityY<=0) {
-          isGrounded=false;
-        }
-      } else {
-        isGrounded=false;
-      }
-
-      if(!isEditMode && touchesAnyKillPart(blocks,player.position)) touchedHazard=true;
-      // Checkpoints activate when stepped on or touched. Existing finish
-      // flags in older worlds continue to work.
-      if(!isEditMode){
-        if(isGrounded&&ground.block?.actionType==='checkpoint')triggerCheckpoint(ground.block);
-        for (const b of blocks) {
-          if (b.actionType!=='checkpoint' && b.actionType!=='finish') continue;
-          // Checkpoint activation uses surface contact (including sides and
-          // underside), not just penetration of the solid part. This works
-          // even when physics stops the avatar at the block's outer face.
-          if(b.actionType==='checkpoint'){
-            if(isPlayerTouchingSpecialPart(b,player.position))triggerCheckpoint(b);
-          }else if(checkPlayerIntersectingBlockData(b,player.position)){
-            triggerFinishLine();
-          }
-        }
-      }
-
-      if (touchedHazard || player.position.y < -30) {
-        kwgStepDistance=0;
-        kwgAudio.play('death');
-        respawnPlayer();
-        return;
-      }
-
-      // No footsteps when standing still, jumping, falling, editing or flying.
-      const stepTravel=Math.hypot(player.position.x-stepStartX,player.position.z-stepStartZ);
-      if(isMoving && isGrounded && !isEditMode && stepTravel>.001 && stepTravel<1){
-        kwgStepDistance+=stepTravel;
-        const now=performance.now();
-        // Slightly faster footfall cadence to match the slower leg swing.
-        if(kwgStepDistance>=.60 && now-kwgLastStepAt>=215){
-          kwgAudio.footstep();
-          kwgLastStepAt=now;
-          kwgStepDistance=0;
-        }
-      }else kwgStepDistance=0;
-
-      updateAvatarAnimations(player,isMoving,isGrounded,delta,undefined,velocityY);
-
-      const now=Date.now();
-      if (now-lastSendTime>40) {
-        lastSendTime=now;
-        socket.emit('player_movement',{
-          x:player.position.x,y:player.position.y,z:player.position.z,
-          rotationY:player.rotation.y,
-          walkClock:player.userData.walkClock,
-          verticalVelocity:velocityY,
-          isMoving,isGrounded
-        });
-      }
-    }
-
-    window.addEventListener('beforeunload', (e) => {
-      if (pendingWorldSaves <= 0) return;
-      e.preventDefault();
-      e.returnValue = '';
-    });
-
-    // --- MAIN GAME LOOP ---
-    const clock = new THREE.Clock();
-
-    function animate() {
-      requestAnimationFrame(animate);
-      const delta = Math.min(clock.getDelta(), 0.1);
-
-      if(!kwgFreeCamera.active) updatePlayerPhysics(delta);
-      if(!kwgFreeCamera.active) updateGizmoScreenScale();
-      else updateWorldThumbnailCamera(delta);
-
-      if (localPlayerAvatar) {
-        // Sky-layer clouds follow the player instead of occupying fixed map space.
-        cloudsGroup.position.x = localPlayerAvatar.position.x;
-        cloudsGroup.position.z = localPlayerAvatar.position.z;
-        cloudsGroup.position.y = localPlayerAvatar.position.y;
-      }
-
-      if (cloudsGroup.visible && cloudRotationSpeedMultiplier > 0) {
-        cloudsGroup.rotation.y += delta * 0.02 * cloudRotationSpeedMultiplier;
-      }
-
-      if (localPlayerAvatar && !kwgFreeCamera.active) {
-        // Exact single-player camera: same distance, height, rotation, smoothing,
-        // right-click orbit, and automatic re-lock behind the player.
-        const player = localPlayerAvatar;
-        const cameraDistance = 6;
-        const cameraHeight = 3.5;
-
-        if (isRightClicking) {
-          const targetCamX = player.position.x - Math.sin(camOrbitAngleY) * cameraDistance * Math.cos(camOrbitAngleX);
-          const targetCamZ = player.position.z - Math.cos(camOrbitAngleY) * cameraDistance * Math.cos(camOrbitAngleX);
-          const targetCamY = player.position.y + cameraHeight + Math.sin(camOrbitAngleX) * cameraDistance;
-
-          camera.position.x += (targetCamX - camera.position.x) * 0.2;
-          camera.position.y += (targetCamY - camera.position.y) * 0.2;
-          camera.position.z += (targetCamZ - camera.position.z) * 0.2;
-
-          const lookTarget = new THREE.Vector3(player.position.x, player.position.y + 1.2, player.position.z);
-          camera.lookAt(lookTarget);
-        } else {
-          camOrbitAngleY = player.rotation.y;
-          camOrbitAngleX = 0;
-
-          const targetCamX = player.position.x - Math.sin(player.rotation.y) * cameraDistance;
-          const targetCamZ = player.position.z - Math.cos(player.rotation.y) * cameraDistance;
-          const targetCamY = player.position.y + cameraHeight;
-
-          camera.position.x += (targetCamX - camera.position.x) * 0.1;
-          camera.position.y += (targetCamY - camera.position.y) * 0.1;
-          camera.position.z += (targetCamZ - camera.position.z) * 0.1;
-
-          camera.lookAt(player.position.x, player.position.y + 1.2, player.position.z);
-        }
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    animate();
-    // ---- V3.12.2 safe UI/world click separation ----
-    // IMPORTANT: do not stop UI events globally; buttons need their normal clicks.
-    // Instead, remember whether a pointer press began on visible UI and let the
-    // existing 3D canvas handlers ignore that interaction.
-    let pointerStartedOnUI = false;
-
-    function pointerIsOverKWGUI(target, clientX = null, clientY = null) {
-      // First use the normal event target.
-      if (target && target !== renderer.domElement && target.closest) {
-        if (target.closest(
-          'button,input,select,textarea,label,a,' +
-          '#hud,#build-toolbar,#room-info-label,#world-chat,#world-chat-header,#world-chat-messages,#world-chat-form,#world-chat-input,#world-chat-send,#chat-container,#chat-panel,#chat-wrap,' +
-          '.modal,.modal-card,#admin-panel,#store-modal,#save-status'
-        )) return true;
-      }
-
-      // More robust check: inspect the actual visual stack under the cursor.
-      // If ANY visible HTML UI element is above the Three.js canvas, this is
-      // a UI click and the world must not receive it.
-      if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
-        const stack = document.elementsFromPoint(clientX, clientY);
-        for (const el of stack) {
-          if (el === renderer.domElement) break;
-          if (el === document.documentElement || el === document.body) continue;
-          const style = getComputedStyle(el);
-          if (style.pointerEvents === 'none' || style.visibility === 'hidden' || style.display === 'none') continue;
-          // Any real HTML element visually above the renderer counts as UI.
-          return true;
-        }
-      }
-      return false;
-    }
-
-    document.addEventListener('pointerdown', (e) => {
-      pointerStartedOnUI = pointerIsOverKWGUI(e.target, e.clientX, e.clientY);
-    }, true);
-
-    document.addEventListener('pointerup', () => {
-      // Keep the flag through this event turn so any world mouseup/click logic
-      // can see it, then clear it.
-      setTimeout(() => { pointerStartedOnUI = false; }, 0);
-    }, true);
-
-    // Buttons keep their normal click behavior, but do not retain keyboard focus.
-    // This prevents Space from activating the previously clicked button.
-    document.addEventListener('click', (e) => {
-      const button = e.target?.closest?.('button');
-      if (button) setTimeout(() => button.blur(), 0);
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if ((e.code === 'Space' || e.key === ' ') && document.activeElement?.tagName === 'BUTTON') {
-        document.activeElement.blur();
-      }
-    }, true);
-
-    // V3.17: decorate player names in world chat and open public profiles.
-    function decorateChatProfileLinks(root=document) {
-      root.querySelectorAll?.('#world-chat-messages .chat-line').forEach(line=>{
-        const nameEl=line.querySelector('.chat-name');
-        if(!nameEl || nameEl.classList.contains('kwg-profile-link'))return;
-        const raw=nameEl.dataset.profileUsername||(nameEl.textContent||'').replace(/:\s*$/,'').trim();
-        if(!raw)return;
-        nameEl.classList.add('kwg-profile-link');
-        nameEl.dataset.profileUsername=raw;
-        nameEl.title=`View ${raw}'s profile`;
+      const decorate = rows => rows.map(r=>{
+        const onlineSocket=socketsByUser.get(r.id);
+        const p=onlineSocket ? playersBySocket.get(onlineSocket.id) : null;
+        return {...r,online:!!onlineSocket,currentWorld:p?.worldName||null};
       });
+      cb({success:true,friends:decorate(accepted.rows),incoming:incoming.rows,outgoing:outgoing.rows});
+    } catch(e){console.error(e);cb({success:false,message:'Could not load friends.'});}
+  });
+
+  socket.on('send_friend_request', async ({username} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const name=cleanUsername(username);
+      const ur=await pool.query('SELECT id,username FROM users WHERE lower(username)=lower($1)',[name]);
+      const target=ur.rows[0];
+      if(!target)return cb({success:false,message:'Player not found.'});
+      if(Number(target.id)===Number(socket.user.id))return cb({success:false,message:"You can't friend yourself."});
+
+      const existing=await pool.query(`
+        SELECT requester_id,addressee_id,status FROM friendships
+        WHERE (requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)
+        LIMIT 1
+      `,[socket.user.id,target.id]);
+      const rel=existing.rows[0];
+      if(rel?.status==='accepted')return cb({success:false,message:'You are already friends.'});
+      if(rel?.status==='pending'){
+        if(Number(rel.requester_id)===Number(target.id)){
+          await pool.query(`UPDATE friendships SET status='accepted',updated_at=NOW()
+            WHERE requester_id=$1 AND addressee_id=$2`,[target.id,socket.user.id]);
+          return cb({success:true,state:'friends',message:'Friend request accepted.'});
+        }
+        return cb({success:false,message:'Friend request already sent.'});
+      }
+      await pool.query(`INSERT INTO friendships(requester_id,addressee_id,status)
+        VALUES($1,$2,'pending')`,[socket.user.id,target.id]);
+      await pool.query(`INSERT INTO notifications(user_id,actor_user_id,type,message)
+        VALUES($1,$2,'friend_request',$3)`,
+        [target.id,socket.user.id,`${socket.user.username} sent you a friend request.`]);
+      cb({success:true,state:'outgoing',message:'Friend request sent.'});
+    } catch(e){console.error(e);cb({success:false,message:'Could not send friend request.'});}
+  });
+
+  socket.on('respond_friend_request', async ({username,accept} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const ur=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      const other=ur.rows[0];
+      if(!other)return cb({success:false,message:'Player not found.'});
+      const result=accept
+        ? await pool.query(`UPDATE friendships SET status='accepted',updated_at=NOW()
+            WHERE requester_id=$1 AND addressee_id=$2 AND status='pending' RETURNING requester_id`,
+            [other.id,socket.user.id])
+        : await pool.query(`DELETE FROM friendships
+            WHERE requester_id=$1 AND addressee_id=$2 AND status='pending' RETURNING requester_id`,
+            [other.id,socket.user.id]);
+      if(!result.rowCount)return cb({success:false,message:'Friend request is no longer available.'});
+      if(accept){
+        await pool.query(`INSERT INTO notifications(user_id,actor_user_id,type,message)
+          VALUES($1,$2,'friend_accepted',$3)`,
+          [other.id,socket.user.id,`${socket.user.username} accepted your friend request.`]);
+      }
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not update friend request.'});}
+  });
+
+  socket.on('cancel_friend_request', async ({username} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const ur=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      const other=ur.rows[0];
+      if(!other)return cb({success:false,message:'Player not found.'});
+      await pool.query(`DELETE FROM friendships WHERE requester_id=$1 AND addressee_id=$2 AND status='pending'`,
+        [socket.user.id,other.id]);
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not cancel request.'});}
+  });
+
+  socket.on('remove_friend', async ({username} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const ur=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      const other=ur.rows[0];
+      if(!other)return cb({success:false,message:'Player not found.'});
+      await pool.query(`DELETE FROM friendships
+        WHERE status='accepted' AND ((requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1))`,
+        [socket.user.id,other.id]);
+      cb({success:true});
+    } catch(e){console.error(e);cb({success:false,message:'Could not remove friend.'});}
+  });
+
+  socket.on('get_profile', async ({username} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const name = cleanUsername(username || socket.user.username);
+      const ur = await pool.query(`
+        SELECT id,username,appearance,bio,showcased_world_ids,
+               created_at AS "createdAt"
+        FROM users WHERE lower(username)=lower($1)
+      `,[name]);
+      const u = ur.rows[0];
+      if (!u) return cb({success:false,message:'Player not found.'});
+
+      const [worldCount, likesGiven, inventoryCount, ownedWorlds] = await Promise.all([
+        pool.query('SELECT COUNT(*)::int AS n FROM worlds WHERE owner_user_id=$1',[u.id]),
+        pool.query('SELECT COUNT(*)::int AS n FROM world_likes WHERE user_id=$1',[u.id]),
+        pool.query('SELECT COUNT(*)::int AS n FROM user_store_items WHERE user_id=$1',[u.id]),
+        pool.query(`
+          SELECT w.name,w.data,w.created_at AS "createdAt",
+                 COUNT(wl.user_id)::int AS "likeCount"
+          FROM worlds w
+          LEFT JOIN world_likes wl ON wl.world_id=w.id
+          WHERE w.owner_user_id=$1
+          GROUP BY w.id
+          ORDER BY w.created_at DESC
+        `,[u.id])
+      ]);
+
+      const showcaseIds = (u.showcased_world_ids || []).map(Number);
+      const byId = new Map();
+      const ownedWithIds = await pool.query(`
+        SELECT w.id,w.name,w.data,w.created_at AS "createdAt",
+               COUNT(wl.user_id)::int AS "likeCount"
+        FROM worlds w
+        LEFT JOIN world_likes wl ON wl.world_id=w.id
+        WHERE w.owner_user_id=$1
+        GROUP BY w.id
+        ORDER BY w.created_at DESC
+      `,[u.id]);
+      ownedWithIds.rows.forEach(w => byId.set(Number(w.id), {
+        id:Number(w.id), name:w.name, displayName:filterKWGUserText(String(w.data?.displayName||w.name)), thumbnailUrl:String(w.data?.thumbnailUrl||''), createdAt:w.createdAt, likeCount:Number(w.likeCount||0)
+      }));
+      const showcasedWorlds = showcaseIds.map(id => byId.get(id)).filter(Boolean).slice(0,3);
+
+      let friendship = {state:'none'};
+      if (u.id === socket.user.id) {
+        friendship = {state:'self'};
+      } else {
+        const fr = await pool.query(`
+          SELECT requester_id,addressee_id,status
+          FROM friendships
+          WHERE (requester_id=$1 AND addressee_id=$2)
+             OR (requester_id=$2 AND addressee_id=$1)
+          LIMIT 1
+        `,[socket.user.id,u.id]);
+        const rel=fr.rows[0];
+        if(rel?.status==='accepted') friendship={state:'friends'};
+        else if(rel?.status==='pending') friendship={
+          state:Number(rel.requester_id)===Number(socket.user.id)?'outgoing':'incoming'
+        };
+      }
+
+      const onlineSocket = socketsByUser.get(u.id);
+      const livePlayer = onlineSocket ? playersBySocket.get(onlineSocket.id) : null;
+      cb({
+        success:true,
+        profile:{
+          username:u.username,
+          bio:filterKWGUserText(u.bio || ''),
+          createdAt:u.createdAt,
+          appearance:u.appearance || {},
+          online:!!onlineSocket,
+          currentWorld:livePlayer?.worldName || null,
+          isOwnProfile:u.id === socket.user.id,
+          friendship,
+          stats:{
+            worlds:Number(worldCount.rows[0]?.n || 0),
+            likesGiven:Number(likesGiven.rows[0]?.n || 0),
+            inventory:Number(inventoryCount.rows[0]?.n || 0)
+          },
+          showcasedWorlds,
+          ownedWorlds: u.id === socket.user.id ? ownedWithIds.rows.map(w => ({
+            id:Number(w.id),name:w.name,displayName:filterKWGUserText(String(w.data?.displayName||w.name)),thumbnailUrl:String(w.data?.thumbnailUrl||''),createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
+          })) : []
+        }
+      });
+    } catch (e) { console.error(e); cb({success:false,message:'Could not load profile.'}); }
+  });
+
+  socket.on('update_profile', async ({bio,showcaseWorldIds} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      bio = filterKWGUserText(String(bio || '').trim().slice(0,300));
+      const ids = [...new Set((Array.isArray(showcaseWorldIds) ? showcaseWorldIds : [])
+        .map(Number).filter(Number.isSafeInteger))].slice(0,3);
+
+      if (ids.length) {
+        const owned = await pool.query(
+          'SELECT id FROM worlds WHERE owner_user_id=$1 AND id = ANY($2::bigint[])',
+          [socket.user.id, ids]
+        );
+        const allowed = new Set(owned.rows.map(r => Number(r.id)));
+        if (ids.some(id => !allowed.has(id)))
+          return cb({success:false,message:'You can only showcase worlds you own.'});
+      }
+
+      await pool.query(
+        'UPDATE users SET bio=$1,showcased_world_ids=$2::bigint[] WHERE id=$3',
+        [bio, ids, socket.user.id]
+      );
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not save profile.'}); }
+  });
+
+  socket.on('get_worlds', async (payload, cb) => {
+    if (typeof payload === 'function') { cb = payload; payload = {}; }
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const sort = payload?.sort === 'liked' ? 'liked' : 'recent';
+      const order = sort === 'liked' ? 'like_count DESC, w.created_at DESC' : 'w.created_at DESC';
+      const r = await pool.query(`
+        SELECT w.*, u.username AS owner_username,
+          COUNT(wl.user_id)::int AS like_count,
+          BOOL_OR(wl.user_id=$1) AS liked_by_me
+        FROM worlds w
+        LEFT JOIN users u ON u.id=w.owner_user_id
+        LEFT JOIN world_likes wl ON wl.world_id=w.id
+        GROUP BY w.id,u.username
+        ORDER BY ${order}
+      `,[socket.user.id]);
+      cb({success:true,worlds:await Promise.all(r.rows.map(worldSummary))});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not load worlds.'}); }
+  });
+
+  socket.on('toggle_world_like', async ({worldName}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      const existing = await pool.query('SELECT 1 FROM world_likes WHERE world_id=$1 AND user_id=$2',[world.id,socket.user.id]);
+      let liked;
+      if (existing.rowCount) {
+        await pool.query('DELETE FROM world_likes WHERE world_id=$1 AND user_id=$2',[world.id,socket.user.id]);
+        liked=false;
+      } else {
+        await pool.query('INSERT INTO world_likes(world_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[world.id,socket.user.id]);
+        liked=true;
+      }
+      const count=await pool.query('SELECT COUNT(*)::int AS n FROM world_likes WHERE world_id=$1',[world.id]);
+      cb({success:true,liked,likes:Number(count.rows[0].n||0)});
+    } catch(e){ console.error(e); cb({success:false,message:'Could not update like.'}); }
+  });
+
+  socket.on('get_world_templates', async (cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const r = await pool.query('SELECT id,name,created_at FROM world_templates ORDER BY name ASC');
+      cb({success:true,templates:r.rows});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not load world templates.'}); }
+  });
+
+  // V3.42: Server chooses the initial Spawn so the multiplayer position
+  // broadcast and the joining client's avatar always agree.
+  function chooseWorldSpawn(data){
+    const blocks=Object.values(data?.blocks||{});
+    const choices=blocks.filter(b=>b&&b.actionType==='spawn');
+    const b=choices.length?choices[Math.floor(Math.random()*choices.length)]:
+      blocks.find(b=>b&&(b.id==='baseplate'));
+    if(!b)return {x:0,y:.18,z:0};
+    const x=Number(b.x)||0,y=Number(b.y)||0,z=Number(b.z)||0;
+    const hx=Math.max(.001,Math.abs(Number(b.scaleX)||1)*.5);
+    const hy=Math.max(.001,Math.abs(Number(b.scaleY)||1)*.5);
+    const hz=Math.max(.001,Math.abs(Number(b.scaleZ)||1)*.5);
+    const ax=Number(b.rotationX)||0,ay=Number(b.rotationY)||0;
+    // Y extent of an XYZ-rotated block's bounding box.
+    const halfHeight=Math.abs(Math.sin(ax)*Math.sin(ay))*hx+
+      Math.abs(Math.cos(ax))*hy+Math.abs(Math.sin(ax)*Math.cos(ay))*hz;
+    return {x,y:y+halfHeight+.18,z};
+  }
+  function makeDefaultSpawnBlock(data){
+    const base=Object.values(data.blocks||{}).find(b=>b&&(b.id==='baseplate'));
+    const x=Number(base?.x)||0,z=Number(base?.z)||0;
+    const y=(Number(base?.y)||0)+Math.abs(Number(base?.scaleY)||1)*.5+.5;
+    const id='spawn_default';
+    return {id,shape:'box',actionType:'spawn',material:'grid',color:'#a86cff',
+      transparency:0,canCollide:true,anchored:true,
+      x,y,z,scaleX:4,scaleY:1,scaleZ:4,rotationX:0,rotationY:0};
+  }
+
+  socket.on('create_world', async ({name, templateId}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    name = cleanWorldName(name);
+    if (!/^[A-Za-z0-9 _-]{1,20}$/.test(name)) return cb({success:false,message:'World name contains invalid characters.'});
+    try {
+      const exists = await pool.query('SELECT id FROM worlds WHERE lower(name)=lower($1)', [name]);
+      if (exists.rowCount) return cb({success:false,message:'That world already exists.'});
+
+      let data;
+      if (templateId && String(templateId) !== 'blank') {
+        const t = await pool.query('SELECT data FROM world_templates WHERE id=$1',[Number(templateId)]);
+        if (!t.rowCount) return cb({success:false,message:'That template no longer exists.'});
+        data = JSON.parse(JSON.stringify(t.rows[0].data));
+        data.name = name;
+        delete data.displayName; delete data.description; delete data.thumbnailUrl;
+      } else {
+        data = {
+          name,
+          blocks: {
+            "baseplate": {
+              id: "baseplate", shape: "box", actionType: "normal", material: "grid",
+              color: "#555555", transparency: 0, canCollide: true, anchored: true,
+              x: 0, y: -0.5, z: 0, scaleX: 250, scaleY: 1, scaleZ: 250
+            }
+          },
+          spawnPoint: {x:0,y:0.05,z:0},
+          skyColor:'#1e1e7b',
+          cloudsEnabled:true,
+          cloudSpeed:1.0,
+          cloudColor:'#ffffff'
+        };
+      }
+      // New worlds always start with one Spawn unless their template already
+      // contains Spawn parts. Existing saved worlds are never modified.
+      data.blocks=data.blocks||{};
+      if(!Object.values(data.blocks).some(b=>b&&b.actionType==='spawn')){
+        const initialSpawn=makeDefaultSpawnBlock(data);
+        data.blocks[initialSpawn.id]=initialSpawn;
+      }
+      await pool.query('INSERT INTO worlds(name,owner_user_id,data) VALUES($1,$2,$3)', [name,socket.user.id,JSON.stringify(data)]);
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not create world.'}); }
+  });
+
+  socket.on('join_world', async ({worldName, appearance}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+
+      // Hard cap: at most 20 connected players per world. Reservations prevent
+      // simultaneous joins from briefly pushing the world over the limit.
+      const alreadyHere = playersBySocket.get(socket.id)?.worldName === world.name;
+      const reserved = worldJoinReservations.get(world.name) || 0;
+      const occupied = worldPlayerCount(world.name) - (alreadyHere ? 1 : 0);
+      if (occupied + reserved >= 20) {
+        return cb({success:false,message:'This world is full (20/20 players).'});
+      }
+      worldJoinReservations.set(world.name, reserved + 1);
+
+      if (socket.data.worldName) socket.leave(`world:${socket.data.worldName}`);
+      socket.join(`world:${world.name}`);
+      socket.data.worldName = world.name;
+
+      const app = await validateAppearanceForUser(socket.user.id, socket.user.appearance || {});
+      const cosmetics = await resolveAppearanceAssets(app);
+      socket.user.appearance = app;
+      const players = {};
+      for (const [sid, p] of playersBySocket) {
+        if (p.worldName === world.name) players[sid] = p;
+      }
+      const selfSpawn=chooseWorldSpawn(world.data);
+      const p = {
+        id: socket.id, username: socket.user.username,
+        x:selfSpawn.x,y:selfSpawn.y,z:selfSpawn.z,
+        rotationY: 0, walkClock: 0, isMoving:false, isGrounded:true,
+        appearance: app, cosmetics, worldName: world.name
+      };
+      playersBySocket.set(socket.id, p);
+      worldJoinReservations.set(world.name, Math.max(0, (worldJoinReservations.get(world.name) || 1) - 1));
+      if (worldJoinReservations.get(world.name) === 0) worldJoinReservations.delete(world.name);
+      socket.to(`world:${world.name}`).emit('player_joined', p);
+      cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics});
+    } catch (e) {
+      console.error(e);
+      const key = cleanWorldName(worldName);
+      if (worldJoinReservations.has(key)) {
+        worldJoinReservations.set(key, Math.max(0, worldJoinReservations.get(key) - 1));
+        if (worldJoinReservations.get(key) === 0) worldJoinReservations.delete(key);
+      }
+      cb({success:false,message:'Could not join world.'});
     }
+  });
 
-    const kwgChatMessages=document.getElementById('world-chat-messages');
-    if(kwgChatMessages){
-      decorateChatProfileLinks(kwgChatMessages);
-      new MutationObserver(()=>decorateChatProfileLinks(kwgChatMessages))
-        .observe(kwgChatMessages,{childList:true,subtree:true});
+  socket.on('leave_world', () => {
+    const p = playersBySocket.get(socket.id);
+    if (p?.worldName) {
+      socket.to(`world:${p.worldName}`).emit('player_left', socket.id);
+      socket.leave(`world:${p.worldName}`);
     }
+    socket.data.worldName = null;
+    playersBySocket.delete(socket.id);
+  });
 
-    document.addEventListener('click',e=>{
-      const link=e.target.closest?.('.kwg-profile-link[data-profile-username]');
-      if(!link)return;
-      e.preventDefault();
-      e.stopPropagation();
-      const username=link.dataset.profileUsername;
-      if(currentWorldName) performLeaveWorld();
-      setTimeout(()=>openPlayerProfile(username),50);
-    });
+  socket.on('player_movement', (data) => {
+    if (!requireAuth(socket)) return;
+    const p = playersBySocket.get(socket.id);
+    if (!p || !p.worldName) return;
+    for (const k of ['x','y','z','rotationY','walkClock']) if (typeof data[k] !== 'number' || !Number.isFinite(data[k])) return;
+    p.x = Math.max(-10000, Math.min(10000, data.x));
+    p.y = Math.max(-1000, Math.min(10000, data.y));
+    p.z = Math.max(-10000, Math.min(10000, data.z));
+    p.rotationY = data.rotationY;
+    p.walkClock = data.walkClock;
+    p.verticalVelocity = (typeof data.verticalVelocity === 'number' && Number.isFinite(data.verticalVelocity)) ? data.verticalVelocity : 0;
+    p.isMoving = !!data.isMoving;
+    p.isGrounded = data.isGrounded !== false;
+    socket.to(`world:${p.worldName}`).emit('player_moved', p);
+  });
 
-    setInterval(()=>{if(loggedInUsername)refreshNotifications();},20000);
+  // KWG V3.40: One read and one PostgreSQL write for up to 100 ordered edits.
+  // The existing single-edit event remains supported for compatibility.
+  socket.on('world_edits_batch', async ({worldName,edits} = {}, cb) => {
+    if (!requireAuth(socket,cb)) return;
+    const key=cleanWorldName(worldName);
+    if (socket.data.worldName!==key)
+      return cb && cb({success:false,message:'Join the world before saving.'});
+    if (!Array.isArray(edits)||edits.length<1||edits.length>100)
+      return cb && cb({success:false,message:'Invalid save batch size.'});
+    try {
+      await queueWorldSave(key,async()=>{
+        const world=await getWorldByName(key);
+        if(!world){const e=new Error('World not found.');e.clientMessage=e.message;throw e;}
+        if(!canEditWorld(socket,world)){
+          const e=new Error('Only the world owner or an admin can edit this world.');
+          e.clientMessage=e.message;throw e;
+        }
+        const data=world.data;
+        data.blocks=data.blocks||{};
+        const notifications=[];
+        for(const edit of edits){
+          if(!edit||!edit.payload||edit.payload.worldName!==key){
+            const e=new Error('Invalid save batch.');e.clientMessage=e.message;throw e;
+          }
+          const payload=edit.payload;
+          if(edit.eventName==='block_update'){
+            const {action,blockData,blockId}=payload;
+            if(action==='add'||action==='update'){
+              if(!blockData||typeof blockData.id!=='string'||!blockData.id){
+                const e=new Error('Invalid block data.');e.clientMessage=e.message;throw e;
+              }
+              if(action==='add'&&!Object.prototype.hasOwnProperty.call(data.blocks,blockData.id)
+                 && Object.keys(data.blocks).length>=1400){
+                const e=new Error('Part limit reached (1400/1400 parts).');e.clientMessage=e.message;throw e;
+              }
+              // V3.41: allow normal, kill, checkpoint and spawn types; preserve materials.
+              blockData.actionType=['normal','kill','checkpoint','spawn'].includes(blockData.actionType)?blockData.actionType:'normal';
+              blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
+              data.blocks[blockData.id]=blockData;
+            }else if(action==='delete'){
+              const target=data.blocks[blockId];
+              if(blockId==='baseplate'||target?.shape==='baseplate'){
+                const e=new Error('The baseplate cannot be deleted.');e.clientMessage=e.message;throw e;
+              }
+              delete data.blocks[blockId];
+            }else{
+              const e=new Error('Invalid block action.');e.clientMessage=e.message;throw e;
+            }
+            notifications.push({type:'block_updated',data:{action,blockData,blockId}});
+          }else if(edit.eventName==='world_settings_update'){
+            const settings=payload.settings;
+            if(!settings||typeof settings!=='object'||Array.isArray(settings)){
+              const e=new Error('Invalid world settings.');e.clientMessage=e.message;throw e;
+            }
+            const allowed=['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint'];
+            const next={};
+            for(const k of allowed)if(Object.prototype.hasOwnProperty.call(settings,k))next[k]=settings[k];
+            if(next.skyColor&&!validColor(next.skyColor))delete next.skyColor;
+            if(next.cloudColor&&!validColor(next.cloudColor))delete next.cloudColor;
+            if(next.cloudSpeed!==undefined)next.cloudSpeed=Math.max(0,Math.min(10,Number(next.cloudSpeed)||0));
+            if(next.cloudsEnabled!==undefined)next.cloudsEnabled=!!next.cloudsEnabled;
+            if(next.spawnPoint){
+              const p=next.spawnPoint;
+              if(![p.x,p.y,p.z].every(Number.isFinite))delete next.spawnPoint;
+            }
+            Object.assign(data,next);
+            notifications.push({type:'world_settings_updated',data:next});
+          }else{
+            const e=new Error('Unsupported save operation.');e.clientMessage=e.message;throw e;
+          }
+        }
+        // All-or-nothing persistence: if any edit fails, none are written.
+        await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',
+          [JSON.stringify(data),world.id]);
+        // Only broadcast AFTER the database confirms the complete batch.
+        for(const n of notifications){
+          if(n.type==='block_updated')socket.to(`world:${world.name}`).emit(n.type,n.data);
+          else io.to(`world:${world.name}`).emit(n.type,n.data);
+        }
+      });
+      cb && cb({success:true,saved:edits.length});
+    }catch(e){
+      console.error('World batch save:',e);
+      cb && cb({success:false,message:e.clientMessage||'Could not save world changes.'});
+    }
+  });
 
-  </script>
-</body>
-</html>
+  socket.on('block_update', async ({worldName, action, blockData, blockId}, cb) => {
+    if (!requireAuth(socket)) return;
+    if (socket.data.worldName !== cleanWorldName(worldName)) return;
+
+    try {
+      await queueWorldSave(worldName, async () => {
+        // Keep the original, proven save logic, but run it one edit at a time.
+        // This prevents rapid deletes/updates from reading stale copies of the
+        // same world and overwriting each other.
+        const world = await getWorldByName(worldName);
+        if (!world) {
+          const err = new Error('World not found.');
+          err.clientMessage = 'World not found.';
+          throw err;
+        }
+        if (!canEditWorld(socket, world)) {
+          const err = new Error('Not allowed to edit world.');
+          err.clientMessage = 'Only the world owner or an admin can edit this world.';
+          throw err;
+        }
+
+        const data = world.data;
+        data.blocks = data.blocks || {};
+
+        if (action === 'add' || action === 'update') {
+          if (!blockData || !blockData.id) {
+            const err = new Error('Invalid block data.');
+            err.clientMessage = 'Could not save changes';
+            throw err;
+          }
+          if (Object.keys(data.blocks).length >= 1400 && action === 'add') {
+            const err = new Error('Part limit reached.');
+            err.clientMessage = 'Part limit reached (1400/1400 parts).';
+            throw err;
+          }
+          // V3.41: Only the four current block types and three current
+          // materials may be saved by clients. Existing legacy worlds are
+          // not rewritten on load; their old flags stay intact until edited.
+          blockData.actionType = ['normal','kill','checkpoint','spawn'].includes(blockData.actionType) ? blockData.actionType : 'normal';
+          blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
+          data.blocks[blockData.id] = blockData;
+        } else if (action === 'delete') {
+          const target = data.blocks[blockId];
+          if (blockId === 'baseplate') {
+            const err = new Error('Baseplate cannot be deleted.');
+            err.clientMessage = 'The baseplate cannot be deleted. You can resize it instead.';
+            throw err;
+          }
+          delete data.blocks[blockId];
+        } else {
+          const err = new Error('Invalid block action.');
+          err.clientMessage = 'Could not save changes';
+          throw err;
+        }
+
+        await pool.query(
+          'UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',
+          [JSON.stringify(data), world.id]
+        );
+
+        socket.to(`world:${world.name}`).emit('block_updated', {action,blockData,blockId});
+      });
+
+      cb && cb({success:true});
+    } catch (e) {
+      console.error(e);
+      cb && cb({success:false,message:e.clientMessage || 'Could not save changes'});
+    }
+  });
+
+  socket.on('world_settings_update', async ({worldName,settings}, cb) => {
+    if (!requireAuth(socket)) return;
+    if (socket.data.worldName !== cleanWorldName(worldName) || !settings) return;
+    try {
+      const world = await getWorldByName(worldName);
+      if (!world) return cb && cb({success:false,message:'World not found.'});
+      if (!canEditWorld(socket, world)) return cb && cb({success:false,message:'Only the world owner or an admin can edit this world.'});
+      const allowed = ['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint'];
+      const next = {};
+      for (const k of allowed) if (Object.prototype.hasOwnProperty.call(settings,k)) next[k] = settings[k];
+      if (next.skyColor && !validColor(next.skyColor)) delete next.skyColor;
+      if (next.cloudColor && !validColor(next.cloudColor)) delete next.cloudColor;
+      if (next.cloudSpeed !== undefined) next.cloudSpeed = Math.max(0, Math.min(10, Number(next.cloudSpeed) || 0));
+      if (next.cloudsEnabled !== undefined) next.cloudsEnabled = !!next.cloudsEnabled;
+      if (next.spawnPoint) {
+        const s = next.spawnPoint;
+        if (![s.x,s.y,s.z].every(Number.isFinite)) delete next.spawnPoint;
+      }
+      Object.assign(world.data,next);
+      await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(world.data),world.id]);
+      io.to(`world:${world.name}`).emit('world_settings_updated',next);
+      cb && cb({success:true});
+    } catch (e) { console.error(e); cb && cb({success:false,message:'Could not save world settings.'}); }
+  });
+
+  socket.on('world_info_update', async ({worldName,displayName,description,thumbnailData} = {}, cb) => {
+    if (!requireAuth(socket,cb)) return;
+    const key=cleanWorldName(worldName);
+    if (socket.data.worldName!==key) return cb && cb({success:false,message:'Join this world before editing its info.'});
+    const title=filterKWGUserText(String(displayName||'').trim());
+    const desc=filterKWGUserText(String(description||'').trim());
+    if (!title || title.length>40 || /[\x00-\x1f\x7f]/.test(title)) return cb && cb({success:false,message:'World title must be 1–40 characters.'});
+    if (desc.length>300 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(desc)) return cb && cb({success:false,message:'Description must be 300 characters or fewer.'});
+    try {
+      const result=await queueWorldSave(key,async()=>{
+        const world=await getWorldByName(key);
+        if (!world) return {success:false,message:'World not found.'};
+        if (!canEditWorld(socket,world)) return {success:false,message:'You cannot edit this world.'};
+        const data=world.data||{};
+        let thumbnailUrl=data.thumbnailUrl||'';
+        if (thumbnailData!==undefined && thumbnailData!==null) {
+          thumbnailUrl=await uploadWorldThumbnail(world.id,thumbnailData);
+        }
+        data.displayName=title;
+        data.description=desc;
+        data.thumbnailUrl=thumbnailUrl;
+        await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
+        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,thumbnailUrl});
+        return {success:true,displayName:title,description:desc,thumbnailUrl};
+      });
+      cb && cb(result);
+    } catch(e){console.error('World info update:',e);cb && cb({success:false,message:e.clientMessage||'Could not save world info or thumbnail. Check thumbnail storage configuration.'});}
+  });
+
+  socket.on('save_appearance', async (appearance, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const app = await validateAppearanceForUser(socket.user.id, appearance);
+      const cosmetics = await resolveAppearanceAssets(app);
+      await pool.query('UPDATE users SET appearance=$1 WHERE id=$2',[JSON.stringify(app),socket.user.id]);
+      socket.user.appearance = app;
+      const p = playersBySocket.get(socket.id);
+      if (p) {
+        p.appearance = app;
+        p.cosmetics = cosmetics;
+        socket.to(`world:${p.worldName}`).emit('player_appearance_updated', p);
+      }
+      cb && cb({success:true,appearance:app,cosmetics});
+    } catch (e) {
+      console.error(e);
+      cb && cb({success:false,message:'Could not save appearance.'});
+    }
+  });
+
+  socket.on('get_store', async (cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const [visible, owned, user] = await Promise.all([
+        pool.query(`
+          SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible
+          FROM store_items WHERE is_visible=true
+          ORDER BY category ASC, created_at DESC
+        `),
+        pool.query(`
+          SELECT s.id,s.category,s.name,s.price,s.asset_url,s.asset_kind,s.metadata,s.is_visible
+          FROM user_store_items o
+          JOIN store_items s ON s.id=o.item_id
+          WHERE o.user_id=$1
+          ORDER BY o.purchased_at ASC
+        `, [socket.user.id]),
+        pool.query('SELECT coins FROM users WHERE id=$1', [socket.user.id])
+      ]);
+      const coins = Number(user.rows[0]?.coins || 0);
+      socket.user.coins = coins;
+      cb({
+        success: true,
+        coins,
+        items: visible.rows.map(rowToStoreItem),
+        ownedItems: owned.rows.map(rowToStoreItem),
+        uploadConfigured: storeStorageConfigured()
+      });
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:'Could not load the store.'});
+    }
+  });
+
+  socket.on('buy_store_item', async ({itemId}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    itemId = cleanStoreItemId(itemId);
+    if (!itemId) return cb({success:false,message:'Invalid store item.'});
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const user = await client.query('SELECT coins FROM users WHERE id=$1 FOR UPDATE', [socket.user.id]);
+      const item = await client.query('SELECT id,price,is_visible FROM store_items WHERE id=$1', [itemId]);
+      if (!item.rowCount) {
+        await client.query('ROLLBACK');
+        return cb({success:false,message:'That store item no longer exists.'});
+      }
+      if (!item.rows[0].is_visible) {
+        await client.query('ROLLBACK');
+        return cb({success:false,message:'That item is not currently available.'});
+      }
+      const already = await client.query('SELECT 1 FROM user_store_items WHERE user_id=$1 AND item_id=$2', [socket.user.id,itemId]);
+      if (already.rowCount) {
+        const coins = Number(user.rows[0].coins || 0);
+        await client.query('COMMIT');
+        return cb({success:true,alreadyOwned:true,coins});
+      }
+      const price = Number(item.rows[0].price || 0);
+      const coins = Number(user.rows[0].coins || 0);
+      if (coins < price) {
+        await client.query('ROLLBACK');
+        return cb({success:false,message:`You need ${price - coins} more coin${price - coins === 1 ? '' : 's'} for that item.`});
+      }
+      const updated = await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 RETURNING coins', [price,socket.user.id]);
+      await client.query('INSERT INTO user_store_items(user_id,item_id) VALUES($1,$2)', [socket.user.id,itemId]);
+      await client.query('COMMIT');
+      const newCoins = Number(updated.rows[0].coins || 0);
+      socket.user.coins = newCoins;
+      cb({success:true,coins:newCoins});
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error(e);
+      cb({success:false,message:'Purchase failed.'});
+    } finally {
+      client.release();
+    }
+  });
+
+  socket.on('admin_store_list', async (cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const r = await pool.query(`
+        SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible
+        FROM store_items ORDER BY created_at DESC
+      `);
+      cb({success:true,items:r.rows.map(rowToStoreItem),uploadConfigured:storeStorageConfigured()});
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:'Could not load store items.'});
+    }
+  });
+
+  socket.on('admin_store_set_visible', async ({itemId,isVisible}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    itemId = cleanStoreItemId(itemId);
+    if (!itemId) return cb({success:false,message:'Invalid store item.'});
+    try {
+      const r = await pool.query(`
+        UPDATE store_items SET is_visible=$1,updated_at=NOW() WHERE id=$2 RETURNING id
+      `, [!!isVisible,itemId]);
+      if (!r.rowCount) return cb({success:false,message:'Store item not found.'});
+      cb({success:true});
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:'Could not update store visibility.'});
+    }
+  });
+
+  socket.on('admin_store_create', async (payload = {}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const category = String(payload.category || '').trim();
+      const name = String(payload.name || '').trim().slice(0, 40);
+      const price = Number(payload.price);
+      if (!STORE_CATEGORIES.has(category)) return cb({success:false,message:'Choose a valid store category.'});
+      if (!name) return cb({success:false,message:'Item name is required.'});
+      if (!Number.isInteger(price) || price < 0 || price > 100000000) return cb({success:false,message:'Price must be a whole number of coins.'});
+      const buffer = fileBufferFromSocket(payload.fileData);
+      if (!buffer || !buffer.length) return cb({success:false,message:'Choose a file to upload.'});
+      if (!storeStorageConfigured()) {
+        return cb({success:false,message:'Store uploads need SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY configured on Render first.'});
+      }
+
+      const metadata = cleanUploadMeta(category, payload.metadata || {});
+      if (category === 'hat') {
+        for (const key of ['size','offsetX','offsetY','offsetZ']) {
+          if (!Number.isFinite(Number(payload.metadata?.[key]))) {
+            return cb({success:false,message:'Hat size and X/Y/Z offsets are required.'});
+          }
+        }
+      }
+      const assetUrl = await uploadStoreAsset({
+        category,
+        fileName: payload.fileName,
+        mimeType: payload.mimeType,
+        buffer
+      });
+      const assetKind = ['eyes','mouth','torso_decal'].includes(category) ? 'image' : 'glb';
+      const r = await pool.query(`
+        INSERT INTO store_items(category,name,price,asset_url,asset_kind,metadata,is_visible,created_by)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+        RETURNING id,category,name,price,asset_url,asset_kind,metadata,is_visible
+      `, [category,name,price,assetUrl,assetKind,JSON.stringify(metadata),payload.isVisible !== false,socket.user.id]);
+      cb({success:true,item:rowToStoreItem(r.rows[0])});
+    } catch (e) {
+      console.error(e);
+      cb({success:false,message:e.message || 'Could not create store item.'});
+    }
+  });
+
+  socket.on('get_world_chat', async ({worldName}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      if (socket.data.worldName !== world.name) return cb({success:false,message:'Join the world first.'});
+      const r = await pool.query(`
+        SELECT username,message,created_at AS "createdAt"
+        FROM chat_messages WHERE world_id=$1
+        ORDER BY created_at DESC LIMIT 100
+      `,[world.id]);
+      cb({success:true,messages:r.rows.reverse().map(x=>({...x,message:filterKWGUserText(x.message),worldName:world.name}))});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not load chat.'}); }
+  });
+
+  socket.on('send_world_chat', async ({worldName,message},cb) => {
+    if (!requireAuth(socket, cb)) return;
+    worldName = cleanWorldName(worldName);
+    message = filterKWGUserText(String(message || '').trim().slice(0,300));
+    if (!message) return cb({success:false,message:'Message cannot be empty.'});
+    if (socket.data.worldName !== worldName) return cb({success:false,message:'Join the world first.'});
+    try {
+      const world = await getWorldByName(worldName);
+      if (!world) return cb({success:false,message:'World not found.'});
+      const r = await pool.query(`
+        INSERT INTO chat_messages(world_id,user_id,username,message)
+        VALUES($1,$2,$3,$4)
+        RETURNING created_at AS "createdAt"
+      `,[world.id,socket.user.id,socket.user.username,message]);
+      io.to(`world:${world.name}`).emit('world_chat_message',{
+        worldName:world.name, username:socket.user.username, message, createdAt:r.rows[0].createdAt
+      });
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not send message.'}); }
+  });
+
+  socket.on('admin_search_users', async ({query} = {}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const q = String(query || '').trim().slice(0, 50);
+      if (!q) return cb({success:true,users:[]});
+      const users = await pool.query(`
+        SELECT id,username,is_admin AS "isAdmin",coins,created_at AS "createdAt"
+        FROM users
+        WHERE username ILIKE $1
+        ORDER BY CASE WHEN LOWER(username)=LOWER($2) THEN 0 ELSE 1 END, username ASC
+        LIMIT 25
+      `,[`%${q}%`,q]);
+      cb({success:true,users:users.rows.map(u => ({
+        username:u.username,isAdmin:u.isAdmin,createdAt:u.createdAt,
+        coins:Number(u.coins || 0),online:socketsByUser.has(u.id)
+      }))});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not search users.'}); }
+  });
+
+  socket.on('admin_search_worlds', async ({query} = {}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const q = String(query || '').trim().slice(0, 80);
+      if (!q) return cb({success:true,worlds:[]});
+      const worlds = await pool.query(`
+        WITH matches AS (
+          SELECT w.id,w.name,w.owner_user_id,w.created_at
+          FROM worlds w
+          LEFT JOIN users owner ON owner.id=w.owner_user_id
+          WHERE w.name ILIKE $1 OR owner.username ILIKE $1
+          ORDER BY CASE WHEN LOWER(w.name)=LOWER($2) THEN 0 ELSE 1 END, w.name ASC
+          LIMIT 25
+        )
+        SELECT m.id,m.name,u.username AS "ownerUsername",
+               COUNT(cm.id)::int AS "chatCount"
+        FROM matches m
+        LEFT JOIN users u ON u.id=m.owner_user_id
+        LEFT JOIN chat_messages cm ON cm.world_id=m.id
+        GROUP BY m.id,m.name,u.username,m.created_at
+        ORDER BY CASE WHEN LOWER(m.name)=LOWER($2) THEN 0 ELSE 1 END, m.name ASC
+      `,[`%${q}%`,q]);
+      cb({success:true,worlds:worlds.rows.map(w => ({
+        name:w.name,ownerUsername:w.ownerUsername,chatCount:w.chatCount,
+        onlineCount:io.sockets.adapter.rooms.get(`world:${w.name}`)?.size || 0
+      }))});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not search worlds.'}); }
+  });
+
+  socket.on('admin_kick_user', async ({username}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const target = await pool.query('SELECT id,is_admin FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      if (!target.rowCount) return cb({success:false,message:'User not found.'});
+      if (target.rows[0].is_admin) return cb({success:false,message:'Admin accounts cannot be kicked from this panel.'});
+      const targetSocket = socketsByUser.get(target.rows[0].id);
+      if (!targetSocket) return cb({success:false,message:'That user is not currently online.'});
+      targetSocket.emit('admin_kicked');
+      targetSocket.disconnect(true);
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not kick user.'}); }
+  });
+
+  socket.on('admin_clear_world_chat', async ({worldName}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      await pool.query('DELETE FROM chat_messages WHERE world_id=$1',[world.id]);
+      io.to(`world:${world.name}`).emit('world_chat_cleared', {worldName:world.name});
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not clear world chat.'}); }
+  });
+
+  socket.on('admin_delete_user', async ({username}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const target = await pool.query('SELECT id,is_admin FROM users WHERE username=$1',[cleanUsername(username)]);
+      if (!target.rowCount) return cb({success:false,message:'User not found.'});
+      if (target.rows[0].is_admin) return cb({success:false,message:'Admin accounts cannot be deleted from this panel.'});
+      const targetSocket = socketsByUser.get(target.rows[0].id);
+      if (targetSocket) {
+        targetSocket.emit('account_deleted');
+        targetSocket.disconnect(true);
+      }
+      await pool.query('DELETE FROM users WHERE id=$1',[target.rows[0].id]);
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not delete account.'}); }
+  });
+
+  socket.on('delete_own_world', async ({worldName}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      if (Number(world.owner_user_id) !== Number(socket.user.id)) return cb({success:false,message:'You can only delete worlds you own.'});
+      const room = `world:${world.name}`;
+      for (const [sid,p] of playersBySocket) {
+        if (p.worldName === world.name) {
+          const target = io.sockets.sockets.get(sid);
+          if (target) { target.emit('world_deleted',{worldName:world.name}); target.leave(room); target.data.worldName=null; }
+          playersBySocket.delete(sid);
+        }
+      }
+      await pool.query('DELETE FROM worlds WHERE id=$1',[world.id]);
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not delete world.'}); }
+  });
+
+  socket.on('admin_make_world_template', async ({worldName,templateName}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      const name = String(templateName || world.name).trim().slice(0,40);
+      if (!name) return cb({success:false,message:'Template name is required.'});
+      await pool.query(`
+        INSERT INTO world_templates(name,source_world_id,data,created_by)
+        VALUES($1,$2,$3,$4)
+        ON CONFLICT(name) DO UPDATE SET source_world_id=EXCLUDED.source_world_id,data=EXCLUDED.data,created_by=EXCLUDED.created_by,updated_at=NOW()
+      `,[name,world.id,JSON.stringify(world.data),socket.user.id]);
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not create template.'}); }
+  });
+
+  socket.on('admin_delete_world', async ({worldName}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    try {
+      const world = await getWorldByName(cleanWorldName(worldName));
+      if (!world) return cb({success:false,message:'World not found.'});
+      const room = `world:${world.name}`;
+      for (const [sid,p] of playersBySocket) {
+        if (p.worldName === world.name) {
+          const s = io.sockets.sockets.get(sid);
+          if (s) {
+            s.emit('world_deleted', {worldName:world.name});
+            s.leave(room);
+            s.data.worldName = null;
+          }
+          playersBySocket.delete(sid);
+        }
+      }
+      await pool.query('DELETE FROM worlds WHERE id=$1',[world.id]);
+      cb({success:true});
+    } catch (e) { console.error(e); cb({success:false,message:'Could not delete world.'}); }
+  });
+
+  socket.on('disconnect', () => {
+    const p = playersBySocket.get(socket.id);
+    if (p?.worldName) socket.to(`world:${p.worldName}`).emit('player_left', socket.id);
+    playersBySocket.delete(socket.id);
+    if (socket.user) socketsByUser.delete(socket.user.id);
+  });
+});
+
+migrate().then(() => {
+  server.listen(PORT, () => console.log(`KWG 3D server listening on port ${PORT}`));
+}).catch(err => {
+  console.error('Database migration failed:', err);
+  process.exit(1);
+});
