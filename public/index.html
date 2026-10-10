@@ -2321,7 +2321,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-recolor-material" aria-label="Brush material"><option value="grid" selected>Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
       <p class="kwg-recolor-help">Click any part in the 3D view to apply both.</p>
     </section>
-    <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>R</kbd> Rotate 90° horizontally</div><div><kbd>T</kbd> Rotate 90° vertically</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div></details>
+    <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>R</kbd> Rotate 90° horizontally</div><div><kbd>T</kbd> Rotate 90° vertically</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div><div><kbd>Shift</kbd> + <kbd>D</kbd> Duplicate part</div></details>
     <!-- Selected Part Properties UI -->
     <div id="part-properties-container">
       <div style="border-top: 2px solid #444; margin: 8px 0 10px 0; padding-top: 8px;">
@@ -6365,16 +6365,15 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       const activeTag = document.activeElement ? document.activeElement.tagName : '';
       if (activeTag === 'INPUT' || activeTag === 'SELECT' || activeTag === 'TEXTAREA') return;
 
-      // Editor shortcuts are consumed before gameplay input. Ctrl/Cmd+D must not
-      // also act like the D movement/turn key.
-      if ((e.ctrlKey || e.metaKey) && key === 'd') {
-        if (isEditMode && selectedBlockId) {
-          e.preventDefault();
-          duplicateSelectedBlock();
-        }
+      // Studio duplicate uses Shift+D, avoiding the browser's Ctrl+D bookmark
+      // shortcut while keeping plain D available for WASD movement.
+      if (isEditMode && canEditCurrentWorld && !kwgFreeCamera.active &&
+          e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey &&
+          key === 'd' && !e.repeat && !document.activeElement?.isContentEditable) {
+        e.preventDefault();
+        e.stopPropagation();
         keys['d'] = false;
-        keys['control'] = false;
-        keys['meta'] = false;
+        duplicateSelectedBlock();
         return;
       }
 
