@@ -4541,7 +4541,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       uv.needsUpdate=true;
     }
 
-    // KWG V3.42.7: Each wedge surface uses its own material texture
+    // KWG V3.42.8: Correct triangular end-cap UVs while keeping each
+    // wedge surface's independent material texture
     // transform. A single repeated UV map cannot express five different
     // physical face dimensions, and the old atlas produced invalid sampling.
     // This only changes the mesh's UVs/materials, not its collision geometry.
@@ -4579,8 +4580,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           let u,v;
           if(face===0){u=x+.5;v=z+.5;}
           else if(face===1){u=x+.5;v=y+.5;}
-          else if(face===2){u=z+.5;v=y+.5;}
-          else if(face===3){u=1-(z+.5);v=y+.5;}
+          else if(face===2 || face===3){
+            // Triangular end caps need a *triangular* UV layout.
+            // Old mapping put the icon center directly on the sloping
+            // edge (or outside the visible triangle), so the texture
+            // looked blank or like an enormous cropped icon.
+            // Map the tip to the top CENTER of the tile instead.
+            // This keeps the icon center inside the visible triangle.
+            const baseU=face===2?(z+.5):(1-(z+.5));
+            u=y>0?0.5:baseU;
+            v=y+.5;
+          }
           else{u=x+.5;v=z+.5;}
           uv.setXY(i,u,v);
         }
