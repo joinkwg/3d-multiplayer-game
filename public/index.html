@@ -3243,6 +3243,9 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         stagedWorldEdits.push({eventName:'world_settings_update',payload:{worldName:currentWorldName,settings:JSON.parse(JSON.stringify(settings))}});
       }else socket.emit('world_settings_update',{worldName:currentWorldName,settings});
     }
+    // V3.40: Batch editor writes. Previously each change waited for a separate
+    // full PostgreSQL world read/write; 100 edits now use one atomic world write.
+    // World info (including thumbnail upload) is kept as its own save operation.
     async function commitStagedWorldEdits(){
       if(worldCommitInProgress)return false;
       if(kwgFreeCamera.active) stopWorldThumbnailCamera();
@@ -3255,27 +3258,50 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       });
       try{
         while(stagedWorldEdits.length){
-          const edit=stagedWorldEdits[0];
           const status=document.getElementById('save-status');
           if(status){status.style.display='flex';status.textContent=`Saving ${stagedWorldEdits.length} changes…`;}
+          const first=stagedWorldEdits[0];
+          // Keep event order. Save the largest contiguous group of block and
+          // environment edits together, stopping before world_info_update.
+          const batch=[];
+          if(first.eventName==='block_update'||first.eventName==='world_settings_update'){
+            for(const edit of stagedWorldEdits){
+              if(batch.length>=100)break;
+              if(edit.eventName!=='block_update'&&edit.eventName!=='world_settings_update')break;
+              batch.push(edit);
+            }
+          }
+          const isBatch=batch.length>0;
+          const count=isBatch?batch.length:1;
+          const eventName=isBatch?'world_edits_batch':first.eventName;
+          const payload=isBatch?{
+            worldName:currentWorldName,
+            edits:batch.map(edit=>({eventName:edit.eventName,payload:edit.payload}))
+          }:first.payload;
           const res=await new Promise(resolve=>{
-            const timer=setTimeout(()=>resolve({success:false,message:'Save timed out'}),12000);
-            socket.emit(edit.eventName,edit.payload,r=>{clearTimeout(timer);resolve(r);});
+            const timer=setTimeout(()=>resolve({success:false,message:'Save timed out. Check your connection and retry.'}),25000);
+            socket.emit(eventName,payload,r=>{clearTimeout(timer);resolve(r);});
           });
-          if(!res?.success){showToast('Save failed: '+(res?.message||'Please retry exiting Edit Mode.'),6000);return false;}
-          stagedWorldEdits.shift();
+          if(!res?.success){
+            showToast('Save failed: '+(res?.message||'Please retry Save & Exit.'),6000);
+            return false; // Keep all unacknowledged changes staged for retry.
+          }
+          // Only discard edits after the server confirms its database write.
+          const completed=stagedWorldEdits.splice(0,count);
+          for(const edit of completed){
+            if(edit.eventName==='world_info_update') {
+              if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl});
+              kwgInfoOriginal={displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl};
+              kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
+              document.getElementById('current-room-text').textContent=filterKWGUserText(res.displayName);
+              refreshWorldInfoThumbnail();
+            }
+            if(edit.callback)edit.callback(res);
+          }
           saveLoading.update(
             Math.round(((totalEdits-stagedWorldEdits.length)/totalEdits)*100),
             `Saved ${totalEdits-stagedWorldEdits.length} of ${totalEdits} changes`
           );
-          if(edit.eventName==='world_info_update') {
-            if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl});
-            kwgInfoOriginal={displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl};
-            kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
-            document.getElementById('current-room-text').textContent=filterKWGUserText(res.displayName);
-            refreshWorldInfoThumbnail();
-          }
-          if(edit.callback)edit.callback(res);
         }
         const status=document.getElementById('save-status');
         if(status){status.textContent='All changes saved';setTimeout(()=>{if(!stagedWorldEdits.length&&status)status.style.display='none';},1400);}
