@@ -4527,11 +4527,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           }else if(tri<4){ // back, XY
             u=(x+.5)*sx;v=(y+.5)*sy;
           }else if(tri<6){ // triangular end caps, ZY
-            // Keep the play/skull/check symbol inside the triangle instead
-            // of clipping it at the hypotenuse of a 1x1 tile.
-            u=(z+.5)*sz+1/6;
-            v=(y+.5)*sy+1/6;
+            // The triangular caps cover only half of a square UV tile.
+            // Shift the pattern toward the solid half so its center isn't
+            // clipped off by the hypotenuse on 1x1 wedges.
+            u=(z+.5)*sz+0.25;
+            v=(y+.5)*sy+0.25;
           }else{ // inclined roof: width X and actual diagonal distance
+            // Preserve one tile per world unit along the *sloped* face.
+            // The slope runs from the high -Z edge to the low +Z edge.
             u=(x+.5)*sx;
             v=(z+.5)*slopeLength;
           }
@@ -4595,6 +4598,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
         tex.repeat.set(1, 1);
+        if(blockData.shape==='wedge'){
+          // Wedge roofs are often seen at shallow angles. Mipmaps can
+          // average the small dark icon strokes into the white tile,
+          // leaving the entire sloped face looking blank. Keep the
+          // original icon detail instead of downsampling it away.
+          tex.generateMipmaps=false;
+          tex.minFilter=THREE.LinearFilter;
+          tex.magFilter=THREE.NearestFilter;
+        }
         matOptions.map = tex;
       }
 
