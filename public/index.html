@@ -6755,7 +6755,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const hx=sx/2, hy=sy/2, hz=sz/2;
       const lx=px-bx, lz=pz-bz;
 
-      if (shape==='box' || shape==='baseplate' || b.actionType==='checkpoint' || b.actionType==='finish') {
+      if (shape==='box' || shape==='baseplate' || b.actionType==='finish') {
         if (Math.abs(lx)<=hx+0.2 && Math.abs(lz)<=hz+0.2) return by+hy;
         return null;
       }
@@ -7122,7 +7122,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             continue;
           }
           if(shape!=='box'&&shape!=='baseplate'&&
-             b.actionType!=='checkpoint'&&b.actionType!=='finish'){
+             b.actionType!=='finish'){
             kwgResolveRotatedShapeSide(pos,b,previousX,previousZ,feet,head,pr);
             continue;
           }
@@ -7347,7 +7347,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         let undersideY = null;
 
         // Boxes/baseplates/flags have a flat underside.
-        if (shape === 'box' || shape === 'baseplate' || b.actionType === 'checkpoint' || b.actionType === 'finish') {
+        if (shape === 'box' || shape === 'baseplate' || b.actionType === 'finish') {
           if (Math.abs(lx) <= hx + 0.38 && Math.abs(lz) <= hz + 0.38) undersideY = by - hy;
         } else if (shape === 'cylinder') {
           const d2 = Math.pow(lx / (hx + 0.38), 2) + Math.pow(lz / (hz + 0.38), 2);
