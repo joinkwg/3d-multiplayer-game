@@ -4456,72 +4456,78 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return group;
     }
 
-    // KWG V3.42.1: UV coordinates are specific to each face, not shared
-    // across the whole part. 1 world unit = 1 texture tile on flat faces.
-    // Changing UVs on a fresh geometry leaves physics, part dimensions,
-    // material caching, and serialization completely unchanged.
+    // KWG V3.42.2: Tile in physical part units, including curved surfaces.
+    // The texture UVs belong to each mesh geometry, not to the shared texture.
     function applyPartFaceTiling(geometry, blockData) {
-      const sx = Math.max(0.001, Math.abs(Number(blockData.scaleX) || 1));
-      const sy = Math.max(0.001, Math.abs(Number(blockData.scaleY) || 1));
-      const sz = Math.max(0.001, Math.abs(Number(blockData.scaleZ) || 1));
-      const uv = geometry.getAttribute('uv');
-      if (!uv) return;
-      const shape = blockData.shape || 'box';
-      if (shape === 'box') {
-        // Three.js BoxGeometry: +X, -X, +Y, -Y, +Z, -Z;
-        // each face has four unique vertices and its own UV rectangle.
-        const faceTiles = [
-          [sz, sy], [sz, sy],
-          [sx, sz], [sx, sz],
-          [sx, sy], [sx, sy]
+      const sx=Math.max(.001,Math.abs(Number(blockData.scaleX)||1));
+      const sy=Math.max(.001,Math.abs(Number(blockData.scaleY)||1));
+      const sz=Math.max(.001,Math.abs(Number(blockData.scaleZ)||1));
+      const uv=geometry.getAttribute('uv');
+      if(!uv)return;
+      const shape=blockData.shape||'box';
+      // Approximate ellipse circumference in world units (Ramanujan).
+      // Used by cylinder sides and sphere meridians/equators.
+      const ellipseLength=(diameterA,diameterB)=>{
+        const a=diameterA*.5,b=diameterB*.5;
+        const h=((a-b)/(a+b))**2;
+        return Math.PI*(a+b)*(1+3*h/(10+Math.sqrt(4-3*h)));
+      };
+      if(shape==='box'||shape==='baseplate'){
+        const faceTiles=[
+          [sz,sy],[sz,sy],[sx,sz],[sx,sz],[sx,sy],[sx,sy]
         ];
-        for (let face = 0; face < 6; face++) {
-          const [uTiles, vTiles] = faceTiles[face];
-          for (let corner = 0; corner < 4; corner++) {
-            const i = face * 4 + corner;
-            uv.setXY(i, uv.getX(i) * uTiles, uv.getY(i) * vTiles);
+        for(let face=0;face<6;face++){
+          const [u,v]=faceTiles[face];
+          for(let c=0;c<4;c++){
+            const i=face*4+c;
+            uv.setXY(i,uv.getX(i)*u,uv.getY(i)*v);
           }
         }
-      } else if (shape === 'wedge') {
-        // The wedge is non-indexed: two bottom triangles, two rear
-        // triangles, a triangle on each end, and two sloped triangles.
-        // Each planar surface receives independent real-size UVs.
-        const faceTiles = [
-          [sx, sz], [sx, sz],
-          [sx, sy], [sx, sy],
-          [sz, sy], [sz, sy],
-          [sx, Math.hypot(sy, sz)], [sx, Math.hypot(sy, sz)]
-        ];
-        for (let tri = 0; tri < 8; tri++) {
-          const [uTiles, vTiles] = faceTiles[tri];
-          for (let corner = 0; corner < 3; corner++) {
-            const i = tri * 3 + corner;
-            uv.setXY(i, uv.getX(i) * uTiles, uv.getY(i) * vTiles);
+      }else if(shape==='wedge'){
+        // Project each triangle onto its *actual* surface dimensions.
+        // The sloped roof uses its diagonal world length, not its height
+        // or depth independently. Both triangles share the same origin.
+        const pos=geometry.getAttribute('position');
+        const slopeLength=Math.hypot(sy,sz);
+        for(let i=0;i<uv.count;i++){
+          const tri=Math.floor(i/3);
+          const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);
+          let u,v;
+          if(tri<2){ // bottom, XZ
+            u=(x+.5)*sx;v=(z+.5)*sz;
+          }else if(tri<4){ // back, XY
+            u=(x+.5)*sx;v=(y+.5)*sy;
+          }else if(tri<6){ // triangular end caps, ZY
+            u=(z+.5)*sz;v=(y+.5)*sy;
+          }else{ // inclined face, X and diagonal ZY
+            u=(x+.5)*sx;v=(z+.5)*slopeLength;
+          }
+          uv.setXY(i,u,v);
+        }
+      }else if(shape==='cylinder'){
+        const pos=geometry.getAttribute('position');
+        const normal=geometry.getAttribute('normal');
+        // One texture repeat per world unit of circumference/height.
+        const around=ellipseLength(sx,sz);
+        for(let i=0;i<uv.count;i++){
+          if(Math.abs(normal.getY(i))>.9){
+            // Flat cap: world-space X/Z projection.
+            uv.setXY(i,(pos.getX(i)+.5)*sx,(pos.getZ(i)+.5)*sz);
+          }else{
+            uv.setXY(i,uv.getX(i)*around,uv.getY(i)*sy);
           }
         }
-      } else if (shape === 'cylinder') {
-        // Cylinder UVs: the side runs around the circumference and up
-        // the height; top/bottom caps are X/Z circles.
-        const circumference = Math.PI * Math.sqrt((sx*sx + sz*sz) / 2);
-        const sideTiles = circumference / Math.PI; // default unit cylinder = 1 tile
-        const pos = geometry.getAttribute('position');
-        const norm = geometry.getAttribute('normal');
-        for (let i = 0; i < uv.count; i++) {
-          if (Math.abs(norm.getY(i)) > 0.9) {
-            uv.setXY(i, (pos.getX(i) + 0.5) * sx, (pos.getZ(i) + 0.5) * sz);
-          } else {
-            uv.setXY(i, uv.getX(i) * sideTiles, uv.getY(i) * sy);
-          }
-        }
-      } else if (shape === 'sphere') {
-        // A sphere has curved UVs rather than six separate flat faces.
-        // Scale longitude and latitude by the corresponding dimensions.
-        const horizontal = Math.sqrt((sx*sx + sz*sz) / 2);
-        for (let i = 0; i < uv.count; i++) {
-          uv.setXY(i, uv.getX(i) * horizontal, uv.getY(i) * sy);
+      }else if(shape==='sphere'){
+        // UVs on spheres follow longitude/latitude, so measure the
+        // equator and pole-to-pole arc in world units instead of treating
+        // the entire sphere as a single square texture tile.
+        const around=ellipseLength(sx,sz);
+        const vertical=ellipseLength(Math.max(sx,sz),sy)*.5;
+        for(let i=0;i<uv.count;i++){
+          uv.setXY(i,uv.getX(i)*around,uv.getY(i)*vertical);
         }
       }
-      uv.needsUpdate = true;
+      uv.needsUpdate=true;
     }
 
     function buildBlockMesh(blockData, isPreview = false) {
@@ -5194,7 +5200,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         noSelMsg.style.display = 'none';
         partFields.style.display = 'block';
 
-        document.getElementById('block-shape-select').value = block.shape || 'box';
+        document.getElementById('block-shape-select').value = (!block.shape || block.shape === 'baseplate') ? 'box' : block.shape;
         document.getElementById('block-action-select').value = ['normal','kill','checkpoint','spawn'].includes(block.actionType) ? block.actionType : 'normal';
         document.getElementById('block-material-select').value = ['grid','brick','wood'].includes(block.material) ? block.material : 'grid';
         document.getElementById('block-color-input').value = block.color || '#888888'; kwgSyncRGBField('block-color-input');
@@ -5817,7 +5823,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             if (hitObj.userData.isBlock) {
               const blockId = hitObj.userData.blockId;
               if (currentWorldData && currentWorldData.blocks[blockId]) {
-                if (blockId === 'baseplate' || currentWorldData.blocks[blockId].shape === 'baseplate') {
+                if (blockId === 'baseplate') {
                   showToast('The baseplate cannot be removed. You can resize it instead.');
                   return;
                 }
@@ -5948,7 +5954,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               }
             }
           } else if (buildSubTool === 'delete') {
-            if (blockId === 'baseplate' || currentWorldData.blocks[blockId]?.shape === 'baseplate') {
+            if (blockId === 'baseplate') {
               showToast('The baseplate cannot be removed. You can resize it instead.');
               return;
             }
@@ -6546,7 +6552,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         return;
       }
       const original=currentWorldData.blocks[selectedBlockId];
-      if (original.id === 'baseplate' || original.shape === 'baseplate') {
+      if (original.id === 'baseplate') {
         showToast('The baseplate cannot be duplicated.');
         return;
       }
@@ -7231,7 +7237,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const top=Number.isFinite(bounds.maxY)?bounds.maxY:(Number(chosen.y)||0)+.5;
         return {x:Number(chosen.x)||0,y:top+.18,z:Number(chosen.z)||0};
       }
-      const plate=blocks.find(b=>b.id==='baseplate'||b.shape==='baseplate');
+      const plate=blocks.find(b=>b.id==='baseplate');
       if(plate){
         const bounds=getBlockAABB(plate);
         return {x:Number(plate.x)||0,y:bounds.maxY+.18,z:Number(plate.z)||0};
