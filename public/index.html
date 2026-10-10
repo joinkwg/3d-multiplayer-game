@@ -2321,7 +2321,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-recolor-material" aria-label="Brush material"><option value="grid" selected>Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
       <p class="kwg-recolor-help">Click any part in the 3D view to apply both.</p>
     </section>
-    <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>Ctrl</kbd> + <kbd>R</kbd> Rotate 90° horizontally</div><div><kbd>Ctrl</kbd> + <kbd>T</kbd> Rotate 90° vertically</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div></details>
+    <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>R</kbd> Rotate 90° horizontally</div><div><kbd>T</kbd> Rotate 90° vertically</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div></details>
     <!-- Selected Part Properties UI -->
     <div id="part-properties-container">
       <div style="border-top: 2px solid #444; margin: 8px 0 10px 0; padding-top: 8px;">
@@ -4814,12 +4814,15 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
     let kwgCopiedPart = null;
     window.addEventListener('keydown', e=>{
-      if(!isEditMode || !canEditCurrentWorld || !e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+      if(!isEditMode || !canEditCurrentWorld || e.altKey || e.metaKey || e.repeat || kwgFreeCamera.active) return;
       const tag=document.activeElement?.tagName;
       if(['INPUT','TEXTAREA','SELECT'].includes(tag)||document.activeElement?.isContentEditable) return;
       const k=e.key.toLowerCase();
-      if(!['r','t','c','v'].includes(k))return;
+      // Browsers reserve Ctrl+T for a new tab and Ctrl+R for reload.
+      // Plain R/T are safe in Studio; copy/paste still require Ctrl.
+      if(e.ctrlKey ? !['c','v'].includes(k) : !['r','t'].includes(k))return;
       e.preventDefault();
+      e.stopPropagation();
       const b=selectedBlockId && currentWorldData?.blocks?.[selectedBlockId];
       if(k==='c') {if(b){kwgCopiedPart=JSON.parse(JSON.stringify(b));showToast('Part copied');}return;}
       if(k==='v') {
@@ -6375,7 +6378,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         return;
       }
 
-      // Modifier keys themselves never participate in player movement.
+      // Modifier keys and Studio rotation shortcuts never enter movement state.
+      if (isEditMode && (key === 'r' || key === 't')) return;
       if (key !== 'control' && key !== 'meta' && key !== 'alt' && key !== 'shift') keys[key] = true;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
