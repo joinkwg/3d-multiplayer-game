@@ -4456,6 +4456,74 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return group;
     }
 
+    // KWG V3.42.1: UV coordinates are specific to each face, not shared
+    // across the whole part. 1 world unit = 1 texture tile on flat faces.
+    // Changing UVs on a fresh geometry leaves physics, part dimensions,
+    // material caching, and serialization completely unchanged.
+    function applyPartFaceTiling(geometry, blockData) {
+      const sx = Math.max(0.001, Math.abs(Number(blockData.scaleX) || 1));
+      const sy = Math.max(0.001, Math.abs(Number(blockData.scaleY) || 1));
+      const sz = Math.max(0.001, Math.abs(Number(blockData.scaleZ) || 1));
+      const uv = geometry.getAttribute('uv');
+      if (!uv) return;
+      const shape = blockData.shape || 'box';
+      if (shape === 'box') {
+        // Three.js BoxGeometry: +X, -X, +Y, -Y, +Z, -Z;
+        // each face has four unique vertices and its own UV rectangle.
+        const faceTiles = [
+          [sz, sy], [sz, sy],
+          [sx, sz], [sx, sz],
+          [sx, sy], [sx, sy]
+        ];
+        for (let face = 0; face < 6; face++) {
+          const [uTiles, vTiles] = faceTiles[face];
+          for (let corner = 0; corner < 4; corner++) {
+            const i = face * 4 + corner;
+            uv.setXY(i, uv.getX(i) * uTiles, uv.getY(i) * vTiles);
+          }
+        }
+      } else if (shape === 'wedge') {
+        // The wedge is non-indexed: two bottom triangles, two rear
+        // triangles, a triangle on each end, and two sloped triangles.
+        // Each planar surface receives independent real-size UVs.
+        const faceTiles = [
+          [sx, sz], [sx, sz],
+          [sx, sy], [sx, sy],
+          [sz, sy], [sz, sy],
+          [sx, Math.hypot(sy, sz)], [sx, Math.hypot(sy, sz)]
+        ];
+        for (let tri = 0; tri < 8; tri++) {
+          const [uTiles, vTiles] = faceTiles[tri];
+          for (let corner = 0; corner < 3; corner++) {
+            const i = tri * 3 + corner;
+            uv.setXY(i, uv.getX(i) * uTiles, uv.getY(i) * vTiles);
+          }
+        }
+      } else if (shape === 'cylinder') {
+        // Cylinder UVs: the side runs around the circumference and up
+        // the height; top/bottom caps are X/Z circles.
+        const circumference = Math.PI * Math.sqrt((sx*sx + sz*sz) / 2);
+        const sideTiles = circumference / Math.PI; // default unit cylinder = 1 tile
+        const pos = geometry.getAttribute('position');
+        const norm = geometry.getAttribute('normal');
+        for (let i = 0; i < uv.count; i++) {
+          if (Math.abs(norm.getY(i)) > 0.9) {
+            uv.setXY(i, (pos.getX(i) + 0.5) * sx, (pos.getZ(i) + 0.5) * sz);
+          } else {
+            uv.setXY(i, uv.getX(i) * sideTiles, uv.getY(i) * sy);
+          }
+        }
+      } else if (shape === 'sphere') {
+        // A sphere has curved UVs rather than six separate flat faces.
+        // Scale longitude and latitude by the corresponding dimensions.
+        const horizontal = Math.sqrt((sx*sx + sz*sz) / 2);
+        for (let i = 0; i < uv.count; i++) {
+          uv.setXY(i, uv.getX(i) * horizontal, uv.getY(i) * sy);
+        }
+      }
+      uv.needsUpdate = true;
+    }
+
     function buildBlockMesh(blockData, isPreview = false) {
       if (blockData.actionType === 'finish') {
         return createFlagMesh(blockData, isPreview);
@@ -4466,6 +4534,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       else if (blockData.shape === 'cylinder') geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
       else if (blockData.shape === 'wedge') geo = createWedgeGeometry();
       else geo = new THREE.BoxGeometry(1, 1, 1);
+      applyPartFaceTiling(geo, blockData);
 
       const mapTexture = getMaterialTexture(blockData.actionType === 'kill' ? 'kill' : blockData.actionType === 'checkpoint' ? 'checkpoint' : blockData.actionType === 'spawn' ? 'spawn' : (blockData.material || 'grid'));
       const isUncollidable = blockData.canCollide === false;
@@ -4481,16 +4550,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if (mapTexture) {
         const tex = mapTexture.clone();
         tex.needsUpdate = true;
-        // Fixed material density. UVs are generated from the scaled world-space
-        // surface position in the shader, so stretching a part never stretches
-        // the material pattern with it.
+        // UVs are already scaled per face by applyPartFaceTiling().
+        // Do NOT repeat the whole texture here: that makes a 1x1 end
+        // show as many icons as the long side of a stretched part.
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
-        // Safe UV tiling (no custom shader). This keeps the renderer valid.
-        // Full per-face fixed-density mapping will be added separately after physics is verified.
-        const tileU = Math.max(1, Math.abs(blockData.scaleX || 1));
-        const tileV = Math.max(1, Math.abs(blockData.scaleZ || 1));
-        tex.repeat.set(tileU, tileV);
+        tex.repeat.set(1, 1);
         matOptions.map = tex;
       }
 
