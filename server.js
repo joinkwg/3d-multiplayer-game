@@ -928,6 +928,34 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb({success:false,message:'Could not load world templates.'}); }
   });
 
+  // V3.42: Server chooses the initial Spawn so the multiplayer position
+  // broadcast and the joining client's avatar always agree.
+  function chooseWorldSpawn(data){
+    const blocks=Object.values(data?.blocks||{});
+    const choices=blocks.filter(b=>b&&b.actionType==='spawn');
+    const b=choices.length?choices[Math.floor(Math.random()*choices.length)]:
+      blocks.find(b=>b&&(b.id==='baseplate'||b.shape==='baseplate'));
+    if(!b)return {x:0,y:.18,z:0};
+    const x=Number(b.x)||0,y=Number(b.y)||0,z=Number(b.z)||0;
+    const hx=Math.max(.001,Math.abs(Number(b.scaleX)||1)*.5);
+    const hy=Math.max(.001,Math.abs(Number(b.scaleY)||1)*.5);
+    const hz=Math.max(.001,Math.abs(Number(b.scaleZ)||1)*.5);
+    const ax=Number(b.rotationX)||0,ay=Number(b.rotationY)||0;
+    // Y extent of an XYZ-rotated block's bounding box.
+    const halfHeight=Math.abs(Math.sin(ax)*Math.sin(ay))*hx+
+      Math.abs(Math.cos(ax))*hy+Math.abs(Math.sin(ax)*Math.cos(ay))*hz;
+    return {x,y:y+halfHeight+.18,z};
+  }
+  function makeDefaultSpawnBlock(data){
+    const base=Object.values(data.blocks||{}).find(b=>b&&(b.id==='baseplate'||b.shape==='baseplate'));
+    const x=Number(base?.x)||0,z=Number(base?.z)||0;
+    const y=(Number(base?.y)||0)+Math.abs(Number(base?.scaleY)||1)*.5+.5;
+    const id='spawn_default';
+    return {id,shape:'box',actionType:'spawn',material:'grid',color:'#a86cff',
+      transparency:0,canCollide:true,anchored:true,
+      x,y,z,scaleX:4,scaleY:1,scaleZ:4,rotationX:0,rotationY:0};
+  }
+
   socket.on('create_world', async ({name, templateId}, cb) => {
     if (!requireAuth(socket, cb)) return;
     name = cleanWorldName(name);
@@ -959,6 +987,13 @@ io.on('connection', (socket) => {
           cloudSpeed:1.0,
           cloudColor:'#ffffff'
         };
+      }
+      // New worlds always start with one Spawn unless their template already
+      // contains Spawn parts. Existing saved worlds are never modified.
+      data.blocks=data.blocks||{};
+      if(!Object.values(data.blocks).some(b=>b&&b.actionType==='spawn')){
+        const initialSpawn=makeDefaultSpawnBlock(data);
+        data.blocks[initialSpawn.id]=initialSpawn;
       }
       await pool.query('INSERT INTO worlds(name,owner_user_id,data) VALUES($1,$2,$3)', [name,socket.user.id,JSON.stringify(data)]);
       cb({success:true});
@@ -992,9 +1027,10 @@ io.on('connection', (socket) => {
       for (const [sid, p] of playersBySocket) {
         if (p.worldName === world.name) players[sid] = p;
       }
+      const selfSpawn=chooseWorldSpawn(world.data);
       const p = {
         id: socket.id, username: socket.user.username,
-        x: world.data.spawnPoint.x, y: world.data.spawnPoint.y, z: world.data.spawnPoint.z,
+        x:selfSpawn.x,y:selfSpawn.y,z:selfSpawn.z,
         rotationY: 0, walkClock: 0, isMoving:false, isGrounded:true,
         appearance: app, cosmetics, worldName: world.name
       };
@@ -1002,7 +1038,7 @@ io.on('connection', (socket) => {
       worldJoinReservations.set(world.name, Math.max(0, (worldJoinReservations.get(world.name) || 1) - 1));
       if (worldJoinReservations.get(world.name) === 0) worldJoinReservations.delete(world.name);
       socket.to(`world:${world.name}`).emit('player_joined', p);
-      cb({success:true,worldData:world.data,players,selfId:socket.id,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics});
+      cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics});
     } catch (e) {
       console.error(e);
       const key = cleanWorldName(worldName);
@@ -1075,8 +1111,8 @@ io.on('connection', (socket) => {
                  && Object.keys(data.blocks).length>=1400){
                 const e=new Error('Part limit reached (1400/1400 parts).');e.clientMessage=e.message;throw e;
               }
-              // V3.41: allow normal, kill and checkpoint types; preserve materials.
-              blockData.actionType=['normal','kill','checkpoint'].includes(blockData.actionType)?blockData.actionType:'normal';
+              // V3.41: allow normal, kill, checkpoint and spawn types; preserve materials.
+              blockData.actionType=['normal','kill','checkpoint','spawn'].includes(blockData.actionType)?blockData.actionType:'normal';
               blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
               data.blocks[blockData.id]=blockData;
             }else if(action==='delete'){
@@ -1162,10 +1198,10 @@ io.on('connection', (socket) => {
             err.clientMessage = 'Part limit reached (1400/1400 parts).';
             throw err;
           }
-          // V3.41: Only the three current block types and three current
+          // V3.41: Only the four current block types and three current
           // materials may be saved by clients. Existing legacy worlds are
           // not rewritten on load; their old flags stay intact until edited.
-          blockData.actionType = ['normal','kill','checkpoint'].includes(blockData.actionType) ? blockData.actionType : 'normal';
+          blockData.actionType = ['normal','kill','checkpoint','spawn'].includes(blockData.actionType) ? blockData.actionType : 'normal';
           blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
           data.blocks[blockData.id] = blockData;
         } else if (action === 'delete') {
