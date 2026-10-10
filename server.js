@@ -455,7 +455,7 @@ async function migrate() {
     data.blocks = data.blocks || {};
     if (Object.keys(data.blocks).length === 0) {
       data.blocks.baseplate = {
-        id:'baseplate', shape:'baseplate', actionType:'normal', material:'grid', color:'#555555',
+        id:'baseplate', shape:'box', actionType:'normal', material:'grid', color:'#555555',
         transparency:0, canCollide:true, anchored:true,
         x:0, y:-0.5, z:0, scaleX:250, scaleY:1, scaleZ:250
       };
@@ -934,7 +934,7 @@ io.on('connection', (socket) => {
     const blocks=Object.values(data?.blocks||{});
     const choices=blocks.filter(b=>b&&b.actionType==='spawn');
     const b=choices.length?choices[Math.floor(Math.random()*choices.length)]:
-      blocks.find(b=>b&&(b.id==='baseplate'||b.shape==='baseplate'));
+      blocks.find(b=>b&&(b.id==='baseplate'));
     if(!b)return {x:0,y:.18,z:0};
     const x=Number(b.x)||0,y=Number(b.y)||0,z=Number(b.z)||0;
     const hx=Math.max(.001,Math.abs(Number(b.scaleX)||1)*.5);
@@ -947,7 +947,7 @@ io.on('connection', (socket) => {
     return {x,y:y+halfHeight+.18,z};
   }
   function makeDefaultSpawnBlock(data){
-    const base=Object.values(data.blocks||{}).find(b=>b&&(b.id==='baseplate'||b.shape==='baseplate'));
+    const base=Object.values(data.blocks||{}).find(b=>b&&(b.id==='baseplate'));
     const x=Number(base?.x)||0,z=Number(base?.z)||0;
     const y=(Number(base?.y)||0)+Math.abs(Number(base?.scaleY)||1)*.5+.5;
     const id='spawn_default';
@@ -976,7 +976,7 @@ io.on('connection', (socket) => {
           name,
           blocks: {
             "baseplate": {
-              id: "baseplate", shape: "baseplate", actionType: "normal", material: "grid",
+              id: "baseplate", shape: "box", actionType: "normal", material: "grid",
               color: "#555555", transparency: 0, canCollide: true, anchored: true,
               x: 0, y: -0.5, z: 0, scaleX: 250, scaleY: 1, scaleZ: 250
             }
@@ -1206,7 +1206,7 @@ io.on('connection', (socket) => {
           data.blocks[blockData.id] = blockData;
         } else if (action === 'delete') {
           const target = data.blocks[blockId];
-          if (blockId === 'baseplate' || target?.shape === 'baseplate') {
+          if (blockId === 'baseplate') {
             const err = new Error('Baseplate cannot be deleted.');
             err.clientMessage = 'The baseplate cannot be deleted. You can resize it instead.';
             throw err;
