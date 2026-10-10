@@ -4513,33 +4513,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           }
         }
       }else if(shape==='wedge'){
-        // Project each triangle onto its *actual* surface dimensions.
-        // The sloped roof uses its diagonal world length, not its height
-        // or depth independently. Both triangles share the same origin.
-        const pos=geometry.getAttribute('position');
-        const slopeLength=Math.hypot(sy,sz);
-        for(let i=0;i<uv.count;i++){
-          const tri=Math.floor(i/3);
-          const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);
-          let u,v;
-          if(tri<2){ // bottom, XZ
-            u=(x+.5)*sx;v=(z+.5)*sz;
-          }else if(tri<4){ // back, XY
-            u=(x+.5)*sx;v=(y+.5)*sy;
-          }else if(tri<6){ // triangular end caps, ZY
-            // The triangular caps cover only half of a square UV tile.
-            // Shift the pattern toward the solid half so its center isn't
-            // clipped off by the hypotenuse on 1x1 wedges.
-            u=(z+.5)*sz+0.25;
-            v=(y+.5)*sy+0.25;
-          }else{ // inclined roof: width X and actual diagonal distance
-            // Preserve one tile per world unit along the *sloped* face.
-            // The slope runs from the high -Z edge to the low +Z edge.
-            u=(x+.5)*sx;
-            v=(z+.5)*slopeLength;
-          }
-          uv.setXY(i,u,v);
-        }
+        // Wedge textures are baked into a five-face atlas below.
+        // UVs are assigned there, after we know each face's dimensions.
       }else if(shape==='cylinder'){
         const pos=geometry.getAttribute('position');
         const normal=geometry.getAttribute('normal');
@@ -4566,6 +4541,69 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       uv.needsUpdate=true;
     }
 
+    // KWG V3.42.6: A wedge has five distinct faces. Give each face a
+    // separate region of a texture atlas instead of relying on repeating UVs
+    // over triangles. This prevents missing, oversized, and offset icons.
+    // It affects rendering only; geometry and collision code are unchanged.
+    function buildWedgeSurfaceAtlas(geometry, sourceTexture, blockData) {
+      const canvas=document.createElement('canvas');
+      const cell=256, inset=2;
+      canvas.width=cell*3;canvas.height=cell*2;
+      const ctx=canvas.getContext('2d');
+      const sx=Math.max(.001,Math.abs(Number(blockData.scaleX)||1));
+      const sy=Math.max(.001,Math.abs(Number(blockData.scaleY)||1));
+      const sz=Math.max(.001,Math.abs(Number(blockData.scaleZ)||1));
+      const faces=[
+        {width:sx,height:sz},                 // bottom
+        {width:sx,height:sy},                 // vertical back
+        {width:sz,height:sy,cap:true},        // left triangular end
+        {width:sz,height:sy,cap:true},        // right triangular end
+        {width:sx,height:Math.hypot(sy,sz)}   // sloped roof
+      ];
+      faces.forEach((face,index)=>{
+        const col=index%3,row=Math.floor(index/3);
+        const ox=col*cell+inset,oy=row*cell+inset;
+        const inner=cell-inset*2;
+        // Cap repeats are shifted so a complete icon sits inside the
+        // triangular face rather than exactly on its clipped diagonal.
+        const tw=Math.max(3,inner/face.width);
+        const th=Math.max(3,inner/face.height);
+        const shift=face.cap?.20:0;
+        ctx.save();
+        ctx.beginPath();ctx.rect(ox,oy,inner,inner);ctx.clip();
+        for(let x=ox-tw*(1+shift);x<ox+inner;x+=tw){
+          for(let y=oy-th*(1+shift);y<oy+inner;y+=th){
+            ctx.drawImage(sourceTexture.image,x,y,tw+.01,th+.01);
+          }
+        }
+        ctx.restore();
+      });
+      const uv=geometry.getAttribute('uv');
+      const pos=geometry.getAttribute('position');
+      for(let i=0;i<uv.count;i++){
+        const tri=Math.floor(i/3);
+        const face=tri<2?0:tri<4?1:tri===4?2:tri===5?3:4;
+        const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);
+        let u,v;
+        if(face===0){u=x+.5;v=z+.5;}
+        else if(face===1){u=x+.5;v=y+.5;}
+        else if(face===2){u=z+.5;v=y+.5;}
+        else if(face===3){u=z+.5;v=y+.5;}
+        else{u=x+.5;v=z+.5;}
+        const col=face%3,row=Math.floor(face/3);
+        uv.setXY(i,(col*cell+inset+u*(cell-2*inset))/canvas.width,
+                   1-(row*cell+inset+v*(cell-2*inset))/canvas.height);
+      }
+      uv.needsUpdate=true;
+      const tex=new THREE.CanvasTexture(canvas);
+      tex.wrapS=THREE.ClampToEdgeWrapping;
+      tex.wrapT=THREE.ClampToEdgeWrapping;
+      tex.magFilter=THREE.NearestFilter;
+      tex.minFilter=THREE.LinearMipmapLinearFilter;
+      tex.needsUpdate=true;
+      return tex;
+    }
+
     function buildBlockMesh(blockData, isPreview = false) {
       if (blockData.actionType === 'finish') {
         return createFlagMesh(blockData, isPreview);
@@ -4578,7 +4616,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       else geo = new THREE.BoxGeometry(1, 1, 1);
       applyPartFaceTiling(geo, blockData);
 
-      const mapTexture = getBlockSurfaceTexture(blockData.material || 'grid', blockData.actionType || 'normal');
+      const surfaceTexture=getBlockSurfaceTexture(blockData.material || 'grid', blockData.actionType || 'normal');
+      const mapTexture=blockData.shape==='wedge'
+        ?buildWedgeSurfaceAtlas(geo,surfaceTexture,blockData)
+        :surfaceTexture;
       const isUncollidable = blockData.canCollide === false;
       const transparency = blockData.transparency || 0;
       const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
@@ -4595,18 +4636,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         // UVs are already scaled per face by applyPartFaceTiling().
         // Do NOT repeat the whole texture here: that makes a 1x1 end
         // show as many icons as the long side of a stretched part.
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(1, 1);
-        if(blockData.shape==='wedge'){
-          // Wedge roofs are often seen at shallow angles. Mipmaps can
-          // average the small dark icon strokes into the white tile,
-          // leaving the entire sloped face looking blank. Keep the
-          // original icon detail instead of downsampling it away.
-          tex.generateMipmaps=false;
-          tex.minFilter=THREE.LinearFilter;
-          tex.magFilter=THREE.NearestFilter;
+        if(blockData.shape!=='wedge'){
+          tex.wrapS=THREE.RepeatWrapping;
+          tex.wrapT=THREE.RepeatWrapping;
         }
+        tex.repeat.set(1,1);
         matOptions.map = tex;
       }
 
