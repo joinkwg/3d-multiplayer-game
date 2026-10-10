@@ -2040,6 +2040,18 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 <style>
 .kwg-clothing-preview{height:95px;width:100%;display:flex;align-items:center;justify-content:center;background:#131e2c;border:1px solid #30435c;margin-bottom:7px;color:#a5b3c5;font-size:10px}.kwg-clothing-preview canvas,.kwg-clothing-preview img{max-width:100%;max-height:100%;object-fit:contain}.kwg-native-card{min-height:135px!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;justify-content:center!important}.kwg-native-card span{text-align:center}
 </style>
+<style>
+/* V3.41: Compact retro Place preset controls. */
+#kwg-place-panel{margin:7px 9px!important;padding:9px!important;border:2px solid #48677e!important;border-radius:0!important;background:#223447!important}
+#kwg-place-panel .kwg-recolor-field{margin-bottom:8px}
+#kwg-place-panel select,#kwg-place-panel input[type="number"]{min-width:0;max-width:100%;box-sizing:border-box;background:#0c1b2a;color:#e9f4ff;border:2px solid #56748e;border-radius:0;padding:5px;font-family:inherit;font-size:11px}
+#kwg-place-panel input[type="color"]{height:30px;width:64px;border-radius:0}
+#kwg-place-panel input[type="checkbox"]{width:17px;height:17px;accent-color:#49d2f1}
+#kwg-place-panel input[type="range"]{max-width:125px;accent-color:#49d2f1}
+#kwg-place-panel .kwg-place-section-label{margin:11px 0 5px;font-size:10px;font-weight:800;letter-spacing:.08em;color:#9ecce9}
+#kwg-place-panel .kwg-place-number-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+#kwg-place-panel .kwg-place-number-grid label{font-size:10px;color:#c7e4f7;display:flex;flex-direction:column;gap:3px}
+</style>
 </head>
 <body>
   <div id="kwg-loading-overlay" role="status" aria-live="polite" aria-atomic="true" aria-label="Loading" aria-hidden="true">
@@ -2315,6 +2327,28 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 <button id="tool-delete-btn" title="Remove" aria-label="Remove" onclick="setBuildSubTool('delete')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7"/></svg></button>
     </div>
 
+    <section id="kwg-place-panel" class="kwg-recolor-panel kwg-place-panel" aria-label="Place tool preset properties" style="display:none">
+      <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">+</span> PLACE PRESETS</div>
+      <p class="kwg-recolor-help" style="margin:0 0 10px">New parts use these properties automatically.</p>
+      <label class="kwg-recolor-field"><span>Shape</span><select id="kwg-place-shape"><option value="box">Cube / Box</option><option value="wedge">Wedge</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option></select></label>
+      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option></select></label>
+      <label class="kwg-recolor-field"><span>Material</span><select id="kwg-place-material"><option value="grid">Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
+      <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-place-color" value="#888888" aria-label="Place preset color"></span></label>
+      <label class="kwg-recolor-field"><span>Transparency</span><input type="range" id="kwg-place-transparency" min="0" max="1" step="0.05" value="0"></label>
+      <label class="kwg-recolor-field"><span>Can Collide</span><input type="checkbox" id="kwg-place-collide" checked></label>
+      <div class="kwg-place-section-label">PART SIZE</div>
+      <div class="kwg-place-number-grid">
+        <label>X<input type="number" id="kwg-place-sx" value="1" min="0.1" max="500" step="0.5"></label>
+        <label>Y<input type="number" id="kwg-place-sy" value="1" min="0.1" max="500" step="0.5"></label>
+        <label>Z<input type="number" id="kwg-place-sz" value="1" min="0.1" max="500" step="0.5"></label>
+      </div>
+      <div class="kwg-place-section-label">ROTATION (DEGREES)</div>
+      <div class="kwg-place-number-grid">
+        <label>X<input type="number" id="kwg-place-rx" value="0" min="-360" max="360" step="90"></label>
+        <label>Y<input type="number" id="kwg-place-ry" value="0" min="-360" max="360" step="90"></label>
+      </div>
+      <p class="kwg-recolor-help">Click a surface to place a part with these presets.</p>
+    </section>
     <section id="kwg-recolor-panel" class="kwg-recolor-panel" aria-label="Recolor brush settings" style="display:none">
       <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">●</span> RECOLOR BRUSH</div>
       <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-recolor-color" value="#4b9cff" aria-label="Brush color"></span></label>
@@ -2345,6 +2379,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
             <select id="block-action-select">
               <option value="normal">Normal Solid Block</option>
               <option value="kill">Kill Part</option>
+              <option value="checkpoint">Checkpoint</option>
             </select>
           </div>
 
@@ -2970,7 +3005,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     // --- PROCEDURAL TEXTURE GENERATOR ---
     const textureCache = {};
     function getMaterialTexture(matType) {
-      if (!['grid','brick','wood','kill','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
+      if (!['grid','brick','wood','kill','checkpoint','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
       if (textureCache[matType]) return textureCache[matType];
 
       const canvas = document.createElement('canvas');
@@ -3022,6 +3057,20 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         ctx.fillRect(54, 69, 5, 10);
         ctx.fillRect(63, 69, 5, 10);
         ctx.fillRect(72, 69, 5, 10);
+      } else if (matType === 'checkpoint') {
+        // Tileable pixel-art checkpoint marker: a flag and check mark.
+        // White tile lets the part's yellow tint color the whole surface.
+        ctx.fillStyle='#343a43';
+        ctx.fillRect(33,22,10,85); // flag pole
+        ctx.fillRect(28,103,24,9); // stand
+        ctx.fillRect(43,22,57,10);
+        ctx.fillRect(90,32,10,37);
+        ctx.fillRect(43,64,57,9);
+        // A chunky pixel check on the flag.
+        ctx.fillRect(53,43,10,10);
+        ctx.fillRect(63,53,10,10);
+        ctx.fillRect(73,43,10,10);
+        ctx.fillRect(83,33,10,10);
       } else if (matType === 'yellow_flag') {
         ctx.fillStyle = '#f1c40f'; ctx.fillRect(0, 0, 128, 128);
         ctx.fillStyle = '#f39c12'; ctx.beginPath(); ctx.arc(64, 64, 30, 0, Math.PI * 2); ctx.fill();
@@ -3379,6 +3428,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       updateEditorCursor();
       const recolorPanel=document.getElementById('kwg-recolor-panel');
       if(recolorPanel)recolorPanel.style.display='none';
+      const placePanel=document.getElementById('kwg-place-panel');
+      if(placePanel)placePanel.style.display='none';
       ['select','place','move','scale','recolor','delete'].forEach(tool=>{
         document.getElementById(`tool-${tool}-btn`)?.classList.remove('active');
       });
@@ -4404,7 +4455,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     }
 
     function buildBlockMesh(blockData, isPreview = false) {
-      if (blockData.actionType === 'checkpoint' || blockData.actionType === 'finish') {
+      if (blockData.actionType === 'finish') {
         return createFlagMesh(blockData, isPreview);
       }
 
@@ -4414,13 +4465,13 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       else if (blockData.shape === 'wedge') geo = createWedgeGeometry();
       else geo = new THREE.BoxGeometry(1, 1, 1);
 
-      const mapTexture = getMaterialTexture(blockData.actionType === 'kill' ? 'kill' : (blockData.material || 'grid'));
+      const mapTexture = getMaterialTexture(blockData.actionType === 'kill' ? 'kill' : blockData.actionType === 'checkpoint' ? 'checkpoint' : (blockData.material || 'grid'));
       const isUncollidable = blockData.canCollide === false;
       const transparency = blockData.transparency || 0;
       const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
 
       const matOptions = { 
-        color: blockData.color || '#888888',
+        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : '#888888'),
         transparent: isUncollidable || transparency > 0,
         opacity: opacityVal
       };
@@ -4962,6 +5013,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         buildSubTool = null;
         const recolorPanel=document.getElementById('kwg-recolor-panel');
         if(recolorPanel)recolorPanel.style.display='none';
+      const placePanel=document.getElementById('kwg-place-panel');
+      if(placePanel)placePanel.style.display='none';
         ['select','place','move','scale','recolor','delete'].forEach(tool=>{
           document.getElementById(`tool-${tool}-btn`)?.classList.remove('active');
         });
@@ -5008,9 +5061,13 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     function setBuildSubTool(tool) {
       buildSubTool = buildSubTool === tool ? null : tool;
       tool = buildSubTool;
+      if(!tool){clearHoverOutline();clearSelectionOutline();}
+      else if(selectedBlockId&&worldBlocks[selectedBlockId])updateSelectionOutline(worldBlocks[selectedBlockId]);
       updateEditorCursor();
       const recolorPanel=document.getElementById('kwg-recolor-panel');
       if(recolorPanel)recolorPanel.style.display=tool==='recolor'?'block':'none';
+      const placePanel=document.getElementById('kwg-place-panel');
+      if(placePanel)placePanel.style.display=tool==='place'?'block':'none';
       ['select', 'place', 'scale', 'move', 'recolor', 'delete'].forEach(t => {
         const btn = document.getElementById(`tool-${t}-btn`);
         if (btn) btn.classList.toggle('active', t === tool);
@@ -5067,7 +5124,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         partFields.style.display = 'block';
 
         document.getElementById('block-shape-select').value = block.shape || 'box';
-        document.getElementById('block-action-select').value = block.actionType === 'kill' ? 'kill' : 'normal';
+        document.getElementById('block-action-select').value = ['normal','kill','checkpoint'].includes(block.actionType) ? block.actionType : 'normal';
         document.getElementById('block-material-select').value = ['grid','brick','wood'].includes(block.material) ? block.material : 'grid';
         document.getElementById('block-color-input').value = block.color || '#888888'; kwgSyncRGBField('block-color-input');
         document.getElementById('block-transparency-input').value = block.transparency !== undefined ? block.transparency : 0;
@@ -5084,7 +5141,13 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
       const blockData = currentWorldData.blocks[selectedBlockId];
       blockData.shape = document.getElementById('block-shape-select').value;
-      blockData.actionType = document.getElementById('block-action-select').value;
+      const nextType=document.getElementById('block-action-select').value;
+      if(nextType!==blockData.actionType){
+        if(nextType==='checkpoint')document.getElementById('block-color-input').value='#f4cf45';
+        if(nextType==='kill')document.getElementById('block-color-input').value='#d95757';
+        kwgSyncRGBField('block-color-input');
+      }
+      blockData.actionType=nextType;
       blockData.material = document.getElementById('block-material-select').value;
       blockData.color = document.getElementById('block-color-input').value;
       blockData.transparency = parseFloat(document.getElementById('block-transparency-input').value) || 0;
@@ -5166,12 +5229,14 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     }
 
     function updateSelectionOutline(targetMesh) {
+      clearSelectionOutline();
+      if(!isEditMode||!buildSubTool)return;
       drawBlockOutline(targetMesh, selectionOutlineGroup, 0x00d2ff);
     }
 
     function updateHoverOutline(targetMesh) {
       clearHoverOutline();
-      if (!targetMesh || !isEditMode) return;
+      if (!targetMesh || !isEditMode || !buildSubTool) return;
       hoveredBlockId = targetMesh.userData.blockId;
       if (hoveredBlockId === selectedBlockId) return;
       drawBlockOutline(targetMesh, hoverOutlineGroup, 0x3388ff);
@@ -5292,21 +5357,66 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       });
     }
 
+    // Place presets are shared by the preview and the actual placed part.
+    // Reading them in one place prevents the preview from disagreeing with
+    // what gets saved to the server.
+    function kwgPlacePreset(){
+      const value=id=>document.getElementById(id).value;
+      const dimension=id=>{
+        const n=Number(value(id));
+        return Number.isFinite(n)?Math.max(.1,Math.min(500,n)):1;
+      };
+      const angle=id=>{
+        const n=Number(value(id));
+        return (Number.isFinite(n)?Math.max(-360,Math.min(360,n)):0)*Math.PI/180;
+      };
+      return {
+        shape:value('kwg-place-shape'),
+        actionType:value('kwg-place-type'),
+        material:value('kwg-place-material'),
+        color:value('kwg-place-color'),
+        transparency:Number(value('kwg-place-transparency'))||0,
+        canCollide:document.getElementById('kwg-place-collide').checked,
+        anchored:true,
+        scaleX:dimension('kwg-place-sx'),
+        scaleY:dimension('kwg-place-sy'),
+        scaleZ:dimension('kwg-place-sz'),
+        rotationX:angle('kwg-place-rx'),
+        rotationY:angle('kwg-place-ry')
+      };
+    }
+    const kwgPlacePresetFields=[
+      'kwg-place-shape','kwg-place-type','kwg-place-material',
+      'kwg-place-color','kwg-place-transparency','kwg-place-collide',
+      'kwg-place-sx','kwg-place-sy','kwg-place-sz','kwg-place-rx','kwg-place-ry'
+    ];
+    let kwgLastPlaceType='normal';
+    kwgPlacePresetFields.forEach(id=>{
+      const element=document.getElementById(id);
+      element.addEventListener('input',()=>{
+        if(id==='kwg-place-type'){
+          const type=element.value;
+          const colorInput=document.getElementById('kwg-place-color');
+          if(type!==kwgLastPlaceType){
+            if(type==='checkpoint')colorInput.value='#f4cf45';
+            else if(type==='kill')colorInput.value='#d95757';
+            else if(kwgLastPlaceType!=='normal')colorInput.value='#888888';
+            kwgLastPlaceType=type;
+            kwgSyncRGBField('kwg-place-color');
+          }
+        }
+        if(isEditMode&&buildSubTool==='place')updatePreviewMesh();
+      });
+      element.addEventListener('change',()=>{
+        if(isEditMode&&buildSubTool==='place')updatePreviewMesh();
+      });
+    });
+
     function updatePreviewMesh() {
       if (previewMesh) scene.remove(previewMesh);
       if (!isEditMode || buildSubTool !== 'place') return;
 
-      const shape = 'box';
-      const actionType = 'normal';
-      const material = 'grid';
-      const color = '#888888';
-      const transparency = 0;
-      const canCollide = true;
-      const anchored = true;
-
-      let scaleX = 1, scaleY = 1, scaleZ = 1;
-
-      previewMesh = buildBlockMesh({ shape, actionType, material, color, transparency, canCollide, anchored, scaleX, scaleY, scaleZ }, true);
+      previewMesh = buildBlockMesh(kwgPlacePreset(), true);
       previewMesh.visible = false;
       scene.add(previewMesh);
     }
@@ -5559,7 +5669,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         }
       }
 
-      if (isEditMode) {
+      if (isEditMode && buildSubTool) {
         raycaster.setFromCamera(mouse, camera);
         const interactableObjects = Object.values(worldBlocks);
         const intersects = raycaster.intersectObjects(interactableObjects, true);
@@ -5704,26 +5814,17 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
             return;
           }
 
-          const shape = 'box';
-          const actionType = 'normal';
-          const material = 'grid';
-          const color = '#888888';
-          const transparency = 0;
-          const canCollide = true;
-          const anchored = true;
-          
-          let scaleX = 1, scaleY = 1, scaleZ = 1;
+          const preset=kwgPlacePreset();
           const voxelTarget = getTargetVoxelPosition(hit);
           const targetPos = { x: voxelTarget.x, y: voxelTarget.y, z: voxelTarget.z };
           const blockKey = `${voxelTarget.key}_${Date.now()}`;
 
           const blockData = {
             id: blockKey,
-            shape, actionType, material, color, transparency, canCollide, anchored,
+            ...preset,
             x: targetPos.x,
             y: targetPos.y,
-            z: targetPos.z,
-            scaleX, scaleY, scaleZ
+            z: targetPos.z
           };
 
           currentWorldData.blocks[blockKey] = blockData;
@@ -6541,7 +6642,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         if(px<bounds.minX-.2||px>bounds.maxX+.2||pz<bounds.minZ-.2||pz>bounds.maxZ+.2)return null;
         // Rectangular parts rotated by 90 degrees are still axis-aligned,
         // with swapped dimensions; the top of the new bounds is the floor.
-        if(shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish')
+        if(shape==='box'||shape==='baseplate'||b.actionType==='finish')
           return bounds.maxY;
         // Rotated ellipsoids use the exact same inverse-rotation geometry
         // as their side collider, rather than a faceted mesh raycast.
@@ -6612,7 +6713,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       for (const [x,y,z] of pts) {
         const lx=x-bx,ly=y-by,lz=z-bz;
         let inside=false;
-        if (shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish')
+        if (shape==='box'||shape==='baseplate'||b.actionType==='finish')
           inside=Math.abs(lx)<=hx&&Math.abs(ly)<=hy&&Math.abs(lz)<=hz;
         else if (shape==='sphere')
           inside=Math.pow(lx/hx,2)+Math.pow(ly/hy,2)+Math.pow(lz/hz,2)<=1;
@@ -6968,7 +7069,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         if (by+hy<=feet+.05 || by-hy>=head) continue;
         const lx=pos.x-bx,lz=pos.z-bz;
 
-        if (shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish') {
+        if (shape==='box'||shape==='baseplate'||b.actionType==='finish') {
           const minX=bx-hx-pr,maxX=bx+hx+pr,minZ=bz-hz-pr,maxZ=bz+hz+pr;
           if (pos.x>minX&&pos.x<maxX&&pos.z>minZ&&pos.z<maxZ) {
             const vals=[pos.x-minX,maxX-pos.x,pos.z-minZ,maxZ-pos.z];
@@ -7033,13 +7134,11 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
     function triggerCheckpoint(block) {
       if (currentCheckpoint && currentCheckpoint.id === block.id) return;
-      currentCheckpoint = { id: block.id, x: block.x, y: block.y + 0.6, z: block.z };
+      const bounds=getBlockAABB(block);
+      const surface=getPartSurfaceYFromData(block,block.x,block.z,bounds.maxY+1);
+      const safeY=surface===null?bounds.maxY:surface;
+      currentCheckpoint={id:block.id,x:block.x,y:safeY+.08,z:block.z};
       showToast("Checkpoint Saved!");
-      
-      const flagMesh = worldBlocks[block.id];
-      if (flagMesh && flagMesh.userData && flagMesh.userData.flagCloth) {
-        flagMesh.userData.flagCloth.position.y = 1.6;
-      }
     }
 
     let lastFinishTime = 0;
@@ -7098,7 +7197,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
              pos.z<bounds.minZ-.38||pos.z>bounds.maxZ+.38)continue;
           let undersideY=null;
           const shape=b.shape||'box';
-          if(shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish'){
+          if(shape==='box'||shape==='baseplate'||b.actionType==='finish'){
             undersideY=bounds.minY;
           }else{
             // Curved and sloped surfaces use the real rotated triangle mesh.
@@ -7231,12 +7330,16 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       }
 
       if(!isEditMode && touchesAnyKillPart(blocks,player.position)) touchedHazard=true;
-      // Legacy flags in older worlds remain functional, but cannot be placed.
-      for (const b of blocks) {
-        if (b.actionType!=='checkpoint' && b.actionType!=='finish') continue;
-        if (!checkPlayerIntersectingBlockData(b,player.position)) continue;
-        if (b.actionType==='checkpoint') triggerCheckpoint(b);
-        else triggerFinishLine();
+      // Checkpoints activate when stepped on or touched. Existing finish
+      // flags in older worlds continue to work.
+      if(!isEditMode){
+        if(isGrounded&&ground.block?.actionType==='checkpoint')triggerCheckpoint(ground.block);
+        for (const b of blocks) {
+          if (b.actionType!=='checkpoint' && b.actionType!=='finish') continue;
+          if (!checkPlayerIntersectingBlockData(b,player.position)) continue;
+          if (b.actionType==='checkpoint') triggerCheckpoint(b);
+          else triggerFinishLine();
+        }
       }
 
       if (touchedHazard || player.position.y < -30) {
