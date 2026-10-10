@@ -6604,7 +6604,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       return blocks.some(b=>b.actionType==='kill'&&isPlayerTouchingKillPart(b,pos));
     }
 
-    function resolveHorizontalCollisionsMP(pos,blocks) {
+    function resolveHorizontalCollisionsMP(pos,blocks,previousX=pos.x,previousZ=pos.z) {
       const pr=0.42, ph=2.35, feet=pos.y, head=feet+ph;
       for (const b of blocks) {
         if (b.canCollide===false) continue;
@@ -6614,12 +6614,35 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
           const minX=bounds.minX-pr,maxX=bounds.maxX+pr;
           const minZ=bounds.minZ-pr,maxZ=bounds.maxZ+pr;
           if(pos.x>minX&&pos.x<maxX&&pos.z>minZ&&pos.z<maxZ){
-            const distances=[pos.x-minX,maxX-pos.x,pos.z-minZ,maxZ-pos.z];
-            const smallest=Math.min(...distances);
-            if(smallest===distances[0])pos.x=minX;
-            else if(smallest===distances[1])pos.x=maxX;
-            else if(smallest===distances[2])pos.z=minZ;
-            else pos.z=maxZ;
+            // V3.39.5: A nearest-face correction can fling the avatar across
+            // a large rotated part. Instead, block the movement that entered
+            // the part and try sliding along its exposed face.
+            const wasInside=previousX>minX&&previousX<maxX&&
+                            previousZ>minZ&&previousZ<maxZ;
+            if(!wasInside){
+              const xBlocked=previousX<=minX||previousX>=maxX;
+              const zBlocked=previousZ<=minZ||previousZ>=maxZ;
+              if(xBlocked)pos.x=previousX;
+              if(zBlocked)pos.z=previousZ;
+              // If diagonal motion entered through a corner, both axes stop.
+              if(pos.x>minX&&pos.x<maxX&&pos.z>minZ&&pos.z<maxZ){
+                pos.x=previousX;
+                pos.z=previousZ;
+              }
+            }else{
+              // If already overlapping (e.g. a block was edited around the
+              // player), never push them across its entire width in one frame.
+              // Cancel inward movement, allowing them to walk back out.
+              const nearestX=Math.min(previousX-minX,maxX-previousX);
+              const nearestZ=Math.min(previousZ-minZ,maxZ-previousZ);
+              if(nearestX<=nearestZ){
+                const side=(previousX-minX<=maxX-previousX)?-1:1;
+                if((pos.x-previousX)*side<0)pos.x=previousX;
+              }else{
+                const side=(previousZ-minZ<=maxZ-previousZ)?-1:1;
+                if((pos.z-previousZ)*side<0)pos.z=previousZ;
+              }
+            }
           }
           continue;
         }
@@ -6857,7 +6880,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
             player.position.y=ground.floorY;
           }
         }
-        resolveHorizontalCollisionsMP(player.position,blocks);
+        resolveHorizontalCollisionsMP(player.position,blocks,stepStartX,stepStartZ);
       }
 
       if (keys[' ']&&isGrounded) {
@@ -6873,7 +6896,9 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
       const ground=getGroundSurfaceUnderPlayerMP(player.position.x,player.position.y,player.position.z,blocks);
       if (ground.floorY!==-Infinity) {
-        if (velocityY<=0 && player.position.y<=ground.floorY+.08) {
+        if (velocityY<=0 &&
+            player.position.y<=ground.floorY+.08 &&
+            player.position.y>=ground.floorY-maxStepHeight-.08) {
           player.position.y=ground.floorY;
           velocityY=0;
           isGrounded=true;
