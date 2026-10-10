@@ -4541,67 +4541,52 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       uv.needsUpdate=true;
     }
 
-    // KWG V3.42.6: A wedge has five distinct faces. Give each face a
-    // separate region of a texture atlas instead of relying on repeating UVs
-    // over triangles. This prevents missing, oversized, and offset icons.
-    // It affects rendering only; geometry and collision code are unchanged.
-    function buildWedgeSurfaceAtlas(geometry, sourceTexture, blockData) {
-      const canvas=document.createElement('canvas');
-      const cell=256, inset=2;
-      canvas.width=cell*3;canvas.height=cell*2;
-      const ctx=canvas.getContext('2d');
+    // KWG V3.42.7: Each wedge surface uses its own material texture
+    // transform. A single repeated UV map cannot express five different
+    // physical face dimensions, and the old atlas produced invalid sampling.
+    // This only changes the mesh's UVs/materials, not its collision geometry.
+    function buildWedgeFaceMaterials(geometry, surfaceTexture, blockData, matOptions) {
       const sx=Math.max(.001,Math.abs(Number(blockData.scaleX)||1));
       const sy=Math.max(.001,Math.abs(Number(blockData.scaleY)||1));
       const sz=Math.max(.001,Math.abs(Number(blockData.scaleZ)||1));
-      const faces=[
-        {width:sx,height:sz},                 // bottom
-        {width:sx,height:sy},                 // vertical back
-        {width:sz,height:sy,cap:true},        // left triangular end
-        {width:sz,height:sy,cap:true},        // right triangular end
-        {width:sx,height:Math.hypot(sy,sz)}   // sloped roof
-      ];
-      faces.forEach((face,index)=>{
-        const col=index%3,row=Math.floor(index/3);
-        const ox=col*cell+inset,oy=row*cell+inset;
-        const inner=cell-inset*2;
-        // Cap repeats are shifted so a complete icon sits inside the
-        // triangular face rather than exactly on its clipped diagonal.
-        const tw=Math.max(3,inner/face.width);
-        const th=Math.max(3,inner/face.height);
-        const shift=face.cap?.20:0;
-        ctx.save();
-        ctx.beginPath();ctx.rect(ox,oy,inner,inner);ctx.clip();
-        for(let x=ox-tw*(1+shift);x<ox+inner;x+=tw){
-          for(let y=oy-th*(1+shift);y<oy+inner;y+=th){
-            ctx.drawImage(sourceTexture.image,x,y,tw+.01,th+.01);
-          }
-        }
-        ctx.restore();
-      });
+      const slope=Math.hypot(sy,sz);
       const uv=geometry.getAttribute('uv');
       const pos=geometry.getAttribute('position');
-      for(let i=0;i<uv.count;i++){
-        const tri=Math.floor(i/3);
-        const face=tri<2?0:tri<4?1:tri===4?2:tri===5?3:4;
-        const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);
-        let u,v;
-        if(face===0){u=x+.5;v=z+.5;}
-        else if(face===1){u=x+.5;v=y+.5;}
-        else if(face===2){u=z+.5;v=y+.5;}
-        else if(face===3){u=z+.5;v=y+.5;}
-        else{u=x+.5;v=z+.5;}
-        const col=face%3,row=Math.floor(face/3);
-        uv.setXY(i,(col*cell+inset+u*(cell-2*inset))/canvas.width,
-                   1-(row*cell+inset+v*(cell-2*inset))/canvas.height);
+      const faceTiles=[
+        [sx,sz],      // bottom (two triangles)
+        [sx,sy],      // vertical back (two triangles)
+        [sz,sy],      // left triangular end
+        [sz,sy],      // right triangular end
+        [sx,slope]    // sloped roof (two triangles)
+      ];
+      geometry.clearGroups();
+      const ranges=[[0,6],[6,6],[12,3],[15,3],[18,6]];
+      const materials=[];
+      for(let face=0;face<5;face++){
+        const [first,count]=ranges[face];
+        geometry.addGroup(first,count,face);
+        // Every face gets its own texture clone so its repeats cannot
+        // affect the other faces (or any other block).
+        const tex=surfaceTexture.clone();
+        tex.wrapS=THREE.RepeatWrapping;
+        tex.wrapT=THREE.RepeatWrapping;
+        tex.repeat.set(...faceTiles[face]);
+        tex.offset.set(0,0);
+        tex.needsUpdate=true;
+        materials.push(new THREE.MeshLambertMaterial({...matOptions,map:tex}));
+        for(let i=first;i<first+count;i++){
+          const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);
+          let u,v;
+          if(face===0){u=x+.5;v=z+.5;}
+          else if(face===1){u=x+.5;v=y+.5;}
+          else if(face===2){u=z+.5;v=y+.5;}
+          else if(face===3){u=1-(z+.5);v=y+.5;}
+          else{u=x+.5;v=z+.5;}
+          uv.setXY(i,u,v);
+        }
       }
       uv.needsUpdate=true;
-      const tex=new THREE.CanvasTexture(canvas);
-      tex.wrapS=THREE.ClampToEdgeWrapping;
-      tex.wrapT=THREE.ClampToEdgeWrapping;
-      tex.magFilter=THREE.NearestFilter;
-      tex.minFilter=THREE.LinearMipmapLinearFilter;
-      tex.needsUpdate=true;
-      return tex;
+      return materials;
     }
 
     function buildBlockMesh(blockData, isPreview = false) {
@@ -4617,9 +4602,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       applyPartFaceTiling(geo, blockData);
 
       const surfaceTexture=getBlockSurfaceTexture(blockData.material || 'grid', blockData.actionType || 'normal');
-      const mapTexture=blockData.shape==='wedge'
-        ?buildWedgeSurfaceAtlas(geo,surfaceTexture,blockData)
-        :surfaceTexture;
+      const isWedge=blockData.shape==='wedge';
       const isUncollidable = blockData.canCollide === false;
       const transparency = blockData.transparency || 0;
       const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
@@ -4630,23 +4613,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         opacity: opacityVal
       };
       
-      if (mapTexture) {
-        const tex = mapTexture.clone();
-        tex.needsUpdate = true;
-        // UVs are already scaled per face by applyPartFaceTiling().
-        // Do NOT repeat the whole texture here: that makes a 1x1 end
-        // show as many icons as the long side of a stretched part.
-        if(blockData.shape!=='wedge'){
-          tex.wrapS=THREE.RepeatWrapping;
-          tex.wrapT=THREE.RepeatWrapping;
-        }
-        tex.repeat.set(1,1);
-        matOptions.map = tex;
-      }
-
       if (blockData.actionType === 'kill') matOptions.emissive = 0x220808;
 
-      const mat = new THREE.MeshLambertMaterial(matOptions);
+      let mat;
+      if(isWedge){
+        // Independent, high-resolution repeats on all five wedge faces.
+        mat=buildWedgeFaceMaterials(geo,surfaceTexture,blockData,matOptions);
+      }else{
+        const tex=surfaceTexture.clone();
+        tex.needsUpdate=true;
+        tex.wrapS=THREE.RepeatWrapping;
+        tex.wrapT=THREE.RepeatWrapping;
+        tex.repeat.set(1,1);
+        mat=new THREE.MeshLambertMaterial({...matOptions,map:tex});
+      }
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(blockData.x || 0, blockData.y || 0, blockData.z || 0);
       mesh.scale.set(blockData.scaleX || 1, blockData.scaleY || 1, blockData.scaleZ || 1);
@@ -4664,9 +4644,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       };
 
       if (isPreview) {
-        mesh.material = mesh.material.clone();
-        mesh.material.transparent = true;
-        mesh.material.opacity = Math.max(0.2, transparency);
+        const previewOpacity=Math.max(0.2,transparency);
+        if(Array.isArray(mesh.material)){
+          mesh.material=mesh.material.map(m=>{
+            const previewMat=m.clone();
+            previewMat.transparent=true;
+            previewMat.opacity=previewOpacity;
+            return previewMat;
+          });
+        }else{
+          mesh.material=mesh.material.clone();
+          mesh.material.transparent=true;
+          mesh.material.opacity=previewOpacity;
+        }
 
         let outlineGeo = geo;
         const wireMat = new THREE.MeshBasicMaterial({ color: 0x3388ff, wireframe: true });
