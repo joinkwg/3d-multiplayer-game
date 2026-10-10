@@ -6479,6 +6479,32 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     // This intentionally mirrors the old single-player controller instead of the
     // experimental V3.8 contact-normal/traction system.
 
+    // V3.39.10: Use the same local-space rotation/scale transform for
+    // sphere FLOOR collision that the sphere side collider already uses.
+    // Unlike a mesh raycast, this continuous ellipsoid has no triangle gaps,
+    // and a 90-degree rotation cannot change the shape of its collision.
+    function kwgRotatedEllipsoidTopY(b,px,pz){
+      const bx=Number(b.x)||0,by=Number(b.y)||0,bz=Number(b.z)||0;
+      const rx=Math.max(.001,Math.abs(Number(b.scaleX)||1)*.5);
+      const ry=Math.max(.001,Math.abs(Number(b.scaleY)||1)*.5);
+      const rz=Math.max(.001,Math.abs(Number(b.scaleZ)||1)*.5);
+      const e=new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(
+        Number(b.rotationX)||0,Number(b.rotationY)||0,0,'XYZ'
+      )).invert().elements;
+      const x=px-bx,z=pz-bz;
+      // In local space, a world-vertical line becomes p(t)=p0+t*v.
+      // Solve (p.x/rx)^2+(p.y/ry)^2+(p.z/rz)^2=1 analytically.
+      const p0=e[0]*x+e[8]*z,p1=e[1]*x+e[9]*z,p2=e[2]*x+e[10]*z;
+      const v0=e[4],v1=e[5],v2=e[6];
+      const ir0=1/(rx*rx),ir1=1/(ry*ry),ir2=1/(rz*rz);
+      const a=v0*v0*ir0+v1*v1*ir1+v2*v2*ir2;
+      const halfB=p0*v0*ir0+p1*v1*ir1+p2*v2*ir2;
+      const c=p0*p0*ir0+p1*p1*ir1+p2*p2*ir2-1;
+      const discriminant=halfB*halfB-a*c;
+      if(discriminant<0)return null;
+      return by+(-halfB+Math.sqrt(Math.max(0,discriminant)))/a;
+    }
+
     function getPartSurfaceYFromData(b, px, pz, playerFeetY) {
       const shape=b.shape || 'box';
       if(kwgPartIsRotated(b)){
@@ -6488,9 +6514,11 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         // with swapped dimensions; the top of the new bounds is the floor.
         if(shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish')
           return bounds.maxY;
-        // Cast from ABOVE the whole rotated mesh, not from the avatar's
-        // feet. A ray starting below the slanted surface cannot hit it;
-        // that caused players to sink into large rotated wedges.
+        // Rotated ellipsoids use the exact same inverse-rotation geometry
+        // as their side collider, rather than a faceted mesh raycast.
+        // This prevents sinking through thin or squished sphere tops.
+        if(shape==='sphere')return kwgRotatedEllipsoidTopY(b,px,pz);
+        // Wedges and cylinders retain their working mesh-based floor logic.
         return kwgRotatedSurfaceRayY(b,px,pz,
           bounds.maxY+1,kwgCollisionRayDirectionDown,1);
       }
@@ -6523,7 +6551,10 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
     function getGroundSurfaceUnderPlayerMP(px,py,pz,blocks) {
       let highest=-Infinity, groundBlock=null;
-      const offsets=[[0,0],[0.2,0],[-0.2,0],[0,0.2],[0,-0.2]];
+      // Sample the avatar's footprint, not just its center. Thin rotated
+      // ellipsoids otherwise lose ground contact at their outer rim.
+      const offsets=[[0,0],[.2,0],[-.2,0],[0,.2],[0,-.2],
+                     [.22,.22],[.22,-.22],[-.22,.22],[-.22,-.22]];
       for (const b of blocks) {
         if (b.canCollide===false) continue;
         for (const [ox,oz] of offsets) {
@@ -6698,6 +6729,98 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       }
     }
 
+    // V3.39.9: Exact finite elliptical cylinder sweep in rotated local space.
+    // Checks curved walls AND flat caps, including very flat cylinders.
+    function kwgResolveRotatedCylinderSide(pos,b,previousX,previousZ,feet,head,pr){
+      const dx=pos.x-previousX,dz=pos.z-previousZ;
+      if(Math.abs(dx)+Math.abs(dz)<.000001)return;
+      const bounds=getBlockAABB(b);
+      if(bounds.maxY<feet-.01||bounds.minY>head+.01)return;
+      if(Math.min(previousX,pos.x)>bounds.maxX+pr||
+         Math.max(previousX,pos.x)<bounds.minX-pr||
+         Math.min(previousZ,pos.z)>bounds.maxZ+pr||
+         Math.max(previousZ,pos.z)<bounds.minZ-pr)return;
+      const bx=Number(b.x)||0,by=Number(b.y)||0,bz=Number(b.z)||0;
+      const inverse=new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(
+        Number(b.rotationX)||0,Number(b.rotationY)||0,0,'XYZ'
+      )).invert();
+      const e=inverse.elements;
+      const rx=Math.max(.001,Math.abs(Number(b.scaleX)||1)*.5)+pr*Math.hypot(e[0],e[8]);
+      const hy=Math.max(.001,Math.abs(Number(b.scaleY)||1)*.5)+pr*Math.hypot(e[1],e[9]);
+      const rz=Math.max(.001,Math.abs(Number(b.scaleZ)||1)*.5)+pr*Math.hypot(e[2],e[10]);
+      function local(x,y,z){
+        x-=bx;y-=by;z-=bz;
+        return [e[0]*x+e[4]*y+e[8]*z,
+                e[1]*x+e[5]*y+e[9]*z,
+                e[2]*x+e[6]*y+e[10]*z];
+      }
+      function inside(x,y,z){
+        const p=local(x,y,z);
+        return Math.abs(p[1])<hy-.00001 &&
+               p[0]*p[0]/(rx*rx)+p[2]*p[2]/(rz*rz)<.99999;
+      }
+      const bottom=Math.max(feet+.065,bounds.minY+.01);
+      const top=Math.min(head-.08,bounds.maxY-.01);
+      if(top<bottom)return;
+      const heights=[bottom,(bottom+top)*.5,top];
+      if(top-bottom>.4)heights.push(bottom+(top-bottom)*.25,bottom+(top-bottom)*.75);
+      const v0=e[0]*dx+e[8]*dz,v1=e[1]*dx+e[9]*dz,v2=e[2]*dx+e[10]*dz;
+      let first=1.01,contactHeight=null,hitCap=false;
+      for(const y of heights){
+        const p=local(previousX,y,previousZ);
+        const radial=p[0]*p[0]/(rx*rx)+p[2]*p[2]/(rz*rz);
+        if(radial<=1&&Math.abs(p[1])<=hy)continue;
+        const a=v0*v0/(rx*rx)+v2*v2/(rz*rz);
+        const bb=2*(p[0]*v0/(rx*rx)+p[2]*v2/(rz*rz));
+        const c=radial-1;
+        let sideEnter=-Infinity,sideExit=Infinity;
+        if(a<1e-12){
+          if(c>0)continue;
+        }else{
+          const disc=bb*bb-4*a*c;
+          if(disc<0)continue;
+          const root=Math.sqrt(disc);
+          sideEnter=(-bb-root)/(2*a);
+          sideExit=(-bb+root)/(2*a);
+        }
+        let capEnter=-Infinity,capExit=Infinity;
+        if(Math.abs(v1)<1e-12){
+          if(Math.abs(p[1])>hy)continue;
+        }else{
+          const t0=(-hy-p[1])/v1,t1=(hy-p[1])/v1;
+          capEnter=Math.min(t0,t1);
+          capExit=Math.max(t0,t1);
+        }
+        const entry=Math.max(sideEnter,capEnter);
+        const exit=Math.min(sideExit,capExit);
+        if(entry>exit||exit<0||entry>1||entry<0)continue;
+        if(entry<first){
+          first=entry;contactHeight=y;hitCap=capEnter>sideEnter;
+        }
+      }
+      if(contactHeight===null)return;
+      const safeT=Math.max(0,first-.002);
+      const cx=previousX+dx*safeT,cz=previousZ+dz*safeT;
+      const p=local(cx,contactHeight,cz);
+      let gx,gy,gz;
+      if(hitCap){gx=0;gy=Math.sign(p[1])||1;gz=0;}
+      else{gx=p[0]/(rx*rx);gy=0;gz=p[2]/(rz*rz);}
+      const nx=e[0]*gx+e[1]*gy+e[2]*gz;
+      const nz=e[8]*gx+e[9]*gy+e[10]*gz;
+      const nlen=Math.hypot(nx,nz);
+      if(nlen<.000001){pos.x=cx;pos.z=cz;return;}
+      const ux=nx/nlen,uz=nz/nlen;
+      const remaining=1-safeT;
+      const dot=dx*ux+dz*uz;
+      const sx=cx+(dx-Math.min(0,dot)*ux)*remaining;
+      const sz=cz+(dz-Math.min(0,dot)*uz)*remaining;
+      if(heights.some(y=>inside(sx,y,sz))){
+        pos.x=cx;pos.z=cz;
+      }else{
+        pos.x=sx;pos.z=sz;
+      }
+    }
+
     function kwgResolveRotatedShapeSide(pos,b,previousX,previousZ,feet,head,pr){
       const mesh=worldBlocks[b.id];
       if(!mesh)return;
@@ -6761,6 +6884,10 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
           const shape=b.shape||'box';
           if(shape==='sphere'){
             kwgResolveRotatedSphereSide(pos,b,previousX,previousZ,feet,head,pr);
+            continue;
+          }
+          if(shape==='cylinder'){
+            kwgResolveRotatedCylinderSide(pos,b,previousX,previousZ,feet,head,pr);
             continue;
           }
           if(shape!=='box'&&shape!=='baseplate'&&
