@@ -6459,7 +6459,10 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       for(const hit of hits){
         if(!hit.face)continue;
         const normal=hit.face.normal.clone().transformDirection(mesh.matrixWorld);
-        if(normal.y*normalSign>.52)return hit.point.y;
+        // A wedge remains walkable even when scaled into a steep ramp.
+        // Its slope must not disappear from floor detection after rotation.
+        const minUp=(b.shape==='wedge')?.005:.52;
+        if(normal.y*normalSign>minUp)return hit.point.y;
       }
       return null;
     }
@@ -6485,8 +6488,11 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         // with swapped dimensions; the top of the new bounds is the floor.
         if(shape==='box'||shape==='baseplate'||b.actionType==='checkpoint'||b.actionType==='finish')
           return bounds.maxY;
+        // Cast from ABOVE the whole rotated mesh, not from the avatar's
+        // feet. A ray starting below the slanted surface cannot hit it;
+        // that caused players to sink into large rotated wedges.
         return kwgRotatedSurfaceRayY(b,px,pz,
-          playerFeetY+maxStepHeight+.12,kwgCollisionRayDirectionDown,1);
+          bounds.maxY+1,kwgCollisionRayDirectionDown,1);
       }
       const bx=Number(b.x)||0, by=Number(b.y)||0, bz=Number(b.z)||0;
       const sx=Math.abs(Number(b.scaleX)||1), sy=Math.abs(Number(b.scaleY)||1), sz=Math.abs(Number(b.scaleZ)||1);
@@ -6640,7 +6646,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
           kwgShapeFaceNormal.copy(hit.face.normal).transformDirection(mesh.matrixWorld);
           // Top-facing slopes are floors, handled by ground snapping. Only
           // side faces or steep ramps should impede horizontal movement.
-          if(kwgShapeFaceNormal.y>.52)continue;
+          if(kwgShapeFaceNormal.y>((b.shape==='wedge')?.005:.52))continue;
           const horizontalDot=ux*kwgShapeFaceNormal.x+uz*kwgShapeFaceNormal.z;
           if(horizontalDot>=-.08)continue; // not entering this face
           if(!nearest||hit.distance<nearest.distance){
@@ -6963,12 +6969,20 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
       const ground=getGroundSurfaceUnderPlayerMP(player.position.x,player.position.y,player.position.z,blocks);
       if (ground.floorY!==-Infinity) {
+        // Use the previous feet height for a swept landing test. The feet
+        // can pass through a thin/steep ramp between animation frames;
+        // checking only their new height can miss the collision entirely.
+        const crossedSurface=oldFeetY>=ground.floorY-.08 &&
+          player.position.y<=ground.floorY+.08;
+        const closeToSurface=player.position.y>=ground.floorY-maxStepHeight-.08;
         if (velocityY<=0 &&
             player.position.y<=ground.floorY+.08 &&
-            player.position.y>=ground.floorY-maxStepHeight-.08) {
+            (closeToSurface||crossedSurface)) {
           player.position.y=ground.floorY;
           velocityY=0;
           isGrounded=true;
+        } else if (velocityY<=0) {
+          isGrounded=false;
         }
       } else {
         isGrounded=false;
