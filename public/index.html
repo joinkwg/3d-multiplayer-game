@@ -2332,7 +2332,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">+</span> PLACE PRESETS</div>
       <p class="kwg-recolor-help" style="margin:0 0 10px">New parts use these properties automatically.</p>
       <label class="kwg-recolor-field"><span>Shape</span><select id="kwg-place-shape"><option value="box">Cube / Box</option><option value="wedge">Wedge</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option></select></label>
-      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option></select></label>
+      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option><option value="spawn">Spawn</option></select></label>
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-place-material"><option value="grid">Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
       <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-place-color" value="#888888" aria-label="Place preset color"></span></label>
       <label class="kwg-recolor-field"><span>Transparency (0–1)</span><input type="number" id="kwg-place-transparency" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Place transparency, 0 to 1"></label>
@@ -2370,6 +2370,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               <option value="normal">Normal Solid Block</option>
               <option value="kill">Kill Part</option>
               <option value="checkpoint">Checkpoint</option>
+              <option value="spawn">Spawn</option>
             </select>
           </div>
 
@@ -2995,7 +2996,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // --- PROCEDURAL TEXTURE GENERATOR ---
     const textureCache = {};
     function getMaterialTexture(matType) {
-      if (!['grid','brick','wood','kill','checkpoint','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
+      if (!['grid','brick','wood','kill','checkpoint','spawn','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
       if (textureCache[matType]) return textureCache[matType];
 
       const canvas = document.createElement('canvas');
@@ -3061,6 +3062,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         ctx.fillRect(63,53,10,10);
         ctx.fillRect(73,43,10,10);
         ctx.fillRect(83,33,10,10);
+      } else if (matType === 'spawn') {
+        // Repeatable pixel-art PLAY button, tinted purple by the part color.
+        ctx.fillStyle='#343a43';
+        ctx.fillRect(24,24,80,80);
+        ctx.fillStyle='#ffffff';
+        ctx.fillRect(32,32,64,64);
+        ctx.fillStyle='#343a43';
+        ctx.fillRect(45,40,12,48);
+        ctx.fillRect(57,46,12,36);
+        ctx.fillRect(69,52,12,24);
+        ctx.fillRect(81,58,9,12);
       } else if (matType === 'yellow_flag') {
         ctx.fillStyle = '#f1c40f'; ctx.fillRect(0, 0, 128, 128);
         ctx.fillStyle = '#f39c12'; ctx.beginPath(); ctx.arc(64, 64, 30, 0, Math.PI * 2); ctx.fill();
@@ -3181,7 +3193,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         editBtn.style.display = canEditCurrentWorld ? 'block' : 'none';
         editBtn.title = canEditCurrentWorld ? 'Edit this world' : 'Only the world owner or an admin can edit this world';
 
-        loadWorldData(res.worldData, res.players, res.selfId);
+        loadWorldData(res.worldData, res.players, res.selfId, res.selfSpawn);
         resetWorldInfoEditor(res.worldData,roomName);
         document.getElementById('world-chat').style.display = 'block';
         startWorldIdleWatch();
@@ -3829,7 +3841,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const spawnMarkerMat = new THREE.MeshBasicMaterial({ color: 0x8e44ad, wireframe: true });
     const spawnMarker = new THREE.Mesh(spawnMarkerGeo, spawnMarkerMat);
     spawnMarker.position.set(0, 0.05, 0);
-    scene.add(spawnMarker);
+    spawnMarker.visible=false; // V3.42: real Spawn parts replace the old marker.
 
     // --- CIRCULATING SKY CLOUDS SYSTEM ---
     const cloudsGroup = new THREE.Group();
@@ -4455,13 +4467,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       else if (blockData.shape === 'wedge') geo = createWedgeGeometry();
       else geo = new THREE.BoxGeometry(1, 1, 1);
 
-      const mapTexture = getMaterialTexture(blockData.actionType === 'kill' ? 'kill' : blockData.actionType === 'checkpoint' ? 'checkpoint' : (blockData.material || 'grid'));
+      const mapTexture = getMaterialTexture(blockData.actionType === 'kill' ? 'kill' : blockData.actionType === 'checkpoint' ? 'checkpoint' : blockData.actionType === 'spawn' ? 'spawn' : (blockData.material || 'grid'));
       const isUncollidable = blockData.canCollide === false;
       const transparency = blockData.transparency || 0;
       const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
 
       const matOptions = { 
-        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : '#888888'),
+        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : blockData.actionType === 'spawn' ? '#a86cff' : '#888888'),
         transparent: isUncollidable || transparency > 0,
         opacity: opacityVal
       };
@@ -4515,7 +4527,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return mesh;
     }
 
-    function loadWorldData(world, initialPlayers, selfId) {
+    function loadWorldData(world, initialPlayers, selfId, selfSpawn) {
       currentWorldData = world;
       if (localPlayerAvatar) { scene.remove(localPlayerAvatar); localPlayerAvatar = null; }
       for (const id in otherPlayers) {
@@ -4540,11 +4552,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       updateCloudsAppearance(cloudsEnabled, cloudColorHex);
 
-      spawnMarker.position.set(world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z);
+      // The server selects each player's join spawn so other players see
+      // the exact same starting position. Older servers still fall back locally.
+      const initialSpawn=selfSpawn&&Number.isFinite(selfSpawn.x)&&Number.isFinite(selfSpawn.y)&&Number.isFinite(selfSpawn.z)
+        ?selfSpawn:kwgChooseSpawnPosition(world);
+      spawnMarker.position.set(initialSpawn.x,initialSpawn.y,initialSpawn.z);
 
       localPlayerAvatar = buildBlockyAvatar(playerAppearance, equippedCosmetics);
       localPlayerAvatar.add(createNameTagSprite(loggedInUsername || 'Player'));
-      localPlayerAvatar.position.set(world.spawnPoint.x, world.spawnPoint.y, world.spawnPoint.z);
+      localPlayerAvatar.position.set(initialSpawn.x, initialSpawn.y, initialSpawn.z);
       localPlayerAvatar.userData.walkClock = 0;
       scene.add(localPlayerAvatar);
 
@@ -5114,7 +5130,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         partFields.style.display = 'block';
 
         document.getElementById('block-shape-select').value = block.shape || 'box';
-        document.getElementById('block-action-select').value = ['normal','kill','checkpoint'].includes(block.actionType) ? block.actionType : 'normal';
+        document.getElementById('block-action-select').value = ['normal','kill','checkpoint','spawn'].includes(block.actionType) ? block.actionType : 'normal';
         document.getElementById('block-material-select').value = ['grid','brick','wood'].includes(block.material) ? block.material : 'grid';
         document.getElementById('block-color-input').value = block.color || '#888888'; kwgSyncRGBField('block-color-input');
         document.getElementById('block-transparency-input').value = block.transparency !== undefined ? block.transparency : 0;
@@ -5135,6 +5151,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const nextType=document.getElementById('block-action-select').value;
       if(nextType!==blockData.actionType){
         if(nextType==='checkpoint')document.getElementById('block-color-input').value='#f4cf45';
+        if(nextType==='spawn')document.getElementById('block-color-input').value='#a86cff';
         if(nextType==='kill')document.getElementById('block-color-input').value='#d95757';
         kwgSyncRGBField('block-color-input');
       }
@@ -5408,6 +5425,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const colorInput=document.getElementById('kwg-place-color');
           if(type!==kwgLastPlaceType){
             if(type==='checkpoint')colorInput.value='#f4cf45';
+            else if(type==='spawn')colorInput.value='#a86cff';
             else if(type==='kill')colorInput.value='#d95757';
             else if(kwgLastPlaceType!=='normal')colorInput.value='#888888';
             kwgLastPlaceType=type;
@@ -7136,10 +7154,34 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     }
 
+    // V3.42: Spawn parts are the source of truth for join/respawn positions.
+    // No Spawn parts -> feet above the center of the baseplate, not the old
+    // invisible world.spawnPoint value. Each call independently randomizes.
+    function kwgChooseSpawnPosition(world){
+      const blocks=Object.values(world?.blocks||{});
+      const spawns=blocks.filter(b=>b&&b.actionType==='spawn');
+      if(spawns.length){
+        const chosen=spawns[Math.floor(Math.random()*spawns.length)];
+        const bounds=getBlockAABB(chosen);
+        const top=Number.isFinite(bounds.maxY)?bounds.maxY:(Number(chosen.y)||0)+.5;
+        return {x:Number(chosen.x)||0,y:top+.18,z:Number(chosen.z)||0};
+      }
+      const plate=blocks.find(b=>b.id==='baseplate'||b.shape==='baseplate');
+      if(plate){
+        const bounds=getBlockAABB(plate);
+        return {x:Number(plate.x)||0,y:bounds.maxY+.18,z:Number(plate.z)||0};
+      }
+      return {x:0,y:.18,z:0};
+    }
+
     function respawnPlayer() {
       if (localPlayerAvatar) {
-        const spawnPos = currentCheckpoint || (currentWorldData ? currentWorldData.spawnPoint : { x: 0, y: 0.05, z: 0 });
-        localPlayerAvatar.position.set(spawnPos.x, spawnPos.y + 0.1, spawnPos.z);
+        // Keep earned checkpoints; otherwise choose a fresh random Spawn part.
+        // If a checkpoint was deleted, fall back to the Spawn parts instead.
+        const checkpointValid=currentCheckpoint&&currentWorldData?.blocks?.[currentCheckpoint.id]?.actionType==='checkpoint';
+        if(!checkpointValid)currentCheckpoint=null;
+        const spawnPos=currentCheckpoint||kwgChooseSpawnPosition(currentWorldData);
+        localPlayerAvatar.position.set(spawnPos.x,spawnPos.y,spawnPos.z);
         velocityY = 0;
       }
     }
