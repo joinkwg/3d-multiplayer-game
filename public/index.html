@@ -2047,7 +2047,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 #kwg-place-panel select,#kwg-place-panel input[type="number"]{min-width:0;max-width:100%;box-sizing:border-box;background:#0c1b2a;color:#e9f4ff;border:2px solid #56748e;border-radius:0;padding:5px;font-family:inherit;font-size:11px}
 #kwg-place-panel input[type="color"]{height:30px;width:64px;border-radius:0}
 #kwg-place-panel input[type="checkbox"]{width:17px;height:17px;accent-color:#49d2f1}
-#kwg-place-panel input[type="range"]{max-width:125px;accent-color:#49d2f1}
+#kwg-place-panel input[type="number"]{width:90px;min-height:32px;text-align:center;font-variant-numeric:tabular-nums}
+body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;text-align:center;font-variant-numeric:tabular-nums}
 #kwg-place-panel .kwg-place-section-label{margin:11px 0 5px;font-size:10px;font-weight:800;letter-spacing:.08em;color:#9ecce9}
 #kwg-place-panel .kwg-place-number-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
 #kwg-place-panel .kwg-place-number-grid label{font-size:10px;color:#c7e4f7;display:flex;flex-direction:column;gap:3px}
@@ -2334,19 +2335,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option></select></label>
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-place-material"><option value="grid">Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
       <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-place-color" value="#888888" aria-label="Place preset color"></span></label>
-      <label class="kwg-recolor-field"><span>Transparency</span><input type="range" id="kwg-place-transparency" min="0" max="1" step="0.05" value="0"></label>
+      <label class="kwg-recolor-field"><span>Transparency (0–1)</span><input type="number" id="kwg-place-transparency" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Place transparency, 0 to 1"></label>
       <label class="kwg-recolor-field"><span>Can Collide</span><input type="checkbox" id="kwg-place-collide" checked></label>
-      <div class="kwg-place-section-label">PART SIZE</div>
-      <div class="kwg-place-number-grid">
-        <label>X<input type="number" id="kwg-place-sx" value="1" min="0.1" max="500" step="0.5"></label>
-        <label>Y<input type="number" id="kwg-place-sy" value="1" min="0.1" max="500" step="0.5"></label>
-        <label>Z<input type="number" id="kwg-place-sz" value="1" min="0.1" max="500" step="0.5"></label>
-      </div>
-      <div class="kwg-place-section-label">ROTATION (DEGREES)</div>
-      <div class="kwg-place-number-grid">
-        <label>X<input type="number" id="kwg-place-rx" value="0" min="-360" max="360" step="90"></label>
-        <label>Y<input type="number" id="kwg-place-ry" value="0" min="-360" max="360" step="90"></label>
-      </div>
       <p class="kwg-recolor-help">Click a surface to place a part with these presets.</p>
     </section>
     <section id="kwg-recolor-panel" class="kwg-recolor-panel" aria-label="Recolor brush settings" style="display:none">
@@ -2399,7 +2389,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 
           <div class="tool-row">
             <label>Transparency:</label>
-            <input type="range" id="block-transparency-input" min="0" max="1" step="0.05" value="0">
+            <input type="number" id="block-transparency-input" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Part transparency, 0 to 1">
           </div>
 
           <div class="tool-row">
@@ -5136,6 +5126,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     }
 
     function applySelectedPartPropertyChange() {
+      if(!kwgTransparencyInputReady('block-transparency-input'))return;
       if (!isEditMode || !selectedBlockId || !currentWorldName || !currentWorldData) return;
       if (!currentWorldData.blocks[selectedBlockId]) return;
 
@@ -5150,7 +5141,7 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       blockData.actionType=nextType;
       blockData.material = document.getElementById('block-material-select').value;
       blockData.color = document.getElementById('block-color-input').value;
-      blockData.transparency = parseFloat(document.getElementById('block-transparency-input').value) || 0;
+      blockData.transparency = kwgTransparencyValue('block-transparency-input');
       blockData.canCollide = document.getElementById('block-collidable-checkbox').checked;
 
       emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
@@ -5172,6 +5163,19 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       const elem = document.getElementById(id);
       elem.addEventListener('change', applySelectedPartPropertyChange);
       elem.addEventListener('input', applySelectedPartPropertyChange);
+    });
+
+    ['block-transparency-input','kwg-place-transparency'].forEach(id=>{
+      document.getElementById(id).addEventListener('blur',()=>{
+        const before=document.getElementById(id).value;
+        kwgNormalizeTransparencyInput(id);
+        if(id==='block-transparency-input' && before!==document.getElementById(id).value){
+          applySelectedPartPropertyChange();
+        }
+        if(id==='kwg-place-transparency'&&isEditMode&&buildSubTool==='place'){
+          updatePreviewMesh();
+        }
+      });
     });
 
     function clearGizmos() {
@@ -5360,35 +5364,40 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     // Place presets are shared by the preview and the actual placed part.
     // Reading them in one place prevents the preview from disagreeing with
     // what gets saved to the server.
+    // Transparency fields use a number instead of a slider.
+    // Clamp committed values to 0–1; ignore unfinished typing.
+    function kwgTransparencyValue(id){
+      const raw=document.getElementById(id).value.trim();
+      const n=Number(raw);
+      return raw!=='' && Number.isFinite(n) ? Math.max(0,Math.min(1,n)) : 0;
+    }
+    function kwgTransparencyInputReady(id){
+      const el=document.getElementById(id);
+      const raw=el.value.trim();
+      const n=Number(raw);
+      return raw!=='' && Number.isFinite(n) && n>=0 && n<=1;
+    }
+    function kwgNormalizeTransparencyInput(id){
+      const el=document.getElementById(id);
+      el.value=String(kwgTransparencyValue(id));
+    }
     function kwgPlacePreset(){
       const value=id=>document.getElementById(id).value;
-      const dimension=id=>{
-        const n=Number(value(id));
-        return Number.isFinite(n)?Math.max(.1,Math.min(500,n)):1;
-      };
-      const angle=id=>{
-        const n=Number(value(id));
-        return (Number.isFinite(n)?Math.max(-360,Math.min(360,n)):0)*Math.PI/180;
-      };
       return {
         shape:value('kwg-place-shape'),
         actionType:value('kwg-place-type'),
         material:value('kwg-place-material'),
         color:value('kwg-place-color'),
-        transparency:Number(value('kwg-place-transparency'))||0,
+        transparency:kwgTransparencyValue('kwg-place-transparency'),
         canCollide:document.getElementById('kwg-place-collide').checked,
         anchored:true,
-        scaleX:dimension('kwg-place-sx'),
-        scaleY:dimension('kwg-place-sy'),
-        scaleZ:dimension('kwg-place-sz'),
-        rotationX:angle('kwg-place-rx'),
-        rotationY:angle('kwg-place-ry')
+        scaleX:1,scaleY:1,scaleZ:1,
+        rotationX:0,rotationY:0
       };
     }
     const kwgPlacePresetFields=[
       'kwg-place-shape','kwg-place-type','kwg-place-material',
-      'kwg-place-color','kwg-place-transparency','kwg-place-collide',
-      'kwg-place-sx','kwg-place-sy','kwg-place-sz','kwg-place-rx','kwg-place-ry'
+      'kwg-place-color','kwg-place-transparency','kwg-place-collide'
     ];
     let kwgLastPlaceType='normal';
     kwgPlacePresetFields.forEach(id=>{
@@ -6730,8 +6739,8 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
     // after ground snapping. Ordinary solid collision must not cancel a kill.
     // Uses player capsule extents and block bounds so side/top/bottom contact
     // is detected even when the player never enters the solid block volume.
-    function isPlayerTouchingKillPart(block,pos) {
-      if (!block || block.actionType !== 'kill' || !pos) return false;
+    function isPlayerTouchingSpecialPart(block,pos) {
+      if (!block || !pos) return false;
       if(kwgPartIsRotated(block)){
         const bounds=getBlockAABB(block);
         const radius=PLAYER_RADIUS+.07,epsilon=.065;
@@ -6766,6 +6775,9 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
       // contact shape. The physics engine already uses this approximation.
       const nearX=Math.max(0,dx-hx),nearZ=Math.max(0,dz-hz);
       return nearX*nearX+nearZ*nearZ<=(radius+epsilon)*(radius+epsilon);
+    }
+    function isPlayerTouchingKillPart(block,pos){
+      return !!block&&block.actionType==='kill'&&isPlayerTouchingSpecialPart(block,pos);
     }
     function touchesAnyKillPart(blocks,pos){
       return blocks.some(b=>b.actionType==='kill'&&isPlayerTouchingKillPart(b,pos));
@@ -7336,9 +7348,14 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
         if(isGrounded&&ground.block?.actionType==='checkpoint')triggerCheckpoint(ground.block);
         for (const b of blocks) {
           if (b.actionType!=='checkpoint' && b.actionType!=='finish') continue;
-          if (!checkPlayerIntersectingBlockData(b,player.position)) continue;
-          if (b.actionType==='checkpoint') triggerCheckpoint(b);
-          else triggerFinishLine();
+          // Checkpoint activation uses surface contact (including sides and
+          // underside), not just penetration of the solid part. This works
+          // even when physics stops the avatar at the block's outer face.
+          if(b.actionType==='checkpoint'){
+            if(isPlayerTouchingSpecialPart(b,player.position))triggerCheckpoint(b);
+          }else if(checkPlayerIntersectingBlockData(b,player.position)){
+            triggerFinishLine();
+          }
         }
       }
 
