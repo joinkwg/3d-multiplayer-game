@@ -3500,10 +3500,43 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       'kike','kikes','spic','spics','chink','chinks','gook','gooks',
       'wetback','wetbacks','beaner','beaners','raghead','ragheads',
       'paki','pakis','tranny','trannies','retard','retards','retarded',
-      'dyke','dykes','coon','coons'
+      'dyke','dykes','coon','coons',
+  // Additional sexual terms and common variants missed by the original filter.
+  'sex','sexy','sexual','sexuality','sext','sexting','sexted','sexts',
+  'porn','porno','pornography','pornographic','pornhub','xxx',
+  'nude','nudes','nudity','naked','horny','horniness','aroused',
+  'penis','penises','vagina','vaginas','vaginal','vulva','vulvas',
+  'boob','boobs','boobies','breast','breasts','tits','titties','nipple','nipples',
+  'testicle','testicles','ballsack','scrotum','semen','sperm',
+  'orgasm','orgasms','orgasmic','masturbate','masturbation','masturbating',
+  'blowjob','blowjobs','handjob','handjobs','rimjob','rimjobs',
+  'intercourse','ejaculate','ejaculation','ejaculating','erection','erections',
+  'dildo','dildos','vibrator','vibrators','fetish','fetishes',
+  'hentai','onlyfans','nsfw','anal','anus','clitoris','clit','clits',
+  'cum','cums','cumming','cummed','jizz','boner','boners','erect',
+  'threesome','threesomes','orgy','orgies','incest',
+  'rape','raped','raping','rapist','molest','molested','molesting',
+  'pedophile','paedophile','pedo','pedos',
     ];
+    // Spell-out numbers are blocked as *whole words* to avoid damaging
+    // harmless words such as someone, alone, stone, weight or sixth.
+    const KWG_NUMBER_WORDS = [
+      'zero','one','two','three','four','five','six','seven','eight','nine',
+      'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen',
+      'seventeen','eighteen','nineteen','twenty','thirty','forty','fourty',
+      'fifty','sixty','seventy','eighty','ninety','hundred','thousand',
+      'million','billion','trillion',
+      'first','second','third','fourth','fifth','sixth','seventh','eighth',
+      'ninth','tenth','eleventh','twelfth','thirteenth','fourteenth',
+      'fifteenth','sixteenth','seventeenth','eighteenth','nineteenth',
+      'twentieth','thirtieth','fortieth','fiftieth','sixtieth',
+      'seventieth','eightieth','ninetieth','hundredth','thousandth'
+    ];
+    // Match obfuscated spellings such as s.e.x and t-w-o, while requiring
+    // word boundaries so innocent words are not partly censored.
+    const KWG_FILTER_TERMS = [...new Set([...KWG_BLOCKED_TERMS, ...KWG_NUMBER_WORDS])];
     const KWG_BLOCKED_REGEX = new RegExp(
-      '(^|[^a-z])(' + KWG_BLOCKED_TERMS
+      '(^|[^a-z])(' + KWG_FILTER_TERMS
         .sort((a,b)=>b.length-a.length)
         .map(term=>term.split('').join('[\\s._-]{0,3}'))
         .join('|') + ')(?![a-z])','gi'
