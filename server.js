@@ -1309,7 +1309,7 @@ io.on('connection', (socket) => {
 
   // Privacy helpers: always consult the database, never client-supplied names.
   const KWG_HIDDEN_USER='Hidden User';
-  const KWG_HIDDEN_MESSAGE='This message has been hidden because your or the user are blocked.';
+  const KWG_HIDDEN_MESSAGE='This message has been hidden because you or the user are blocked.';
   async function blockedPeers(userId, peerIds){
     const ids=[...new Set(peerIds.map(Number).filter(n=>Number.isSafeInteger(n)&&n!==Number(userId)))];
     if(!ids.length)return new Set();
