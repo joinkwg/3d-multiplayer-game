@@ -505,6 +505,8 @@ async function migrate() {
       ('zombie_1','Zombie 1',175,'zombie'),('zombie_2','Zombie 2',185,'zombie'),
       ('zombie_3','Zombie 3',195,'zombie'),('zombie_4','Zombie 4',205,'zombie')
     ON CONFLICT(pet_key) DO NOTHING;
+    -- Keep shelved pets and past purchases in the database for a future redesign.
+    UPDATE pet_catalog SET is_visible=FALSE WHERE species IN ('skeleton','mummy','zombie');
 
     CREATE TABLE IF NOT EXISTS world_templates (
       id BIGSERIAL PRIMARY KEY,
@@ -1528,7 +1530,8 @@ io.on('connection', (socket) => {
       const app = await validateAppearanceForUser(socket.user.id, socket.user.appearance || {});
       const cosmetics = await resolveAppearanceAssets(app);
       const equippedPetRow=await pool.query('SELECT pet_key FROM user_pet_equipment WHERE user_id=$1',[userId]);
-      const petKey=equippedPetRow.rows[0]?.pet_key||null;
+      const storedPetKey=equippedPetRow.rows[0]?.pet_key||null;
+      const petKey=/^(skeleton|mummy|zombie)_[1-4]$/.test(storedPetKey||'')?null:storedPetKey;
       if (!socket.connected || !socket.user) throw new Error('Disconnected during world join.');
       socket.user.appearance = app;
 
@@ -1860,16 +1863,19 @@ io.on('connection', (socket) => {
     }
   });
 
+  // KWG V3.55.6: shelve three species without deleting their purchase records.
+  const kwgRetiredPetKey=key=>typeof key==='string' && /^(skeleton|mummy|zombie)_[1-4]$/.test(key);
+
   // KWG V3.49: pet shop, ownership and equipped companion.
   socket.on('get_pets', async (cb) => {
     if (!requireAuth(socket,cb)) return;
     try {
       const [catalog,owned,equipped]=await Promise.all([
-        pool.query(`SELECT pet_key AS "petKey",name,price,species,is_visible AS "isVisible" FROM pet_catalog WHERE ($1::boolean OR is_visible=true OR pet_key IN (SELECT pet_key FROM user_pets WHERE user_id=$2)) ORDER BY species,pet_key`,[!!socket.user.isAdmin,socket.user.id]),
+        pool.query(`SELECT pet_key AS "petKey",name,price,species,is_visible AS "isVisible" FROM pet_catalog WHERE species NOT IN ('skeleton','mummy','zombie') AND ($1::boolean OR is_visible=true OR pet_key IN (SELECT pet_key FROM user_pets WHERE user_id=$2)) ORDER BY species,pet_key`,[!!socket.user.isAdmin,socket.user.id]),
         pool.query('SELECT pet_key AS "petKey" FROM user_pets WHERE user_id=$1',[socket.user.id]),
         pool.query('SELECT pet_key AS "petKey" FROM user_pet_equipment WHERE user_id=$1',[socket.user.id])
       ]);
-      cb({success:true,pets:catalog.rows,owned:owned.rows.map(r=>r.petKey),equippedPet:equipped.rows[0]?.petKey||null});
+      cb({success:true,pets:catalog.rows,owned:owned.rows.map(r=>r.petKey).filter(k=>!kwgRetiredPetKey(k)),equippedPet:kwgRetiredPetKey(equipped.rows[0]?.petKey)?null:(equipped.rows[0]?.petKey||null)});
     } catch(err){console.error('Get pets failed',err);cb({success:false,message:'Could not load pets.'});}
   });
 
@@ -1877,6 +1883,7 @@ io.on('connection', (socket) => {
     if (!requireAuth(socket,cb)) return;
     if (typeof petKey!=='string'||!/^([a-z0-9_]{1,32})$/.test(petKey))
       return cb({success:false,message:'Invalid pet.'});
+    if(kwgRetiredPetKey(petKey))return cb({success:false,message:'This pet is temporarily unavailable.'});
     const client=await pool.connect();
     try {
       await client.query('BEGIN');
@@ -1900,6 +1907,7 @@ io.on('connection', (socket) => {
     if (!requireAuth(socket,cb)) return;
     if(petKey!==null && (typeof petKey!=='string'||!/^([a-z0-9_]{1,32})$/.test(petKey)))
       return cb({success:false,message:'Invalid pet.'});
+    if(kwgRetiredPetKey(petKey))return cb({success:false,message:'This pet is temporarily unavailable.'});
     try {
       if(petKey){
         const owned=await pool.query('SELECT 1 FROM user_pets WHERE user_id=$1 AND pet_key=$2',[socket.user.id,petKey]);
@@ -2005,6 +2013,7 @@ io.on('connection', (socket) => {
       if (kind === 'pet') {
         if (typeof petKey !== 'string' || !/^[a-z0-9_]{1,32}$/.test(petKey))
           return cb({success:false,message:'Invalid pet.'});
+        if(kwgRetiredPetKey(petKey))return cb({success:false,message:'This pet is temporarily unavailable.'});
         updated=await pool.query('UPDATE pet_catalog SET price=$1,is_visible=$2 WHERE pet_key=$3 RETURNING pet_key',[price,isVisible,petKey]);
       } else if (kind === 'avatar') {
         const id=cleanStoreItemId(itemId);
