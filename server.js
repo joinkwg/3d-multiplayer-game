@@ -413,6 +413,15 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS friendships_requester_idx ON friendships(requester_id,status);
     CREATE INDEX IF NOT EXISTS friendships_addressee_idx ON friendships(addressee_id,status);
+    -- Blocking is directional, but all privacy effects apply to BOTH players.
+    CREATE TABLE IF NOT EXISTS user_blocks (
+      blocker_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (blocker_id,blocked_id),
+      CHECK (blocker_id <> blocked_id)
+    );
+    CREATE INDEX IF NOT EXISTS user_blocks_blocked_idx ON user_blocks(blocked_id);
     CREATE TABLE IF NOT EXISTS profile_messages (
       id BIGSERIAL PRIMARY KEY,
       profile_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -821,6 +830,7 @@ io.on('connection', (socket) => {
       const target=ur.rows[0];
       if(!target)return cb({success:false,message:'Player not found.'});
       if(Number(target.id)===Number(socket.user.id))return cb({success:false,message:"You can't friend yourself."});
+      if(await blockedTogether(socket.user.id,target.id))return cb({success:false,message:'Friend requests are unavailable between blocked players.'});
 
       const existing=await pool.query(`
         SELECT requester_id,addressee_id,status FROM friendships
@@ -955,6 +965,14 @@ io.on('connection', (socket) => {
         };
       }
 
+      const blockFlags=await pool.query(`
+        SELECT blocker_id,blocked_id FROM user_blocks
+        WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)
+      `,[socket.user.id,u.id]);
+      const blockedByMe=blockFlags.rows.some(x=>Number(x.blocker_id)===Number(socket.user.id));
+      const blockBetween=blockFlags.rowCount>0;
+      if(blockBetween&&friendship.state!=='self')friendship={state:'none'};
+
       // Public profile sections: worlds liked by this player, their highest-
       // liked creations, accepted friends, and latest message-board posts.
       const [likedRows, friendRows, messageRows] = await Promise.all([
@@ -1004,10 +1022,13 @@ io.on('connection', (socket) => {
         username:friend.username,online:!!socketsByUser.get(friend.id),
         appearance:friend.appearance||{},friendsSince:friend.friendsSince
       }));
+      const hiddenAuthors=await blockedPeers(socket.user.id,messageRows.rows.map(m=>m.authorId));
       const messages=messageRows.rows.map(m=>({
-        id:Number(m.id),authorUsername:m.authorUsername,
-        authorAppearance:m.authorAppearance||{},
-        body:filterKWGUserText(m.body),createdAt:m.createdAt,
+        id:Number(m.id),authorUsername:hiddenAuthors.has(Number(m.authorId))?KWG_HIDDEN_USER:m.authorUsername,
+        authorAppearance:hiddenAuthors.has(Number(m.authorId))?{}:(m.authorAppearance||{}),
+        hidden:hiddenAuthors.has(Number(m.authorId)),
+        body:hiddenAuthors.has(Number(m.authorId))?KWG_HIDDEN_MESSAGE:filterKWGUserText(m.body),
+        createdAt:m.createdAt,
         canDelete:Number(m.authorId)===Number(socket.user.id)||Number(u.id)===Number(socket.user.id)
       }));
 
@@ -1024,6 +1045,7 @@ io.on('connection', (socket) => {
           currentWorld:(friendship.state==='friends'||friendship.state==='self') ? (livePlayer?.worldName||null) : null,
           isOwnProfile:u.id === socket.user.id,
           friendship,
+          blockedByMe,blockBetween,
           stats:{
             worlds:Number(worldCount.rows[0]?.n || 0),
             likesGiven:Number(likesGiven.rows[0]?.n || 0),
@@ -1074,6 +1096,8 @@ io.on('connection', (socket) => {
       const targetName=cleanUsername(username);
       const target=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[targetName]);
       if(!target.rowCount)return cb({success:false,message:'Player not found.'});
+      if(await blockedTogether(socket.user.id,target.rows[0].id))
+        return cb({success:false,message:'You cannot post to this player while either account is blocked.'});
       body=filterKWGUserText(String(body||'').trim().slice(0,240));
       if(!body.trim())return cb({success:false,message:'Message cannot be empty.'});
       const recent=await pool.query(`
@@ -1283,6 +1307,71 @@ io.on('connection', (socket) => {
       x,y,z,scaleX:4,scaleY:1,scaleZ:4,rotationX:0,rotationY:0};
   }
 
+  // Privacy helpers: always consult the database, never client-supplied names.
+  const KWG_HIDDEN_USER='Hidden User';
+  const KWG_HIDDEN_MESSAGE='This message has been hidden because your or the user are blocked.';
+  async function blockedPeers(userId, peerIds){
+    const ids=[...new Set(peerIds.map(Number).filter(n=>Number.isSafeInteger(n)&&n!==Number(userId)))];
+    if(!ids.length)return new Set();
+    const r=await pool.query(`
+      SELECT CASE WHEN blocker_id=$1 THEN blocked_id ELSE blocker_id END AS peer_id
+      FROM user_blocks
+      WHERE (blocker_id=$1 AND blocked_id=ANY($2::bigint[]))
+         OR (blocked_id=$1 AND blocker_id=ANY($2::bigint[]))
+    `,[userId,ids]);
+    return new Set(r.rows.map(x=>Number(x.peer_id)));
+  }
+  async function blockedTogether(a,b){return (await blockedPeers(a,[b])).has(Number(b));}
+  function privatePlayer(p,hidden){return hidden?{...p,username:KWG_HIDDEN_USER,hidden:true}: {...p,hidden:false};}
+  function privateChat(msg,hidden){return hidden?{...msg,username:KWG_HIDDEN_USER,message:KWG_HIDDEN_MESSAGE,hidden:true}:msg;}
+  function worldPeers(worldName,exceptSid=null){
+    return [...playersBySocket.entries()].filter(([sid,p])=>sid!==exceptSid&&p.worldName===worldName)
+      .map(([sid,p])=>({sid,p,socket:io.sockets.sockets.get(sid)})).filter(x=>x.socket?.user);
+  }
+  function refreshPairPrivacy(userA,userB,hidden){
+    for(const [sid,p] of playersBySocket){
+      const sock=io.sockets.sockets.get(sid);
+      if(!sock?.user||![Number(userA),Number(userB)].includes(Number(sock.user.id)))continue;
+      const otherId=Number(sock.user.id)===Number(userA)?Number(userB):Number(userA);
+      for(const [otherSid,otherP] of playersBySocket){
+        const otherSock=io.sockets.sockets.get(otherSid);
+        if(otherSock?.user&&Number(otherSock.user.id)===otherId&&otherP.worldName===p.worldName){
+          sock.emit('kwg_block_relation_changed',{
+            playerId:otherSid,hidden,username:hidden?KWG_HIDDEN_USER:otherP.username
+          });
+        }
+      }
+    }
+  }
+
+  socket.on('block_player',async ({username}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    try{
+      const r=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      if(!r.rowCount)return cb({success:false,message:'Player not found.'});
+      const targetId=Number(r.rows[0].id);
+      if(targetId===Number(socket.user.id))return cb({success:false,message:'You cannot block yourself.'});
+      await pool.query(`INSERT INTO user_blocks(blocker_id,blocked_id) VALUES($1,$2) ON CONFLICT DO NOTHING`,[socket.user.id,targetId]);
+      // Blocking removes existing friendships and pending requests in either direction.
+      await pool.query(`DELETE FROM friendships WHERE (requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1)`,[socket.user.id,targetId]);
+      refreshPairPrivacy(socket.user.id,targetId,true);
+      cb({success:true,message:'Player blocked. Messages and in-world names are hidden for both players.'});
+    }catch(e){console.error('Block player:',e);cb({success:false,message:'Could not block player.'});}
+  });
+  socket.on('unblock_player',async ({username}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    try{
+      const r=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[cleanUsername(username)]);
+      if(!r.rowCount)return cb({success:false,message:'Player not found.'});
+      const targetId=Number(r.rows[0].id);
+      await pool.query('DELETE FROM user_blocks WHERE blocker_id=$1 AND blocked_id=$2',[socket.user.id,targetId]);
+      // A block made by the other player still keeps both sides hidden.
+      const hidden=await blockedTogether(socket.user.id,targetId);
+      refreshPairPrivacy(socket.user.id,targetId,hidden);
+      cb({success:true,message:hidden?'Your block was removed; the other player still has you blocked.':'Player unblocked.'});
+    }catch(e){console.error('Unblock player:',e);cb({success:false,message:'Could not unblock player.'});}
+  });
+
   socket.on('create_world', async ({name, templateId}, cb) => {
     if (!requireAuth(socket, cb)) return;
     name = cleanWorldName(name);
@@ -1327,7 +1416,7 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb({success:false,message:'Could not create world.'}); }
   });
 
-  socket.on('join_world', async ({worldName, appearance, visitUsername}, cb) => {
+  socket.on('join_world', async ({worldName, appearance, visitUsername, confirmBlocked=false}, cb) => {
     if (!requireAuth(socket, cb)) return;
     const userId=socket.user.id;
     if (accountWorldJoinReservations.has(userId)) {
@@ -1366,6 +1455,16 @@ io.on('connection', (socket) => {
           return cb({success:false,message:'Your friend is no longer in that world.'});
       }
 
+      // Confirm before entering a world containing anyone blocked in either direction.
+      // This check happens on EVERY attempt and precedes the session lease.
+      const occupants=worldPeers(world.name,socket.id);
+      const blockedOccupants=await blockedPeers(userId,occupants.map(x=>x.socket.user.id));
+      if(blockedOccupants.size && !confirmBlocked){
+        return cb({success:false,requiresBlockConfirmation:true,
+          message:'A blocked user is in this world. Their username and messages will be hidden. Join anyway?',
+          blockedCount:occupants.filter(x=>blockedOccupants.has(Number(x.socket.user.id))).length});
+      }
+
       // Claim the account's single in-world lease atomically in PostgreSQL.
       // Unlike a browser-only check, this rejects joins from separate tabs,
       // devices, and separate Node/Render instances.
@@ -1398,7 +1497,10 @@ io.on('connection', (socket) => {
       socket.data.worldName = world.name;
       const players = {};
       for (const [sid, p] of playersBySocket) {
-        if (p.worldName === world.name) players[sid] = p;
+        if (p.worldName === world.name) {
+          const otherSock=io.sockets.sockets.get(sid);
+          players[sid]=privatePlayer(p,!!otherSock?.user&&blockedOccupants.has(Number(otherSock.user.id)));
+        }
       }
       const selfSpawn=chooseWorldSpawn(world.data);
       const p = {
@@ -1412,7 +1514,11 @@ io.on('connection', (socket) => {
       worldJoinReservations.set(world.name, Math.max(0, (worldJoinReservations.get(world.name) || 1) - 1));
       if (worldJoinReservations.get(world.name) === 0) worldJoinReservations.delete(world.name);
       reservedWorldName=null;
-      socket.to(`world:${world.name}`).emit('player_joined', p);
+      // Per-recipient join announcements never expose a blocked username.
+      for(const peer of occupants){
+        if(peer.socket.connected&&peer.p.worldName===world.name)
+          peer.socket.emit('player_joined',privatePlayer(p,blockedOccupants.has(Number(peer.socket.user.id))));
+      }
       // Record only successful world entries. A history write failure must
       // never prevent a player from joining an otherwise healthy world.
       try {
@@ -1469,7 +1575,10 @@ io.on('connection', (socket) => {
     p.verticalVelocity = (typeof data.verticalVelocity === 'number' && Number.isFinite(data.verticalVelocity)) ? data.verticalVelocity : 0;
     p.isMoving = !!data.isMoving;
     p.isGrounded = data.isGrounded !== false;
-    socket.to(`world:${p.worldName}`).emit('player_moved', p);
+    socket.to(`world:${p.worldName}`).emit('player_moved',{
+      id:p.id,x:p.x,y:p.y,z:p.z,rotationY:p.rotationY,walkClock:p.walkClock,
+      verticalVelocity:p.verticalVelocity,isMoving:p.isMoving,isGrounded:p.isGrounded
+    });
   });
 
   // KWG V3.40: One read and one PostgreSQL write for up to 100 ordered edits.
@@ -1694,7 +1803,11 @@ io.on('connection', (socket) => {
       if (p) {
         p.appearance = app;
         p.cosmetics = cosmetics;
-        socket.to(`world:${p.worldName}`).emit('player_appearance_updated', p);
+        const peers=worldPeers(p.worldName,socket.id);
+        const hiddenPeers=await blockedPeers(socket.user.id,peers.map(x=>x.socket.user.id));
+        for(const peer of peers){
+          peer.socket.emit('player_appearance_updated',privatePlayer(p,hiddenPeers.has(Number(peer.socket.user.id))));
+        }
       }
       cb && cb({success:true,appearance:app,cosmetics});
     } catch (e) {
@@ -1859,11 +1972,14 @@ io.on('connection', (socket) => {
       if (!world) return cb({success:false,message:'World not found.'});
       if (socket.data.worldName !== world.name) return cb({success:false,message:'Join the world first.'});
       const r = await pool.query(`
-        SELECT username,message,created_at AS "createdAt"
+        SELECT user_id AS "userId",username,message,created_at AS "createdAt"
         FROM chat_messages WHERE world_id=$1
         ORDER BY created_at DESC LIMIT 100
       `,[world.id]);
-      cb({success:true,messages:r.rows.reverse().map(x=>({...x,message:filterKWGUserText(x.message),worldName:world.name}))});
+      const hiddenAuthors=await blockedPeers(socket.user.id,r.rows.map(x=>x.userId));
+      cb({success:true,messages:r.rows.reverse().map(x=>privateChat({
+        username:x.username,message:filterKWGUserText(x.message),createdAt:x.createdAt,worldName:world.name
+      },hiddenAuthors.has(Number(x.userId))))});
     } catch (e) { console.error(e); cb({success:false,message:'Could not load chat.'}); }
   });
 
@@ -1881,9 +1997,12 @@ io.on('connection', (socket) => {
         VALUES($1,$2,$3,$4)
         RETURNING created_at AS "createdAt"
       `,[world.id,socket.user.id,socket.user.username,message]);
-      io.to(`world:${world.name}`).emit('world_chat_message',{
-        worldName:world.name, username:socket.user.username, message, createdAt:r.rows[0].createdAt
-      });
+      const peers=worldPeers(world.name);
+      const hiddenPeers=await blockedPeers(socket.user.id,peers.map(x=>x.socket.user.id));
+      const event={worldName:world.name,username:socket.user.username,message,createdAt:r.rows[0].createdAt};
+      for(const peer of peers){
+        peer.socket.emit('world_chat_message',privateChat(event,hiddenPeers.has(Number(peer.socket.user.id))));
+      }
       cb({success:true});
     } catch (e) { console.error(e); cb({success:false,message:'Could not send message.'}); }
   });
