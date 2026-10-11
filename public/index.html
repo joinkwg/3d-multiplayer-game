@@ -5218,119 +5218,200 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     });
 
 
-    // KWG V3.49: original bouncy legless companions, built entirely from Three.js primitives.
-    function kwgBuildPet(petKey){
-      if(!['dog_1','cat_1'].includes(petKey))return null;
-      const dog=petKey==='dog_1';
-      const root=new THREE.Group();
-      const bouncer=new THREE.Group();root.add(bouncer);
-      const fur=new THREE.MeshLambertMaterial({color:dog?0xd7a16a:0xbfc6e1});
-      const lightFur=new THREE.MeshLambertMaterial({color:dog?0xf7dfb4:0xf3efff});
-      const earFur=new THREE.MeshLambertMaterial({color:dog?0x9d5b3d:0x8790b8});
-      const pink=new THREE.MeshLambertMaterial({color:0xe69bb1});
-      const dark=new THREE.MeshLambertMaterial({color:0x242034});
-      const eyeMat=new THREE.MeshPhongMaterial({color:0x111529,shininess:110,specular:0xffffff});
-      const sparkle=new THREE.MeshBasicMaterial({color:0xffffff});
-      const geometry=(radius=1)=>new THREE.SphereGeometry(radius,16,12);
-      const orb=(parent,mat,x,y,z,sx,sy,sz)=>{
-        const m=new THREE.Mesh(geometry(),mat);m.position.set(x,y,z);m.scale.set(sx,sy,sz);parent.add(m);return m;
+    // KWG V3.50.2: Each pet is ONE skinned, organically fused surface.
+    // The fur, inner ears, eyes, highlights, nose, belly and paws are shaded
+    // directly onto that surface. No floating facial or ear meshes.
+    const kwgPetMeshCache=new Map();
+    function kwgPetGeometry(dog){
+      const cacheKey=dog?'dog':'cat';
+      if(kwgPetMeshCache.has(cacheKey))return kwgPetMeshCache.get(cacheKey);
+      const ell=(x,y,z,cx,cy,cz,rx,ry,rz)=>
+        (Math.hypot((x-cx)/rx,(y-cy)/ry,(z-cz)/rz)-1)*Math.min(rx,ry,rz);
+      const smoothUnion=(a,b,k)=>{
+        const h=Math.max(k-Math.abs(a-b),0)/k;
+        return Math.min(a,b)-h*h*k*.25;
       };
-      // Squishy torso: no legs. The entire body hops.
-      const torso=orb(bouncer,fur,0,.27,0,.28,.30,.23);
-      orb(bouncer,lightFur,0,.26,.193,.19,.22,.055);
-      const head=new THREE.Group();head.position.y=.72;bouncer.add(head);
-      orb(head,fur,0,0,0,.38,.35,.33);
-      // Plush little arms; separate pivot points let them wiggle while bouncing.
-      const arms=[];
-      for(const side of [-1,1]){
-        const arm=new THREE.Group();arm.position.set(side*.255,.45,.04);bouncer.add(arm);
-        orb(arm,fur,side*.095,-.10,.04,.115,.20,.12);
-        orb(arm,lightFur,side*.105,-.25,.095,.105,.075,.10);
-        arms.push(arm);
+      function field(x,y,z){
+        let d=ell(x,y,z,0,.285,0,.275,.30,.235); // legless pear-shaped torso
+        d=smoothUnion(d,ell(x,y,z,0,.725,.005,.365,.345,.322),.14);
+        d=smoothUnion(d,ell(x,y,z,0,.565,.265,.185,.12,.135),.095); // rounded muzzle
+        for(const side of [-1,1]){
+          d=smoothUnion(d,ell(x,y,z,side*.305,.395,.035,.135,.22,.145),.11);
+          d=smoothUnion(d,ell(x,y,z,side*.36,.22,.115,.115,.11,.125),.075);
+          if(dog){
+            d=smoothUnion(d,ell(x,y,z,side*.36,.855,-.015,.155,.22,.13),.075);
+            d=smoothUnion(d,ell(x,y,z,side*.44,.69,-.005,.135,.21,.11),.085);
+          }else{
+            // A tapered, rounded triangular ear grown out of the head surface.
+            const t=Math.max(0,Math.min(1,(y-.83)/.35));
+            const cx=side*(.245+.06*t);
+            const rx=.155*(1-t)+.008,rz=.11*(1-t)+.008;
+            const radial=(Math.hypot((x-cx)/rx,(z+.015)/rz)-1)*Math.min(rx,rz);
+            const ear=Math.max(radial,.83-y,y-1.18);
+            d=smoothUnion(d,ear,.05);
+          }
+        }
+        // Tail is fused at its root, with a rounded upturned tip.
+        d=smoothUnion(d,ell(x,y,z,0,.34,-.265,.10,.16,.205),.085);
+        if(dog)d=smoothUnion(d,ell(x,y,z,.015,.49,-.42,.09,.16,.11),.06);
+        else d=smoothUnion(d,ell(x,y,z,.015,.57,-.44,.07,.22,.085),.06);
+        return d;
       }
-      // Distinct dog and cat ears.
-      if(dog){
-        for(const side of [-1,1]){
-          const ear=orb(head,earFur,side*.31,.13,-.005,.15,.29,.11);ear.rotation.z=side*.45;
-          orb(head,pink,side*.33,.13,.095,.07,.16,.022);
-        }
-        orb(head,lightFur,0,-.13,.26,.20,.15,.13);
-      }else{
-        // Cat ears are one cohesive, softly bevelled silhouette per ear.
-        // The pink lining is a flush inset on the FRONT face, not a separate cone
-        // sticking out in front of the fur (which used to look like floating spikes).
-        for(const side of [-1,1]){
-          const earGroup=new THREE.Group();
-          earGroup.position.set(side*.245,.255,-.015);
-          earGroup.rotation.z=-side*.095; // a gentle outward tilt
-          head.add(earGroup);
-
-          const earOutline=new THREE.Shape();
-          earOutline.moveTo(-.185,-.105);
-          earOutline.quadraticCurveTo(-.20,-.095,-.17,-.015);
-          earOutline.lineTo(side*.055,.275);
-          earOutline.quadraticCurveTo(side*.075,.298,side*.092,.268);
-          earOutline.lineTo(.17,-.025);
-          earOutline.quadraticCurveTo(.198,-.102,.158,-.108);
-          earOutline.quadraticCurveTo(0,-.137,-.185,-.105);
-          const earShell=new THREE.Mesh(new THREE.ExtrudeGeometry(earOutline,{
-            depth:.09,steps:1,bevelEnabled:true,bevelThickness:.012,
-            bevelSize:.014,bevelSegments:2,curveSegments:8
-          }),fur);
-          earShell.position.z=0;
-          earGroup.add(earShell);
-
-          // A smaller matching shape lies almost exactly on the shell's front
-          // surface, leaving a visible fur border all the way around.
-          const lining=new THREE.Shape();
-          lining.moveTo(-.104,-.059);
-          lining.quadraticCurveTo(-.114,-.047,-.083,.012);
-          lining.lineTo(side*.047,.192);
-          lining.quadraticCurveTo(side*.057,.207,side*.065,.19);
-          lining.lineTo(.09,.008);
-          lining.quadraticCurveTo(.119,-.048,.099,-.062);
-          lining.quadraticCurveTo(0,-.084,-.104,-.059);
-          const innerEar=new THREE.Mesh(new THREE.ShapeGeometry(lining,8),pink);
-          innerEar.position.z=.103; // shell front is .102 after its bevel
-          innerEar.material.side=THREE.DoubleSide;
-          earGroup.add(innerEar);
-        }
-        // Soft cheek tufts give the cat a plush silhouette without obscuring
-        // the eyes or making the face look busier.
-        for(const side of [-1,1]){
-          const cheek=orb(head,fur,side*.295,-.155,.105,.115,.11,.13);
-          cheek.rotation.z=-side*.24;
-        }
-        orb(head,lightFur,0,-.14,.265,.18,.12,.095);
+      const step=.035,x0=-.735,y0=-.105,z0=-.71;
+      const nx=43,ny=39,nz=38,pointCount=nx*ny*nz;
+      const values=new Float32Array(pointCount);
+      const index=(x,y,z)=>(z*ny+y)*nx+x;
+      for(let z=0;z<nz;z++)for(let y=0;y<ny;y++)for(let x=0;x<nx;x++)
+        values[index(x,y,z)]=field(x0+x*step,y0+y*step,z0+z*step);
+      const gradients=new Float32Array(pointCount*3);
+      for(let z=0;z<nz;z++)for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+        const ix=index(x,y,z),gx=values[index(Math.min(nx-1,x+1),y,z)]-values[index(Math.max(0,x-1),y,z)],
+          gy=values[index(x,Math.min(ny-1,y+1),z)]-values[index(x,Math.max(0,y-1),z)],
+          gz=values[index(x,y,Math.min(nz-1,z+1))]-values[index(x,y,Math.max(0,z-1))];
+        const len=Math.hypot(gx,gy,gz)||1;
+        gradients[ix*3]=gx/len;gradients[ix*3+1]=gy/len;gradients[ix*3+2]=gz/len;
       }
-      // Large glossy eyes, pupils and off-centre white glints.
-      for(const side of [-1,1]){
-        orb(head,lightFur,side*.145,.045,.285,.124,.15,.068);
-        orb(head,eyeMat,side*.145,.04,.344,.084,.109,.043);
-        orb(head,sparkle,side*.125,.092,.381,.033,.037,.016);
-        orb(head,sparkle,side*.172,.014,.381,.014,.017,.009);
-        if(!dog){
-          for(const dy of [-.02,.025]){
-            const whisker=new THREE.Mesh(new THREE.BoxGeometry(.17,.008,.008),lightFur);
-            whisker.position.set(side*.36,-.17+dy,.26);whisker.rotation.z=side*(dy>0?-.17:.17);head.add(whisker);
+      const positions=[],normals=[],skinIndices=[],skinWeights=[];
+      const corners=[[0,0,0],[1,0,0],[1,1,0],[0,1,0],[0,0,1],[1,0,1],[1,1,1],[0,1,1]];
+      const tets=[[0,5,1,6],[0,1,2,6],[0,2,3,6],[0,3,7,6],[0,7,4,6],[0,4,5,6]];
+      const smooth=(a,b,v)=>{let t=Math.max(0,Math.min(1,(v-a)/(b-a)));return t*t*(3-2*t);};
+      function emitVertex(v){
+        positions.push(v[0],v[1],v[2]);normals.push(v[3],v[4],v[5]);
+        const x=v[0],y=v[1],z=v[2];
+        let head=smooth(.49,.76,y)*.96;
+        let arm=smooth(.22,.43,Math.abs(x))*(1-smooth(.49,.70,y))*smooth(-.18,.10,z)*.94;
+        let tail=(1-smooth(-.44,-.19,z))*(1-smooth(.53,.80,y))*.94;
+        let root=Math.max(.04,1-head-arm-tail);
+        const total=root+head+arm+tail;root/=total;head/=total;arm/=total;tail/=total;
+        skinIndices.push(0,1,x<0?2:3,4);
+        skinWeights.push(root,head,arm,tail);
+      }
+      function edge(a,b){
+        const t=a[6]/(a[6]-b[6]);
+        const n=[a[3]+(b[3]-a[3])*t,a[4]+(b[4]-a[4])*t,a[5]+(b[5]-a[5])*t];
+        const l=Math.hypot(...n)||1;
+        return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,n[0]/l,n[1]/l,n[2]/l];
+      }
+      function tri(a,b,c){
+        const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];
+        const dot=(uy*vz-uz*vy)*(a[3]+b[3]+c[3])+
+          (uz*vx-ux*vz)*(a[4]+b[4]+c[4])+(ux*vy-uy*vx)*(a[5]+b[5]+c[5]);
+        if(dot<0){emitVertex(a);emitVertex(c);emitVertex(b);}
+        else{emitVertex(a);emitVertex(b);emitVertex(c);}
+      }
+      for(let z=0;z<nz-1;z++)for(let y=0;y<ny-1;y++)for(let x=0;x<nx-1;x++){
+        const c=corners.map(([dx,dy,dz])=>{
+          const ix=index(x+dx,y+dy,z+dz);
+          return [x0+(x+dx)*step,y0+(y+dy)*step,z0+(z+dz)*step,
+            gradients[ix*3],gradients[ix*3+1],gradients[ix*3+2],values[ix]];
+        });
+        if(c.every(v=>v[6]>=0)||c.every(v=>v[6]<0))continue;
+        for(const tet of tets){
+          const inside=tet.filter(i=>c[i][6]<0),outside=tet.filter(i=>c[i][6]>=0);
+          if(!inside.length||!outside.length)continue;
+          if(inside.length===1){
+            const a=inside[0];tri(edge(c[a],c[outside[0]]),edge(c[a],c[outside[1]]),edge(c[a],c[outside[2]]));
+          }else if(outside.length===1){
+            const a=outside[0];tri(edge(c[a],c[inside[0]]),edge(c[a],c[inside[1]]),edge(c[a],c[inside[2]]));
+          }else{
+            const a=edge(c[inside[0]],c[outside[0]]),b=edge(c[inside[0]],c[outside[1]]),
+              cc=edge(c[inside[1]],c[outside[0]]),d=edge(c[inside[1]],c[outside[1]]);
+            tri(a,b,cc);tri(b,d,cc);
           }
         }
       }
-      orb(head,dog?dark:pink,0,-.145,.386,dog?.075:.07,.055,.045);
-      const smile=orb(head,dark,0,-.223,.345,.075,.016,.018);
-      if(dog){
-        const tongue=orb(head,pink,0,-.26,.356,.048,.064,.025);
-        tongue.visible=true;
-      }
-      const tail=new THREE.Group();tail.position.set(0,.28,-.20);bouncer.add(tail);
-      if(dog){
-        const wag=orb(tail,fur,0,.11,-.14,.09,.20,.10);wag.rotation.x=-.65;
-      }else{
-        orb(tail,fur,0,.16,-.12,.07,.23,.07);
-        orb(tail,earFur,0,.37,-.18,.08,.11,.08);
-      }
+      const geo=new THREE.BufferGeometry();
+      geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+      geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+      geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));
+      geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(skinWeights,4));
+      geo.computeBoundingSphere();
+      const mat=new THREE.MeshPhongMaterial({color:0xffffff,shininess:65,specular:0x393939});
+      const dogLiteral=dog?'true':'false';
+      mat.onBeforeCompile=shader=>{
+        shader.vertexShader=shader.vertexShader.replace('#include <common>',
+          '#include <common>\nvarying vec3 vKwgPetPosition;');
+        shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',
+          '#include <begin_vertex>\nvKwgPetPosition = position;');
+        shader.fragmentShader=shader.fragmentShader.replace('#include <common>',
+          '#include <common>\nvarying vec3 vKwgPetPosition;\nfloat kwgPetOval(vec2 p,vec2 c,vec2 r){return 1.0-smoothstep(.87,1.08,length((p-c)/r));}\nfloat kwgPetStroke(vec2 p,vec2 a,vec2 b,float width){vec2 q=b-a;float t=clamp(dot(p-a,q)/dot(q,q),0.0,1.0);return 1.0-smoothstep(width,width+.007,length(p-a-q*t));}');
+        shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',
+          `#include <map_fragment>
+          vec3 kp=vKwgPetPosition;
+          bool kd=${dogLiteral};
+          vec3 fur=kd?vec3(.70,.43,.24):vec3(.66,.71,.86);
+          vec3 cream=kd?vec3(.97,.84,.66):vec3(.96,.94,1.0);
+          vec3 earColor=kd?vec3(.44,.24,.16):vec3(.48,.54,.72);
+          vec3 blush=vec3(.97,.52,.66);
+          vec3 ink=vec3(.035,.042,.088);
+          vec3 color=fur;
+          // Shaded body markings are painted directly onto the continuous mesh.
+          float belly=kwgPetOval(kp.xy,vec2(0.0,.31),vec2(.18,.23))*smoothstep(.10,.20,kp.z);
+          color=mix(color,cream,belly);
+          float muzzle=kwgPetOval(kp.xy,vec2(0.0,.55),vec2(.205,.125))*smoothstep(.22,.31,kp.z);
+          color=mix(color,cream,muzzle);
+          for(int side=-1;side<=1;side+=2){
+            float s=float(side);
+            float paw=kwgPetOval(kp.xy,vec2(s*.365,.20),vec2(.11,.09))*smoothstep(.07,.15,kp.z);
+            color=mix(color,cream,paw);
+            if(kd){
+              float outerEar=kwgPetOval(kp.xy,vec2(s*.405,.80),vec2(.145,.25))*smoothstep(.045,.12,kp.z);
+              color=mix(color,earColor,outerEar);
+              float lining=kwgPetOval(kp.xy,vec2(s*.405,.80),vec2(.075,.15))*smoothstep(.105,.15,kp.z);
+              color=mix(color,blush,lining*.84);
+            }else{
+              float t=clamp((kp.y-.86)/.32,0.0,1.0);
+              float earX=s*(.245+.06*t);
+              float outerEar=(1.0-smoothstep(.65,.98,abs(kp.x-earX)/(.15*(1.0-t)+.01)))*smoothstep(.85,.91,kp.y)*smoothstep(.005,.065,kp.z);
+              color=mix(color,earColor,outerEar*.52);
+              float innerEar=(1.0-smoothstep(.58,.88,abs(kp.x-earX)/(.11*(1.0-t)+.007)))*smoothstep(.89,.94,kp.y)*smoothstep(.065,.10,kp.z);
+              color=mix(color,blush,innerEar);
+            }
+          }
+          // Eyes, pupils and glints: painted into the surface, not protruding orbs.
+          float face=smoothstep(.16,.27,kp.z);
+          for(int side=-1;side<=1;side+=2){
+            float s=float(side);
+            vec2 eye=vec2(s*.148,.762);
+            color=mix(color,cream,kwgPetOval(kp.xy,eye,vec2(.118,.142))*face);
+            color=mix(color,ink,kwgPetOval(kp.xy,eye+vec2(0.0,-.008),vec2(.083,.109))*face);
+            color=mix(color,vec3(1.0),kwgPetOval(kp.xy,eye+vec2(-.026,.050),vec2(.034,.037))*face);
+            color=mix(color,vec3(.93,.96,1.0),kwgPetOval(kp.xy,eye+vec2(.040,-.045),vec2(.014,.018))*face);
+            if(!kd){
+              for(int i=0;i<2;i++){
+                float off=float(i)*.036;
+                float whisk=kwgPetStroke(kp.xy,vec2(s*.21,.52+off),vec2(s*.39,.50+off*1.35),.006);
+                color=mix(color,cream,whisk*smoothstep(.17,.27,kp.z));
+              }
+            }
+          }
+          float nose=kwgPetOval(kp.xy,vec2(0.0,.557),vec2(.072,.047))*smoothstep(.27,.34,kp.z);
+          color=mix(color,kd?ink:blush,nose);
+          float smile=kwgPetStroke(kp.xy,vec2(-.065,.475),vec2(.065,.475),.010)*smoothstep(.27,.33,kp.z);
+          color=mix(color,ink,smile);
+          diffuseColor.rgb *= color;`);
+      };
+      mat.customProgramCacheKey=()=>dog?'kwg_pet_dog_unified_v1':'kwg_pet_cat_unified_v1';
+      const data={geo,mat};kwgPetMeshCache.set(cacheKey,data);return data;
+    }
+    function kwgBuildPet(petKey){
+      if(!['dog_1','cat_1'].includes(petKey))return null;
+      const {geo,mat}=kwgPetGeometry(petKey==='dog_1');
+      const root=new THREE.Group();
+      const body=new THREE.SkinnedMesh(geo,mat);
+      body.frustumCulled=false; // moving bones must not cull the skinned silhouette
+      const torsoBone=new THREE.Bone(),headBone=new THREE.Bone(),leftArm=new THREE.Bone(),
+        rightArm=new THREE.Bone(),tailBone=new THREE.Bone();
+      torsoBone.add(headBone,leftArm,rightArm,tailBone);
+      headBone.position.set(0,.65,0);
+      leftArm.position.set(-.295,.43,.035);rightArm.position.set(.295,.43,.035);
+      tailBone.position.set(0,.34,-.24);
+      body.add(torsoBone);
+      body.updateMatrixWorld(true);
+      body.bind(new THREE.Skeleton([torsoBone,headBone,leftArm,rightArm,tailBone]));
+      root.add(body);
       root.scale.setScalar(.85);
-      root.userData.kwgPetParts={bouncer,head,arms,tail};
+      root.userData.kwgPetParts={body,headBone,leftArm,rightArm,tailBone};
       return root;
     }
 
@@ -5391,11 +5472,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         // Turn toward the owner and wag ears, arms and tail while hopping.
         pet.mesh.rotation.y=Math.atan2(avatar.position.x-pet.mesh.position.x,avatar.position.z-pet.mesh.position.z);
         const parts=pet.mesh.userData.kwgPetParts;
-        parts.bouncer.scale.y=1+Math.sin(pet.clock*8+pet.phase)*.06;
-        parts.head.rotation.z=Math.sin(pet.clock*4+pet.phase)*.055;
-        parts.arms[0].rotation.z=Math.sin(pet.clock*8+pet.phase)*.23;
-        parts.arms[1].rotation.z=-Math.sin(pet.clock*8+pet.phase)*.23;
-        parts.tail.rotation.z=Math.sin(pet.clock*11+pet.phase)*.45;
+        // A single skinned surface deforms with its five-bone rig.
+        parts.body.scale.y=1+Math.sin(pet.clock*8+pet.phase)*.055;
+        parts.headBone.rotation.z=Math.sin(pet.clock*4+pet.phase)*.055;
+        parts.leftArm.rotation.z=Math.sin(pet.clock*8+pet.phase)*.23;
+        parts.rightArm.rotation.z=-Math.sin(pet.clock*8+pet.phase)*.23;
+        parts.tailBone.rotation.z=Math.sin(pet.clock*11+pet.phase)*.42;
       }
     }
 
