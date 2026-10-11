@@ -4381,6 +4381,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     });
 
     // --- CUSTOM WEDGE GEOMETRY HELPER ---
+    // Wedge UVs have TWO components per vertex (u,v). Using itemSize 3
+    // silently truncated 24 vertices to 16 UVs and corrupted the last faces.
     function createWedgeGeometry() {
       const geom = new THREE.BufferGeometry();
       const vertices = new Float32Array([
@@ -4410,7 +4412,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
       geom.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-      geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 3));
+      geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
       return geom;
     }
 
@@ -4559,10 +4561,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const faceRanges=[[0,6],[6,6],[12,3],[15,3],[18,6]];
       const uv=geometry.getAttribute('uv');
       const pos=geometry.getAttribute('position');
-      const baseType=['grid','brick','wood'].includes(blockData.material)
-        ?blockData.material:'grid';
-      const iconType=['kill','checkpoint','spawn'].includes(blockData.actionType)
-        ?blockData.actionType:null;
       geometry.clearGroups();
       const materials=[];
 
@@ -4591,19 +4589,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         ctx.imageSmoothingEnabled=false;
         const tileW=canvas.width/width;
         const tileH=canvas.height/height;
-        if((face===2||face===3)&&iconType){
-          // Keep the material aligned to world units. Only move the icon
-          // artwork toward the center of each triangular end, at FULL
-          // tile size; do not shrink or warp the icon or its background.
-          paintTiles(ctx,getMaterialTexture(baseType).image,tileW,tileH);
-          ctx.globalCompositeOperation='multiply';
-          paintTiles(ctx,getMaterialTexture(iconType).image,tileW,tileH,
-                     (face===2?-1:1)*tileW/6,tileH/6);
-          ctx.globalCompositeOperation='source-over';
-        }else{
-          // Combined material + icon artwork at one repeat per world unit.
-          paintTiles(ctx,surfaceTexture.image,tileW,tileH);
-        }
+        // Material and special icon are already combined in the same
+        // source tile. Draw them together at exactly the same scale and
+        // alignment on all five wedge faces.
+        paintTiles(ctx,surfaceTexture.image,tileW,tileH);
         const tex=new THREE.CanvasTexture(canvas);
         tex.wrapS=THREE.ClampToEdgeWrapping;
         tex.wrapT=THREE.ClampToEdgeWrapping;
