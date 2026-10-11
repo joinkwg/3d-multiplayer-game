@@ -2461,11 +2461,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     .kwg-pet-shop-intro{color:#b7d4e8;font-size:12px;line-height:1.8;margin:0 0 14px}
     .kwg-pet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
     .kwg-pet-card{min-width:0;background:#102034;border:2px solid #44627e;padding:12px;box-shadow:3px 3px 0 #070f1a;display:flex;flex-direction:column;gap:9px}
-    .kwg-pet-preview{height:145px;background:radial-gradient(circle at 50% 35%,#2b5067,#0a1728 75%);border:2px solid #365570;display:flex;align-items:center;justify-content:center;color:#aac7db;font-size:11px;overflow:hidden}
+    .kwg-pet-preview{height:145px;background:radial-gradient(circle at 50% 35%,#34485b,#111b29 75%);border:2px solid #365570;display:flex;align-items:center;justify-content:center;color:#aac7db;font-size:11px;overflow:hidden}
     .kwg-pet-preview img{width:100%;height:100%;object-fit:contain;display:block}
-    .kwg-pet-card-title{color:#f1faff;font-size:14px;font-weight:900}
-    .kwg-pet-card-subtitle{font-size:10px;line-height:1.7;color:#b0cadb;flex:1}
-    .kwg-pet-card-price{color:#ffdf83;font-size:12px;font-weight:900}
+    .kwg-pet-card-price{color:#ffdf83;font-size:13px;font-weight:900;text-align:center;margin-top:auto}
     .kwg-pet-card button,.kwg-pet-unequip{background:#246348;color:#f2fff5;border:2px solid #85dcac;box-shadow:2px 2px 0 #071a17;padding:10px;font:inherit;font-size:11px;font-weight:900;cursor:pointer;border-radius:0}
     .kwg-pet-card button:disabled{background:#253848;border-color:#5d768b;color:#aabfce;cursor:default}
     .kwg-pet-inventory-modal{position:fixed;inset:0;background:rgba(3,9,18,.82);z-index:1800;display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
@@ -5396,16 +5394,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const kwgCharacterMeshCache=new Map();
     function kwgCharacterGeometry(petKey){
       if(kwgCharacterMeshCache.has(petKey))return kwgCharacterMeshCache.get(petKey);
-      const cat=petKey==='cat_1';
-      const palette=cat?{
-        fur:'#e8a657',head:'#f0b76e',light:'#ffd18a',shade:'#b97839',
-        cream:'#fff2d9',pink:'#ef9eac',inner:'#e88f9b',
-        eye:'#241a24',nose:'#dc8293',collar:'#68c6ba',tag:'#f7d477'
-      }:{
-        fur:'#c58e62',head:'#d4a478',light:'#e9bd8d',shade:'#825039',
-        cream:'#fff0d6',pink:'#e8a7a2',inner:'#a56962',
-        eye:'#241a24',nose:'#34282c',collar:'#719bd6',tag:'#ffe3a0'
+      const cat=petKey.startsWith('cat_');
+      // V3.53: color-only variants of the same two professionally sculpted pets.
+      // Every variation keeps identical geometry, bones and expressive animations.
+      const palettes={
+        cat_1:{fur:'#e8a657',head:'#f0b76e',light:'#ffd18a',shade:'#b97839',cream:'#fff2d9',pink:'#ef9eac',inner:'#e88f9b',eye:'#17151e',nose:'#dc8293'},
+        cat_2:{fur:'#a3aab5',head:'#b7bec9',light:'#d8dce4',shade:'#737d8d',cream:'#f6f5f1',pink:'#e9a4b6',inner:'#d88fa9',eye:'#17151e',nose:'#cf8da4'},
+        cat_3:{fur:'#f0d8a6',head:'#f7e3bb',light:'#fff1d4',shade:'#caa873',cream:'#fff9eb',pink:'#efa6ac',inner:'#e998a5',eye:'#17151e',nose:'#d98b94'},
+        cat_4:{fur:'#454650',head:'#575862',light:'#757781',shade:'#292c36',cream:'#f1eef0',pink:'#dba1b1',inner:'#c9829c',eye:'#111018',nose:'#b78198'},
+        dog_1:{fur:'#c58e62',head:'#d4a478',light:'#e9bd8d',shade:'#825039',cream:'#fff0d6',pink:'#e8a7a2',inner:'#a56962',eye:'#17151e',nose:'#34282c'},
+        dog_2:{fur:'#e8ce9d',head:'#f0d9af',light:'#ffebc7',shade:'#bfa076',cream:'#fff5df',pink:'#e9b1a8',inner:'#c9a38e',eye:'#17151e',nose:'#4d3635'},
+        dog_3:{fur:'#865541',head:'#a16b50',light:'#bd8968',shade:'#58362f',cream:'#e8c8a6',pink:'#c9958d',inner:'#70473e',eye:'#17151e',nose:'#2c2225'},
+        dog_4:{fur:'#5c626b',head:'#747b83',light:'#9ca2a8',shade:'#353a44',cream:'#e5e6e0',pink:'#c69a9b',inner:'#52515b',eye:'#111018',nose:'#29262c'}
       };
+      const palette=palettes[petKey]||palettes.dog_1;
       const C=Object.fromEntries(Object.entries(palette).map(([k,v])=>[k,new THREE.Color(v)]));
       const white=new THREE.Color('#ffffff'),black=new THREE.Color('#211922');
       const softBlack=new THREE.Color('#51403d'),iris=new THREE.Color(cat?'#5b3934':'#654537');
@@ -5575,11 +5577,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       for(const side of [-1,1]){
         const bone=side<0?5:6;
         const x=side*.159,y=.844;
-        oval(bone,x,y,.289,.100,.124,.043,C.cream,32);
-        oval(bone,x,y-.004,.326,.095,.117,.028,iris,30);
-        oval(bone,x,y-.004,.346,.089,.111,.025,C.eye,32);
-        oval(bone,x-.029,y+.047,.371,.024,.029,.009,white,20);
-        oval(bone,x+.033,y-.037,.371,.012,.014,.005,new THREE.Color('#c5e9ff'),14);
+        // The entire visible eye is the dark pupil: no white rim or iris ring.
+        oval(bone,x,y-.004,.315,.109,.132,.058,C.eye,36);
+        oval(bone,x-.030,y+.048,.369,.025,.030,.010,white,20);
+        oval(bone,x+.035,y-.039,.368,.013,.016,.007,new THREE.Color('#c5e9ff'),14);
       }
       // Closed-eye smiles live on the HEAD behind the eyeballs. They are
       // exposed briefly when the actual eye geometry folds shut. Unlike the
@@ -5589,16 +5590,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         stroke(1,[[x-.061,.840,.331],[x-.029,.823,.337],
           [x,.819,.339],[x+.029,.823,.337],[x+.061,.840,.331]],.0055,C.shade);
       }
-      // Decorative neck scarf / tiny pendant: colorful but deliberately small.
-      // Torus + pendant triangles are merged into the one animated mesh.
-      {
-        const collar=new THREE.TorusGeometry(.185,.020,8,42,Math.PI*.95);
-        collar.rotateX(Math.PI*.5);collar.rotateZ(Math.PI*.025);
-        collar.translate(0,.562,.035);
-        append(collar,0,C.collar);
-        oval(0,0,.534,.225,.029,.031,.017,C.tag,20);
-        oval(0,-.009,.545,.239,.006,.007,.003,white,12);
-      }
+      // V3.53: no collars, pendants, or other neck accessories.
       // Animated, curved tail: ginger kitten's question mark / puppy's wag.
       const tail=cat?[
         [.015,.275,-.17],[.16,.30,-.32],[.30,.39,-.34],
@@ -5622,7 +5614,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
     // One shared eleven-bone hierarchy for Dog 1, Cat 1 and future pet designs.
     function kwgBuildPet(petKey){
-      if(!['dog_1','cat_1'].includes(petKey))return null;
+      if(!/^(dog|cat)_[1-4]$/.test(petKey))return null;
       const {geo,mat}=kwgCharacterGeometry(petKey);
       const root=new THREE.Group();
       const body=new THREE.SkinnedMesh(geo,mat);
@@ -5745,7 +5737,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       // Wag in the horizontal plane as well as up and down. Dog 1 gets
       // excited tail-wag speed; Cat 1 swishes more slowly and deliberately.
-      const cat=pet.petKey==='cat_1';
+      const cat=pet.petKey.startsWith('cat_');
       // Integrate phase, never multiply elapsed time by a changing frequency:
       // doing so made the tail race wildly when follow blended into idle.
       const wagSpeed=cat?(5.2+blend*4.3):(10+blend*5);
@@ -5937,8 +5929,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(kwgPetThumbnailCache.has(petKey))return kwgPetThumbnailCache.get(petKey);
       const renderer=getThumbnailRenderer(180,135);
       const sc=new THREE.Scene();
-      sc.add(new THREE.AmbientLight(0xffffff,1.25));
-      const light=new THREE.DirectionalLight(0xffffff,1.5);light.position.set(3,5,5);sc.add(light);
+      sc.add(new THREE.AmbientLight(0xffffff,.78));
+      const light=new THREE.DirectionalLight(0xffffff,.95);light.position.set(3,5,5);sc.add(light);
       const mesh=kwgBuildPet(petKey);if(!mesh)return null;
       sc.add(mesh);
       const cam=new THREE.PerspectiveCamera(32,180/135,.01,50);
@@ -5954,9 +5946,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const preview=document.createElement('div');preview.className='kwg-pet-preview';
       try{const url=kwgPetThumbnail(pet.petKey);if(url){const img=document.createElement('img');img.src=url;img.alt=pet.name+' 3D preview';preview.append(img);}}
       catch(err){console.warn('Pet preview unavailable',err);preview.textContent=pet.name;}
-      const title=document.createElement('div');title.className='kwg-pet-card-title';title.textContent=pet.name;
-      const desc=document.createElement('div');desc.className='kwg-pet-card-subtitle';
-      desc.textContent=pet.species==='dog'?'A cheerful puppy with floppy ears and a wagging tail.':'A sweet kitty with pointy ears and a swishy tail.';
+      // Keep pet names for screen readers, but not as visible shop-card text.
+      card.setAttribute('aria-label',pet.name+(inventory?' inventory pet':' store pet'));
       const price=document.createElement('div');price.className='kwg-pet-card-price';
       price.textContent=owned?'OWNED':pet.price+' COINS';
       const button=document.createElement('button');
@@ -5977,7 +5968,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           });
         };
       }
-      card.append(preview,title,desc,price,button);return card;
+      card.append(preview,price,button);return card;
     }
     function kwgRenderPets(){
       const shop=document.getElementById('kwg-pets-store-grid');
