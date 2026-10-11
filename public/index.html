@@ -5368,15 +5368,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               color=mix(color,blush,innerEar);
             }
           }
-          // Eyes, pupils and glints: painted into the surface, not protruding orbs.
-          float face=smoothstep(.16,.27,kp.z);
+          // V3.50.4: Eyes are independent glossy meshes with real blinking,
+          // so no flat eye graphics are baked into the body shader.
           for(int side=-1;side<=1;side+=2){
             float s=float(side);
-            vec2 eye=vec2(s*.148,.762);
-            color=mix(color,cream,kwgPetOval(kp.xy,eye,vec2(.118,.142))*face);
-            color=mix(color,ink,kwgPetOval(kp.xy,eye+vec2(0.0,-.008),vec2(.083,.109))*face);
-            color=mix(color,vec3(1.0),kwgPetOval(kp.xy,eye+vec2(-.026,.050),vec2(.034,.037))*face);
-            color=mix(color,vec3(.93,.96,1.0),kwgPetOval(kp.xy,eye+vec2(.040,-.045),vec2(.014,.018))*face);
             if(!kd){
               for(int i=0;i<2;i++){
                 float off=float(i)*.036;
@@ -5394,7 +5389,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       mat.customProgramCacheKey=()=>dog?'kwg_pet_dog_unified_v1':'kwg_pet_cat_unified_v1';
       const data={geo,mat};kwgPetMeshCache.set(cacheKey,data);return data;
     }
-    // KWG V3.50.3: Cat 1 character sculpt. One skinned draw mesh, with deliberately
+    // KWG V3.50.4: Cat 1 plush reference redesign. One skinned draw mesh, with deliberately
     // defined anatomical contours rather than a metaball/smooth-union silhouette.
     // The mesh contains separate topology islands for the head, torso, arms, ears,
     // and tail (a standard way to keep a character readable without extra objects).
@@ -5403,10 +5398,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgSculptedCatGeometry(){
       if(kwgSculptedCatCache)return kwgSculptedCatCache;
       const positions=[],normals=[],colors=[],skinIndices=[],skinWeights=[];
-      const fur=new THREE.Color('#b8c5df'),headFur=new THREE.Color('#c5cee7');
-      const belly=new THREE.Color('#f5f2fc'),earFur=new THREE.Color('#a6b2d0');
-      const earPink=new THREE.Color('#f0a0b7'),paw=new THREE.Color('#f8f5ff');
-      const tailFur=new THREE.Color('#b4c0dc');
+      const fur=new THREE.Color('#9ca0a8'),headFur=new THREE.Color('#aeb2bb');
+      const belly=new THREE.Color('#f7f5f1'),earFur=new THREE.Color('#989ba6');
+      const earPink=new THREE.Color('#eaa0ad'),paw=new THREE.Color('#eee9e8');
+      const tailFur=new THREE.Color('#9599a2');
       const smooth=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
       function addSurface(geometry,bone,paint){
         // Retain the source geometry's smooth vertex normals when expanding its
@@ -5425,26 +5420,29 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(g!==geometry)g.dispose();
         geometry.dispose();
       }
-      // Big, intentionally distinct head: slightly squared plush cheeks, round
-      // forehead and a pronounced chin. This is NOT fused into the torso.
-      const head=new THREE.SphereGeometry(1,40,28);
+      // V3.50.4: Cat-shaped plush head, not a spherical face with ears.
+      // A broad, gently flattened brow, angular cheek silhouette and smaller
+      // chin echo the supplied bouncy grey kitten reference.
+      const head=new THREE.SphereGeometry(1,48,36);
       {
         const a=head.getAttribute('position');
         for(let i=0;i<a.count;i++){
-          let x=a.getX(i),y=a.getY(i),z=a.getZ(i);
-          const cheek=Math.exp(-Math.pow((y+.32)/.31,2)) * Math.exp(-Math.pow((z-.36)/.62,2));
-          x=(x*.348)+(Math.sign(x)*.026*cheek);
-          y=y*.324+.775;
-          z=z*.297+.018;
-          a.setXYZ(i,x,y,z);
+          const x=a.getX(i),y=a.getY(i),z=a.getZ(i);
+          // Broad cheeks, subtly squared brow, and a tapered lower jaw.
+          const width=.365*(.83+.21*Math.max(0,y)+.13*Math.exp(-Math.pow((y+.12)/.34,2)));
+          const squaredX=Math.sign(x)*Math.pow(Math.abs(x),.79);
+          const cheeks=.030*Math.exp(-Math.pow((y+.18)/.26,2))*Math.exp(-Math.pow((z-.48)/.40,2));
+          const newX=squaredX*width+Math.sign(x)*cheeks*Math.pow(Math.abs(x),.7);
+          const newY=y*.306+.782;
+          const newZ=z*.286+.015+(z>0?.022*(1-y*y):0);
+          a.setXYZ(i,newX,newY,newZ);
         }
         a.needsUpdate=true;head.computeVertexNormals();
       }
       addSurface(head,1,(x,y,z)=>{
         const c=headFur.clone();
-        // Cream chin and lower cheek gradient is on the surface itself.
-        const chin=(1-smooth(.52,.68,y))*smooth(.04,.19,z);
-        return c.lerp(belly,chin*.75);
+        const chin=(1-smooth(.58,.74,y))*smooth(.08,.24,z);
+        return c.lerp(belly,chin*.38);
       });
       // Cat ears: tapered, slightly curved sculpted shells, with pink inner-ear
       // vertex paint inset on their front faces. No detached pink cones.
@@ -5453,14 +5451,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const rings=24,around=20;
         for(let j=0;j<=rings;j++){
           const t=j/rings;
-          const centerX=side*(.228+.053*t*t);
-          const radiusX=.126*Math.pow(1-t,.82)+.0015;
-          const radiusZ=.076*Math.pow(1-t,.9)+.001;
-          const cy=1.002+t*.330;
+          const centerX=side*(.232+.071*t*t);
+          const radiusX=.154*Math.pow(1-t,.84)+.0015;
+          const radiusZ=.078*Math.pow(1-t,.9)+.001;
+          const cy=1.006+t*.326;
           for(let k=0;k<=around;k++){
             const ang=2*Math.PI*k/around;
             const x=centerX+Math.cos(ang)*radiusX;
-            const z=-.038+Math.sin(ang)*radiusZ+.015*t;
+            const z=-.018+Math.sin(ang)*radiusZ+.019*t;
             pos.push(x,cy,z);
           }
         }
@@ -5479,35 +5477,44 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       for(const side of [-1,1]){
         addSurface(earGeometry(side),1,(x,y,z)=>{
-          const t=Math.max(0,Math.min(1,(y-1.002)/.330));
-          const centerX=side*(.228+.053*t*t);
-          const width=.126*Math.pow(1-t,.82)+.0015;
+          const t=Math.max(0,Math.min(1,(y-1.006)/.326));
+          const centerX=side*(.232+.071*t*t);
+          const width=.154*Math.pow(1-t,.84)+.0015;
           const innerX=Math.abs(x-centerX)/width;
-          const front=smooth(-.035,.015,z);
-          const inner=(1-smooth(.42,.76,innerX))*smooth(1.075,1.135,y)*(1-smooth(1.285,1.325,y))*front;
+          const front=smooth(-.003,.040,z);
+          const inner=(1-smooth(.42,.79,innerX))*smooth(1.085,1.13,y)*(1-smooth(1.29,1.33,y))*front;
           return earFur.clone().lerp(earPink,inner*.95);
         });
       }
       // Compact legless, pear-shaped torso, with an actual chin-to-torso
       // contour instead of a melted head/body union.
       const torso=new THREE.SphereGeometry(1,36,24);
-      torso.scale(.255,.270,.214);torso.translate(0,.286,-.018);
+      torso.scale(.225,.288,.191);torso.translate(0,.297,-.025);
       addSurface(torso,0,(x,y,z)=>{
-        const patch=(1-smooth(.125,.235,Math.abs(x)))*smooth(.075,.16,z)*smooth(.055,.13,y)*(1-smooth(.44,.56,y));
+        const patch=(1-smooth(.095,.205,Math.abs(x)))*smooth(.06,.15,z)*smooth(.055,.13,y)*(1-smooth(.48,.59,y));
         return fur.clone().lerp(belly,patch*.96);
       });
       // Arms are short, plush and angled outward. They're still part of the
       // same SkinnedMesh, but have clean shoulder and paw silhouettes.
       for(const side of [-1,1]){
         const arm=new THREE.SphereGeometry(1,24,18);
-        arm.scale(.115,.163,.111);
-        arm.rotateZ(side*-.20);
-        arm.translate(side*.288,.325,.078);
+        arm.scale(.193,.083,.096);
+        arm.rotateZ(side*.11);
+        arm.translate(side*.345,.444,.022);
         addSurface(arm,side<0?2:3,(x,y,z)=>{
-          const mitt=(1-smooth(.235,.365,y))*smooth(.06,.13,z);
+          const mitt=smooth(.365,.49,Math.abs(x))*smooth(-.08,.02,z);
           return fur.clone().lerp(paw,mitt*.98);
         });
       }
+      // Small overlapping cheek puffs form a recognisable kitten muzzle.
+      // They share the body's SkinnedMesh/material (not floating objects).
+      for(const side of [-1,1]){
+        const muzzle=new THREE.SphereGeometry(1,24,18);
+        muzzle.scale(.106,.073,.064);
+        muzzle.translate(side*.071,.632,.270);
+        addSurface(muzzle,1,()=>belly.clone());
+      }
+      // A tiny pink triangular nose will be painted above the muzzle.
       // A tapered, curved, upward kitty tail. One connected tube surface,
       // skinned to the existing tail bone, with no extra draw call.
       const curve=new THREE.CatmullRomCurve3([
@@ -5526,7 +5533,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));
       geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(skinWeights,4));
       geo.computeBoundingSphere();
-      const mat=new THREE.MeshPhongMaterial({vertexColors:true,shininess:44,specular:0x252a38,side:THREE.DoubleSide});
+      const mat=new THREE.MeshPhongMaterial({vertexColors:true,shininess:29,specular:0x202028,side:THREE.DoubleSide});
       mat.onBeforeCompile=shader=>{
         shader.vertexShader=shader.vertexShader.replace('#include <common>',
           '#include <common>\nvarying vec3 vKwgCatSculptPos;');
@@ -5541,19 +5548,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           `#include <color_fragment>
           vec3 kp=vKwgCatSculptPos;
           float face=smoothstep(.16,.245,kp.z)*smoothstep(.49,.60,kp.y)*(1.0-smoothstep(1.025,1.09,kp.y));
-          vec3 cream=vec3(.96,.95,1.0),ink=vec3(.022,.030,.075),pink=vec3(.97,.48,.61);
+          vec3 cream=vec3(.96,.95,.93),ink=vec3(.065,.064,.080),pink=vec3(.94,.52,.62);
           // Each facial marking is shaded directly onto the curved head.
           for(int side=-1;side<=1;side+=2){
             float s=float(side);
-            vec2 eye=vec2(s*.147,.790);
-            float rim=kwgCatOval(kp.xy,eye,vec2(.106,.128))*face;
-            diffuseColor.rgb=mix(diffuseColor.rgb,cream,rim);
-            float iris=kwgCatOval(kp.xy,eye+vec2(0.0,-.007),vec2(.080,.103))*face;
-            diffuseColor.rgb=mix(diffuseColor.rgb,ink,iris);
-            float shine=kwgCatOval(kp.xy,eye+vec2(-.029,.046),vec2(.032,.037))*face;
-            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(1.0),shine);
-            float shine2=kwgCatOval(kp.xy,eye+vec2(.037,-.044),vec2(.014,.017))*face;
-            diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.85,.94,1.0),shine2);
+            // V3.50.4: independently modeled blinking eyes sit above this face.
             float cheek=kwgCatOval(kp.xy,vec2(s*.258,.647),vec2(.067,.037))*face*.33;
             diffuseColor.rgb=mix(diffuseColor.rgb,pink,cheek);
             for(int w=0;w<2;w++){
@@ -5571,9 +5570,73 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           mouth=max(mouth,kwgCatLine(kp.xy,vec2(0.0,.563),vec2(.045,.575),.004)*face);
           diffuseColor.rgb=mix(diffuseColor.rgb,ink,mouth*.8);`);
       };
-      mat.customProgramCacheKey=()=> 'kwg_cat_sculpt_v3503';
+      mat.customProgramCacheKey=()=> 'kwg_cat_plush_v3504';
       kwgSculptedCatCache={geo,mat};
       return kwgSculptedCatCache;
+    }
+
+    // KWG V3.50.4: All pet species share this independent 3D eye system.
+    // The eye assemblies follow the head bone, and their eyelids can blink.
+    const kwgEyeGeometry=new THREE.SphereGeometry(1,24,16);
+    const kwgEyeWhite=new THREE.MeshPhongMaterial({color:0xfffaf7,shininess:95,specular:0xffffff});
+    const kwgEyeIris=new THREE.MeshPhongMaterial({color:0x171724,shininess:110,specular:0x858ba6});
+    const kwgEyeGlint=new THREE.MeshBasicMaterial({color:0xffffff});
+    const kwgEyeGlintBlue=new THREE.MeshBasicMaterial({color:0xd8eaff});
+    const kwgEyelidMat=new THREE.MeshPhongMaterial({color:0x585661,shininess:12});
+    function kwgAttachPetEyes(headBone,petKey){
+      const cat=petKey==='cat_1',eyes=[],lids=[];
+      for(const side of [-1,1]){
+        const anchor=new THREE.Group();
+        // Bone is based at y=.65. Place eyes flush on the sculpted face.
+        anchor.position.set(side*(cat?.158:.151),cat?.155:.117,cat?.291:.295);
+        anchor.rotation.y=side*(cat?.20:.16);
+        headBone.add(anchor);
+        const blinking=new THREE.Group();anchor.add(blinking);
+        const sclera=new THREE.Mesh(kwgEyeGeometry,kwgEyeWhite);
+        sclera.scale.set(cat?.098:.092,cat?.122:.117,.039);
+        blinking.add(sclera);
+        const iris=new THREE.Mesh(kwgEyeGeometry,kwgEyeIris);
+        iris.scale.set(cat?.072:.069,cat?.096:.091,.025);
+        iris.position.set(side*-.005,-.009,.035);
+        blinking.add(iris);
+        const glint=new THREE.Mesh(kwgEyeGeometry,kwgEyeGlint);
+        glint.scale.set(.024,.030,.010);
+        glint.position.set(-.025,.044,.057);
+        blinking.add(glint);
+        const tinyGlint=new THREE.Mesh(kwgEyeGeometry,kwgEyeGlintBlue);
+        tinyGlint.scale.set(.011,.014,.008);
+        tinyGlint.position.set(.029,-.046,.056);
+        blinking.add(tinyGlint);
+        const lid=new THREE.Mesh(kwgEyeGeometry,kwgEyelidMat);
+        lid.scale.set(cat?.088:.083,.009,.018);
+        lid.position.z=.032;
+        lid.visible=false;
+        anchor.add(lid);
+        eyes.push(blinking);lids.push(lid);
+      }
+      return {eyes,lids};
+    }
+    function kwgAnimatePetBlink(pet,dt){
+      const parts=pet.mesh.userData.kwgPetParts;
+      if(!parts?.eyes?.length)return;
+      pet.blinkCountdown-=dt;
+      if(pet.blinkCountdown<=0&&pet.blinkAge===null){
+        pet.blinkAge=0;
+        pet.blinkCountdown=2.2+Math.random()*4.3;
+        pet.doubleBlink=Math.random()<.23;
+      }
+      let amount=0;
+      if(pet.blinkAge!==null){
+        pet.blinkAge+=dt;
+        const t=pet.blinkAge;
+        if(t<.19)amount=Math.sin(Math.PI*t/.19);
+        else if(pet.doubleBlink&&t>.27&&t<.44)amount=Math.sin(Math.PI*(t-.27)/.17);
+        else if(t>(pet.doubleBlink?.44:.19))pet.blinkAge=null;
+      }
+      for(let i=0;i<parts.eyes.length;i++){
+        parts.eyes[i].scale.y=Math.max(.045,1-amount*.955);
+        parts.lids[i].visible=amount>.83;
+      }
     }
 
     function kwgBuildPet(petKey){
@@ -5592,8 +5655,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       body.updateMatrixWorld(true);
       body.bind(new THREE.Skeleton([torsoBone,headBone,leftArm,rightArm,tailBone]));
       root.add(body);
+      const {eyes,lids}=kwgAttachPetEyes(headBone,petKey);
       root.scale.setScalar(.85);
-      root.userData.kwgPetParts={body,headBone,leftArm,rightArm,tailBone};
+      root.userData.kwgPetParts={body,headBone,leftArm,rightArm,tailBone,eyes,lids};
       return root;
     }
 
@@ -5612,7 +5676,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       // Store a world-space follow target. Camera/avatar yaw alone must never move a pet.
       kwgWorldPets.set(playerId,{mesh,petKey,phase:Math.random()*Math.PI*2,clock:0,
         lastOwnerX:avatar.position.x,lastOwnerZ:avatar.position.z,
-        followX:mesh.position.x,followZ:mesh.position.z});
+        followX:mesh.position.x,followZ:mesh.position.z,
+        blinkCountdown:1.4+Math.random()*3.8,blinkAge:null,doubleBlink:false});
     }
     function kwgClearWorldPets(){
       for(const pet of kwgWorldPets.values())scene.remove(pet.mesh);
@@ -5660,6 +5725,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         parts.leftArm.rotation.z=Math.sin(pet.clock*8+pet.phase)*.23;
         parts.rightArm.rotation.z=-Math.sin(pet.clock*8+pet.phase)*.23;
         parts.tailBone.rotation.z=Math.sin(pet.clock*11+pet.phase)*.42;
+        kwgAnimatePetBlink(pet,dt);
       }
     }
 
