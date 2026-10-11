@@ -484,7 +484,10 @@ async function migrate() {
       equipped_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     INSERT INTO pet_catalog(pet_key,name,price,species) VALUES
-      ('dog_1','Dog 1',75,'dog'),('cat_1','Cat 1',95,'cat')
+      ('dog_1','Dog 1',75,'dog'),('dog_2','Dog 2',85,'dog'),
+      ('dog_3','Dog 3',95,'dog'),('dog_4','Dog 4',110,'dog'),
+      ('cat_1','Cat 1',95,'cat'),('cat_2','Cat 2',105,'cat'),
+      ('cat_3','Cat 3',115,'cat'),('cat_4','Cat 4',125,'cat')
     ON CONFLICT(pet_key) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS world_templates (
