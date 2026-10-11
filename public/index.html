@@ -5256,11 +5256,50 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         }
         orb(head,lightFur,0,-.13,.26,.20,.15,.13);
       }else{
+        // Cat ears are one cohesive, softly bevelled silhouette per ear.
+        // The pink lining is a flush inset on the FRONT face, not a separate cone
+        // sticking out in front of the fur (which used to look like floating spikes).
         for(const side of [-1,1]){
-          const ear=new THREE.Mesh(new THREE.ConeGeometry(.18,.34,4),fur);
-          ear.position.set(side*.25,.37,-.01);ear.rotation.y=Math.PI/4;head.add(ear);
-          const inner=new THREE.Mesh(new THREE.ConeGeometry(.095,.19,4),pink);
-          inner.position.set(side*.25,.39,.12);inner.rotation.y=Math.PI/4;head.add(inner);
+          const earGroup=new THREE.Group();
+          earGroup.position.set(side*.245,.255,-.015);
+          earGroup.rotation.z=-side*.095; // a gentle outward tilt
+          head.add(earGroup);
+
+          const earOutline=new THREE.Shape();
+          earOutline.moveTo(-.185,-.105);
+          earOutline.quadraticCurveTo(-.20,-.095,-.17,-.015);
+          earOutline.lineTo(side*.055,.275);
+          earOutline.quadraticCurveTo(side*.075,.298,side*.092,.268);
+          earOutline.lineTo(.17,-.025);
+          earOutline.quadraticCurveTo(.198,-.102,.158,-.108);
+          earOutline.quadraticCurveTo(0,-.137,-.185,-.105);
+          const earShell=new THREE.Mesh(new THREE.ExtrudeGeometry(earOutline,{
+            depth:.09,steps:1,bevelEnabled:true,bevelThickness:.012,
+            bevelSize:.014,bevelSegments:2,curveSegments:8
+          }),fur);
+          earShell.position.z=0;
+          earGroup.add(earShell);
+
+          // A smaller matching shape lies almost exactly on the shell's front
+          // surface, leaving a visible fur border all the way around.
+          const lining=new THREE.Shape();
+          lining.moveTo(-.104,-.059);
+          lining.quadraticCurveTo(-.114,-.047,-.083,.012);
+          lining.lineTo(side*.047,.192);
+          lining.quadraticCurveTo(side*.057,.207,side*.065,.19);
+          lining.lineTo(.09,.008);
+          lining.quadraticCurveTo(.119,-.048,.099,-.062);
+          lining.quadraticCurveTo(0,-.084,-.104,-.059);
+          const innerEar=new THREE.Mesh(new THREE.ShapeGeometry(lining,8),pink);
+          innerEar.position.z=.103; // shell front is .102 after its bevel
+          innerEar.material.side=THREE.DoubleSide;
+          earGroup.add(innerEar);
+        }
+        // Soft cheek tufts give the cat a plush silhouette without obscuring
+        // the eyes or making the face look busier.
+        for(const side of [-1,1]){
+          const cheek=orb(head,fur,side*.295,-.155,.105,.115,.11,.13);
+          cheek.rotation.z=-side*.24;
         }
         orb(head,lightFur,0,-.14,.265,.18,.12,.095);
       }
