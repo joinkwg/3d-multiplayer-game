@@ -5705,7 +5705,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }else{
         pet.trickCountdown-=dt*still;
         if(pet.trickCountdown<=0){
-          pet.trickType=1+Math.floor(Math.random()*5);
+          pet.trickType=1+Math.floor(Math.random()*4);
           pet.trickAge=0;
         }
       }
@@ -5714,7 +5714,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const wave=pet.trickType===2?gesture:0;
       const wiggle=pet.trickType===3?gesture:0;
       const perky=pet.trickType===4?gesture:0;
-      const dance=pet.trickType===5?gesture:0;
+      const dance=0; // Removed the awkward full-body dance; keep the four subtle gestures.
       const danceBeat=Math.sin(t*13.5);
       const happyWiggle=wiggle*Math.sin(t*17);
 
@@ -5752,8 +5752,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       // Wag in the horizontal plane as well as up and down. Dog 1 gets
       // excited tail-wag speed; Cat 1 swishes more slowly and deliberately.
       const cat=pet.petKey==='cat_1';
-      const wagSpeed=cat?(still*5.2+blend*9.5):(still*10+blend*15);
-      const wag=Math.sin(t*wagSpeed+pet.phase);
+      // Integrate phase, never multiply elapsed time by a changing frequency:
+      // doing so made the tail race wildly when follow blended into idle.
+      const wagSpeed=cat?(5.2+blend*4.3):(10+blend*5);
+      pet.tailPhase=(pet.tailPhase??pet.phase)+dt*wagSpeed;
+      const wag=Math.sin(pet.tailPhase);
       p.tailBone.rotation.y=wag*(cat?.35:.67)*(1+blend*.30)+dance*.27*danceBeat;
       p.tailBone.rotation.z=Math.sin(t*(cat?4.3:7.5)+pet.phase)*(.17+blend*.15)
         +happyWiggle*.23;
@@ -5769,6 +5772,84 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgAnimatePetBlink(pet,dt);
     }
 
+    // V3.52.4: Pets have their OWN grounded movement, independent of avatar Y.
+    // Only collidable world parts count. A small footprint keeps them from
+    // clipping through walls or walking off platforms while following.
+    const kwgPetCollisionRay=new THREE.Raycaster();
+    const kwgPetRayOrigin=new THREE.Vector3();
+    const kwgPetRayDirection=new THREE.Vector3();
+    const KWG_PET_RADIUS=.245;
+    const KWG_PET_STEP=.34;
+    function kwgPetNearbyBlocks(x,z,range=1.3){
+      const result=[];
+      if(!currentWorldData?.blocks)return result;
+      for(const b of Object.values(currentWorldData.blocks)){
+        if(!b||b.canCollide===false||!worldBlocks[b.id])continue;
+        // Bounding sphere is conservative for rotated or stretched parts.
+        const radius=Math.hypot(Math.abs(Number(b.scaleX)||1),
+          Math.abs(Number(b.scaleY)||1),Math.abs(Number(b.scaleZ)||1))*.5+range;
+        if(Math.abs(x-(Number(b.x)||0))>radius ||
+           Math.abs(z-(Number(b.z)||0))>radius)continue;
+        result.push(b);
+      }
+      return result;
+    }
+    function kwgPetFloorAt(x,z,topY,drop=3.5){
+      let best=-Infinity;
+      const blocks=kwgPetNearbyBlocks(x,z,.55);
+      // Sample around the pet's little body so edges do not leave it hovering.
+      for(const b of blocks){
+        for(const [ox,oz] of [[0,0],[.12,0],[-.12,0],[0,.12],[0,-.12]]){
+          const y=getPartSurfaceYFromData(b,x+ox,z+oz,topY);
+          if(y!==null&&Number.isFinite(y)&&y<=topY+.001&&y>=topY-drop&&y>best)
+            best=y;
+        }
+      }
+      return best===-Infinity?null:best;
+    }
+    function kwgPetMoveGrounded(pet,dx,dz){
+      const dist=Math.hypot(dx,dz);
+      if(dist<.000001)return 0;
+      const px=pet.mesh.position.x,pz=pet.mesh.position.z;
+      const floor=pet.groundY;
+      const dirX=dx/dist,dirZ=dz/dist;
+      const nearby=kwgPetNearbyBlocks(px+dx*.5,pz+dz*.5,dist+1);
+      let permitted=dist;
+      kwgPetRayDirection.set(dirX,0,dirZ);
+      // Cast from the pet's torso and face: don't run through a wall merely
+      // because the center point isn't inside it yet.
+      for(const b of nearby){
+        const bounds=getBlockAABB(b);
+        if(bounds.maxY<=floor+KWG_PET_STEP+.03||bounds.minY>=floor+1.08)continue;
+        const mesh=worldBlocks[b.id];
+        mesh.updateWorldMatrix(true,false);
+        for(const h of [.38,.72]){
+          if(floor+h<bounds.minY||floor+h>bounds.maxY)continue;
+          kwgPetRayOrigin.set(px,floor+h,pz);
+          kwgPetCollisionRay.set(kwgPetRayOrigin,kwgPetRayDirection);
+          kwgPetCollisionRay.near=0;
+          kwgPetCollisionRay.far=dist+KWG_PET_RADIUS+.025;
+          const hits=kwgPetCollisionRay.intersectObject(mesh,false);
+          for(const hit of hits){
+            if(!hit.face)continue;
+            const normal=hit.face.normal.clone().transformDirection(mesh.matrixWorld);
+            if(normal.y>.52)continue; // walkable ramp/floor, not a wall
+            if(normal.x*dirX+normal.z*dirZ>=-.07)continue;
+            permitted=Math.min(permitted,Math.max(0,hit.distance-KWG_PET_RADIUS-.018));
+            break;
+          }
+        }
+      }
+      if(permitted<=.0001)return 0;
+      const nx=px+dirX*permitted,nz=pz+dirZ*permitted;
+      // Step onto small objects; reject drops into empty space and tall ledges.
+      const nextFloor=kwgPetFloorAt(nx,nz,floor+KWG_PET_STEP,2.0);
+      if(nextFloor===null)return 0;
+      pet.mesh.position.x=nx;
+      pet.mesh.position.z=nz;
+      pet.groundY=nextFloor;
+      return permitted;
+    }
     function kwgSetWorldPet(playerId,petKey){
       const old=kwgWorldPets.get(playerId);
       if(old){scene.remove(old.mesh);kwgWorldPets.delete(playerId);}
@@ -5781,12 +5862,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       mesh.position.set(avatar.position.x-Math.sin(yaw)*1.25+Math.cos(yaw)*.85,
         avatar.position.y,avatar.position.z-Math.cos(yaw)*1.25-Math.sin(yaw)*.85);
       scene.add(mesh);
+      const spawnFloor=kwgPetFloorAt(mesh.position.x,mesh.position.z,avatar.position.y+.65,8);
+      const petFloor=spawnFloor===null?avatar.position.y:spawnFloor;
+      mesh.position.y=petFloor+.05;
       // Store a world-space follow target. Camera/avatar yaw alone must never move a pet.
       kwgWorldPets.set(playerId,{mesh,petKey,phase:Math.random()*Math.PI*2,clock:0,
         lastOwnerX:avatar.position.x,lastOwnerZ:avatar.position.z,
         followX:mesh.position.x,followZ:mesh.position.z,
         blinkCountdown:.9+Math.random()*1.8,blinkAge:null,doubleBlink:false,motionBlend:0,
-        hopClock:0,settleTimer:0,trickCountdown:2.5+Math.random()*3,trickAge:-1,trickType:0});
+        hopClock:0,settleTimer:0,groundY:petFloor,tailPhase:Math.random()*Math.PI*2,
+        trickCountdown:2.5+Math.random()*3,trickAge:-1,trickType:0});
     }
     function kwgClearWorldPets(){
       for(const pet of kwgWorldPets.values())scene.remove(pet.mesh);
@@ -5794,19 +5879,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
     function kwgAnimateWorldPets(dt){
       if(!currentWorldName)return;
+      dt=Math.min(dt,.06);
       for(const [id,pet] of kwgWorldPets){
         const avatar=id===socket.id?localPlayerAvatar:otherPlayers[id]?.mesh;
         if(!avatar){scene.remove(pet.mesh);kwgWorldPets.delete(id);continue;}
         pet.clock+=dt;
-        // Follow actual movement, NOT the direction the player is looking.
-        // This lets players stand still, turn their camera, and admire their pet.
+        // Only the owner's horizontal movement updates the target. Turning
+        // in place or jumping vertically cannot make the pet circle or jump.
         const movedX=avatar.position.x-pet.lastOwnerX;
         const movedZ=avatar.position.z-pet.lastOwnerZ;
         const moved=Math.hypot(movedX,movedZ);
-        if(moved>0.015){
-          if(moved>14){ // Respawn/teleport: bring the pet along immediately.
-            pet.followX=avatar.position.x+.85;
-            pet.followZ=avatar.position.z+1.25;
+        if(moved>.015){
+          if(moved>14){
+            // Respawn/teleport: find a nearby floor rather than inherit avatar Y.
+            const x=avatar.position.x+.85,z=avatar.position.z+1.25;
+            const y=kwgPetFloorAt(x,z,avatar.position.y+.65,8);
+            pet.mesh.position.x=x;pet.mesh.position.z=z;
+            if(y!==null)pet.groundY=y;
+            pet.mesh.position.y=pet.groundY+.05;
+            pet.followX=x;pet.followZ=z;
+            pet.motionBlend=0;pet.settleTimer=0;
           }else{
             const dirX=movedX/moved,dirZ=movedZ/moved;
             pet.followX=avatar.position.x-dirX*1.3-dirZ*.75;
@@ -5815,31 +5907,31 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           pet.lastOwnerX=avatar.position.x;
           pet.lastOwnerZ=avatar.position.z;
         }
-        const tx=pet.followX,tz=pet.followZ;
-        const dx=tx-pet.mesh.position.x,dz=tz-pet.mesh.position.z;
+        const dx=pet.followX-pet.mesh.position.x;
+        const dz=pet.followZ-pet.mesh.position.z;
         const distance=Math.hypot(dx,dz);
-        if(distance>14){pet.mesh.position.x=tx;pet.mesh.position.z=tz;}
-        else{
-          const speed=Math.min(1,dt*(distance>2?6:3.7));
-          pet.mesh.position.x+=dx*speed;pet.mesh.position.z+=dz*speed;
+        let travel=0;
+        if(distance>14){
+          const y=kwgPetFloorAt(pet.followX,pet.followZ,pet.groundY+3,9);
+          if(y!==null){
+            pet.mesh.position.x=pet.followX;pet.mesh.position.z=pet.followZ;
+            pet.groundY=y;
+          }
+        }else if(distance>.01){
+          const step=distance*Math.min(1,dt*(distance>2?6:3.7));
+          travel=kwgPetMoveGrounded(pet,dx/distance*step,dz/distance*step);
         }
-        // Detect actual locomotion, not tiny avatar interpolation jitter. The
-        // pet can finish catching up, then settle into its planted idle bob.
-        const petTravel=Math.hypot(pet.mesh.position.x-(pet.prevX??pet.mesh.position.x),
-          pet.mesh.position.z-(pet.prevZ??pet.mesh.position.z));
-        pet.prevX=pet.mesh.position.x;pet.prevZ=pet.mesh.position.z;
-        const ownerWalking=moved>.035;
-        const catchingUp=distance>.27 && petTravel>.004;
-        if(ownerWalking||catchingUp)pet.settleTimer=.22;
+        // Only ACTUAL pet travel causes hopping. A jumping owner or a pet
+        // waiting at a wall does not trigger a phantom airborne hop.
+        if(travel>.0025)pet.settleTimer=.13;
         else pet.settleTimer=Math.max(0,pet.settleTimer-dt);
         const moving=pet.settleTimer>0;
-        pet.motionBlend+=(Number(moving)-pet.motionBlend)*Math.min(1,dt*(moving?8:5));
-        // Separate hop cycle: airborne during travel, grounded while idle.
+        pet.motionBlend+=(Number(moving)-pet.motionBlend)*Math.min(1,dt*(moving?5.5:4));
+        // Smoothly fade jump height at the end of a hop; no vertical snapping.
         pet.hopClock+=dt*2.35;
         const hop=Math.pow(Math.max(0,Math.sin(pet.hopClock*Math.PI*2)),.85);
-        const targetY=avatar.position.y+.05+hop*.44*pet.motionBlend;
-        pet.mesh.position.y+=(targetY-pet.mesh.position.y)*Math.min(1,dt*16);
-        // Keep the pet facing its owner without orbiting when the owner spins.
+        const targetY=pet.groundY+.05+hop*.44*pet.motionBlend;
+        pet.mesh.position.y+=(targetY-pet.mesh.position.y)*Math.min(1,dt*13);
         pet.mesh.rotation.y=Math.atan2(avatar.position.x-pet.mesh.position.x,
           avatar.position.z-pet.mesh.position.z);
         kwgAnimatePetRig(pet,dt);
@@ -6364,7 +6456,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           mesh.position.set(pData.x, pData.y, pData.z);
           scene.add(mesh);
           otherPlayers[pId] = { mesh, username: pData.username };
-          kwgSetWorldPet(pId,pData.petKey);
         }
       }
 
@@ -6372,6 +6463,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const mesh = buildBlockMesh(world.blocks[bId]);
         scene.add(mesh);
         worldBlocks[bId] = mesh;
+      }
+      // Build companions after collidable world meshes are ready, so their
+      // initial ground height is found correctly on elevated platforms.
+      for (const pId in initialPlayers) {
+        if(pId!==selfId)kwgSetWorldPet(pId,initialPlayers[pId].petKey);
       }
       
       updatePartCounter();
