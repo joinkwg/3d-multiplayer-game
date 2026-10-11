@@ -2053,6 +2053,45 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 #kwg-place-panel .kwg-place-number-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
 #kwg-place-panel .kwg-place-number-grid label{font-size:10px;color:#c7e4f7;display:flex;flex-direction:column;gap:3px}
 </style>
+<style id="kwg-v344-home-style">
+/* KWG V3.44 - discovery-first home dashboard. No emoji in the game UI. */
+#home-pane .kwg-home-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(250px,1fr);gap:14px;align-items:start}
+#home-pane .kwg-home-panel{min-width:0;padding:16px;background:#152335;border:2px solid #57718b;box-shadow:4px 4px 0 #0a1220;border-radius:0}
+#home-pane .kwg-home-feature,#home-pane .kwg-home-recent{grid-column:1}
+#home-pane .kwg-home-notices{grid-column:2;grid-row:1 / span 2}
+#home-pane .kwg-home-panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:13px;padding-bottom:12px;border-bottom:2px solid #344d65}
+#home-pane .kwg-home-panel-head h3{margin:3px 0 0;color:#e7f5ff;font-size:13px;letter-spacing:.055em}
+#home-pane .kwg-home-kicker{font-size:9px;letter-spacing:.1em;color:#88c8ed;font-weight:800}
+#home-pane .kwg-home-feature-star{font-size:26px;color:#f5d879;line-height:1}
+#home-pane .kwg-home-text-button{background:#213b50;color:#a9ebff;border:2px solid #6589a4;padding:8px 9px;font:inherit;font-size:9px;font-weight:800;cursor:pointer;white-space:nowrap;border-radius:0}
+#home-pane .kwg-home-text-button:hover,#home-pane .kwg-home-join:hover{filter:brightness(1.15)}
+#home-pane .kwg-home-empty{padding:20px 12px;background:#101b2a;border:1px dashed #466077;color:#a6b7c9;font-size:11px;line-height:1.8}
+#home-pane .kwg-home-feature-card{display:grid;grid-template-columns:minmax(130px,43%) minmax(0,1fr);gap:14px;align-items:stretch}
+#home-pane .kwg-home-thumb{background:#0d1927;border:2px solid #45627c;min-height:125px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#7996ae;font-size:10px;font-weight:800;letter-spacing:.08em}
+#home-pane .kwg-home-thumb img{display:block;width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+#home-pane .kwg-home-feature-info{min-width:0;display:flex;flex-direction:column;gap:9px;align-items:flex-start}
+#home-pane .kwg-home-feature-name{font-size:17px;font-weight:900;line-height:1.4;color:#fff;overflow-wrap:anywhere}
+#home-pane .kwg-home-subtitle{color:#b5c7d9;font-size:10px;line-height:1.7;overflow-wrap:anywhere}
+#home-pane .kwg-home-daily-likes{color:#f9dc81;font-size:11px;font-weight:900}
+#home-pane .kwg-home-join{background:#267052;color:#f1fff6;border:2px solid #a4e88c;box-shadow:2px 2px 0 #091b19;padding:10px 14px;font:inherit;font-size:11px;font-weight:900;cursor:pointer;border-radius:0}
+#home-pane .kwg-home-recent-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+#home-pane .kwg-home-recent-grid>.kwg-home-empty{grid-column:1/-1}
+#home-pane .kwg-home-world-card{min-width:0;display:grid;grid-template-columns:88px minmax(0,1fr);gap:10px;background:#0e1b2a;border:2px solid #3c536d;padding:9px}
+#home-pane .kwg-home-world-card .kwg-home-thumb{min-height:85px}
+#home-pane .kwg-home-world-body{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+#home-pane .kwg-home-world-name{font-size:11px;font-weight:900;color:#d8f4ff;overflow-wrap:anywhere}
+#home-pane .kwg-home-world-meta{font-size:9px;color:#9db5c8;line-height:1.6}
+#home-pane .kwg-home-world-card .kwg-home-join{font-size:9px;padding:6px 10px;margin-top:auto}
+#home-pane .kwg-home-notice-list{display:flex;flex-direction:column;gap:8px}
+#home-pane .kwg-home-notice{display:flex;align-items:flex-start;gap:10px;padding:11px;background:#101d2b;border:2px solid #31465e}
+#home-pane .kwg-home-notice.unread{border-color:#8cbe88;background:#1b3040}
+#home-pane .kwg-home-notice-dot{flex:none;width:7px;height:7px;margin-top:5px;background:#60778b}
+#home-pane .kwg-home-notice.unread .kwg-home-notice-dot{background:#a5e88b}
+#home-pane .kwg-home-notice-message{font-size:10px;color:#e4ecf5;line-height:1.7;overflow-wrap:anywhere}
+#home-pane .kwg-home-notice-time{font-size:9px;color:#95adc0;margin-top:6px}
+@media(max-width:790px){#home-pane .kwg-home-layout{grid-template-columns:1fr}#home-pane .kwg-home-feature,#home-pane .kwg-home-recent,#home-pane .kwg-home-notices{grid-column:1;grid-row:auto}}
+@media(max-width:480px){#home-pane .kwg-home-panel{padding:11px}#home-pane .kwg-home-feature-card{grid-template-columns:1fr}#home-pane .kwg-home-feature-card>.kwg-home-thumb{height:175px}#home-pane .kwg-home-recent-grid{grid-template-columns:1fr}#home-pane .kwg-home-panel-head{flex-wrap:wrap}}
+</style>
 </head>
 <body>
   <div id="kwg-loading-overlay" role="status" aria-live="polite" aria-atomic="true" aria-label="Loading" aria-hidden="true">
@@ -2122,7 +2161,23 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         <button id="notifications-btn" class="home-tab notifications-tab" data-home-tab="notifications" type="button" title="Notifications" aria-label="Notifications"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 17h12l-1.5-2.2V10a4.5 4.5 0 0 0-9 0v4.8z"/><path d="M10 19.5a2.2 2.2 0 0 0 4 0"/></svg></span><span class="nav-label">Notifications</span><span id="notification-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
         <button class="home-tab admin-home-tab" data-home-tab="admin" title="Admin" aria-label="Admin" style="display:none"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14 5.1l2.9-.3.7 2.8 2.5 1.5-1.1 2.7 1.1 2.7-2.5 1.5-.7 2.8-2.9-.3L12 21l-2-2.1-2.9.3-.7-2.8-2.5-1.5L5 12.2 3.9 9.5 6.4 8l.7-2.8 2.9.3z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="nav-label">Admin</span></button>
       </div>
-      <div id="home-pane" class="home-pane active"><div class="kwg-page-heading"><div><div class="profile-kicker">DASHBOARD</div><h2>HOME</h2><p>Your worlds, avatar, and collection at a glance.</p></div></div><div class="home-profile-grid"><div class="home-section"><h3>YOUR AVATAR</h3><div id="home-avatar-preview" class="home-avatar-preview"></div></div><div style="display:grid;gap:14px"><div class="home-section"><h3>YOUR WORLDS</h3><div id="home-owned-worlds" class="room-list-container home-owned-worlds"></div></div><div class="home-section"><h3>YOUR INVENTORY</h3><div id="home-inventory-grid" class="home-inventory-grid"></div></div></div></div></div>
+      <div id="home-pane" class="home-pane active">
+        <div class="kwg-page-heading"><div><div class="profile-kicker">PLAYER DASHBOARD</div><h2>HOME</h2><p>Jump back in, discover today's favorite, and catch up.</p></div></div>
+        <div class="kwg-home-layout">
+          <section class="kwg-home-panel kwg-home-feature" aria-labelledby="kwg-home-wotd-heading">
+            <div class="kwg-home-panel-head"><div><div class="kwg-home-kicker">COMMUNITY SPOTLIGHT / LAST 24 HOURS</div><h3 id="kwg-home-wotd-heading">WORLD OF THE DAY</h3></div><span class="kwg-home-feature-star" aria-hidden="true">★</span></div>
+            <div id="kwg-home-wotd" class="kwg-home-wotd-content"><div class="kwg-home-empty">Finding today's favorite world...</div></div>
+          </section>
+          <section class="kwg-home-panel kwg-home-recent" aria-labelledby="kwg-home-recent-heading">
+            <div class="kwg-home-panel-head"><div><div class="kwg-home-kicker">YOUR ADVENTURES</div><h3 id="kwg-home-recent-heading">RECENTLY PLAYED</h3></div><button type="button" class="kwg-home-text-button" data-go-tab="worlds">BROWSE WORLDS →</button></div>
+            <div id="kwg-home-recent-worlds" class="kwg-home-recent-grid"><div class="kwg-home-empty">Loading your recently played worlds...</div></div>
+          </section>
+          <section class="kwg-home-panel kwg-home-notices" aria-labelledby="kwg-home-notices-heading">
+            <div class="kwg-home-panel-head"><div><div class="kwg-home-kicker">STAY IN THE LOOP</div><h3 id="kwg-home-notices-heading">RECENT NOTIFICATIONS</h3></div><button type="button" class="kwg-home-text-button" data-go-tab="notifications">VIEW ALL →</button></div>
+            <div id="kwg-home-notices-list" class="kwg-home-notice-list"><div class="kwg-home-empty">Loading notifications...</div></div>
+          </section>
+        </div>
+      </div>
       <div id="notifications-pane" class="home-pane"><section id="notifications-panel" class="notifications-panel">
         <div class="notifications-head">
           <div><div class="profile-kicker">SOCIAL</div><h2>NOTIFICATIONS</h2></div>
@@ -2945,7 +3000,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       document.getElementById('home-screen').style.display = 'flex';
       document.getElementById('logged-user-display').textContent = filterKWGUserText(loggedInUsername);
       switchHomeTab('home');
-      renderHomeOverview();
     }
 
     document.getElementById('auth-login-btn').addEventListener('click', () => {
@@ -3179,14 +3233,95 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       });
     }
 
-    function renderHomeOverview() {
-      refreshStoreData(()=>{renderHomeInventory();renderHomeAvatar();});
-      socket.emit('get_worlds', {sort:'recent'}, (res) => {
-        if (!res?.success) return;
-        const box=document.getElementById('home-owned-worlds'); if(!box)return; box.innerHTML='';
-        const mine=res.worlds.filter(w=>(w.ownerUsername||'').toLowerCase()===(loggedInUsername||'').toLowerCase());
-        mine.forEach(w=>box.appendChild(makeWorldCard(w)));
-        if(!mine.length) box.innerHTML='<div style="color:#888;padding:10px">You do not own any worlds yet. Create one from the Worlds tab!</div>';
+    // KWG V3.44: Home data is loaded from the server. Recently played is
+    // account-scoped; the featured world is ranked by likes added in 24h.
+    let kwgHomeRequestId=0;
+    function kwgHomeThumbnail(w){
+      const thumb=document.createElement('div');
+      thumb.className='kwg-home-thumb';
+      thumb.textContent='NO PHOTO';
+      if(w.thumbnailUrl && /^https:\/\//i.test(w.thumbnailUrl)){
+        const img=document.createElement('img');
+        img.src=w.thumbnailUrl;
+        img.alt='World preview';
+        img.loading='lazy';
+        thumb.replaceChildren(img);
+      }
+      return thumb;
+    }
+    function kwgHomeJoinButton(worldName){
+      const btn=document.createElement('button');
+      btn.type='button';btn.className='kwg-home-join';btn.textContent='PLAY WORLD';
+      btn.addEventListener('click',()=>joinSelectedWorld(worldName));
+      return btn;
+    }
+    function kwgHomeShowFeatured(w){
+      const box=document.getElementById('kwg-home-wotd');
+      if(!box)return;
+      box.replaceChildren();
+      if(!w){box.innerHTML='<div class="kwg-home-empty">No worlds have received new likes in the past 24 hours. The next world to earn a like could be featured!</div>';return;}
+      const card=document.createElement('div');card.className='kwg-home-feature-card';
+      const details=document.createElement('div');details.className='kwg-home-feature-info';
+      const name=document.createElement('div');name.className='kwg-home-feature-name';name.textContent=filterKWGUserText(w.displayName||w.name);
+      const sub=document.createElement('div');sub.className='kwg-home-subtitle';
+      sub.textContent=`By ${filterKWGUserText(w.ownerUsername||'Unknown')} · ${Number(w.onlineCount)||0} playing · ${Number(w.likes)||0} total likes`;
+      const likes=document.createElement('div');likes.className='kwg-home-daily-likes';
+      likes.textContent=`♥ ${Number(w.likesLast24Hours)||0} NEW LIKES / 24H`;
+      const desc=document.createElement('div');desc.className='kwg-home-subtitle';
+      desc.textContent=filterKWGUserText(w.description||'Discover this community favorite.');
+      details.append(name,sub,likes,desc,kwgHomeJoinButton(w.name));
+      card.append(kwgHomeThumbnail(w),details);box.append(card);
+    }
+    function kwgHomeShowRecent(worlds){
+      const box=document.getElementById('kwg-home-recent-worlds');
+      if(!box)return;
+      box.replaceChildren();
+      if(!worlds.length){box.innerHTML='<div class="kwg-home-empty">No recently played worlds yet. Explore the Worlds tab and join one to see it here!</div>';return;}
+      worlds.forEach(w=>{
+        const card=document.createElement('div');card.className='kwg-home-world-card';
+        const body=document.createElement('div');body.className='kwg-home-world-body';
+        const name=document.createElement('div');name.className='kwg-home-world-name';name.textContent=filterKWGUserText(w.displayName||w.name);
+        const meta=document.createElement('div');meta.className='kwg-home-world-meta';
+        meta.textContent=`PLAYED ${timeAgo(w.lastPlayedAt)} · ${Number(w.onlineCount)||0} ONLINE`;
+        body.append(name,meta,kwgHomeJoinButton(w.name));
+        card.append(kwgHomeThumbnail(w),body);box.append(card);
+      });
+    }
+    function kwgHomeShowNotices(notices){
+      const box=document.getElementById('kwg-home-notices-list');
+      if(!box)return;
+      box.replaceChildren();
+      if(!notices.length){box.innerHTML='<div class="kwg-home-empty">You are all caught up. New notifications will appear here.</div>';return;}
+      notices.forEach(n=>{
+        const row=document.createElement('div');row.className='kwg-home-notice'+(n.isRead?'':' unread');
+        const dot=document.createElement('span');dot.className='kwg-home-notice-dot';dot.setAttribute('aria-hidden','true');
+        const body=document.createElement('div');
+        const msg=document.createElement('div');msg.className='kwg-home-notice-message';msg.textContent=filterKWGUserText(n.message||'');
+        const time=document.createElement('div');time.className='kwg-home-notice-time';time.textContent=timeAgo(n.createdAt);
+        body.append(msg,time);row.append(dot,body);box.append(row);
+      });
+    }
+    function renderHomeOverview(){
+      const requestId=++kwgHomeRequestId;
+      const featured=document.getElementById('kwg-home-wotd');
+      const recent=document.getElementById('kwg-home-recent-worlds');
+      const notices=document.getElementById('kwg-home-notices-list');
+      if(!featured||!recent||!notices)return;
+      featured.innerHTML="<div class='kwg-home-empty'>Finding today's favorite world...</div>";
+      recent.innerHTML='<div class="kwg-home-empty">Loading your recently played worlds...</div>';
+      notices.innerHTML='<div class="kwg-home-empty">Loading notifications...</div>';
+      const username=loggedInUsername;
+      socket.emit('get_home_dashboard',{},res=>{
+        if(requestId!==kwgHomeRequestId || loggedInUsername!==username)return;
+        if(!res?.success){
+          featured.innerHTML='<div class="kwg-home-empty">Could not load World of the Day. Please reopen Home to retry.</div>';
+          recent.innerHTML='<div class="kwg-home-empty">Could not load recent worlds.</div>';
+          notices.innerHTML='<div class="kwg-home-empty">Could not load notifications.</div>';
+          return;
+        }
+        kwgHomeShowFeatured(res.worldOfTheDay);
+        kwgHomeShowRecent(res.recentlyPlayed||[]);
+        kwgHomeShowNotices(res.notifications||[]);
       });
     }
     document.getElementById('world-sort').addEventListener('change', renderRoomList);
