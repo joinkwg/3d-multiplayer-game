@@ -2183,6 +2183,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       .kwg-profile-v345 .kwg-profile-message{grid-template-columns:42px minmax(0,1fr);gap:8px!important}
       .kwg-profile-message-avatar{width:42px;height:42px}
     }
+    /* KWG V3.45.2: created-world sorting in the pixel-arcade profile */
+    .kwg-profile-v345 .kwg-profile-created-header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+    .kwg-profile-v345 .kwg-profile-created-header .profile-panel-title{margin-bottom:0!important}
+    .kwg-profile-v345 .kwg-profile-sort-label{display:inline-flex;align-items:center;gap:7px;font-size:9px;font-weight:900;letter-spacing:.05em;color:#b8d2e6;white-space:nowrap}
+    .kwg-profile-v345 #profile-created-sort{font-family:inherit;font-size:10px;font-weight:900;cursor:pointer;color:#ecf9ff;background:#132d43;border:2px solid #6db5d7;border-radius:0;padding:7px 9px;box-shadow:2px 2px 0 #07131e;max-width:100%}
+    .kwg-profile-v345 #profile-created-sort:focus-visible{outline:2px solid #c8f3ff;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -2310,16 +2316,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             <div class="profile-panel-title">FRIENDS <span id="profile-friends-count" class="kwg-profile-count">0</span></div>
             <div id="profile-friends-list" class="kwg-profile-friends-list"></div>
           </section>
-          <div class="profile-grid kwg-profile-world-grid">
-            <section class="profile-panel">
-              <div class="profile-panel-title">LIKED WORLDS</div>
-              <div id="profile-liked-worlds" class="profile-showcase-worlds"></div>
-            </section>
-            <section class="profile-panel">
-              <div class="profile-panel-title">TOP-LIKED CREATIONS</div>
-              <div id="profile-top-worlds" class="profile-showcase-worlds"></div>
-            </section>
-          </div>
           <section class="profile-panel kwg-profile-board">
             <div class="profile-panel-title">MESSAGE BOARD</div>
             <div id="profile-message-list" class="kwg-profile-message-list"></div>
@@ -2329,6 +2325,24 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               <div class="kwg-profile-compose-actions"><span id="profile-message-count">0/240</span><button id="profile-message-send" class="submit-btn" type="button">POST MESSAGE</button></div>
             </div>
           </section>
+          <div class="profile-grid kwg-profile-world-grid">
+            <section class="profile-panel">
+              <div class="profile-panel-title">LIKED WORLDS</div>
+              <div id="profile-liked-worlds" class="profile-showcase-worlds"></div>
+            </section>
+            <section class="profile-panel">
+              <div class="kwg-profile-created-header">
+                <div class="profile-panel-title">CREATED WORLDS</div>
+                <label class="kwg-profile-sort-label" for="profile-created-sort">SORT BY
+                  <select id="profile-created-sort" aria-label="Sort created worlds">
+                    <option value="likes">TOP LIKED</option>
+                    <option value="recent">RECENT</option>
+                  </select>
+                </label>
+              </div>
+              <div id="profile-top-worlds" class="profile-showcase-worlds"></div>
+            </section>
+          </div>
         </div>
       </div>
       <div id="friends-pane" class="home-pane">
@@ -6568,7 +6582,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       renderProfileAvatar(profile.appearance);
       renderProfileWorldList('profile-liked-worlds',profile.likedWorlds,'No liked worlds yet.');
-      renderProfileWorldList('profile-top-worlds',profile.topWorlds,'No worlds created yet.');
+      const createdSort=document.getElementById('profile-created-sort');
+      createdSort.value='likes'; // Every newly opened profile defaults to Top Liked.
+      const drawCreatedWorlds=()=>{
+        const worlds=[...(profile.createdWorlds||profile.topWorlds||[])];
+        if(createdSort.value==='recent'){
+          worlds.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0)||Number(b.id||0)-Number(a.id||0));
+        }else{
+          worlds.sort((a,b)=>Number(b.likeCount||0)-Number(a.likeCount||0)||new Date(b.createdAt||0)-new Date(a.createdAt||0)||Number(b.id||0)-Number(a.id||0));
+        }
+        renderProfileWorldList('profile-top-worlds',worlds,'No worlds created yet.');
+      };
+      createdSort.onchange=drawCreatedWorlds;
+      drawCreatedWorlds();
       renderProfileFriends(profile.friends);
       renderProfileMessages(profile);
 
