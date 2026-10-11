@@ -5444,46 +5444,48 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const chin=(1-smooth(.58,.74,y))*smooth(.08,.24,z);
         return c.lerp(belly,chin*.38);
       });
-      // Cat ears: tapered, slightly curved sculpted shells, with pink inner-ear
-      // vertex paint inset on their front faces. No detached pink cones.
+      // V3.50.5: Wide, kitten-shaped ears whose ROOTS sink into the skull.
+      // The base overlaps the forehead, so there is no visible floating spike.
+      // Front-facing pink lining is VERTEX COLOR on the same ear surface.
       function earGeometry(side){
         const pos=[],idx=[];
-        const rings=24,around=20;
+        const rings=32,around=32;
         for(let j=0;j<=rings;j++){
           const t=j/rings;
-          const centerX=side*(.232+.071*t*t);
-          const radiusX=.154*Math.pow(1-t,.84)+.0015;
-          const radiusZ=.078*Math.pow(1-t,.9)+.001;
-          const cy=1.006+t*.326;
+          const centerX=side*(.238+.075*t*t);
+          // Broad at the head, softly tapered at the tip.
+          const width=.187*Math.pow(1-t,.84)+.002;
+          const depth=.117*Math.pow(1-t,.88)+.004;
+          const cy=.925+t*.379;
+          // Base emerges from the front of the skull, not behind it.
+          const cz=.116-.010*t;
           for(let k=0;k<=around;k++){
-            const ang=2*Math.PI*k/around;
-            const x=centerX+Math.cos(ang)*radiusX;
-            const z=-.018+Math.sin(ang)*radiusZ+.019*t;
-            pos.push(x,cy,z);
+            const a=2*Math.PI*k/around;
+            pos.push(centerX+Math.cos(a)*width,cy,cz+Math.sin(a)*depth);
           }
         }
         for(let j=0;j<rings;j++)for(let k=0;k<around;k++){
           const a=j*(around+1)+k,b=a+around+1;
-          // Correct outward winding for the parametric ear shell.
-          if(side===1){idx.push(a,b,a+1,b,b+1,a+1);}
-          else{idx.push(a,b,a+1,b,b+1,a+1);}
+          idx.push(a,b,a+1,b,b+1,a+1);
         }
         const g=new THREE.BufferGeometry();
         g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
         g.setIndex(idx);g.computeVertexNormals();
-        // Use double-sided material, so the inner panel remains visible if
-        // the ear loft has locally inverted winding.
         return g;
       }
       for(const side of [-1,1]){
         addSurface(earGeometry(side),1,(x,y,z)=>{
-          const t=Math.max(0,Math.min(1,(y-1.006)/.326));
-          const centerX=side*(.232+.071*t*t);
-          const width=.154*Math.pow(1-t,.84)+.0015;
-          const innerX=Math.abs(x-centerX)/width;
-          const front=smooth(-.003,.040,z);
-          const inner=(1-smooth(.42,.79,innerX))*smooth(1.085,1.13,y)*(1-smooth(1.29,1.33,y))*front;
-          return earFur.clone().lerp(earPink,inner*.95);
+          const t=Math.max(0,Math.min(1,(y-.925)/.379));
+          const centerX=side*(.238+.075*t*t);
+          const width=.187*Math.pow(1-t,.84)+.002;
+          const nx=Math.abs(x-centerX)/width;
+          const depth=.117*Math.pow(1-t,.88)+.004;
+          const front=(z-(.116-.010*t))/depth;
+          // Leave a clear gray rim; lining fades naturally into the fur
+          // at the root instead of looking like a stuck-on pink triangle.
+          const inset=(1-smooth(.40,.78,nx))*smooth(.32,.72,front);
+          const vertical=smooth(.990,1.055,y)*(1-smooth(1.262,1.301,y));
+          return earFur.clone().lerp(earPink,inset*vertical*.91);
         });
       }
       // Compact legless, pear-shaped torso, with an actual chin-to-torso
@@ -5494,16 +5496,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const patch=(1-smooth(.095,.205,Math.abs(x)))*smooth(.06,.15,z)*smooth(.055,.13,y)*(1-smooth(.48,.59,y));
         return fur.clone().lerp(belly,patch*.96);
       });
-      // Arms are short, plush and angled outward. They're still part of the
-      // same SkinnedMesh, but have clean shoulder and paw silhouettes.
+      // V3.50.5: Resting kitten arms, gently draped DOWN beside the torso.
+      // Their shoulders tuck under the cheeks rather than holding a T-pose.
+      // Both remain skinned to their own bones for soft hopping motion.
       for(const side of [-1,1]){
-        const arm=new THREE.SphereGeometry(1,24,18);
-        arm.scale(.193,.083,.096);
-        arm.rotateZ(side*.11);
-        arm.translate(side*.345,.444,.022);
+        const arm=new THREE.SphereGeometry(1,28,22);
+        arm.scale(.096,.177,.100);
+        arm.rotateZ(side*.48);
+        arm.translate(side*.247,.337,.052);
         addSurface(arm,side<0?2:3,(x,y,z)=>{
-          const mitt=smooth(.365,.49,Math.abs(x))*smooth(-.08,.02,z);
-          return fur.clone().lerp(paw,mitt*.98);
+          const mitt=(1-smooth(.235,.345,y))*smooth(.01,.10,z);
+          return fur.clone().lerp(paw,mitt*.95);
         });
       }
       // Small overlapping cheek puffs form a recognisable kitten muzzle.
@@ -5570,7 +5573,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           mouth=max(mouth,kwgCatLine(kp.xy,vec2(0.0,.563),vec2(.045,.575),.004)*face);
           diffuseColor.rgb=mix(diffuseColor.rgb,ink,mouth*.8);`);
       };
-      mat.customProgramCacheKey=()=> 'kwg_cat_plush_v3504';
+      mat.customProgramCacheKey=()=> 'kwg_cat_plush_v3505';
       kwgSculptedCatCache={geo,mat};
       return kwgSculptedCatCache;
     }
@@ -5649,7 +5652,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         rightArm=new THREE.Bone(),tailBone=new THREE.Bone();
       torsoBone.add(headBone,leftArm,rightArm,tailBone);
       headBone.position.set(0,.65,0);
-      leftArm.position.set(-.295,.43,.035);rightArm.position.set(.295,.43,.035);
+      leftArm.position.set(-.205,.435,.035);rightArm.position.set(.205,.435,.035);
       tailBone.position.set(0,.34,-.24);
       body.add(torsoBone);
       body.updateMatrixWorld(true);
@@ -5722,8 +5725,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         // A single skinned surface deforms with its five-bone rig.
         parts.body.scale.y=1+Math.sin(pet.clock*8+pet.phase)*.055;
         parts.headBone.rotation.z=Math.sin(pet.clock*4+pet.phase)*.055;
-        parts.leftArm.rotation.z=Math.sin(pet.clock*8+pet.phase)*.23;
-        parts.rightArm.rotation.z=-Math.sin(pet.clock*8+pet.phase)*.23;
+        // Cat arms hang naturally; subtle opposite swings as the pet hops.
+        // Dog keeps its original energetic arm motion.
+        if(pet.petKey==='cat_1'){
+          parts.leftArm.rotation.z=Math.sin(pet.clock*8+pet.phase)*.11;
+          parts.rightArm.rotation.z=-Math.sin(pet.clock*8+pet.phase)*.11;
+          parts.leftArm.rotation.x=Math.sin(pet.clock*8+pet.phase)*.12;
+          parts.rightArm.rotation.x=-Math.sin(pet.clock*8+pet.phase)*.12;
+        }else{
+          parts.leftArm.rotation.z=Math.sin(pet.clock*8+pet.phase)*.23;
+          parts.rightArm.rotation.z=-Math.sin(pet.clock*8+pet.phase)*.23;
+        }
         parts.tailBone.rotation.z=Math.sin(pet.clock*11+pet.phase)*.42;
         kwgAnimatePetBlink(pet,dt);
       }
