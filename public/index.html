@@ -5392,7 +5392,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // KWG V3.52 — ORIGINAL PLUSH COMPANIONS
     // Each species is ONE GPU-skinned mesh / material / draw call, assembled from
     // hand-shaped surfaces with deliberate contours, not an SDF blob. Every
-    // species uses the same nine-bone skeleton and expressive animation rig.
+    // species uses the same eleven-bone skeleton and expressive animation rig.
     const kwgCharacterMeshCache=new Map();
     function kwgCharacterGeometry(petKey){
       if(kwgCharacterMeshCache.has(petKey))return kwgCharacterMeshCache.get(petKey);
@@ -5577,11 +5577,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       for(const side of [-1,1]){
         const bone=side<0?5:6;
         const x=side*.159,y=.844;
-        oval(bone,x,y,.289,.090,.114,.043,C.cream,32);
-        oval(bone,x,y-.006,.325,.070,.093,.027,iris,30);
-        oval(bone,x,y-.006,.341,.057,.080,.022,C.eye,28);
-        oval(bone,x-.024,y+.038,.361,.023,.028,.009,white,20);
-        oval(bone,x+.027,y-.033,.362,.011,.013,.005,new THREE.Color('#c5e9ff'),14);
+        oval(bone,x,y,.289,.095,.119,.043,C.cream,32);
+        oval(bone,x,y-.006,.326,.079,.102,.027,iris,30);
+        oval(bone,x,y-.006,.344,.068,.090,.024,C.eye,28);
+        oval(bone,x-.026,y+.043,.368,.024,.029,.009,white,20);
+        oval(bone,x+.029,y-.035,.369,.012,.014,.005,new THREE.Color('#c5e9ff'),14);
+      }
+      // Soft, articulated upper eyelids: skinned into this same single mesh.
+      // Each eyelid pivots at the top of the eye and sweeps down to cover the
+      // pupil. Unlike squeezing the eye alone, this reads as a real blink.
+      for(const side of [-1,1]){
+        const lidBone=side<0?9:10;
+        const x=side*.159;
+        oval(lidBone,x,.844,.357,.096,.121,.027,C.head,32);
+        // A delicate lower eyelash line becomes visible at full closure.
+        stroke(lidBone,[[x-.061,.837,.381],[x,.828,.384],[x+.061,.837,.381]],.0032,C.shade);
       }
       // Decorative neck scarf / tiny pendant: colorful but deliberately small.
       // Torus + pendant triangles are merged into the one animated mesh.
@@ -5610,11 +5620,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(indices,4));
       geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(weights,4));
       geo.computeBoundingSphere();
-      const mat=new THREE.MeshPhongMaterial({vertexColors:true,shininess:38,specular:0x26211d});
+      const mat=new THREE.MeshPhongMaterial({vertexColors:true,shininess:7,specular:0x0b0908});
       const result={geo,mat};kwgCharacterMeshCache.set(petKey,result);return result;
     }
 
-    // One shared nine-bone hierarchy for Dog 1, Cat 1 and future pet designs.
+    // One shared eleven-bone hierarchy for Dog 1, Cat 1 and future pet designs.
     function kwgBuildPet(petKey){
       if(!['dog_1','cat_1'].includes(petKey))return null;
       const {geo,mat}=kwgCharacterGeometry(petKey);
@@ -5623,113 +5633,145 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       body.frustumCulled=false;
       const torsoBone=new THREE.Bone(),headBone=new THREE.Bone(),leftArm=new THREE.Bone(),
         rightArm=new THREE.Bone(),tailBone=new THREE.Bone(),leftEye=new THREE.Bone(),
-        rightEye=new THREE.Bone(),leftEar=new THREE.Bone(),rightEar=new THREE.Bone();
+        rightEye=new THREE.Bone(),leftEar=new THREE.Bone(),rightEar=new THREE.Bone(),
+        leftLid=new THREE.Bone(),rightLid=new THREE.Bone();
       torsoBone.add(headBone,leftArm,rightArm,tailBone);
-      headBone.add(leftEye,rightEye,leftEar,rightEar);
+      headBone.add(leftEye,rightEye,leftEar,rightEar,leftLid,rightLid);
       headBone.position.set(0,.65,0);
       leftArm.position.set(-.22,.445,.018);rightArm.position.set(.22,.445,.018);
       tailBone.position.set(0,.34,-.24);
       leftEye.position.set(-.159,.194,.325);rightEye.position.set(.159,.194,.325);
       leftEar.position.set(-.26,.43,.04);rightEar.position.set(.26,.43,.04);
+      // Eyelid pivots are located at the upper rim of each eye.
+      leftLid.position.set(-.159,.310,.357);rightLid.position.set(.159,.310,.357);
+      leftLid.scale.y=.001;rightLid.scale.y=.001;
       body.add(torsoBone);body.updateMatrixWorld(true);
+      // Bind in the neutral open-eye pose: bone scales must be set AFTER bind.
+      leftLid.scale.y=1;rightLid.scale.y=1;
+      body.updateMatrixWorld(true);
       body.bind(new THREE.Skeleton([torsoBone,headBone,leftArm,rightArm,tailBone,
-        leftEye,rightEye,leftEar,rightEar]));
+        leftEye,rightEye,leftEar,rightEar,leftLid,rightLid]));
+      leftLid.scale.y=.001;rightLid.scale.y=.001;
       root.add(body);root.scale.setScalar(.85);
       root.userData.kwgPetParts={body,headBone,leftArm,rightArm,tailBone,
-        leftEye,rightEye,leftEar,rightEar};
+        leftEye,rightEye,leftEar,rightEar,leftLid,rightLid};
       return root;
     }
 
-    // V3.52.1 — Lively companions: shared clips for every pet species.
-    // Blink, idle actions and hopping run from elapsed seconds (not frame counts).
+    // V3.52.2 — Shared eleven-bone rig, genuinely expressive animation.
+    // Every species uses the exact same movement, eyelids and gesture system.
     function kwgAnimatePetBlink(pet,dt){
       const p=pet.mesh.userData.kwgPetParts;
       pet.blinkCountdown-=dt;
       if(pet.blinkCountdown<=0 && pet.blinkAge===null){
         pet.blinkAge=0;
-        pet.doubleBlink=Math.random()<.30;
-        pet.blinkCountdown=2.1+Math.random()*3.5;
+        pet.doubleBlink=Math.random()<.27;
+        pet.blinkCountdown=1.8+Math.random()*2.8;
       }
       let closed=0;
       if(pet.blinkAge!==null){
         pet.blinkAge+=dt;
         const t=pet.blinkAge;
-        // Hold the eyes shut for a beat so blinks read at ordinary frame rates.
-        const eyelid=(u)=>u<.10?u/.10:u<.20?1:u<.32?(1-(u-.20)/.12):0;
-        closed=eyelid(t);
-        if(pet.doubleBlink && t>=.39)closed=Math.max(closed,eyelid(t-.39));
-        if(t>(pet.doubleBlink?.74:.34))pet.blinkAge=null;
+        // Each blink stays fully closed long enough to register visually.
+        const lid=(u)=>u<0?0:u<.13?u/.13:u<.27?1:u<.43?1-(u-.27)/.16:0;
+        closed=lid(t);
+        if(pet.doubleBlink && t>.55)closed=Math.max(closed,lid(t-.55));
+        if(t>(pet.doubleBlink?.99:.43))pet.blinkAge=null;
       }
-      // Both eyes (including their glints) are assigned to individual eye bones.
-      // Compressing them reveals the underlying face, like closing eyelids.
-      const eyeHeight=Math.max(.025,1-closed*.975);
-      p.leftEye.scale.y=eyeHeight;
-      p.rightEye.scale.y=eyeHeight;
+      // Eyes compress and retract while fur-colored lids sweep down over them.
+      const open=1-closed;
+      p.leftEye.scale.y=p.rightEye.scale.y=Math.max(.018,open);
+      p.leftEye.position.z=p.rightEye.position.z=.325-closed*.022;
+      p.leftLid.scale.y=p.rightLid.scale.y=Math.max(.001,closed);
     }
 
     function kwgAnimatePetRig(pet,dt){
       const p=pet.mesh.userData.kwgPetParts;
       const t=pet.clock,blend=pet.motionBlend,still=1-blend;
-      const breathe=Math.sin(t*3.8+pet.phase);
-      const bob=Math.sin(t*6.1+pet.phase);
-      const hopWave=Math.sin(pet.hopClock*Math.PI*2);
-      const landing=Math.pow(Math.max(0,-hopWave),6);
+      const idleWave=Math.sin(t*8.2+pet.phase);
+      const idlePulse=(1+idleWave)*.5;
+      const hopPhase=pet.hopClock*Math.PI*2;
+      const airborne=Math.pow(Math.max(0,Math.sin(hopPhase)),.85);
+      const landing=Math.pow(Math.max(0,-Math.sin(hopPhase)),7);
+      const takeoff=Math.max(0,Math.sin(hopPhase));
 
-      // Timed personality clips trigger only when comfortably settled.
+      // Playful routines happen while resting. The dance is a full little
+      // two-second sequence rather than a barely visible twitch.
       if(pet.trickCountdown===undefined){
-        pet.trickCountdown=2.5+Math.random()*3;
-        pet.trickAge=-1;
-        pet.trickType=0;
+        pet.trickCountdown=1.8+Math.random()*2.5;
+        pet.trickAge=-1;pet.trickType=0;
       }
-      if(blend>.35){
-        // Finish the current gesture naturally, then wait until settled again.
+      if(blend>.5){
         pet.trickAge=-1;
-        pet.trickCountdown=Math.max(pet.trickCountdown,1.1);
+        pet.trickCountdown=Math.max(pet.trickCountdown,.9);
       }else if(pet.trickAge>=0){
         pet.trickAge+=dt;
-        if(pet.trickAge>=1.65){
+        if(pet.trickAge>=2.2){
           pet.trickAge=-1;
-          pet.trickCountdown=2.8+Math.random()*3.8;
+          pet.trickCountdown=2.0+Math.random()*3.2;
         }
       }else{
         pet.trickCountdown-=dt*still;
         if(pet.trickCountdown<=0){
-          pet.trickType=1+Math.floor(Math.random()*4);
+          pet.trickType=1+Math.floor(Math.random()*5);
           pet.trickAge=0;
         }
       }
-      const gesture=pet.trickAge>=0?Math.pow(Math.sin(Math.PI*Math.min(1,pet.trickAge/1.65)),2)*still:0;
+      const gesture=pet.trickAge>=0?Math.pow(Math.sin(Math.PI*Math.min(1,pet.trickAge/2.2)),.65)*still:0;
       const curious=pet.trickType===1?gesture:0;
       const wave=pet.trickType===2?gesture:0;
       const wiggle=pet.trickType===3?gesture:0;
       const perky=pet.trickType===4?gesture:0;
+      const dance=pet.trickType===5?gesture:0;
+      const danceBeat=Math.sin(t*13.5);
+      const happyWiggle=wiggle*Math.sin(t*17);
 
-      // IDLE: clearly visible, squishy bob with a planted bottom; no air gap.
-      // FOLLOW: rhythmic squash on landing and stretch on takeoff.
-      const idleSquish=still*(.037*bob+.014*breathe);
-      const jumpStretch=blend*(.045*Math.max(0,hopWave)-.090*landing);
-      p.body.scale.set(1-(idleSquish+jumpStretch)*.32+wiggle*.025,
-        1+idleSquish+jumpStretch+perky*.035,
-        1-(idleSquish+jumpStretch)*.24);
-      p.body.position.y=still*(.010+.009*(1+bob)) + blend*(.009-.009*landing);
-      p.body.rotation.z=still*.014*Math.sin(t*2.6+pet.phase)+wiggle*.10*Math.sin(t*17);
+      // Soft, squishy idle, grounded at all times; springy stretch on jumps.
+      const squash=still*(.068*idleWave+.014*Math.sin(t*3.2+pet.phase))
+        +blend*(.072*takeoff-.105*landing)+dance*.045*danceBeat;
+      p.body.scale.set(1-squash*.43,1+squash,1-squash*.37);
+      p.body.position.y=still*(.016+.010*idlePulse)+blend*(.008-.006*landing);
+      p.body.rotation.z=still*.025*Math.sin(t*3.1+pet.phase)
+        +dance*.13*danceBeat+happyWiggle*.10;
+      p.body.rotation.x=still*.012*Math.sin(t*2.4)+blend*.04*Math.sin(hopPhase);
 
-      // The oversized head leads each bob; the arms swing from shoulder joints.
+      // Head has its own lively follow-through; big curious tilts are readable.
       p.headBone.rotation.set(
-        still*(.030*Math.sin(t*2.4+pet.phase))+blend*.075*hopWave+curious*.12,
-        curious*.23+wiggle*.12*Math.sin(t*12),
-        still*(.035*Math.sin(t*3.1+pet.phase))+blend*.050*hopWave+curious*.27+wiggle*.13*Math.sin(t*17)
+        still*.075*Math.sin(t*3.0+pet.phase)+blend*.14*Math.sin(hopPhase)+curious*.20,
+        curious*.27+wiggle*.20*Math.sin(t*9)+dance*.13*danceBeat,
+        still*.065*Math.sin(t*2.5+pet.phase)+blend*.085*Math.sin(hopPhase)
+          +curious*.34+happyWiggle*.18+dance*.12*danceBeat
       );
-      p.leftArm.rotation.z=still*(-.045+.07*bob)+blend*(.12+.23*hopWave)-wave*.18;
-      p.rightArm.rotation.z=still*(.045-.07*bob)-blend*(.12+.23*hopWave)-wave*1.05;
-      p.leftArm.rotation.x=still*.05*breathe+blend*.20*hopWave;
-      p.rightArm.rotation.x=-still*.05*breathe-blend*.20*hopWave-wave*.33;
-      p.tailBone.rotation.z=Math.sin(t*(blend>.35?12:5.2)+pet.phase)*(.23+blend*.27)+wiggle*.32;
-      p.tailBone.rotation.x=Math.sin(t*6+pet.phase)*(.065+blend*.09);
-      p.leftEar.rotation.z=-curious*.15+wiggle*Math.sin(t*20)*.12+perky*.16;
-      p.rightEar.rotation.z=curious*.15-wiggle*Math.sin(t*20)*.12-perky*.16;
-      p.leftEar.rotation.x=perky*.20+.025*Math.sin(t*2.9+pet.phase);
-      p.rightEar.rotation.x=perky*.20-.025*Math.sin(t*2.9+pet.phase);
+
+      // Shoulder bones pivot actual arms. Negative Z lifts the left paw out;
+      // positive Z lifts the right. Each hop makes both arms visibly FLOP.
+      const armFlop=blend*(.30+.73*airborne+.20*landing);
+      const idleArm=.10+.16*idlePulse;
+      p.leftArm.rotation.z=-(still*idleArm+armFlop)
+        -wave*(.75+.38*Math.sin(t*17))
+        -dance*(.48+.52*Math.max(0,danceBeat));
+      p.rightArm.rotation.z=still*idleArm+armFlop
+        +dance*(.48+.52*Math.max(0,-danceBeat));
+      p.leftArm.rotation.x=still*.14*Math.sin(t*4+pet.phase)+blend*.35*Math.sin(hopPhase)
+        +wave*.25*Math.sin(t*17);
+      p.rightArm.rotation.x=-still*.14*Math.sin(t*4+pet.phase)-blend*.35*Math.sin(hopPhase)
+        -dance*.35*Math.sin(t*13.5);
+
+      // Wag in the horizontal plane as well as up and down. Dog 1 gets
+      // excited tail-wag speed; Cat 1 swishes more slowly and deliberately.
+      const cat=pet.petKey==='cat_1';
+      const wagSpeed=cat?(still*5.2+blend*9.5):(still*10+blend*15);
+      const wag=Math.sin(t*wagSpeed+pet.phase);
+      p.tailBone.rotation.y=wag*(cat?.35:.67)*(1+blend*.30)+dance*.27*danceBeat;
+      p.tailBone.rotation.z=Math.sin(t*(cat?4.3:7.5)+pet.phase)*(.17+blend*.15)
+        +happyWiggle*.23;
+      p.tailBone.rotation.x=Math.sin(t*5+pet.phase)*(.12+blend*.08);
+      p.leftEar.rotation.z=-curious*.17+happyWiggle*.15+perky*.22
+        +blend*.10*Math.sin(hopPhase);
+      p.rightEar.rotation.z=curious*.17-happyWiggle*.15-perky*.22
+        -blend*.10*Math.sin(hopPhase);
+      p.leftEar.rotation.x=perky*.23+.055*Math.sin(t*4.3+pet.phase);
+      p.rightEar.rotation.x=perky*.23-.055*Math.sin(t*4.3+pet.phase);
       kwgAnimatePetBlink(pet,dt);
     }
 
@@ -5799,9 +5841,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const moving=pet.settleTimer>0;
         pet.motionBlend+=(Number(moving)-pet.motionBlend)*Math.min(1,dt*(moving?8:5));
         // Separate hop cycle: airborne during travel, grounded while idle.
-        pet.hopClock+=dt*2.1;
-        const hop=Math.pow(Math.max(0,Math.sin(pet.hopClock*Math.PI*2)),1.2);
-        const targetY=avatar.position.y+.05+hop*.36*pet.motionBlend;
+        pet.hopClock+=dt*2.35;
+        const hop=Math.pow(Math.max(0,Math.sin(pet.hopClock*Math.PI*2)),.85);
+        const targetY=avatar.position.y+.05+hop*.44*pet.motionBlend;
         pet.mesh.position.y+=(targetY-pet.mesh.position.y)*Math.min(1,dt*16);
         // Keep the pet facing its owner without orbiting when the owner spins.
         pet.mesh.rotation.y=Math.atan2(avatar.position.x-pet.mesh.position.x,
