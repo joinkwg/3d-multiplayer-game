@@ -2466,6 +2466,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     .kwg-pet-card-price{color:#ffdf83;font-size:13px;font-weight:900;text-align:center;margin-top:auto}
     .kwg-pet-card button,.kwg-pet-unequip{background:#246348;color:#f2fff5;border:2px solid #85dcac;box-shadow:2px 2px 0 #071a17;padding:10px;font:inherit;font-size:11px;font-weight:900;cursor:pointer;border-radius:0}
     .kwg-pet-card button:disabled{background:#253848;border-color:#5d768b;color:#aabfce;cursor:default}
+    .kwg-catalog-edit{position:fixed;inset:0;z-index:2200;background:rgba(2,8,17,.86);display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+    .kwg-catalog-edit.open{display:flex}
+    .kwg-catalog-edit-panel{width:min(420px,100%);background:#102136;border:3px solid #80c5e6;box-shadow:7px 7px 0 #030912;padding:22px;display:flex;flex-direction:column;gap:14px;color:#f1f9ff}
+    .kwg-catalog-edit-panel h3{margin:0;color:#c1f2ff;font-size:17px}
+    .kwg-catalog-edit-panel label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:800}
+    .kwg-catalog-edit-panel input[type=number]{background:#091627;border:2px solid #587c9a;padding:11px;color:#fff;font:inherit;width:100%;box-sizing:border-box}
+    .kwg-catalog-edit-panel .kwg-edit-visible{flex-direction:row;align-items:center;gap:12px}
+    .kwg-catalog-edit-panel input[type=checkbox]{width:20px;height:20px;accent-color:#6cd9a0}
+    .kwg-catalog-edit-actions{display:flex;justify-content:flex-end;gap:10px}
+    .kwg-catalog-edit-actions button,.kwg-store-edit-btn{background:#25445e;border:2px solid #83bbdc;color:#fff;padding:9px;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+    .kwg-catalog-edit-actions button:last-child{background:#276448;border-color:#8be5b2}
+    .kwg-store-edit-btn{width:100%;background:#473b66;border-color:#ac9ce0}
+    .kwg-item-hidden-label{font-size:10px;color:#ffb5ad;text-align:center;font-weight:800}
     .kwg-pet-inventory-modal{position:fixed;inset:0;background:rgba(3,9,18,.82);z-index:1800;display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
     .kwg-pet-inventory-modal.open{display:flex}
     .kwg-pet-inventory-card{background:#0f1e30;border:3px solid #7dc7e8;box-shadow:7px 7px 0 #050b12;padding:20px;max-width:660px;width:100%;max-height:85vh;overflow:auto;color:#eff9ff}
@@ -2843,6 +2856,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     </div>
   </div>
 
+  <!-- KWG V3.55: secure admin catalog editing, with in-game pixel UI. -->
+  <div id="kwg-catalog-edit-modal" class="kwg-catalog-edit" role="dialog" aria-modal="true" aria-labelledby="kwg-catalog-edit-title" aria-hidden="true">
+    <div class="kwg-catalog-edit-panel">
+      <h3 id="kwg-catalog-edit-title">EDIT STORE ITEM</h3>
+      <div id="kwg-catalog-edit-name" style="font-size:12px;color:#aac7dc"></div>
+      <label>PRICE (COINS)<input id="kwg-catalog-edit-price" type="number" min="0" max="1000000" step="1" inputmode="numeric"></label>
+      <label class="kwg-edit-visible"><input id="kwg-catalog-edit-visible" type="checkbox"> VISIBLE TO PLAYERS</label>
+      <div id="kwg-catalog-edit-error" style="color:#ffb3b3;font-size:11px;min-height:12px" aria-live="polite"></div>
+      <div class="kwg-catalog-edit-actions"><button id="kwg-catalog-edit-cancel" type="button">CANCEL</button><button id="kwg-catalog-edit-save" type="button">SAVE</button></div>
+    </div>
+  </div>
   <!-- V3.50 admin testing console: only available to authenticated admins. -->
   <div id="kwg-admin-console" aria-hidden="true">
     <div id="kwg-admin-console-card" role="dialog" aria-modal="true" aria-labelledby="kwg-admin-console-title">
@@ -3415,6 +3439,52 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       el.textContent = message || '';
     }
 
+    // Only admins get an EDIT control. Server independently checks the account.
+    let kwgCatalogEditing=null;
+    function kwgOpenCatalogEdit(kind,item){
+      if(!isAdmin)return;
+      kwgCatalogEditing={kind,itemId:item.id,petKey:item.petKey};
+      document.getElementById('kwg-catalog-edit-name').textContent=item.name;
+      document.getElementById('kwg-catalog-edit-price').value=Number(item.price)||0;
+      document.getElementById('kwg-catalog-edit-visible').checked=item.isVisible!==false;
+      document.getElementById('kwg-catalog-edit-error').textContent='';
+      const modal=document.getElementById('kwg-catalog-edit-modal');
+      modal.classList.add('open');modal.setAttribute('aria-hidden','false');
+      document.getElementById('kwg-catalog-edit-price').focus();
+    }
+    function kwgCloseCatalogEdit(){
+      kwgCatalogEditing=null;
+      const modal=document.getElementById('kwg-catalog-edit-modal');
+      modal.classList.remove('open');modal.setAttribute('aria-hidden','true');
+    }
+    document.getElementById('kwg-catalog-edit-cancel').addEventListener('click',kwgCloseCatalogEdit);
+    document.getElementById('kwg-catalog-edit-modal').addEventListener('click',e=>{
+      if(e.target.id==='kwg-catalog-edit-modal')kwgCloseCatalogEdit();
+    });
+    document.getElementById('kwg-catalog-edit-save').addEventListener('click',()=>{
+      if(!isAdmin||!kwgCatalogEditing)return;
+      const price=Number(document.getElementById('kwg-catalog-edit-price').value);
+      const error=document.getElementById('kwg-catalog-edit-error');
+      if(!document.getElementById('kwg-catalog-edit-price').value.trim()||!Number.isSafeInteger(price)||price<0||price>1000000){
+        error.textContent='Enter a whole number from 0 to 1,000,000.';return;
+      }
+      const save=document.getElementById('kwg-catalog-edit-save');
+      save.disabled=true;
+      socket.emit('admin_catalog_edit',{...kwgCatalogEditing,price,isVisible:document.getElementById('kwg-catalog-edit-visible').checked},res=>{
+        save.disabled=false;
+        if(!res?.success){error.textContent=res?.message||'Could not save item.';return;}
+        kwgCloseCatalogEdit();
+        refreshStoreData();kwgRefreshPets();
+        setStoreMessage('Store item updated.');
+      });
+    });
+    function kwgAdminEditButton(kind,item){
+      const edit=document.createElement('button');
+      edit.type='button';edit.className='kwg-store-edit-btn';edit.textContent='EDIT';
+      edit.addEventListener('click',()=>kwgOpenCatalogEdit(kind,item));
+      return edit;
+    }
+
     function renderStoreItems() {
       const grid = document.getElementById('store-items-grid');
       if (!grid) return;
@@ -3472,6 +3542,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           });
         }
         card.append(preview,name,price,button);
+        if(isAdmin){
+          if(item.isVisible===false){const hidden=document.createElement('div');hidden.className='kwg-item-hidden-label';hidden.textContent='HIDDEN FROM PLAYERS';card.append(hidden);}
+          card.append(kwgAdminEditButton('avatar',item));
+        }
         grid.appendChild(card);
       }
     }
@@ -5394,7 +5468,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const kwgCharacterMeshCache=new Map();
     function kwgCharacterGeometry(petKey){
       if(kwgCharacterMeshCache.has(petKey))return kwgCharacterMeshCache.get(petKey);
-      if(/^(monkey|bunny|owl|alien)_[1-4]$/.test(petKey))return kwgExtraPetGeometry(petKey);
+      if(/^(monkey|bunny|owl|alien|skeleton|mummy|pumpkin|zombie)_[1-4]$/.test(petKey))return kwgExtraPetGeometry(petKey);
       const cat=petKey.startsWith('cat_');
       // V3.53: color-only variants of the same two professionally sculpted pets.
       // Every variation keeps identical geometry, bones and expressive animations.
@@ -5660,6 +5734,30 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           ['#a89be1','#c8bafa','#e3d9ff','#7768b6','#f3e8ff','#ffb5d5','#171224'],
           ['#75bcd4','#99d9ed','#c7f0fa','#4788a3','#e0faff','#f0b1d9','#111b27'],
           ['#efb5cf','#ffd0e4','#ffe6f1','#bc83a4','#fff0f8','#c4b6fa','#211625']
+        ],
+        skeleton:[
+          ['#ddd8cb','#f1ede3','#fffaf0','#9b968f','#f9f7ec','#9eb7c8','#15141e'],
+          ['#c3c2b8','#e0e1d5','#f5f6ea','#858980','#f2f0de','#d9a9cd','#16151e'],
+          ['#b9e5d0','#d3f5e2','#e7fff2','#6eaa91','#f4fff7','#a3d9ed','#121d20'],
+          ['#a8a3c5','#c8c4e0','#e8e5fb','#726e94','#f3efff','#e2b0ea','#161422']
+        ],
+        mummy:[
+          ['#b5a38a','#d7c6a6','#f1e0bf','#82735f','#f3e5c8','#caa77e','#1b1821'],
+          ['#d1c4a3','#eee1c1','#fff2d7','#9d8c6b','#fff2d9','#b5d9ca','#1a1920'],
+          ['#9fafa4','#c2d2c3','#e2edda','#708a7a','#f1f8e7','#c3a9dd','#17191f'],
+          ['#b5a4bd','#d8c6df','#f2e3f6','#82728c','#f7edf7','#e3b5d6','#191522']
+        ],
+        pumpkin:[
+          ['#dc7c30','#f29c41','#ffbd66','#a45023','#ffe2ad','#5f9d56','#21151b'],
+          ['#e2a849','#f6c66a','#ffe2a0','#a57b32','#fff0c1','#8eaa53','#22181c'],
+          ['#9bc46d','#b9df88','#d5f2aa','#688d4b','#edffd0','#658c55','#1a201a'],
+          ['#af82c9','#cda1e0','#e7c4f2','#79538d','#f5defb','#85b77a','#1d1623']
+        ],
+        zombie:[
+          ['#8abf8b','#abd9a2','#c8ecc0','#587c5c','#e7f4d9','#9b76b1','#17191e'],
+          ['#8ea5bf','#adc3d7','#d1e0ed','#60778e','#eaf3f7','#bfa5d8','#171a23'],
+          ['#ae9ac6','#cfb7de','#e7d7f0','#76668d','#f5e9fa','#a5ca8d','#1c1721'],
+          ['#b9ab7c','#d9c996','#f1e1b4','#80734e','#f7eacb','#c0a1bb','#1e1a1b']
         ]
       };
       const swatches=palettes[species]?.[variant];
@@ -5692,7 +5790,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         add(new THREE.TubeGeometry(curve,Math.max(12,arr.length*8),r,7,false),bone,col);
       }
       // Petite legless body, a little painted tummy, and a clearly shaped head.
-      const owl=species==='owl',alien=species==='alien',monkey=species==='monkey',bunny=species==='bunny';
+      const owl=species==='owl',alien=species==='alien',monkey=species==='monkey',bunny=species==='bunny',skeleton=species==='skeleton',mummy=species==='mummy',pumpkin=species==='pumpkin',zombie=species==='zombie';
       {
         const g=new THREE.SphereGeometry(1,48,36),p=g.getAttribute('position');
         for(let i=0;i<p.count;i++){
@@ -5703,7 +5801,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         add(g,0,(x,y,z)=>{
           const c=fur.clone();
           const bib=(1-smooth(.105,.195,Math.abs(x)))*smooth(.02,.15,z)*smooth(.12,.24,y)*(1-smooth(.48,.59,y));
-          c.lerp(cream,bib*.98);return c;
+          c.lerp(cream,bib*.98);
+          if(skeleton){
+            const rib=Math.pow(Math.max(0,Math.sin(y*42)),10)*smooth(.07,.14,z)*(1-smooth(.16,.23,Math.abs(x)));
+            c.lerp(light,rib*.95);
+          }
+          if(mummy){const wrap=Math.pow(Math.max(0,Math.sin(y*47+x*11)),9);c.lerp(light,wrap*.32);}
+          return c;
         });
       }
       {
@@ -5711,13 +5815,24 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         for(let i=0;i<p.count;i++){
           const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
           const cheek=1+.085*gauss(y,-.26,.28);
-          p.setXYZ(i,x*(owl?.372:alien?.375:monkey?.373:.366)*cheek,
+          const pumpkinR=pumpkin?(1+.055*Math.cos(Math.atan2(z,x)*7)):1;
+          p.setXYZ(i,x*(owl?.372:alien?.375:monkey?.373:skeleton?.350:.366)*cheek*pumpkinR,
             .836+y*(owl?.338:alien?.343:.318),
-            z*(owl?.294:alien?.296:.305));
+            z*(owl?.294:alien?.296:pumpkin?.295:.305)*pumpkinR);
         }
         g.computeVertexNormals();
         add(g,1,(x,y,z)=>{
           const c=head.clone();c.lerp(light,gauss(y,1.05,.22)*.14);
+          if(mummy){
+            // Bandage wraps painted directly into the head, following its surface.
+            const stripe=Math.sin(y*65+x*13+z*8);
+            c.lerp(cream,(stripe>.12?.26:.03)*smooth(.58,.96,y));
+          }
+          if(pumpkin){
+            const groove=Math.pow(Math.abs(Math.sin(Math.atan2(z,x)*6)),18);
+            c.lerp(shade,groove*.20);
+          }
+          if(zombie){c.lerp(shade,gauss(x,.20,.08)*gauss(y,.95,.045)*.24);}
           if(monkey){
             // Small tuft on the forehead, painted into the skull.
             c.lerp(shade,gauss(x,0,.038)*gauss(y,1.12,.06)*smooth(.17,.28,z)*.18);
@@ -5747,7 +5862,30 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       // Species-specific ears, tufts or feelers, always on the shared ear bones.
       for(const side of [-1,1]){
         const bone=side<0?7:8;
-        if(bunny){
+        if(pumpkin){
+          // Curled green vine leaf tips, attached to the shared ear bones.
+          const g=new THREE.SphereGeometry(1,28,20),p=g.getAttribute('position');
+          for(let i=0;i<p.count;i++){
+            const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
+            p.setXYZ(i,side*(.17+.065*ny)+nx*.082*(1-.4*ny),1.155+ny*.11,.045+nz*.044);
+          }
+          g.computeVertexNormals();add(g,bone,accent);
+        }else if(skeleton){
+          // Small sculpted skull temples, no animal ears.
+          ellipsoid(bone,side*.315,.980,-.004,.105,.105,.055,head,28);
+        }else if(mummy){
+          // Loose bandage ends flutter on the same ear bones.
+          const g=new THREE.SphereGeometry(1,30,22),p=g.getAttribute('position');
+          for(let i=0;i<p.count;i++){
+            const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
+            p.setXYZ(i,side*(.28+.028*ny)+nx*.065,1.04+ny*.185,.014+nz*.039);
+          }
+          g.computeVertexNormals();add(g,bone,cream);
+        }else if(zombie){
+          // Little ragged tufts of undead hair.
+          const g=new THREE.ConeGeometry(.095,.20,6,1);
+          g.translate(side*.255,1.205,.02);add(g,bone,shade);
+        }else if(bunny){
           const g=new THREE.SphereGeometry(1,38,30),p=g.getAttribute('position');
           for(let i=0;i<p.count;i++){
             const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
@@ -5785,7 +5923,30 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       // Faces have distinctive species silhouettes, without the previous
       // balloon-like protruding eyes or separate sparkle geometry.
-      if(monkey){
+      if(skeleton){
+        // Friendly skull: broad ivory muzzle, two nostril dots and a toothy smile.
+        ellipsoid(1,0,.675,.297,.177,.095,.064,cream,42);
+        for(const side of [-1,1])ellipsoid(1,side*.028,.692,.354,.016,.024,.008,shade,18);
+        line(1,[[-.105,.634,.347],[0,.612,.366],[.105,.634,.347]],.005,shade);
+        for(let j=-2;j<=2;j++)line(1,[[j*.036,.626,.356],[j*.036,.601,.356]],.0025,shade);
+      }else if(mummy){
+        // Painted bandage crossings, little nose, friendly wrapped smile.
+        ellipsoid(1,0,.675,.296,.139,.074,.052,cream,32);
+        ellipsoid(1,0,.701,.351,.028,.018,.010,shade,20);
+        line(1,[[-.075,.636,.348],[0,.619,.362],[.075,.636,.348]],.0035,shade);
+        line(1,[[-.26,.994,.21],[.18,.939,.26]],.017,cream);
+      }else if(pumpkin){
+        // Jack-o-lantern smile, two tiny glowing cheek dashes, vine stem.
+        line(1,[[-.142,.671,.253],[-.067,.626,.303],[0,.614,.317],[.067,.626,.303],[.142,.671,.253]],.010,shade);
+        for(const side of [-1,1])ellipsoid(1,side*.217,.716,.239,.036,.018,.009,light,20);
+        ellipsoid(1,0,1.191,-.005,.070,.117,.065,accent,26);
+      }else if(zombie){
+        // Cute undead cheeks and little crooked stitched smile.
+        ellipsoid(1,0,.686,.293,.155,.091,.050,cream,34);
+        ellipsoid(1,0,.713,.341,.037,.024,.012,shade,20);
+        line(1,[[-.092,.630,.334],[0,.619,.355],[.092,.651,.333]],.005,shade);
+        for(let j=0;j<2;j++)line(1,[[.055+j*.020,.628,.344],[.048+j*.020,.657,.334]],.003,shade);
+      }else if(monkey){
         // The pale monkey mask wraps around the eyes and little snout.
         ellipsoid(1,0,.763,.278,.270,.215,.053,cream,48);
         ellipsoid(1,0,.657,.316,.178,.106,.064,cream,36);
@@ -5819,7 +5980,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const bone=side<0?5:6;
         const x=side*.159,y=.840;
         const g=new THREE.SphereGeometry(1,72,54),p=g.getAttribute('position');
-        const rx=owl?.102:alien?.117:.106,ry=owl?.119:alien?.146:.130;
+        const rx=owl?.102:alien?.117:pumpkin?.110:.106,ry=owl?.119:alien?.146:pumpkin?.135:.130;
         const z=owl?.322:monkey?.331:bunny?.293:.292;
         for(let i=0;i<p.count;i++){
           const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
@@ -5839,7 +6000,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         });
       }
       // Individual tails, each bound to the standard tail bone.
-      if(monkey){
+      if(pumpkin){
+        line(4,[[0,.33,-.17],[.07,.36,-.26],[.14,.43,-.30],[.11,.49,-.30]],.031,accent);
+      }else if(skeleton){
+        line(4,[[0,.31,-.18],[.06,.30,-.25],[.11,.34,-.30]],.025,light);
+        ellipsoid(4,.11,.34,-.30,.035,.035,.034,cream,18);
+      }else if(mummy){
+        line(4,[[0,.30,-.18],[.09,.32,-.25],[.17,.27,-.29]],.032,cream);
+      }else if(zombie){
+        line(4,[[0,.30,-.18],[.10,.29,-.28],[.17,.35,-.32]],.037,shade);
+      }else if(monkey){
         line(4,[[0,.278,-.18],[.16,.25,-.31],[.30,.31,-.39],[.36,.46,-.40],[.28,.55,-.37],[.23,.49,-.32]],.038,fur);
         ellipsoid(4,.23,.49,-.32,.043,.044,.040,head,18);
       }else if(bunny){
@@ -5863,7 +6033,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
     // One shared eleven-bone hierarchy for Dog 1, Cat 1 and future pet designs.
     function kwgBuildPet(petKey){
-      if(!/^(dog|cat|monkey|bunny|owl|alien)_[1-4]$/.test(petKey))return null;
+      if(!/^(dog|cat|monkey|bunny|owl|alien|skeleton|mummy|pumpkin|zombie)_[1-4]$/.test(petKey))return null;
       const {geo,mat}=kwgCharacterGeometry(petKey);
       const root=new THREE.Group();
       const body=new THREE.SkinnedMesh(geo,mat);
@@ -6339,12 +6509,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           });
         };
       }
-      card.append(preview,price,button);return card;
+      card.append(preview,price,button);
+      if(isAdmin&&!inventory){
+        if(pet.isVisible===false){const hidden=document.createElement('div');hidden.className='kwg-item-hidden-label';hidden.textContent='HIDDEN FROM PLAYERS';card.append(hidden);}
+        card.append(kwgAdminEditButton('pet',pet));
+      }
+      return card;
     }
     function kwgRenderPets(){
       const shop=document.getElementById('kwg-pets-store-grid');
       const inv=document.getElementById('kwg-pets-inventory-grid');
-      if(shop){shop.replaceChildren(...kwgPetCatalog.map(p=>kwgPetCard(p,false)));}
+      if(shop){shop.replaceChildren(...kwgPetCatalog.filter(p=>isAdmin||p.isVisible!==false).map(p=>kwgPetCard(p,false)));}
       if(inv){
         const owned=kwgPetCatalog.filter(p=>kwgOwnedPets.has(p.petKey));
         inv.replaceChildren(...owned.map(p=>kwgPetCard(p,true)));
