@@ -5703,7 +5703,288 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const result={geo,mat};kwgCharacterMeshCache.set(petKey,result);return result;
     }
 
-    // V3.54: Four new original companion species, with four colorways each.
+    // V3.55.4 — Individually sculpted Halloween pets. These are NOT animal
+    // reskins. They share only the nine animation bone indices and material
+    // pipeline with the original dog/cat rigs.
+    function kwgSculptedSpookyPetGeometry(petKey,species,P){
+      if(kwgCharacterMeshCache.has(petKey))return kwgCharacterMeshCache.get(petKey);
+      const {fur,head,light,shade,cream,accent,eye}=P;
+      const ink=new THREE.Color('#211b24');
+      const boneShade=new THREE.Color('#68616b');
+      const orangeGlow=new THREE.Color('#ffe28a');
+      const white=new THREE.Color('#fff9ec');
+      const positions=[],normals=[],colors=[],indices=[],weights=[];
+      const clamp=v=>Math.max(0,Math.min(1,v));
+      const smooth=(a,b,x)=>{const t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
+      const oval=(x,y,cx,cy,rx,ry)=>1-smooth(.78,1.08,Math.hypot((x-cx)/rx,(y-cy)/ry));
+      const segment=(x,y,x1,y1,x2,y2,w)=>{
+        const dx=x2-x1,dy=y2-y1;
+        const t=clamp(((x-x1)*dx+(y-y1)*dy)/(dx*dx+dy*dy+1e-8));
+        return 1-smooth(w*.62,w*1.40,Math.hypot(x-x1-dx*t,y-y1-dy*t));
+      };
+      function add(g,bone,paint){
+        const a=g.index?g.toNonIndexed():g;
+        const p=a.getAttribute('position'),n=a.getAttribute('normal');
+        for(let i=0;i<p.count;i++){
+          const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
+          positions.push(x,y,z);normals.push(n.getX(i),n.getY(i),n.getZ(i));
+          const c=typeof paint==='function'?paint(x,y,z,n.getX(i),n.getY(i),n.getZ(i)):paint;
+          colors.push(c.r,c.g,c.b);
+          indices.push(bone,0,0,0);weights.push(1,0,0,0);
+        }
+        if(a!==g)a.dispose();g.dispose();
+      }
+      function orb(b,x,y,z,rx,ry,rz,paint,detail=36){
+        const g=new THREE.SphereGeometry(1,detail,Math.round(detail*.75));
+        g.scale(rx,ry,rz);g.translate(x,y,z);add(g,b,paint);
+      }
+      function tube(b,pts,r,paint,steps=36){
+        const curve=new THREE.CatmullRomCurve3(pts.map(v=>new THREE.Vector3(...v)));
+        add(new THREE.TubeGeometry(curve,steps,r,8,false),b,paint);
+      }
+      function limb(b,from,to,r1,r2,paint){
+        const a=new THREE.Vector3(...from),z=new THREE.Vector3(...to);
+        const dir=z.clone().sub(a),mid=a.clone().add(z).multiplyScalar(.5);
+        const g=new THREE.CylinderGeometry(r1,r2,dir.length(),14,3);
+        g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize())));
+        g.translate(mid.x,mid.y,mid.z);add(g,b,paint);
+      }
+      // A softly squared sculpted head, with a species-specific silhouette.
+      // Facial markings are vertex paint ON this surface, never floating decals.
+      function sculptHead(shape,paint){
+        const g=new THREE.SphereGeometry(1,120,88),p=g.getAttribute('position');
+        for(let i=0;i<p.count;i++){
+          const a=p.getX(i),b=p.getY(i),c=p.getZ(i);
+          let x,y,z;
+          if(shape==='skull'){
+            const taper=1+.12*Math.exp(-Math.pow((b-.25)/.42,2))-.29*Math.exp(-Math.pow((b+.86)/.24,2));
+            x=a*.332*taper;y=.902+b*.317;z=c*.279;
+          }else if(shape==='wrapped'){
+            const squ=v=>Math.sign(v)*Math.pow(Math.abs(v),.72);
+            x=squ(a)*.314;y=.871+squ(b)*.330;z=squ(c)*.261;
+          }else if(shape==='undead'){
+            const squ=v=>Math.sign(v)*Math.pow(Math.abs(v),.60);
+            const taper=1-.09*Math.max(0,-b);
+            x=squ(a)*.327*taper;y=.866+squ(b)*.322;z=squ(c)*.274;
+          }else{
+            const angle=Math.atan2(c,a);
+            const rib=1+.052*Math.cos(9*angle);
+            const shoulders=1-.17*Math.pow(Math.abs(b),4);
+            x=a*.431*rib*shoulders;y=.806+b*.397;z=c*.360*rib*shoulders;
+          }
+          p.setXYZ(i,x,y,z);
+        }
+        g.computeVertexNormals();add(g,1,paint);
+      }
+      if(species==='skeleton'){
+        // Open ribcage, exposed backbone, pelvis, bone arms and short bone legs.
+        // Empty space between ribs is real empty space, not a dark painted bib.
+        tube(0,[[0,.17,0],[0,.38,0],[0,.60,0]],.043,light,34);
+        orb(0,0,.245,0,.19,.088,.115,light,32);
+        for(const side of [-1,1]){
+          tube(0,[[0,.50,.015],[side*.13,.52,.025],[side*.25,.48,.005]],.038,light,24);
+          for(let i=0;i<4;i++){
+            const y=.37+i*.062;
+            tube(0,[[0,y,.025],[side*.15,y+.020,.135],[side*.245,y+.027,.05],[side*.17,y+.008,-.095]],.027,light,28);
+          }
+          limb(0,[side*.104,.225,0],[side*.13,.095,.018],.049,.038,light);
+          orb(0,side*.13,.091,.027,.067,.052,.074,cream,26);
+          limb(side<0?2:3,[side*.265,.472,0],[side*.32,.299,.040],.048,.039,light);
+          orb(side<0?2:3,side*.322,.292,.042,.052,.051,.052,cream,24);
+          limb(side<0?2:3,[side*.32,.294,.042],[side*.346,.191,.08],.038,.032,light);
+          orb(side<0?2:3,side*.345,.172,.080,.073,.066,.063,light,26);
+        }
+        // Separate anatomical jaw under the big skull vault.
+        orb(1,0,.650,.015,.239,.114,.221,cream,56);
+        sculptHead('skull',(x,y,z,nx,ny,nz)=>{
+          const c=head.clone();c.lerp(light,smooth(.85,1.13,y)*.24);
+          const front=smooth(.20,.55,nz);
+          for(const s of [-1,1]){
+            const socket=oval(x,y,s*.147,.869,.119,.126);
+            const rim=oval(x,y,s*.147,.875,.144,.150);
+            c.lerp(shade,rim*front*.8);
+            c.lerp(ink,socket*front);
+            // Tiny pinpoint gleam deep in the socket; not a floating eyeball.
+            c.lerp(accent,oval(x,y,s*.147,.856,.017,.019)*front*.66);
+          }
+          const nose=(1-smooth(.030,.045,Math.abs(x)))*smooth(.700,.731,y)*(1-smooth(.768,.791,y));
+          c.lerp(ink,nose*front);
+          const mouth=oval(x,y,0,.674,.191,.044);
+          c.lerp(ink,mouth*front);
+          for(let j=-3;j<=3;j++){
+            c.lerp(light,oval(x,y,j*.045,.674,.018,.030)*front);
+          }
+          return c;
+        });
+      }else if(species==='mummy'){
+        // Wrapped humanoid: shoulders, torso, two feet and dangling bandaged
+        // arms. Wrapping seams are painted on the actual surfaces.
+        const wrap=(x,y,z,nx,ny,nz)=>{
+          const c=fur.clone();
+          const wave=Math.sin(y*61+x*17+z*11);
+          c.lerp(light,smooth(-.25,.78,wave)*.67);
+          c.lerp(shade,(1-smooth(.02,.20,Math.abs(wave)))*.46);
+          return c;
+        };
+        orb(0,0,.360,0,.264,.286,.197,wrap,54);
+        orb(0,0,.550,-.012,.240,.105,.182,wrap,36);
+        for(const side of [-1,1]){
+          orb(0,side*.142,.122,.037,.103,.154,.125,wrap,32);
+          orb(0,side*.157,.071,.100,.116,.063,.150,light,30);
+          limb(side<0?2:3,[side*.282,.470,0],[side*.312,.251,.063],.107,.088,wrap);
+          orb(side<0?2:3,side*.314,.210,.075,.094,.101,.090,wrap,32);
+        }
+        // The trailing bandage is skinned to the ear bones and flutters with
+        // the shared ear animation, rather than looking like animal ears.
+        for(const side of [-1,1]){
+          tube(side<0?7:8,[[side*.260,1.085,-.005],[side*.345,1.129,-.022],[side*.402,1.053,-.030]],.041,light,30);
+        }
+        sculptHead('wrapped',(x,y,z,nx,ny,nz)=>{
+          const c=head.clone(),front=smooth(.25,.58,nz);
+          const stripe=Math.sin(y*59+x*20+z*10);
+          c.lerp(light,smooth(-.34,.78,stripe)*.72);
+          c.lerp(shade,(1-smooth(.01,.18,Math.abs(stripe)))*.52);
+          // One deep horizontal eye opening, with two unmistakable eyes.
+          const slit=oval(x,y,0,.862,.254,.082);
+          c.lerp(ink,slit*front);
+          for(const s of [-1,1]){
+            c.lerp(accent,oval(x,y,s*.128,.866,.046,.041)*front);
+            c.lerp(white,oval(x,y,s*.142,.883,.012,.012)*front*.8);
+          }
+          // Crossed bandage over one corner of the face.
+          c.lerp(cream,segment(x,y,-.302,.964,-.044,.758,.035)*front);
+          c.lerp(shade,segment(x,y,-.291,.954,-.036,.752,.006)*front*.50);
+          return c;
+        });
+        // Tiny inset glowing eyes use the existing two eye bones, so the
+        // mummy keeps the exact same real blink animation as cats and dogs.
+        for(const side of [-1,1]){
+          const bone=side<0?5:6,cx=side*.128,cy=.866;
+          const g=new THREE.SphereGeometry(1,44,32),p=g.getAttribute('position');
+          for(let i=0;i<p.count;i++){
+            const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
+            p.setXYZ(i,cx+nx*.045,cy+ny*.040,.258+nz*.006);
+          }
+          g.computeVertexNormals();
+          add(g,bone,(x,y,z,nx,ny,nz)=>{
+            const c=accent.clone();
+            c.lerp(white,oval(x,y,cx-.010,cy+.011,.012,.012)*smooth(.1,.45,nz)*.85);
+            return c;
+          });
+        }
+      }else if(species==='zombie'){
+        // Short, stocky humanoid in a torn shirt, not an animal body.
+        const cloth=(x,y,z,nx,ny,nz)=>{
+          const c=shade.clone();
+          c.lerp(fur,smooth(.10,.21,y)*.20);
+          const rag=.165+.032*Math.sin(x*29)+.014*Math.sin(x*65);
+          c.lerp(fur,(1-smooth(rag-.02,rag+.018,y))*.95);
+          c.lerp(light,oval(x,y,-.09,.445,.033,.044)*smooth(.09,.14,z)*.28);
+          return c;
+        };
+        orb(0,0,.351,0,.270,.270,.194,cloth,56);
+        for(const side of [-1,1]){
+          orb(0,side*.137,.134,.016,.115,.148,.121,shade,34);
+          orb(0,side*.142,.066,.101,.124,.065,.150,fur,32);
+          limb(side<0?2:3,[side*.283,.479,.006],[side*.337,.295,.066],.111,.096,cloth);
+          limb(side<0?2:3,[side*.337,.304,.066],[side*.370,.183,.110],.087,.076,fur);
+          orb(side<0?2:3,side*.371,.164,.111,.091,.080,.088,fur,32);
+        }
+        sculptHead('undead',(x,y,z,nx,ny,nz)=>{
+          const c=head.clone(),front=smooth(.25,.57,nz);
+          const hairline=1.045+.042*Math.sin(x*28)+.023*Math.sin(x*57);
+          c.lerp(shade,smooth(hairline-.020,hairline+.013,y)*.98);
+          // One bruised eye and one droopy eye make an undead expression.
+          c.lerp(shade,oval(x,y,-.155,.845,.129,.108)*front*.58);
+          c.lerp(shade,oval(x,y,.160,.818,.128,.126)*front*.67);
+          // Crooked torn mouth with gaps and a few visible teeth.
+          const mouthY=.677+.046*(x/.30);
+          const mouth=(1-smooth(.041,.058,Math.abs(y-mouthY)))*(1-smooth(.158,.193,Math.abs(x)));
+          c.lerp(ink,mouth*front);
+          for(const tx of [-.10,-.025,.09]){
+            c.lerp(cream,oval(x,y,tx,.694+.046*(tx/.30),.023,.032)*front);
+          }
+          c.lerp(shade,segment(x,y,.167,.719,.276,.772,.016)*front);
+          for(let i=0;i<3;i++){
+            const sx=.181+i*.033,sy=.726+i*.016;
+            c.lerp(ink,segment(x,y,sx-.010,sy+.019,sx+.010,sy-.018,.009)*front);
+          }
+          c.lerp(accent,oval(x,y,-.275,.742,.056,.064)*front*.45);
+          return c;
+        });
+        // Low-profile eyes on the existing eye bones retain blinking.
+        for(const s of [-1,1]){
+          const b=s<0?5:6,xx=s*.155,yy=s<0?.854:.832;
+          const g=new THREE.SphereGeometry(1,56,40),p=g.getAttribute('position');
+          for(let i=0;i<p.count;i++){
+            const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
+            p.setXYZ(i,xx+nx*.084,yy+ny*.087,.273+nz*.010);
+          }
+          g.computeVertexNormals();add(g,b,(x,y,z,nx,ny,nz)=>{
+            const c=eye.clone();
+            const front=smooth(.10,.45,nz);
+            c.lerp(white,oval(x,y,xx-.024,yy+.029,.025,.026)*front);
+            return c;
+          });
+        }
+      }else if(species==='pumpkin'){
+        // The pumpkin itself is the character's torso/head. No animal chest,
+        // paws, ears or tail. The root arms use the existing arm bones; two
+        // sturdy roots grow down from the body as legs.
+        sculptHead('gourd',(x,y,z,nx,ny,nz)=>{
+          const c=head.clone();
+          const a=Math.atan2(z,x),groove=Math.pow(Math.abs(Math.sin(a*4.5)),24);
+          c.lerp(shade,groove*.36);
+          c.lerp(light,smooth(.8,1.17,y)*.13);
+          const front=smooth(.25,.58,nz);
+          for(const s of [-1,1]){
+            const cx=s*.177;
+            // Angled triangular lantern eye cavities.
+            const w=Math.max(.003,.126-(.955-y)*.43);
+            const triangle=(1-smooth(w,w+.019,Math.abs(x-cx)))*smooth(.773,.798,y)*(1-smooth(.966,.988,y));
+            c.lerp(ink,triangle*front);
+            const inner=(1-smooth(Math.max(.003,w-.024),w-.006,Math.abs(x-cx)))*smooth(.803,.821,y)*(1-smooth(.941,.961,y));
+            c.lerp(orangeGlow,inner*front);
+          }
+          const noseW=Math.max(.002,.050-(.768-y)*.48);
+          const nose=(1-smooth(noseW,noseW+.013,Math.abs(x)))*smooth(.701,.719,y)*(1-smooth(.776,.790,y));
+          c.lerp(ink,nose*front);
+          const smile=.609+.085*Math.pow(x/.270,2);
+          const wide=1-smooth(.233,.270,Math.abs(x));
+          const grin=wide*(1-smooth(.057,.071,Math.abs(y-smile)));
+          c.lerp(ink,grin*front);
+          c.lerp(orangeGlow,grin*front*.86);
+          for(const tx of [-.132,0,.133]){
+            const tooth=oval(x,y,tx,smile+.035,.028,.030)*front;
+            c.lerp(head,tooth);
+          }
+          return c;
+        });
+        // One curved green stem with a leaf, both skinned to the head.
+        tube(1,[[0,1.165,0],[.011,1.246,0],[.045,1.297,-.012]],.049,accent,30);
+        orb(1,.089,1.247,-.016,.090,.024,.053,accent,28);
+        for(const s of [-1,1]){
+          const b=s<0?2:3;
+          tube(b,[[s*.363,.601,.008],[s*.471,.561,.017],[s*.522,.429,.074],[s*.568,.352,.100]],.061,accent,38);
+          tube(b,[[s*.549,.394,.088],[s*.596,.358,.132]],.026,shade,18);
+          tube(b,[[s*.556,.369,.084],[s*.591,.326,.061]],.024,accent,18);
+          // Root legs grow directly out of the underside of the pumpkin.
+          tube(0,[[s*.161,.509,-.010],[s*.178,.324,.004],[s*.212,.159,.080],[s*.257,.090,.131]],.073,shade,40);
+          orb(0,s*.265,.083,.146,.112,.060,.117,accent,28);
+        }
+      }
+      const geo=new THREE.BufferGeometry();
+      geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+      geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+      geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+      geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(indices,4));
+      geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(weights,4));
+      geo.computeBoundingSphere();
+      const mat=new THREE.MeshPhongMaterial({vertexColors:true,skinning:true,shininess:7,specular:0x0b0908});
+      const result={geo,mat};kwgCharacterMeshCache.set(petKey,result);return result;
+    }
+
+    // Species palettes and original monkey/bunny/owl/alien mesh builder.
     // Every character is a SINGLE vertex-painted SkinnedMesh using the same
     // torso/head/arm/tail/eye/ear bone indices and animation as dogs and cats.
     function kwgExtraPetGeometry(petKey){
@@ -5763,6 +6044,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const swatches=palettes[species]?.[variant];
       if(!swatches)return null;
       const [fur,head,light,shade,cream,accent,eye]=swatches.map(c=>new THREE.Color(c));
+      if(['skeleton','mummy','pumpkin','zombie'].includes(species)){
+        return kwgSculptedSpookyPetGeometry(petKey,species,{fur,head,light,shade,cream,accent,eye});
+      }
       const white=new THREE.Color('#ffffff');
       const dark=new THREE.Color('#3b2934');
       // V3.55.2: Surface-painted facial features. All of these masks are evaluated
