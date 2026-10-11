@@ -2128,6 +2128,61 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     @media(max-width:740px){.kwg-profile-v345 .profile-grid{grid-template-columns:1fr!important}.kwg-profile-v345 .profile-hero{grid-template-columns:120px minmax(0,1fr)!important}.kwg-profile-v345 .profile-avatar-preview{height:150px!important;min-height:150px!important}}
     @media(max-width:430px){.kwg-profile-v345 .profile-hero{grid-template-columns:1fr!important}.kwg-profile-v345 .profile-avatar-preview{height:190px!important;min-height:190px!important}.kwg-profile-v345 .profile-action-row{gap:7px!important}}
 
+    /* KWG V3.45.1: compact player identity + generous About Me */
+    .kwg-profile-v345 .kwg-profile-feature-row{display:grid;grid-template-columns:minmax(255px,310px) minmax(0,1fr);gap:12px;align-items:stretch}
+    .kwg-profile-v345 .kwg-profile-feature-row>.profile-hero{
+      display:flex!important;flex-direction:column!important;min-height:0!important;
+      border:2px solid #527fa5!important;border-left:4px solid #77d5f7!important;
+      box-shadow:4px 4px 0 #07121e!important;background:#111d2e!important
+    }
+    .kwg-profile-v345 .kwg-profile-feature-row .profile-avatar-preview{
+      height:150px!important;min-height:150px!important;width:100%!important;
+      border:0!important;border-bottom:2px solid #375776!important;
+      background:radial-gradient(circle at 50% 30%,#294761,#0a1524 75%)!important
+    }
+    .kwg-profile-v345 .kwg-profile-feature-row .profile-avatar-preview img{width:100%!important;height:100%!important;object-fit:contain!important}
+    .kwg-profile-v345 .kwg-profile-feature-row .profile-identity{
+      flex:1;padding:12px 14px!important;justify-content:flex-start!important;align-items:flex-start!important;gap:3px
+    }
+    .kwg-profile-v345 .kwg-profile-feature-row #profile-username{
+      font-size:20px!important;line-height:1.25!important;margin:4px 0 5px!important;overflow-wrap:anywhere
+    }
+    .kwg-profile-v345 .kwg-profile-feature-row .profile-joined{font-size:10px!important;margin-top:5px!important}
+    .kwg-profile-v345 .kwg-profile-feature-row .profile-action-row{margin-top:9px!important;width:100%;display:flex;flex-wrap:wrap;gap:6px}
+    .kwg-profile-v345 .kwg-profile-feature-row .profile-join-btn{margin-top:0!important;padding:8px 11px!important;font-size:10px!important}
+    .kwg-profile-v345 .kwg-profile-feature-row .profile-friend-actions{margin-top:0!important;gap:6px}
+    .kwg-profile-v345 .kwg-profile-feature-row .profile-friend-actions button{padding:8px 10px!important;font-size:10px!important}
+    .kwg-profile-v345 .kwg-profile-about-card{min-height:0!important;display:flex;flex-direction:column;padding:19px!important;border:2px solid #354e67!important}
+    .kwg-profile-v345 .kwg-profile-about-card .profile-bio{flex:1;font-size:13px;line-height:1.8;overflow-wrap:anywhere}
+    .kwg-profile-v345 .kwg-profile-about-card textarea{width:100%;box-sizing:border-box;min-height:120px}
+    .kwg-profile-v345 .kwg-profile-friends-card{padding:14px 18px!important}
+    .kwg-profile-v345 .kwg-profile-friends-list{grid-template-columns:repeat(auto-fit,minmax(145px,1fr));max-height:200px}
+    /* Thumbnail cards: artwork is visible even in the compact world lists. */
+    .kwg-profile-v345 .profile-world-card{display:grid!important;grid-template-columns:104px minmax(0,1fr) auto;gap:12px!important;align-items:center}
+    .kwg-profile-world-thumb{position:relative;width:104px;aspect-ratio:16/10;background:#091523;border:2px solid #3c5c77;box-sizing:border-box;
+      display:flex;align-items:center;justify-content:center;text-align:center;font-size:9px;color:#7694af;overflow:hidden}
+    .kwg-profile-world-thumb img{display:block;width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+    .kwg-profile-world-info{min-width:0;overflow-wrap:anywhere}
+    .kwg-profile-v345 .profile-world-card button{padding:8px 10px}
+    /* Avatar + message text share a row, with author and date above message. */
+    .kwg-profile-v345 .kwg-profile-message{grid-template-columns:52px minmax(0,1fr);align-items:start;gap:12px!important}
+    .kwg-profile-message-avatar{width:52px;height:52px;box-sizing:border-box;padding:0;border:2px solid #4b7796;background:#0b1c2e;
+      color:#a5b8c9;font-size:8px;overflow:hidden;cursor:pointer}
+    .kwg-profile-message-avatar img{width:100%;height:100%;display:block;object-fit:cover}
+    .kwg-profile-message-avatar:hover{border-color:#9ee9ff}
+    .kwg-profile-message-content{min-width:0;display:grid;gap:7px}
+    @media(max-width:680px){
+      .kwg-profile-v345 .kwg-profile-feature-row{grid-template-columns:minmax(0,1fr)}
+      .kwg-profile-v345 .kwg-profile-feature-row>.profile-hero{display:grid!important;grid-template-columns:130px minmax(0,1fr)!important;min-height:150px!important}
+      .kwg-profile-v345 .kwg-profile-feature-row .profile-avatar-preview{height:100%!important;min-height:150px!important;border-right:2px solid #375776!important;border-bottom:0!important}
+    }
+    @media(max-width:420px){
+      .kwg-profile-v345 .profile-world-card{grid-template-columns:78px minmax(0,1fr)!important}
+      .kwg-profile-world-thumb{width:78px}
+      .kwg-profile-v345 .profile-world-card button{grid-column:2;justify-self:start}
+      .kwg-profile-v345 .kwg-profile-message{grid-template-columns:42px minmax(0,1fr);gap:8px!important}
+      .kwg-profile-message-avatar{width:42px;height:42px}
+    }
 </style>
 </head>
 <body>
@@ -2227,21 +2282,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       </section></div>
       <div id="profile-pane" class="home-pane">
         <div class="profile-shell kwg-profile-v345">
-          <div class="profile-hero">
-            <div id="profile-avatar-preview" class="profile-avatar-preview"><div class="profile-avatar-placeholder">HEADSHOT</div></div>
-            <div class="profile-identity">
-              <div class="profile-kicker">PLAYER PROFILE</div>
-              <h1 id="profile-username">PLAYER</h1>
-              <div id="profile-status" class="profile-status offline"><span class="profile-status-dot"></span><span>OFFLINE</span></div>
-              <div id="profile-joined" class="profile-joined"></div>
-              <div class="profile-action-row">
-                <button id="profile-join-world-btn" class="submit-btn profile-join-btn" style="display:none">VISIT FRIEND</button>
-                <div id="profile-friend-actions" class="profile-friend-actions"></div>
+          <div class="kwg-profile-feature-row">
+            <div class="profile-hero">
+              <div id="profile-avatar-preview" class="profile-avatar-preview"><div class="profile-avatar-placeholder">HEADSHOT</div></div>
+              <div class="profile-identity">
+                <div class="profile-kicker">PLAYER PROFILE</div>
+                <h1 id="profile-username">PLAYER</h1>
+                <div id="profile-status" class="profile-status offline"><span class="profile-status-dot"></span><span>OFFLINE</span></div>
+                <div id="profile-joined" class="profile-joined"></div>
+                <div class="profile-action-row">
+                  <button id="profile-join-world-btn" class="submit-btn profile-join-btn" style="display:none">VISIT FRIEND</button>
+                  <div id="profile-friend-actions" class="profile-friend-actions"></div>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="profile-grid kwg-profile-top-grid">
-            <section class="profile-panel">
+            <section class="profile-panel kwg-profile-about-card">
               <div class="profile-panel-title">ABOUT ME</div>
               <div id="profile-bio-view" class="profile-bio"></div>
               <div id="profile-edit-area" style="display:none">
@@ -2250,11 +2305,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
                 <button id="profile-save-btn" class="submit-btn">SAVE ABOUT ME</button>
               </div>
             </section>
-            <section class="profile-panel">
-              <div class="profile-panel-title">FRIENDS <span id="profile-friends-count" class="kwg-profile-count">0</span></div>
-              <div id="profile-friends-list" class="kwg-profile-friends-list"></div>
-            </section>
           </div>
+          <section class="profile-panel kwg-profile-friends-card">
+            <div class="profile-panel-title">FRIENDS <span id="profile-friends-count" class="kwg-profile-count">0</span></div>
+            <div id="profile-friends-list" class="kwg-profile-friends-list"></div>
+          </section>
           <div class="profile-grid kwg-profile-world-grid">
             <section class="profile-panel">
               <div class="profile-panel-title">LIKED WORLDS</div>
@@ -6360,6 +6415,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     let kwgProfileAvatarSeq=0;
+    const kwgProfileHeadshotCache=new Map();
+    function kwgMakeProfileHeadshot(appearance,size=84){
+      const key=JSON.stringify(appearance||{});
+      if(kwgProfileHeadshotCache.has(key))return kwgProfileHeadshotCache.get(key);
+      const w=size,h=size;
+      const renderer=getThumbnailRenderer(w,h);
+      const scene=new THREE.Scene();
+      scene.add(new THREE.AmbientLight(0xffffff,1.15));
+      const light=new THREE.DirectionalLight(0xffffff,1.3);light.position.set(3,6,5);scene.add(light);
+      const avatar=buildBlockyAvatar(appearance||{},cosmeticsForAppearance(appearance||{}));
+      scene.add(avatar);
+      const camera=new THREE.PerspectiveCamera(34,w/h,.05,30);
+      camera.position.set(0,1.98,1.85);
+      camera.lookAt(new THREE.Vector3(0,1.98,0));
+      renderer.render(scene,camera);
+      const url=renderer.domElement.toDataURL('image/png');
+      if(kwgProfileHeadshotCache.size>120)kwgProfileHeadshotCache.clear();
+      kwgProfileHeadshotCache.set(key,url);
+      return url;
+    }
     function renderProfileAvatar(appearance) {
       const box=document.getElementById('profile-avatar-preview');
       if(!box)return;
@@ -6391,7 +6466,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
     function renderProfileWorldCard(world) {
       const row=document.createElement('div');row.className='profile-world-card';
-      const info=document.createElement('div');info.style.minWidth='0';
+      const thumb=document.createElement('div');thumb.className='kwg-profile-world-thumb';
+      thumb.textContent='NO PREVIEW';
+      if(world.thumbnailUrl && /^https:\/\//i.test(world.thumbnailUrl)){
+        const img=document.createElement('img');
+        img.src=world.thumbnailUrl;img.alt='Thumbnail for '+filterKWGUserText(world.displayName||world.name);
+        img.loading='lazy';img.referrerPolicy='no-referrer';
+        img.onerror=()=>{img.remove();thumb.textContent='NO PREVIEW';};
+        thumb.replaceChildren(img);
+      }
+      const info=document.createElement('div');info.className='kwg-profile-world-info';
       const name=document.createElement('div');name.className='profile-world-name';
       name.textContent=filterKWGUserText(world.displayName||world.name);
       const meta=document.createElement('div');meta.className='profile-world-meta';
@@ -6399,7 +6483,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       info.append(name,meta);
       const btn=document.createElement('button');btn.type='button';btn.textContent='PLAY';
       btn.addEventListener('click',()=>joinSelectedWorld(world.name));
-      row.append(info,btn);return row;
+      row.append(thumb,info,btn);return row;
     }
     function renderProfileWorldList(id,worlds,emptyMessage){
       const box=document.getElementById(id);box.replaceChildren();
@@ -6422,6 +6506,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(!profile.messages?.length){const empty=document.createElement('div');empty.className='kwg-profile-empty';empty.textContent='No messages yet. Be the first to post!';box.append(empty);}
       (profile.messages||[]).forEach(msg=>{
         const row=document.createElement('article');row.className='kwg-profile-message';
+        const avatar=document.createElement('button');avatar.type='button';
+        avatar.className='kwg-profile-message-avatar';
+        avatar.title='View '+filterKWGUserText(msg.authorUsername)+'\'s profile';
+        avatar.onclick=()=>openPlayerProfile(msg.authorUsername);
+        const avatarImg=document.createElement('img');
+        avatarImg.alt=filterKWGUserText(msg.authorUsername)+' headshot';
+        try{avatarImg.src=kwgMakeProfileHeadshot(msg.authorAppearance||{});}
+        catch(err){console.warn('Message headshot unavailable',err);avatar.textContent='PLAYER';}
+        if(avatarImg.src)avatar.append(avatarImg);
+        const content=document.createElement('div');content.className='kwg-profile-message-content';
         const head=document.createElement('div');head.className='kwg-profile-message-header';
         const author=document.createElement('button');author.type='button';author.className='kwg-profile-message-author';
         author.textContent=filterKWGUserText(msg.authorUsername);author.onclick=()=>openPlayerProfile(msg.authorUsername);
@@ -6434,7 +6528,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           });head.append(del);
         }
         const body=document.createElement('div');body.className='kwg-profile-message-body';body.textContent=filterKWGUserText(msg.body);
-        row.append(head,body);box.append(row);
+        content.append(head,body);row.append(avatar,content);box.append(row);
       });
       document.getElementById('profile-message-compose').style.display=loggedInUsername?'grid':'none';
     }
