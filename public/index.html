@@ -2055,10 +2055,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 </style>
 <style id="kwg-v344-home-style">
 /* KWG V3.44 - discovery-first home dashboard. No emoji in the game UI. */
-#home-pane .kwg-home-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(250px,1fr);gap:14px;align-items:start}
+#home-pane .kwg-home-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(250px,1fr);gap:14px;align-items:stretch}
 #home-pane .kwg-home-panel{min-width:0;padding:16px;background:#152335;border:2px solid #57718b;box-shadow:4px 4px 0 #0a1220;border-radius:0}
 #home-pane .kwg-home-feature,#home-pane .kwg-home-recent{grid-column:1}
-#home-pane .kwg-home-notices{grid-column:2;grid-row:1 / span 2}
+#home-pane .kwg-home-notices{
+  grid-column:2;grid-row:1 / span 2;
+  display:flex;flex-direction:column;min-height:0;min-width:0;
+  /* The card stretches to the combined height of the two left cards. */
+}
+#home-pane .kwg-home-notices .kwg-home-panel-head{flex:0 0 auto}
+#home-pane .kwg-home-notices .kwg-home-notice-list{
+  flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:#6386a1 #0e1b2a;
+  padding-right:3px;
+}
 #home-pane .kwg-home-panel-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:13px;padding-bottom:12px;border-bottom:2px solid #344d65}
 #home-pane .kwg-home-panel-head h3{margin:3px 0 0;color:#e7f5ff;font-size:13px;letter-spacing:.055em}
 #home-pane .kwg-home-kicker{font-size:9px;letter-spacing:.1em;color:#88c8ed;font-weight:800}
@@ -2089,7 +2099,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 #home-pane .kwg-home-notice.unread .kwg-home-notice-dot{background:#a5e88b}
 #home-pane .kwg-home-notice-message{font-size:10px;color:#e4ecf5;line-height:1.7;overflow-wrap:anywhere}
 #home-pane .kwg-home-notice-time{font-size:9px;color:#95adc0;margin-top:6px}
-@media(max-width:790px){#home-pane .kwg-home-layout{grid-template-columns:1fr}#home-pane .kwg-home-feature,#home-pane .kwg-home-recent,#home-pane .kwg-home-notices{grid-column:1;grid-row:auto}}
+@media(max-width:790px){
+  #home-pane .kwg-home-layout{grid-template-columns:1fr}
+  #home-pane .kwg-home-feature,#home-pane .kwg-home-recent,#home-pane .kwg-home-notices{grid-column:1;grid-row:auto}
+  /* On narrow screens the cards stack; don't reserve desktop-sized empty space. */
+  #home-pane .kwg-home-notices .kwg-home-notice-list{flex:0 1 auto;max-height:340px}
+}
 @media(max-width:480px){#home-pane .kwg-home-panel{padding:11px}#home-pane .kwg-home-feature-card{grid-template-columns:1fr}#home-pane .kwg-home-feature-card>.kwg-home-thumb{height:175px}#home-pane .kwg-home-recent-grid{grid-template-columns:1fr}#home-pane .kwg-home-panel-head{flex-wrap:wrap}}
 
     /* KWG V3.45: player profile - pixel arcade, responsive headshot + boards */
