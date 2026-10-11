@@ -5572,17 +5572,36 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       for(const side of [-1,1]){
         oval(1,side*.278,.705,.237,.057,.026,.012,C.pink,20);
       }
-      // Big, nearly all-pupil eyes with just a fine soft rim and TWO glints. Each entire eye
-      // is skinned to an eye bone, allowing clean occasional blinks.
+      // V3.53.2: Low-profile button eyes with highlights PAINTED into the
+      // vertex colors of the same skinned eye surface. No raised glint geometry.
+      // Keep each eye on its existing bone so blinks still fold it closed.
       for(const side of [-1,1]){
         const bone=side<0?5:6;
-        const x=side*.159,y=.844;
-        // The entire visible eye is the dark pupil: no white rim or iris ring.
-        oval(bone,x,y-.004,.315,.109,.132,.058,C.eye,36);
-        // Large, crisp catchlights are intentionally raised just above the dark eye
-        // surface so they remain visible at normal camera distances and in previews.
-        oval(bone,x-.032,y+.043,.379,.037,.040,.009,white,24);
-        oval(bone,x+.039,y-.032,.377,.019,.021,.008,new THREE.Color('#d9f3ff'),18);
+        const x=side*.159,y=.840;
+        const g=new THREE.SphereGeometry(1,72,54);
+        const p=g.getAttribute('position');
+        for(let i=0;i<p.count;i++){
+          const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
+          // Shallow eye with a softly curved front, tucked into the face.
+          // The old .058 depth plus raised catchlights made the eyes bulge.
+          p.setXYZ(i,x+nx*.108,y+ny*.130,.285+nz*.027);
+        }
+        g.computeVertexNormals();
+        append(g,bone,(vx,vy,vz,nx,ny,nz)=>{
+          const col=C.eye.clone();
+          if(nz>.05){
+            const u=(vx-x)/.108,v=(vy-y)/.130;
+            const glint=(cx,cy,rx,ry)=>{
+              const d=Math.hypot((u-cx)/rx,(v-cy)/ry);
+              return 1-smooth(.74,1.06,d);
+            };
+            const face=smooth(.05,.38,nz);
+            // Large pearly reflection and smaller cool-white twinkle.
+            col.lerp(white,glint(-.30,.38,.31,.31)*face);
+            col.lerp(new THREE.Color('#d9f3ff'),glint(.36,-.27,.17,.18)*face);
+          }
+          return col;
+        });
       }
       // Closed-eye smiles live on the HEAD behind the eyeballs. They are
       // exposed briefly when the actual eye geometry folds shut. Unlike the
