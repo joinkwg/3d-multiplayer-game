@@ -413,6 +413,15 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS friendships_requester_idx ON friendships(requester_id,status);
     CREATE INDEX IF NOT EXISTS friendships_addressee_idx ON friendships(addressee_id,status);
+    CREATE TABLE IF NOT EXISTS profile_messages (
+      id BIGSERIAL PRIMARY KEY,
+      profile_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      author_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body VARCHAR(240) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS profile_messages_profile_idx ON profile_messages(profile_user_id,created_at DESC,id DESC);
+    CREATE INDEX IF NOT EXISTS profile_messages_author_idx ON profile_messages(author_user_id,created_at DESC);
     CREATE TABLE IF NOT EXISTS notifications (
       id BIGSERIAL PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -871,6 +880,52 @@ io.on('connection', (socket) => {
         };
       }
 
+      // Public profile sections: worlds liked by this player, their highest-
+      // liked creations, accepted friends, and latest message-board posts.
+      const [likedRows, friendRows, messageRows] = await Promise.all([
+        pool.query(`
+          SELECT w.id,w.name,w.data,owner.username AS owner_username,
+                 (SELECT COUNT(*)::int FROM world_likes l2 WHERE l2.world_id=w.id) AS like_count
+          FROM world_likes liked
+          JOIN worlds w ON w.id=liked.world_id
+          LEFT JOIN users owner ON owner.id=w.owner_user_id
+          WHERE liked.user_id=$1
+          ORDER BY liked.created_at DESC,w.id DESC LIMIT 12
+        `,[u.id]),
+        pool.query(`
+          SELECT other.id,other.username
+          FROM friendships f
+          JOIN users other ON other.id=CASE WHEN f.requester_id=$1 THEN f.addressee_id ELSE f.requester_id END
+          WHERE f.status='accepted' AND (f.requester_id=$1 OR f.addressee_id=$1)
+          ORDER BY lower(other.username) LIMIT 100
+        `,[u.id]),
+        pool.query(`
+          SELECT m.id,m.body,m.created_at AS "createdAt",m.author_user_id AS "authorId",
+                 author.username AS "authorUsername"
+          FROM profile_messages m
+          JOIN users author ON author.id=m.author_user_id
+          WHERE m.profile_user_id=$1
+          ORDER BY m.created_at DESC,m.id DESC LIMIT 30
+        `,[u.id])
+      ]);
+      const worldCard=w=>({
+        id:Number(w.id),name:w.name,
+        displayName:filterKWGUserText(String(w.data?.displayName||w.name)),
+        likeCount:Number(w.like_count??w.likeCount??0),
+        ownerUsername:w.owner_username||null
+      });
+      const topWorlds=ownedWithIds.rows.slice().sort((a,b)=>
+        Number(b.likeCount)-Number(a.likeCount)||String(a.name).localeCompare(String(b.name))
+      ).slice(0,8).map(w=>worldCard({...w,like_count:w.likeCount}));
+      const friends=friendRows.rows.map(friend=>({
+        username:friend.username,online:!!socketsByUser.get(friend.id)
+      }));
+      const messages=messageRows.rows.map(m=>({
+        id:Number(m.id),authorUsername:m.authorUsername,
+        body:filterKWGUserText(m.body),createdAt:m.createdAt,
+        canDelete:Number(m.authorId)===Number(socket.user.id)||Number(u.id)===Number(socket.user.id)
+      }));
+
       const onlineSocket = socketsByUser.get(u.id);
       const livePlayer = onlineSocket ? playersBySocket.get(onlineSocket.id) : null;
       cb({
@@ -881,7 +936,7 @@ io.on('connection', (socket) => {
           createdAt:u.createdAt,
           appearance:u.appearance || {},
           online:!!onlineSocket,
-          currentWorld:livePlayer?.worldName || null,
+          currentWorld:(friendship.state==='friends'||friendship.state==='self') ? (livePlayer?.worldName||null) : null,
           isOwnProfile:u.id === socket.user.id,
           friendship,
           stats:{
@@ -890,6 +945,7 @@ io.on('connection', (socket) => {
             inventory:Number(inventoryCount.rows[0]?.n || 0)
           },
           showcasedWorlds,
+          likedWorlds:likedRows.rows.map(worldCard),topWorlds,friends,messages,
           ownedWorlds: u.id === socket.user.id ? ownedWithIds.rows.map(w => ({
             id:Number(w.id),name:w.name,displayName:filterKWGUserText(String(w.data?.displayName||w.name)),thumbnailUrl:String(w.data?.thumbnailUrl||''),createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
           })) : []
@@ -915,12 +971,49 @@ io.on('connection', (socket) => {
           return cb({success:false,message:'You can only showcase worlds you own.'});
       }
 
-      await pool.query(
-        'UPDATE users SET bio=$1,showcased_world_ids=$2::bigint[] WHERE id=$3',
-        [bio, ids, socket.user.id]
-      );
+      if(Array.isArray(showcaseWorldIds)){
+        await pool.query('UPDATE users SET bio=$1,showcased_world_ids=$2::bigint[] WHERE id=$3',
+          [bio,ids,socket.user.id]);
+      }else{
+        await pool.query('UPDATE users SET bio=$1 WHERE id=$2',[bio,socket.user.id]);
+      }
       cb({success:true});
     } catch (e) { console.error(e); cb({success:false,message:'Could not save profile.'}); }
+  });
+
+  socket.on('post_profile_message', async ({username,body} = {}, cb) => {
+    if(!requireAuth(socket,cb))return;
+    try{
+      const targetName=cleanUsername(username);
+      const target=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',[targetName]);
+      if(!target.rowCount)return cb({success:false,message:'Player not found.'});
+      body=filterKWGUserText(String(body||'').trim().slice(0,240));
+      if(!body.trim())return cb({success:false,message:'Message cannot be empty.'});
+      const recent=await pool.query(`
+        SELECT 1 FROM profile_messages
+        WHERE author_user_id=$1 AND created_at>NOW()-INTERVAL '10 seconds' LIMIT 1
+      `,[socket.user.id]);
+      if(recent.rowCount)return cb({success:false,message:'Wait 10 seconds before posting another message.'});
+      await pool.query('INSERT INTO profile_messages(profile_user_id,author_user_id,body) VALUES($1,$2,$3)',
+        [target.rows[0].id,socket.user.id,body]);
+      cb({success:true});
+    }catch(e){console.error('Profile post error:',e);cb({success:false,message:'Could not post message.'});}
+  });
+
+  socket.on('delete_profile_message', async ({messageId} = {}, cb) => {
+    if(!requireAuth(socket,cb))return;
+    try{
+      const id=Number(messageId);
+      if(!Number.isSafeInteger(id)||id<1)return cb({success:false,message:'Invalid message.'});
+      const deleted=await pool.query(`
+        DELETE FROM profile_messages m USING users owner
+        WHERE m.id=$1 AND owner.id=m.profile_user_id
+          AND (m.author_user_id=$2 OR owner.id=$2)
+        RETURNING m.id
+      `,[id,socket.user.id]);
+      if(!deleted.rowCount)return cb({success:false,message:'Message not found or permission denied.'});
+      cb({success:true});
+    }catch(e){console.error('Profile delete error:',e);cb({success:false,message:'Could not delete message.'});}
   });
 
   // Home dashboard: recent visits, current rolling-24h like leader,
@@ -1102,11 +1195,29 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb({success:false,message:'Could not create world.'}); }
   });
 
-  socket.on('join_world', async ({worldName, appearance}, cb) => {
+  socket.on('join_world', async ({worldName, appearance, visitUsername}, cb) => {
     if (!requireAuth(socket, cb)) return;
     try {
       const world = await getWorldByName(cleanWorldName(worldName));
       if (!world) return cb({success:false,message:'World not found.'});
+      // Visiting a player is a friend-only action. Never trust the client to
+      // provide the correct world or to claim that the players are friends.
+      if(visitUsername){
+        const target=await pool.query('SELECT id FROM users WHERE lower(username)=lower($1)',
+          [cleanUsername(visitUsername)]);
+        if(!target.rowCount||Number(target.rows[0].id)===Number(socket.user.id))
+          return cb({success:false,message:'Friend is unavailable.'});
+        const friend=await pool.query(`
+          SELECT 1 FROM friendships WHERE status='accepted'
+            AND ((requester_id=$1 AND addressee_id=$2) OR (requester_id=$2 AND addressee_id=$1))
+          LIMIT 1
+        `,[socket.user.id,target.rows[0].id]);
+        if(!friend.rowCount)return cb({success:false,message:'Only friends can visit players.'});
+        const friendSocket=socketsByUser.get(target.rows[0].id);
+        const friendPlayer=friendSocket?playersBySocket.get(friendSocket.id):null;
+        if(!friendPlayer||friendPlayer.worldName!==world.name)
+          return cb({success:false,message:'Your friend is no longer in that world.'});
+      }
 
       // Hard cap: at most 20 connected players per world. Reservations prevent
       // simultaneous joins from briefly pushing the world over the limit.
