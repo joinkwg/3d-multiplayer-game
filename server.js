@@ -897,11 +897,12 @@ io.on('connection', (socket) => {
           ORDER BY liked.created_at DESC,w.id DESC
         `,[u.id]),
         pool.query(`
-          SELECT other.id,other.username
+          SELECT other.id,other.username,other.appearance,
+                 f.updated_at AS "friendsSince"
           FROM friendships f
           JOIN users other ON other.id=CASE WHEN f.requester_id=$1 THEN f.addressee_id ELSE f.requester_id END
           WHERE f.status='accepted' AND (f.requester_id=$1 OR f.addressee_id=$1)
-          ORDER BY lower(other.username) LIMIT 100
+          ORDER BY f.updated_at DESC,lower(other.username) LIMIT 100
         `,[u.id]),
         pool.query(`
           SELECT m.id,m.body,m.created_at AS "createdAt",m.author_user_id AS "authorId",
@@ -925,7 +926,8 @@ io.on('connection', (socket) => {
         Number(b.likeCount)-Number(a.likeCount)||String(a.name).localeCompare(String(b.name))
       ).slice(0,8).map(w=>worldCard({...w,like_count:w.likeCount}));
       const friends=friendRows.rows.map(friend=>({
-        username:friend.username,online:!!socketsByUser.get(friend.id)
+        username:friend.username,online:!!socketsByUser.get(friend.id),
+        appearance:friend.appearance||{},friendsSince:friend.friendsSince
       }));
       const messages=messageRows.rows.map(m=>({
         id:Number(m.id),authorUsername:m.authorUsername,
