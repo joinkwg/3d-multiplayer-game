@@ -2430,6 +2430,29 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       outline:2px solid #fff;outline-offset:3px}
     @media(max-width:480px){#kwg-ui-dialog{padding:18px 15px;box-shadow:5px 5px 0 #050c17}}
 
+
+    /* KWG V3.50 — compact admin-only testing console. */
+    #kwg-admin-console{position:fixed;inset:0;z-index:44000;display:none;align-items:center;
+      justify-content:center;padding:18px;box-sizing:border-box;background:rgba(3,9,19,.85);
+      font-family:'Pixelify Sans',monospace}
+    #kwg-admin-console.kwg-open{display:flex}
+    #kwg-admin-console-card{width:min(470px,100%);background:#152539;border:3px solid #83b9dc;
+      box-shadow:8px 8px 0 #050c17;padding:22px;box-sizing:border-box;color:#eaf6ff}
+    #kwg-admin-console-card h2{font-size:19px;color:#f7d783;margin:7px 0 15px}
+    #kwg-admin-console-card p{font-size:13px;line-height:1.5;margin:0 0 14px}
+    #kwg-admin-console-card label{display:block;font-size:12px;margin:12px 0 7px}
+    #kwg-admin-coin-amount{width:100%;box-sizing:border-box;height:43px;padding:8px 10px;
+      background:#0c192a;border:2px solid #6597b5;color:#fff;
+      font:700 16px 'Pixelify Sans',monospace;border-radius:0}
+    #kwg-admin-console-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;flex-wrap:wrap}
+    #kwg-admin-console button{background:#294961;border:2px solid #96c4de;color:#fff;
+      font:900 12px 'Pixelify Sans',monospace;padding:11px 13px;cursor:pointer;
+      border-radius:0;box-shadow:3px 3px 0 #08121e}
+    #kwg-admin-console button.kwg-admin-give{background:#266e55;border-color:#9de6bd}
+    #kwg-admin-console button:hover{filter:brightness(1.13)}
+    #kwg-admin-console button:focus-visible,#kwg-admin-coin-amount:focus-visible{outline:2px solid #fff;outline-offset:3px}
+    #kwg-admin-console-status{font-size:12px;min-height:18px;margin-top:12px;color:#9de6bd}
+
     /* KWG V3.49: two-shop storefront and in-world pets inventory. */
     #store-pane .kwg-shop-switch{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 16px}
     #store-pane .kwg-shop-switch-btn{font-family:inherit;font-weight:900;font-size:12px;letter-spacing:.05em;padding:13px 20px;cursor:pointer;
@@ -2819,6 +2842,23 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         <div id="admin-store-items-list"></div>
       </div>
       <div id="admin-error" class="error-msg"></div>
+    </div>
+  </div>
+
+  <!-- V3.50 admin testing console: only available to authenticated admins. -->
+  <div id="kwg-admin-console" aria-hidden="true">
+    <div id="kwg-admin-console-card" role="dialog" aria-modal="true" aria-labelledby="kwg-admin-console-title">
+      <div style="font-size:10px;color:#83c9e8;font-weight:900;letter-spacing:.14em">KWG / ADMIN TOOLS</div>
+      <h2 id="kwg-admin-console-title">TEST COINS</h2>
+      <p>Add coins to your own account for testing. Server admin permissions are required.</p>
+      <p>Current balance: <strong id="kwg-admin-console-balance">0</strong> coins</p>
+      <label for="kwg-admin-coin-amount">COINS TO ADD (1–100,000)</label>
+      <input id="kwg-admin-coin-amount" type="number" min="1" max="100000" step="1" value="1000" autocomplete="off">
+      <div id="kwg-admin-console-status" role="status" aria-live="polite"></div>
+      <div id="kwg-admin-console-actions">
+        <button type="button" id="kwg-admin-console-close">CANCEL</button>
+        <button type="button" id="kwg-admin-console-give" class="kwg-admin-give">GIVE COINS</button>
+      </div>
     </div>
   </div>
 
@@ -4577,6 +4617,74 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       switchHomeTab('home');
     });
 
+    // V3.50: Ctrl+Alt+K opens the admin-only test console, even inside a world.
+    const kwgAdminConsole=document.getElementById('kwg-admin-console');
+    const kwgAdminCoinAmount=document.getElementById('kwg-admin-coin-amount');
+    const kwgAdminConsoleStatus=document.getElementById('kwg-admin-console-status');
+    const kwgAdminGiveButton=document.getElementById('kwg-admin-console-give');
+    let kwgAdminConsolePreviousFocus=null;
+    function kwgCloseAdminConsole(){
+      if(!kwgAdminConsole.classList.contains('kwg-open'))return;
+      kwgAdminConsole.classList.remove('kwg-open');
+      kwgAdminConsole.setAttribute('aria-hidden','true');
+      if(kwgAdminConsolePreviousFocus?.isConnected)kwgAdminConsolePreviousFocus.focus({preventScroll:true});
+    }
+    function kwgOpenAdminConsole(){
+      if(!isAdmin||!loggedInUsername||kwgActiveDialog)return;
+      kwgAdminConsolePreviousFocus=document.activeElement;
+      document.getElementById('kwg-admin-console-balance').textContent=String(coinBalance);
+      kwgAdminConsoleStatus.textContent='';
+      kwgAdminConsole.classList.add('kwg-open');
+      kwgAdminConsole.setAttribute('aria-hidden','false');
+      kwgAdminCoinAmount.focus();kwgAdminCoinAmount.select();
+    }
+    document.getElementById('kwg-admin-console-close').addEventListener('click',kwgCloseAdminConsole);
+    kwgAdminGiveButton.addEventListener('click',()=>{
+      if(!isAdmin)return;
+      const amount=Number(kwgAdminCoinAmount.value);
+      if(!Number.isSafeInteger(amount)||amount<1||amount>100000){
+        kwgAdminConsoleStatus.style.color='#f2a0a7';
+        kwgAdminConsoleStatus.textContent='Enter a whole number from 1 to 100,000.';return;
+      }
+      kwgAdminGiveButton.disabled=true;
+      kwgAdminConsoleStatus.style.color='#83c9e8';
+      kwgAdminConsoleStatus.textContent='Adding coins...';
+      socket.emit('admin_grant_self_coins',{amount},res=>{
+        kwgAdminGiveButton.disabled=false;
+        if(!res?.success){
+          kwgAdminConsoleStatus.style.color='#f2a0a7';
+          kwgAdminConsoleStatus.textContent=res?.message||'Could not add coins.';return;
+        }
+        coinBalance=Number(res.coins);
+        updateCoinDisplays();
+        document.getElementById('kwg-admin-console-balance').textContent=String(coinBalance);
+        kwgAdminConsoleStatus.style.color='#9de6bd';
+        kwgAdminConsoleStatus.textContent='Added '+amount.toLocaleString()+' coins!';
+        kwgAudio.play('success');
+      });
+    });
+    window.addEventListener('keydown',e=>{
+      if(isAdmin&&e.ctrlKey&&e.altKey&&!e.shiftKey&&!e.metaKey&&e.code==='KeyK'){
+        e.preventDefault();e.stopImmediatePropagation();
+        if(kwgAdminConsole.classList.contains('kwg-open'))kwgCloseAdminConsole();
+        else kwgOpenAdminConsole();
+        return;
+      }
+      if(!kwgAdminConsole.classList.contains('kwg-open'))return;
+      if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();kwgCloseAdminConsole();return;}
+      if(e.key==='Enter'&&document.activeElement===kwgAdminCoinAmount){
+        e.preventDefault();e.stopImmediatePropagation();kwgAdminGiveButton.click();return;
+      }
+      if(e.key==='Tab'){
+        const focusable=[kwgAdminCoinAmount,document.getElementById('kwg-admin-console-close'),kwgAdminGiveButton];
+        const index=focusable.indexOf(document.activeElement);
+        const next=e.shiftKey?(index<=0?focusable.length-1:index-1):(index<0||index===focusable.length-1?0:index+1);
+        e.preventDefault();e.stopImmediatePropagation();focusable[next].focus();return;
+      }
+      // Suppress gameplay and build shortcuts while the console is open.
+      e.stopImmediatePropagation();
+    },true);
+
     // --- THREE.JS SCENE SETUP ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1e1e7b);
@@ -5199,7 +5307,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       mesh.position.set(avatar.position.x-Math.sin(yaw)*1.25+Math.cos(yaw)*.85,
         avatar.position.y,avatar.position.z-Math.cos(yaw)*1.25-Math.sin(yaw)*.85);
       scene.add(mesh);
-      kwgWorldPets.set(playerId,{mesh,petKey,phase:Math.random()*Math.PI*2,clock:0});
+      // Store a world-space follow target. Camera/avatar yaw alone must never move a pet.
+      kwgWorldPets.set(playerId,{mesh,petKey,phase:Math.random()*Math.PI*2,clock:0,
+        lastOwnerX:avatar.position.x,lastOwnerZ:avatar.position.z,
+        followX:mesh.position.x,followZ:mesh.position.z});
     }
     function kwgClearWorldPets(){
       for(const pet of kwgWorldPets.values())scene.remove(pet.mesh);
@@ -5211,9 +5322,24 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const avatar=id===socket.id?localPlayerAvatar:otherPlayers[id]?.mesh;
         if(!avatar){scene.remove(pet.mesh);kwgWorldPets.delete(id);continue;}
         pet.clock+=dt;
-        const yaw=avatar.rotation.y;
-        const tx=avatar.position.x-Math.sin(yaw)*1.25+Math.cos(yaw)*.85;
-        const tz=avatar.position.z-Math.cos(yaw)*1.25-Math.sin(yaw)*.85;
+        // Follow actual movement, NOT the direction the player is looking.
+        // This lets players stand still, turn their camera, and admire their pet.
+        const movedX=avatar.position.x-pet.lastOwnerX;
+        const movedZ=avatar.position.z-pet.lastOwnerZ;
+        const moved=Math.hypot(movedX,movedZ);
+        if(moved>0.015){
+          if(moved>14){ // Respawn/teleport: bring the pet along immediately.
+            pet.followX=avatar.position.x+.85;
+            pet.followZ=avatar.position.z+1.25;
+          }else{
+            const dirX=movedX/moved,dirZ=movedZ/moved;
+            pet.followX=avatar.position.x-dirX*1.3-dirZ*.75;
+            pet.followZ=avatar.position.z-dirZ*1.3+dirX*.75;
+          }
+          pet.lastOwnerX=avatar.position.x;
+          pet.lastOwnerZ=avatar.position.z;
+        }
+        const tx=pet.followX,tz=pet.followZ;
         const dx=tx-pet.mesh.position.x,dz=tz-pet.mesh.position.z;
         const distance=Math.hypot(dx,dz);
         if(distance>14){pet.mesh.position.x=tx;pet.mesh.position.z=tz;}
