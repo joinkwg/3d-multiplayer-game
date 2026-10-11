@@ -487,7 +487,15 @@ async function migrate() {
       ('dog_1','Dog 1',75,'dog'),('dog_2','Dog 2',85,'dog'),
       ('dog_3','Dog 3',95,'dog'),('dog_4','Dog 4',110,'dog'),
       ('cat_1','Cat 1',95,'cat'),('cat_2','Cat 2',105,'cat'),
-      ('cat_3','Cat 3',115,'cat'),('cat_4','Cat 4',125,'cat')
+      ('cat_3','Cat 3',115,'cat'),('cat_4','Cat 4',125,'cat'),
+      ('monkey_1','Monkey 1',135,'monkey'),('monkey_2','Monkey 2',145,'monkey'),
+      ('monkey_3','Monkey 3',155,'monkey'),('monkey_4','Monkey 4',165,'monkey'),
+      ('bunny_1','Bunny 1',135,'bunny'),('bunny_2','Bunny 2',145,'bunny'),
+      ('bunny_3','Bunny 3',155,'bunny'),('bunny_4','Bunny 4',165,'bunny'),
+      ('owl_1','Owl 1',165,'owl'),('owl_2','Owl 2',175,'owl'),
+      ('owl_3','Owl 3',185,'owl'),('owl_4','Owl 4',195,'owl'),
+      ('alien_1','Alien 1',185,'alien'),('alien_2','Alien 2',195,'alien'),
+      ('alien_3','Alien 3',205,'alien'),('alien_4','Alien 4',215,'alien')
     ON CONFLICT(pet_key) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS world_templates (
