@@ -5394,6 +5394,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const kwgCharacterMeshCache=new Map();
     function kwgCharacterGeometry(petKey){
       if(kwgCharacterMeshCache.has(petKey))return kwgCharacterMeshCache.get(petKey);
+      if(/^(monkey|bunny|owl|alien)_[1-4]$/.test(petKey))return kwgExtraPetGeometry(petKey);
       const cat=petKey.startsWith('cat_');
       // V3.53: color-only variants of the same two professionally sculpted pets.
       // Every variation keeps identical geometry, bones and expressive animations.
@@ -5628,9 +5629,241 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const result={geo,mat};kwgCharacterMeshCache.set(petKey,result);return result;
     }
 
+    // V3.54: Four new original companion species, with four colorways each.
+    // Every character is a SINGLE vertex-painted SkinnedMesh using the same
+    // torso/head/arm/tail/eye/ear bone indices and animation as dogs and cats.
+    function kwgExtraPetGeometry(petKey){
+      if(kwgCharacterMeshCache.has(petKey))return kwgCharacterMeshCache.get(petKey);
+      const [species,number]=petKey.split('_');
+      const variant=Number(number)-1;
+      const palettes={
+        monkey:[
+          ['#b77c51','#d59b67','#e7b788','#74432e','#f7d5a4','#c48c71','#221920'],
+          ['#d9bc8d','#f0d5a5','#ffebc4','#aa825d','#fff0d5','#d5a391','#221920'],
+          ['#71534b','#937064','#b98c76','#48312f','#dfbaa0','#a97b78','#1b151b'],
+          ['#999ca7','#b4b8c2','#d3d5dc','#646774','#f0e6de','#bc9da7','#191722']
+        ],
+        bunny:[
+          ['#e9ddd3','#f8eee4','#ffffff','#bba99e','#fff9f1','#efb0be','#211b22'],
+          ['#b7a8a2','#d2c3bb','#ebe0d8','#81726e','#fff3e9','#dba3b0','#211b22'],
+          ['#e3bd88','#f3d4a5','#ffe9c4','#b68a5e','#fff3dc','#df9da9','#211b22'],
+          ['#66616e','#87808c','#aaa1af','#3f3b48','#eee3e6','#b7859c','#17151e']
+        ],
+        owl:[
+          ['#b88757','#d5a373','#eac79d','#765036','#f6e3c2','#e8a852','#19151c'],
+          ['#d2d7df','#e8ebf0','#ffffff','#919aa9','#f8f7ed','#e2b15e','#19151c'],
+          ['#89665d','#ac8574','#cda99a','#583f40','#f4dfcf','#df9b58','#19151c'],
+          ['#5b6079','#787e9a','#a1a9c2','#373b53','#e6e6f2','#d9ad63','#15141f']
+        ],
+        alien:[
+          ['#86caa1','#a6e1bb','#c9f6d6','#4f9271','#d8ffe4','#f1a9ca','#111923'],
+          ['#a89be1','#c8bafa','#e3d9ff','#7768b6','#f3e8ff','#ffb5d5','#171224'],
+          ['#75bcd4','#99d9ed','#c7f0fa','#4788a3','#e0faff','#f0b1d9','#111b27'],
+          ['#efb5cf','#ffd0e4','#ffe6f1','#bc83a4','#fff0f8','#c4b6fa','#211625']
+        ]
+      };
+      const swatches=palettes[species]?.[variant];
+      if(!swatches)return null;
+      const [fur,head,light,shade,cream,accent,eye]=swatches.map(c=>new THREE.Color(c));
+      const white=new THREE.Color('#ffffff');
+      const dark=new THREE.Color('#3b2934');
+      const points=[],normals=[],colors=[],skinIndices=[],skinWeights=[];
+      const clamp=(v)=>Math.max(0,Math.min(1,v));
+      const smooth=(a,b,x)=>{let t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
+      const gauss=(x,c,r)=>Math.exp(-Math.pow((x-c)/r,2));
+      function add(geometry,bone,paint){
+        const g=geometry.index?geometry.toNonIndexed():geometry;
+        const p=g.getAttribute('position'),n=g.getAttribute('normal');
+        for(let i=0;i<p.count;i++){
+          const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
+          points.push(x,y,z);normals.push(n.getX(i),n.getY(i),n.getZ(i));
+          const color=typeof paint==='function'?paint(x,y,z,n.getX(i),n.getY(i),n.getZ(i)):paint;
+          colors.push(color.r,color.g,color.b);
+          skinIndices.push(bone,0,0,0);skinWeights.push(1,0,0,0);
+        }
+        if(g!==geometry)g.dispose();geometry.dispose();
+      }
+      function ellipsoid(bone,x,y,z,rx,ry,rz,paint,seg=36){
+        const g=new THREE.SphereGeometry(1,seg,Math.max(18,Math.floor(seg*.72)));
+        g.scale(rx,ry,rz);g.translate(x,y,z);add(g,bone,paint);
+      }
+      function line(bone,arr,r,col){
+        const curve=new THREE.CatmullRomCurve3(arr.map(p=>new THREE.Vector3(...p)));
+        add(new THREE.TubeGeometry(curve,Math.max(12,arr.length*8),r,7,false),bone,col);
+      }
+      // Petite legless body, a little painted tummy, and a clearly shaped head.
+      const owl=species==='owl',alien=species==='alien',monkey=species==='monkey',bunny=species==='bunny';
+      {
+        const g=new THREE.SphereGeometry(1,48,36),p=g.getAttribute('position');
+        for(let i=0;i<p.count;i++){
+          const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
+          p.setXYZ(i,x*(owl?.262:.237),.306+y*(owl?.287:.275),z*.202);
+        }
+        g.computeVertexNormals();
+        add(g,0,(x,y,z)=>{
+          const c=fur.clone();
+          const bib=(1-smooth(.105,.195,Math.abs(x)))*smooth(.02,.15,z)*smooth(.12,.24,y)*(1-smooth(.48,.59,y));
+          c.lerp(cream,bib*.98);return c;
+        });
+      }
+      {
+        const g=new THREE.SphereGeometry(1,72,52),p=g.getAttribute('position');
+        for(let i=0;i<p.count;i++){
+          const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
+          const cheek=1+.085*gauss(y,-.26,.28);
+          p.setXYZ(i,x*(owl?.372:alien?.375:monkey?.373:.366)*cheek,
+            .836+y*(owl?.338:alien?.343:.318),
+            z*(owl?.294:alien?.296:.305));
+        }
+        g.computeVertexNormals();
+        add(g,1,(x,y,z)=>{
+          const c=head.clone();c.lerp(light,gauss(y,1.05,.22)*.14);
+          if(monkey){
+            // Small tuft on the forehead, painted into the skull.
+            c.lerp(shade,gauss(x,0,.038)*gauss(y,1.12,.06)*smooth(.17,.28,z)*.18);
+          }
+          return c;
+        });
+      }
+      // Expressive floppy arms for monkeys/bunnies/aliens; small feathered wings
+      // for owls. Both animate from the same left/right arm bones.
+      for(const side of [-1,1]){
+        const bone=side<0?2:3;
+        const g=new THREE.SphereGeometry(1,36,26),p=g.getAttribute('position');
+        for(let i=0;i<p.count;i++){
+          const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
+          const feather=owl?(.105+.024*ny):.098;
+          p.setXYZ(i,side*(owl?.269:.260)+nx*feather+side*(-ny)*(owl?.045:.055),
+            .382+ny*(owl?.164:.155),.02+nz*(owl?.067:.101));
+        }
+        g.computeVertexNormals();
+        add(g,bone,(x,y,z)=>{
+          const c=fur.clone();c.lerp(light,smooth(.24,.40,y)*.14);
+          if(owl)c.lerp(cream,(1-smooth(.23,.36,y))*.35);
+          else c.lerp(cream,(1-smooth(.25,.32,y))*.76);
+          return c;
+        });
+      }
+      // Species-specific ears, tufts or feelers, always on the shared ear bones.
+      for(const side of [-1,1]){
+        const bone=side<0?7:8;
+        if(bunny){
+          const g=new THREE.SphereGeometry(1,38,30),p=g.getAttribute('position');
+          for(let i=0;i<p.count;i++){
+            const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
+            const taper=1-.25*ny;
+            p.setXYZ(i,side*(.235+.020*ny)+nx*.105*taper,
+              1.253+ny*.335,
+              .038+nz*.069*taper);
+          }
+          g.computeVertexNormals();
+          add(g,bone,(x,y,z,nx,ny,nz)=>{
+            const c=head.clone();
+            const inset=(1-smooth(.52,.82,Math.abs(nx)))*smooth(.15,.6,nz)*smooth(1.06,1.19,y);
+            c.lerp(accent,inset*.86);return c;
+          });
+        }else if(monkey){
+          // Round little monkey ears with contrasting inner surfaces.
+          ellipsoid(bone,side*.361,.846,.035,.135,.150,.085,head,38);
+          ellipsoid(bone,side*.372,.850,.107,.088,.101,.016,accent,30);
+        }else if(owl){
+          // Feather tufts, not mammalian ears.
+          const g=new THREE.SphereGeometry(1,32,28),p=g.getAttribute('position');
+          for(let i=0;i<p.count;i++){
+            const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
+            const taper=Math.pow(Math.max(.04,(1-ny)*.5),.67);
+            p.setXYZ(i,side*(.278+.035*ny)+nx*.135*taper,1.140+ny*.178,
+              .004+nz*.080*taper);
+          }
+          g.computeVertexNormals();add(g,bone,head);
+        }else if(alien){
+          // Soft, short feelers with little colored glowing tips, skinned to ear bones.
+          line(bone,[[side*.20,1.08,.01],[side*.255,1.24,.018],[side*.30,1.32,.026]],.025,fur);
+          ellipsoid(bone,side*.30,1.335,.026,.068,.072,.064,accent,26);
+          ellipsoid(bone,side*.316,1.355,.078,.019,.022,.010,light,18);
+        }
+      }
+      // Faces have distinctive species silhouettes, without the previous
+      // balloon-like protruding eyes or separate sparkle geometry.
+      if(monkey){
+        // The pale monkey mask wraps around the eyes and little snout.
+        ellipsoid(1,0,.763,.278,.270,.215,.053,cream,48);
+        ellipsoid(1,0,.657,.316,.178,.106,.064,cream,36);
+        ellipsoid(1,0,.697,.380,.047,.032,.018,dark,24);
+        line(1,[[-.047,.637,.373],[0,.622,.383],[.047,.637,.373]],.004,dark);
+        for(const side of [-1,1])ellipsoid(1,side*.155,.659,.347,.044,.023,.009,accent,18);
+      }else if(bunny){
+        for(const side of [-1,1])ellipsoid(1,side*.077,.669,.298,.102,.083,.061,cream,34);
+        ellipsoid(1,0,.686,.364,.039,.029,.018,accent,24);
+        line(1,[[0,.668,.369],[0,.633,.359]],.0035,dark);
+        line(1,[[-.041,.628,.351],[0,.615,.361],[.041,.628,.351]],.0035,dark);
+        for(const side of [-1,1])for(let j=0;j<2;j++)
+          line(1,[[side*.139,.655-j*.025,.325],[side*.242,.668-j*.047,.272]],.0024,shade);
+      }else if(owl){
+        // Two creamy face disks, a small golden beak, tiny forehead feathers.
+        for(const side of [-1,1])ellipsoid(1,side*.162,.833,.260,.169,.203,.063,cream,44);
+        const beak=new THREE.ConeGeometry(.060,.108,5,1);beak.rotateX(Math.PI/2);
+        beak.translate(0,.695,.341);add(beak,1,accent);
+        for(const side of [-1,1])ellipsoid(1,side*.273,.677,.205,.049,.028,.010,light,18);
+      }else if(alien){
+        // Friendly cheek dots and tiny curved smile.
+        for(const side of [-1,1]){
+          ellipsoid(1,side*.244,.701,.226,.049,.027,.009,accent,20);
+          ellipsoid(1,side*.268,.755,.218,.019,.020,.008,light,16);
+        }
+        line(1,[[-.074,.658,.290],[0,.641,.312],[.074,.658,.290]],.004,dark);
+      }
+      // Two broad, low-profile glossy eyes, highlights painted as vertex colors.
+      // Eyeball geometry is assigned to the SAME two eye bones as cats/dogs.
+      for(const side of [-1,1]){
+        const bone=side<0?5:6;
+        const x=side*.159,y=.840;
+        const g=new THREE.SphereGeometry(1,72,54),p=g.getAttribute('position');
+        const rx=owl?.102:alien?.117:.106,ry=owl?.119:alien?.146:.130;
+        const z=owl?.322:monkey?.331:bunny?.293:.292;
+        for(let i=0;i<p.count;i++){
+          const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
+          p.setXYZ(i,x+nx*rx,y+ny*ry,z+nz*.024);
+        }
+        g.computeVertexNormals();
+        add(g,bone,(vx,vy,vz,nx,ny,nz)=>{
+          const c=eye.clone();
+          if(nz>.04){
+            const u=(vx-x)/rx,v=(vy-y)/ry;
+            const glint=(gx,gy,grx,gry)=>1-smooth(.72,1.04,Math.hypot((u-gx)/grx,(v-gy)/gry));
+            const face=smooth(.04,.35,nz);
+            c.lerp(white,glint(-.29,.38,.31,.30)*face);
+            c.lerp(new THREE.Color('#d9f5ff'),glint(.35,-.27,.16,.17)*face);
+          }
+          return c;
+        });
+      }
+      // Individual tails, each bound to the standard tail bone.
+      if(monkey){
+        line(4,[[0,.278,-.18],[.16,.25,-.31],[.30,.31,-.39],[.36,.46,-.40],[.28,.55,-.37],[.23,.49,-.32]],.038,fur);
+        ellipsoid(4,.23,.49,-.32,.043,.044,.040,head,18);
+      }else if(bunny){
+        ellipsoid(4,0,.303,-.229,.107,.105,.096,light,28);
+      }else if(owl){
+        for(const side of [-1,0,1])ellipsoid(4,side*.068,.269,-.206,.064,.112,.053,shade,24);
+      }else if(alien){
+        line(4,[[0,.270,-.18],[.11,.30,-.31],[.22,.36,-.34]],.037,fur);
+        ellipsoid(4,.22,.36,-.34,.049,.050,.047,accent,20);
+      }
+      const geo=new THREE.BufferGeometry();
+      geo.setAttribute('position',new THREE.Float32BufferAttribute(points,3));
+      geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+      geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+      geo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));
+      geo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(skinWeights,4));
+      geo.computeBoundingSphere();
+      const mat=new THREE.MeshPhongMaterial({vertexColors:true,skinning:true,shininess:7,specular:0x0b0908});
+      const result={geo,mat};kwgCharacterMeshCache.set(petKey,result);return result;
+    }
+
     // One shared eleven-bone hierarchy for Dog 1, Cat 1 and future pet designs.
     function kwgBuildPet(petKey){
-      if(!/^(dog|cat)_[1-4]$/.test(petKey))return null;
+      if(!/^(dog|cat|monkey|bunny|owl|alien)_[1-4]$/.test(petKey))return null;
       const {geo,mat}=kwgCharacterGeometry(petKey);
       const root=new THREE.Group();
       const body=new THREE.SkinnedMesh(geo,mat);
@@ -5883,9 +6116,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       // The small back offsets keep the pet slightly behind the shoulders,
       // without turning a side placement into a rear placement.
       return [
-        [ .94, .05],[-.94, .05],[1.17, .02],[-1.17, .02],
-        [ .87,-.23],[-.87,-.23],[1.02, .28],[-1.02, .28],
-        [1.36,0],[-1.36,0]
+        [1.27,.34],[-1.27,.34],[1.43,.26],[-1.43,.26],
+        [1.16,.16],[-1.16,.16],[1.28,.54],[-1.28,.54],
+        [1.54,.43],[-1.54,.43]
       ].map(([side,back])=>({x:ax+rightX*side+backX*back,
                             z:az+rightZ*side+backZ*back}));
     }
@@ -5922,11 +6155,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // does not keep performing tiny hops while parked beside its owner.
     function kwgPetSettleBeside(pet,avatar){
       let best=null,bestDist=Infinity;
-      for(const candidate of kwgPetSideSpots(avatar)){
+      for(const [index,candidate] of kwgPetSideSpots(avatar).entries()){
         const spot=kwgPetSafeSpot(candidate.x,candidate.z,avatar.position.y,.65);
         if(!spot)continue;
-        const d=Math.hypot(spot.x-pet.mesh.position.x,spot.z-pet.mesh.position.z);
-        if(d<bestDist){best=spot;bestDist=d;}
+        const distance=Math.hypot(spot.x-pet.mesh.position.x,spot.z-pet.mesh.position.z);
+        // Prefer the intended side-and-slightly-behind pose, while still
+        // considering the pet's current location to avoid large snaps.
+        const score=distance+index*.045;
+        if(score<bestDist){best=spot;bestDist=score;}
       }
       // Prefer a genuinely lateral parking spot even if the pet approached
       // from behind. Never choose a rear-only spot just because it's closer.
@@ -5956,8 +6192,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(sideSpawn)mesh.position.set(sideSpawn.x,sideSpawn.y+.05,sideSpawn.z);
       else{
         const yaw=avatar.rotation.y;
-        mesh.position.set(avatar.position.x+Math.cos(yaw)*.94,
-          avatar.position.y,avatar.position.z-Math.sin(yaw)*.94);
+        mesh.position.set(avatar.position.x+Math.cos(yaw)*1.27-Math.sin(yaw)*.34,
+          avatar.position.y,avatar.position.z-Math.sin(yaw)*1.27-Math.cos(yaw)*.34);
       }
       scene.add(mesh);
       const spawnFloor=kwgPetFloorAt(mesh.position.x,mesh.position.z,avatar.position.y+.65,8);
