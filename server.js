@@ -472,6 +472,16 @@ async function migrate() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    -- One active in-world socket per account. The unique user_id makes this
+    -- work even when the game is hosted by multiple Node processes.
+    CREATE TABLE IF NOT EXISTS active_world_sessions (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      socket_id TEXT NOT NULL,
+      world_name TEXT NOT NULL,
+      last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS active_world_sessions_seen_idx ON active_world_sessions(last_seen);
+
     CREATE TABLE IF NOT EXISTS world_likes (
       world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -497,6 +507,7 @@ async function migrate() {
   `);
 
   await pool.query('DELETE FROM auth_sessions WHERE expires_at <= NOW()');
+  await pool.query("DELETE FROM active_world_sessions WHERE last_seen < NOW() - INTERVAL '90 seconds'");
 
   // Older multiplayer worlds could be created completely empty. The editor places
   // parts onto existing surfaces, so seed a baseplate only when a world has zero blocks.
@@ -562,10 +573,23 @@ async function createSession(userId) {
   await pool.query(`INSERT INTO auth_sessions(token_hash,user_id,expires_at) VALUES($1,$2,NOW() + INTERVAL '30 days')`, [hash,userId]);
   return token;
 }
+function refreshPrimarySocketForUser(userId) {
+  // Prefer the in-world socket for friends' online/visit information, even if
+  // the same account is signed into other dashboard-only tabs.
+  let chosen = null;
+  for (const s of io.sockets.sockets.values()) {
+    if (s.user && Number(s.user.id) === Number(userId)) {
+      if (playersBySocket.has(s.id)) { chosen = s; break; }
+      chosen = s;
+    }
+  }
+  if (chosen) socketsByUser.set(userId, chosen);
+  else socketsByUser.delete(userId);
+}
 async function loginSocketUser(socket, user) {
   socket.user = user;
   socket.user.isAdmin = !!user.is_admin;
-  socketsByUser.set(user.id, socket);
+  refreshPrimarySocketForUser(user.id);
 }
 function authResponse(user, token) {
   return {success:true,username:user.username,appearance:user.appearance,isAdmin:!!user.is_admin,coins:Number(user.coins || 0),sessionToken:token};
@@ -593,6 +617,46 @@ function queueWorldSave(worldName, task) {
 }
 
 const worldJoinReservations = new Map();
+const accountWorldJoinReservations = new Set();
+
+function inWorldSocketForUser(userId, excludingSocketId) {
+  for (const [sid, player] of playersBySocket) {
+    if (sid === excludingSocketId || !player.worldName) continue;
+    const s = io.sockets.sockets.get(sid);
+    if (s?.user && Number(s.user.id) === Number(userId)) return s;
+  }
+  return null;
+}
+
+async function claimWorldSession(userId, socketId, worldName) {
+  const result = await pool.query(`
+    INSERT INTO active_world_sessions(user_id,socket_id,world_name,last_seen)
+    VALUES($1,$2,$3,NOW())
+    ON CONFLICT (user_id) DO UPDATE
+      SET socket_id=EXCLUDED.socket_id,world_name=EXCLUDED.world_name,last_seen=NOW()
+    WHERE active_world_sessions.socket_id=EXCLUDED.socket_id
+       OR active_world_sessions.last_seen < NOW() - INTERVAL '90 seconds'
+    RETURNING user_id
+  `,[userId,socketId,worldName]);
+  return result.rowCount === 1;
+}
+async function releaseWorldSession(userId, socketId) {
+  await pool.query('DELETE FROM active_world_sessions WHERE user_id=$1 AND socket_id=$2',[userId,socketId]);
+}
+// Renew DB leases for connected players even when they stand still.
+// A dropped server process stops renewing, so orphaned leases expire.
+const worldLeaseHeartbeat = setInterval(() => {
+  const byUser = new Map();
+  for (const [sid,player] of playersBySocket) {
+    const s=io.sockets.sockets.get(sid);
+    if (s?.user && player.worldName) byUser.set(s.user.id,sid);
+  }
+  for (const [userId,sid] of byUser) {
+    pool.query('UPDATE active_world_sessions SET last_seen=NOW() WHERE user_id=$1 AND socket_id=$2',[userId,sid])
+      .catch(err=>console.error('Could not renew world session:',err));
+  }
+},20000);
+worldLeaseHeartbeat.unref?.();
 
 function worldPlayerCount(worldName) {
   let count = 0;
@@ -662,8 +726,19 @@ io.on('connection', (socket) => {
   socket.on('logout', async ({token} = {}, cb) => {
     try {
       if (token) await pool.query('DELETE FROM auth_sessions WHERE token_hash=$1',[sessionTokenHash(token)]);
-      if (socket.user) socketsByUser.delete(socket.user.id);
-      socket.user = null;
+      if (socket.user) {
+        const uid=socket.user.id;
+        const p=playersBySocket.get(socket.id);
+        if (p?.worldName) {
+          socket.to(`world:${p.worldName}`).emit('player_left',socket.id);
+          socket.leave(`world:${p.worldName}`);
+        }
+        playersBySocket.delete(socket.id);
+        socket.data.worldName=null;
+        await releaseWorldSession(uid,socket.id);
+        socket.user=null;
+        refreshPrimarySocketForUser(uid);
+      }
       cb && cb({success:true});
     } catch (e) { console.error(e); cb && cb({success:false}); }
   });
@@ -1254,7 +1329,22 @@ io.on('connection', (socket) => {
 
   socket.on('join_world', async ({worldName, appearance, visitUsername}, cb) => {
     if (!requireAuth(socket, cb)) return;
+    const userId=socket.user.id;
+    if (accountWorldJoinReservations.has(userId)) {
+      return cb({success:false,message:'This account is already joining a world in another session.'});
+    }
+    if (inWorldSocketForUser(userId,socket.id)) {
+      return cb({success:false,message:'Your account is already playing in another session. Leave that world before joining here.'});
+    }
+    accountWorldJoinReservations.add(userId);
+    let leaseClaimed=false;
+    let wasAlreadyPlaying=!!playersBySocket.get(socket.id)?.worldName;
+    let joinedSuccessfully=false;
+    let reservedWorldName=null;
     try {
+      // Wait for a preceding leave_world DB cleanup on this socket. This
+      // prevents a late release from erasing a newly claimed session lease.
+      if (socket.data.worldReleasePromise) await socket.data.worldReleasePromise;
       const world = await getWorldByName(cleanWorldName(worldName));
       if (!world) return cb({success:false,message:'World not found.'});
       // Visiting a player is a friend-only action. Never trust the client to
@@ -1276,6 +1366,13 @@ io.on('connection', (socket) => {
           return cb({success:false,message:'Your friend is no longer in that world.'});
       }
 
+      // Claim the account's single in-world lease atomically in PostgreSQL.
+      // Unlike a browser-only check, this rejects joins from separate tabs,
+      // devices, and separate Node/Render instances.
+      leaseClaimed=await claimWorldSession(userId,socket.id,world.name);
+      if (!leaseClaimed) {
+        return cb({success:false,message:'Your account is already playing in another session. Leave that world before joining here.'});
+      }
       // Hard cap: at most 20 connected players per world. Reservations prevent
       // simultaneous joins from briefly pushing the world over the limit.
       const alreadyHere = playersBySocket.get(socket.id)?.worldName === world.name;
@@ -1285,14 +1382,20 @@ io.on('connection', (socket) => {
         return cb({success:false,message:'This world is full (20/20 players).'});
       }
       worldJoinReservations.set(world.name, reserved + 1);
-
-      if (socket.data.worldName) socket.leave(`world:${socket.data.worldName}`);
-      socket.join(`world:${world.name}`);
-      socket.data.worldName = world.name;
+      reservedWorldName=world.name;
 
       const app = await validateAppearanceForUser(socket.user.id, socket.user.appearance || {});
       const cosmetics = await resolveAppearanceAssets(app);
+      if (!socket.connected || !socket.user) throw new Error('Disconnected during world join.');
       socket.user.appearance = app;
+
+      const previousWorld=playersBySocket.get(socket.id)?.worldName;
+      if (previousWorld && previousWorld!==world.name) {
+        socket.to(`world:${previousWorld}`).emit('player_left',socket.id);
+      }
+      if (socket.data.worldName) socket.leave(`world:${socket.data.worldName}`);
+      socket.join(`world:${world.name}`);
+      socket.data.worldName = world.name;
       const players = {};
       for (const [sid, p] of playersBySocket) {
         if (p.worldName === world.name) players[sid] = p;
@@ -1305,8 +1408,10 @@ io.on('connection', (socket) => {
         appearance: app, cosmetics, worldName: world.name
       };
       playersBySocket.set(socket.id, p);
+      refreshPrimarySocketForUser(userId);
       worldJoinReservations.set(world.name, Math.max(0, (worldJoinReservations.get(world.name) || 1) - 1));
       if (worldJoinReservations.get(world.name) === 0) worldJoinReservations.delete(world.name);
+      reservedWorldName=null;
       socket.to(`world:${world.name}`).emit('player_joined', p);
       // Record only successful world entries. A history write failure must
       // never prevent a player from joining an otherwise healthy world.
@@ -1318,15 +1423,20 @@ io.on('connection', (socket) => {
             SET last_played_at=EXCLUDED.last_played_at
         `,[socket.user.id,world.id]);
       } catch(visitError) {console.error('Could not record recent world visit:',visitError);}
+      joinedSuccessfully=true;
       cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics});
     } catch (e) {
       console.error(e);
-      const key = cleanWorldName(worldName);
-      if (worldJoinReservations.has(key)) {
-        worldJoinReservations.set(key, Math.max(0, worldJoinReservations.get(key) - 1));
-        if (worldJoinReservations.get(key) === 0) worldJoinReservations.delete(key);
+      if (reservedWorldName && worldJoinReservations.has(reservedWorldName)) {
+        worldJoinReservations.set(reservedWorldName, Math.max(0, worldJoinReservations.get(reservedWorldName) - 1));
+        if (worldJoinReservations.get(reservedWorldName) === 0) worldJoinReservations.delete(reservedWorldName);
       }
       cb({success:false,message:'Could not join world.'});
+    } finally {
+      accountWorldJoinReservations.delete(userId);
+      if (leaseClaimed && !joinedSuccessfully && !wasAlreadyPlaying) {
+        await releaseWorldSession(userId,socket.id).catch(err=>console.error('Could not release failed join lease:',err));
+      }
     }
   });
 
@@ -1338,6 +1448,12 @@ io.on('connection', (socket) => {
     }
     socket.data.worldName = null;
     playersBySocket.delete(socket.id);
+    if (socket.user) {
+      const uid=socket.user.id;
+      refreshPrimarySocketForUser(uid);
+      socket.data.worldReleasePromise=releaseWorldSession(uid,socket.id)
+        .catch(err=>console.error('Could not release world session:',err));
+    }
   });
 
   socket.on('player_movement', (data) => {
@@ -1873,8 +1989,10 @@ io.on('connection', (socket) => {
           const target = io.sockets.sockets.get(sid);
           if (target) { target.emit('world_deleted',{worldName:world.name}); target.leave(room); target.data.worldName=null; }
           playersBySocket.delete(sid);
+          if (target?.user) refreshPrimarySocketForUser(target.user.id);
         }
       }
+      await pool.query('DELETE FROM active_world_sessions WHERE world_name=$1',[world.name]);
       await pool.query('DELETE FROM worlds WHERE id=$1',[world.id]);
       cb({success:true});
     } catch (e) { console.error(e); cb({success:false,message:'Could not delete world.'}); }
@@ -1911,8 +2029,10 @@ io.on('connection', (socket) => {
             s.data.worldName = null;
           }
           playersBySocket.delete(sid);
+          if (s?.user) refreshPrimarySocketForUser(s.user.id);
         }
       }
+      await pool.query('DELETE FROM active_world_sessions WHERE world_name=$1',[world.name]);
       await pool.query('DELETE FROM worlds WHERE id=$1',[world.id]);
       cb({success:true});
     } catch (e) { console.error(e); cb({success:false,message:'Could not delete world.'}); }
@@ -1922,7 +2042,11 @@ io.on('connection', (socket) => {
     const p = playersBySocket.get(socket.id);
     if (p?.worldName) socket.to(`world:${p.worldName}`).emit('player_left', socket.id);
     playersBySocket.delete(socket.id);
-    if (socket.user) socketsByUser.delete(socket.user.id);
+    if (socket.user) {
+      const uid=socket.user.id;
+      refreshPrimarySocketForUser(uid);
+      releaseWorldSession(uid,socket.id).catch(err=>console.error('Could not release disconnected world session:',err));
+    }
   });
 });
 
