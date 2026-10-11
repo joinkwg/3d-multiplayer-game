@@ -473,6 +473,15 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions(user_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
     CREATE INDEX IF NOT EXISTS world_likes_world_idx ON world_likes(world_id);
+    CREATE INDEX IF NOT EXISTS world_likes_recent_idx ON world_likes(created_at DESC, world_id);
+    CREATE TABLE IF NOT EXISTS user_world_visits (
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+      last_played_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id,world_id)
+    );
+    CREATE INDEX IF NOT EXISTS user_world_visits_recent_idx
+      ON user_world_visits(user_id,last_played_at DESC);
     CREATE INDEX IF NOT EXISTS chat_world_created_idx ON chat_messages(world_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS store_items_category_visible_idx ON store_items(category, is_visible, created_at DESC);
     CREATE INDEX IF NOT EXISTS user_store_items_user_idx ON user_store_items(user_id);
@@ -914,6 +923,66 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb({success:false,message:'Could not save profile.'}); }
   });
 
+  // Home dashboard: recent visits, current rolling-24h like leader,
+  // and latest account notifications. All data is scoped to the signed-in user.
+  socket.on('get_home_dashboard', async (_payload, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    try {
+      const uid=socket.user.id;
+      const [recent,featured,notifications]=await Promise.all([
+        pool.query(`
+          SELECT w.*, owner.username AS owner_username,
+                 (SELECT COUNT(*)::int FROM world_likes wl WHERE wl.world_id=w.id) AS like_count,
+                 EXISTS(SELECT 1 FROM world_likes wl WHERE wl.world_id=w.id AND wl.user_id=$1) AS liked_by_me,
+                 visits.last_played_at
+          FROM user_world_visits visits
+          JOIN worlds w ON w.id=visits.world_id
+          LEFT JOIN users owner ON owner.id=w.owner_user_id
+          WHERE visits.user_id=$1
+          ORDER BY visits.last_played_at DESC, w.id DESC
+          LIMIT 6
+        `,[uid]),
+        pool.query(`
+          SELECT w.*, owner.username AS owner_username, daily.likes_24h,
+                 (SELECT COUNT(*)::int FROM world_likes wl WHERE wl.world_id=w.id) AS like_count,
+                 EXISTS(SELECT 1 FROM world_likes wl WHERE wl.world_id=w.id AND wl.user_id=$1) AS liked_by_me
+          FROM (
+            SELECT world_id, COUNT(*)::int AS likes_24h
+            FROM world_likes
+            WHERE created_at >= NOW() - INTERVAL '24 hours'
+            GROUP BY world_id
+            ORDER BY likes_24h DESC, world_id ASC
+            LIMIT 1
+          ) daily
+          JOIN worlds w ON w.id=daily.world_id
+          LEFT JOIN users owner ON owner.id=w.owner_user_id
+        `,[uid]),
+        pool.query(`
+          SELECT n.id,n.type,n.message,n.is_read AS "isRead",
+                 n.created_at AS "createdAt", u.username AS "actorUsername"
+          FROM notifications n
+          LEFT JOIN users u ON u.id=n.actor_user_id
+          WHERE n.user_id=$1
+          ORDER BY n.created_at DESC,n.id DESC
+          LIMIT 5
+        `,[uid])
+      ]);
+      cb({success:true,
+        recentlyPlayed:await Promise.all(recent.rows.map(async row=>({
+          ...await worldSummary(row),lastPlayedAt:row.last_played_at
+        }))),
+        worldOfTheDay:featured.rows.length?{
+          ...await worldSummary(featured.rows[0]),
+          likesLast24Hours:Number(featured.rows[0].likes_24h||0)
+        }:null,
+        notifications:notifications.rows
+      });
+    } catch(error) {
+      console.error('Home dashboard error:',error);
+      cb({success:false,message:'Could not load home dashboard.'});
+    }
+  });
+
   socket.on('get_worlds', async (payload, cb) => {
     if (typeof payload === 'function') { cb = payload; payload = {}; }
     if (!requireAuth(socket, cb)) return;
@@ -1071,6 +1140,16 @@ io.on('connection', (socket) => {
       worldJoinReservations.set(world.name, Math.max(0, (worldJoinReservations.get(world.name) || 1) - 1));
       if (worldJoinReservations.get(world.name) === 0) worldJoinReservations.delete(world.name);
       socket.to(`world:${world.name}`).emit('player_joined', p);
+      // Record only successful world entries. A history write failure must
+      // never prevent a player from joining an otherwise healthy world.
+      try {
+        await pool.query(`
+          INSERT INTO user_world_visits(user_id,world_id,last_played_at)
+          VALUES($1,$2,NOW())
+          ON CONFLICT(user_id,world_id) DO UPDATE
+            SET last_played_at=EXCLUDED.last_played_at
+        `,[socket.user.id,world.id]);
+      } catch(visitError) {console.error('Could not record recent world visit:',visitError);}
       cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics});
     } catch (e) {
       console.error(e);
