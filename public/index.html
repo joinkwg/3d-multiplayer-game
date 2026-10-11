@@ -5640,65 +5640,96 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return root;
     }
 
+    // V3.52.1 — Lively companions: shared clips for every pet species.
+    // Blink, idle actions and hopping run from elapsed seconds (not frame counts).
     function kwgAnimatePetBlink(pet,dt){
-      const parts=pet.mesh.userData.kwgPetParts;
+      const p=pet.mesh.userData.kwgPetParts;
       pet.blinkCountdown-=dt;
-      if(pet.blinkCountdown<=0&&pet.blinkAge===null){
-        pet.blinkAge=0;pet.blinkCountdown=2.8+Math.random()*4.6;
-        pet.doubleBlink=Math.random()<.24;
+      if(pet.blinkCountdown<=0 && pet.blinkAge===null){
+        pet.blinkAge=0;
+        pet.doubleBlink=Math.random()<.30;
+        pet.blinkCountdown=2.1+Math.random()*3.5;
       }
-      let amount=0;
+      let closed=0;
       if(pet.blinkAge!==null){
         pet.blinkAge+=dt;
         const t=pet.blinkAge;
-        if(t<.22)amount=Math.sin(Math.PI*t/.22);
-        else if(pet.doubleBlink&&t>.33&&t<.52)amount=Math.sin(Math.PI*(t-.33)/.19);
-        else if(t>(pet.doubleBlink?.52:.22))pet.blinkAge=null;
+        // Hold the eyes shut for a beat so blinks read at ordinary frame rates.
+        const eyelid=(u)=>u<.10?u/.10:u<.20?1:u<.32?(1-(u-.20)/.12):0;
+        closed=eyelid(t);
+        if(pet.doubleBlink && t>=.39)closed=Math.max(closed,eyelid(t-.39));
+        if(t>(pet.doubleBlink?.74:.34))pet.blinkAge=null;
       }
-      parts.leftEye.scale.y=parts.rightEye.scale.y=Math.max(.045,1-amount*.955);
+      // Both eyes (including their glints) are assigned to individual eye bones.
+      // Compressing them reveals the underlying face, like closing eyelids.
+      const eyeHeight=Math.max(.025,1-closed*.975);
+      p.leftEye.scale.y=eyeHeight;
+      p.rightEye.scale.y=eyeHeight;
     }
 
-    function kwgAnimatePetRig(pet,dt,moving){
+    function kwgAnimatePetRig(pet,dt){
       const p=pet.mesh.userData.kwgPetParts;
-      const blend=pet.motionBlend,still=1-blend,t=pet.clock;
-      const bounce=Math.sin(t*9.5+pet.phase),breath=Math.sin(t*2.25+pet.phase);
-      // An occasional idle action: curious head tilt, one-paw hello, happy
-      // wiggle, or a tiny anticipatory hop. All species share these clips.
-      if(pet.trickCountdown===undefined){pet.trickCountdown=3+Math.random()*5;pet.trickAge=0;pet.trickType=0;}
-      let trick=0;
-      if(moving){pet.trickAge=0;pet.trickCountdown=Math.max(pet.trickCountdown,1.6);}
-      else if(pet.trickAge>0){
-        pet.trickAge+=dt;
-        const duration=pet.trickType===3?1.15:1.8;
-        trick=Math.pow(Math.sin(Math.PI*Math.min(1,pet.trickAge/duration)),2)*still;
-        if(pet.trickAge>=duration){pet.trickAge=0;pet.trickCountdown=3+Math.random()*5.5;}
-      }else{
-        pet.trickCountdown-=dt;
-        if(pet.trickCountdown<=0){pet.trickType=1+Math.floor(Math.random()*4);pet.trickAge=.001;}
+      const t=pet.clock,blend=pet.motionBlend,still=1-blend;
+      const breathe=Math.sin(t*3.8+pet.phase);
+      const bob=Math.sin(t*6.1+pet.phase);
+      const hopWave=Math.sin(pet.hopClock*Math.PI*2);
+      const landing=Math.pow(Math.max(0,-hopWave),6);
+
+      // Timed personality clips trigger only when comfortably settled.
+      if(pet.trickCountdown===undefined){
+        pet.trickCountdown=2.5+Math.random()*3;
+        pet.trickAge=-1;
+        pet.trickType=0;
       }
-      const curious=pet.trickType===1?trick:0;
-      const wave=pet.trickType===2?trick:0;
-      const wiggle=pet.trickType===3?trick:0;
-      const perky=pet.trickType===4?trick:0;
-      // Idle is breathing + a tiny floating bob; follow is springy squash.
-      p.body.scale.y=1+still*breath*.014+blend*bounce*.044+perky*.034;
-      p.body.scale.x=1-blend*bounce*.015+wiggle*.026;
-      p.headBone.rotation.z=still*Math.sin(t*1.4+pet.phase)*.021+
-        blend*bounce*.030+curious*.22+wiggle*Math.sin(t*15)*.09;
-      p.headBone.rotation.x=still*Math.sin(t*1.15+pet.phase)*.018+
-        blend*bounce*.053+curious*.08;
-      p.headBone.rotation.y=curious*.17+wiggle*Math.sin(t*12)*.08;
-      // Resting arms stay down; playful movements are brief and soft.
-      p.leftArm.rotation.z=blend*bounce*.15+still*breath*.018-wave*.20;
-      p.rightArm.rotation.z=-blend*bounce*.15-still*breath*.018-wave*.72;
-      p.leftArm.rotation.x=blend*bounce*.18;
-      p.rightArm.rotation.x=-blend*bounce*.18-wave*.27;
-      p.tailBone.rotation.z=Math.sin(t*(blend>0.4?10:3.7)+pet.phase)*(.14+blend*.25)+wiggle*.22;
-      p.tailBone.rotation.x=Math.sin(t*5+pet.phase)*(.035+blend*.05);
-      p.leftEar.rotation.z=-curious*.10+wiggle*Math.sin(t*18)*.085+perky*.10;
-      p.rightEar.rotation.z=curious*.10-wiggle*Math.sin(t*18)*.085-perky*.10;
-      p.leftEar.rotation.x=perky*.12;
-      p.rightEar.rotation.x=perky*.12;
+      if(blend>.35){
+        // Finish the current gesture naturally, then wait until settled again.
+        pet.trickAge=-1;
+        pet.trickCountdown=Math.max(pet.trickCountdown,1.1);
+      }else if(pet.trickAge>=0){
+        pet.trickAge+=dt;
+        if(pet.trickAge>=1.65){
+          pet.trickAge=-1;
+          pet.trickCountdown=2.8+Math.random()*3.8;
+        }
+      }else{
+        pet.trickCountdown-=dt*still;
+        if(pet.trickCountdown<=0){
+          pet.trickType=1+Math.floor(Math.random()*4);
+          pet.trickAge=0;
+        }
+      }
+      const gesture=pet.trickAge>=0?Math.pow(Math.sin(Math.PI*Math.min(1,pet.trickAge/1.65)),2)*still:0;
+      const curious=pet.trickType===1?gesture:0;
+      const wave=pet.trickType===2?gesture:0;
+      const wiggle=pet.trickType===3?gesture:0;
+      const perky=pet.trickType===4?gesture:0;
+
+      // IDLE: clearly visible, squishy bob with a planted bottom; no air gap.
+      // FOLLOW: rhythmic squash on landing and stretch on takeoff.
+      const idleSquish=still*(.037*bob+.014*breathe);
+      const jumpStretch=blend*(.045*Math.max(0,hopWave)-.090*landing);
+      p.body.scale.set(1-(idleSquish+jumpStretch)*.32+wiggle*.025,
+        1+idleSquish+jumpStretch+perky*.035,
+        1-(idleSquish+jumpStretch)*.24);
+      p.body.position.y=still*(.010+.009*(1+bob)) + blend*(.009-.009*landing);
+      p.body.rotation.z=still*.014*Math.sin(t*2.6+pet.phase)+wiggle*.10*Math.sin(t*17);
+
+      // The oversized head leads each bob; the arms swing from shoulder joints.
+      p.headBone.rotation.set(
+        still*(.030*Math.sin(t*2.4+pet.phase))+blend*.075*hopWave+curious*.12,
+        curious*.23+wiggle*.12*Math.sin(t*12),
+        still*(.035*Math.sin(t*3.1+pet.phase))+blend*.050*hopWave+curious*.27+wiggle*.13*Math.sin(t*17)
+      );
+      p.leftArm.rotation.z=still*(-.045+.07*bob)+blend*(.12+.23*hopWave)-wave*.18;
+      p.rightArm.rotation.z=still*(.045-.07*bob)-blend*(.12+.23*hopWave)-wave*1.05;
+      p.leftArm.rotation.x=still*.05*breathe+blend*.20*hopWave;
+      p.rightArm.rotation.x=-still*.05*breathe-blend*.20*hopWave-wave*.33;
+      p.tailBone.rotation.z=Math.sin(t*(blend>.35?12:5.2)+pet.phase)*(.23+blend*.27)+wiggle*.32;
+      p.tailBone.rotation.x=Math.sin(t*6+pet.phase)*(.065+blend*.09);
+      p.leftEar.rotation.z=-curious*.15+wiggle*Math.sin(t*20)*.12+perky*.16;
+      p.rightEar.rotation.z=curious*.15-wiggle*Math.sin(t*20)*.12-perky*.16;
+      p.leftEar.rotation.x=perky*.20+.025*Math.sin(t*2.9+pet.phase);
+      p.rightEar.rotation.x=perky*.20-.025*Math.sin(t*2.9+pet.phase);
       kwgAnimatePetBlink(pet,dt);
     }
 
@@ -5718,7 +5749,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgWorldPets.set(playerId,{mesh,petKey,phase:Math.random()*Math.PI*2,clock:0,
         lastOwnerX:avatar.position.x,lastOwnerZ:avatar.position.z,
         followX:mesh.position.x,followZ:mesh.position.z,
-        blinkCountdown:1.4+Math.random()*3.8,blinkAge:null,doubleBlink:false,motionBlend:0});
+        blinkCountdown:.9+Math.random()*1.8,blinkAge:null,doubleBlink:false,motionBlend:0,
+        hopClock:0,settleTimer:0,trickCountdown:2.5+Math.random()*3,trickAge:-1,trickType:0});
     }
     function kwgClearWorldPets(){
       for(const pet of kwgWorldPets.values())scene.remove(pet.mesh);
@@ -5755,17 +5787,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const speed=Math.min(1,dt*(distance>2?6:3.7));
           pet.mesh.position.x+=dx*speed;pet.mesh.position.z+=dz*speed;
         }
-        // Only bounce while actually following. When the owner stops, the pet
-        // settles into a tiny breathing/bobbing idle animation.
-        const moving=moved>.018||distance>.18;
-        pet.motionBlend+=(Number(moving)-pet.motionBlend)*Math.min(1,dt*5.5);
-        const hop=Math.max(0,Math.sin(pet.clock*8+pet.phase));
-        const idleBob=Math.sin(pet.clock*2.7+pet.phase)*.019;
-        const offset=idleBob*(1-pet.motionBlend)+hop*.23*pet.motionBlend;
-        pet.mesh.position.y+=(avatar.position.y+.05+offset-pet.mesh.position.y)*Math.min(1,dt*10);
-        // Rotate toward the owner without moving around them when they turn.
-        pet.mesh.rotation.y=Math.atan2(avatar.position.x-pet.mesh.position.x,avatar.position.z-pet.mesh.position.z);
-        kwgAnimatePetRig(pet,dt,moving);
+        // Detect actual locomotion, not tiny avatar interpolation jitter. The
+        // pet can finish catching up, then settle into its planted idle bob.
+        const petTravel=Math.hypot(pet.mesh.position.x-(pet.prevX??pet.mesh.position.x),
+          pet.mesh.position.z-(pet.prevZ??pet.mesh.position.z));
+        pet.prevX=pet.mesh.position.x;pet.prevZ=pet.mesh.position.z;
+        const ownerWalking=moved>.035;
+        const catchingUp=distance>.27 && petTravel>.004;
+        if(ownerWalking||catchingUp)pet.settleTimer=.22;
+        else pet.settleTimer=Math.max(0,pet.settleTimer-dt);
+        const moving=pet.settleTimer>0;
+        pet.motionBlend+=(Number(moving)-pet.motionBlend)*Math.min(1,dt*(moving?8:5));
+        // Separate hop cycle: airborne during travel, grounded while idle.
+        pet.hopClock+=dt*2.1;
+        const hop=Math.pow(Math.max(0,Math.sin(pet.hopClock*Math.PI*2)),1.2);
+        const targetY=avatar.position.y+.05+hop*.36*pet.motionBlend;
+        pet.mesh.position.y+=(targetY-pet.mesh.position.y)*Math.min(1,dt*16);
+        // Keep the pet facing its owner without orbiting when the owner spins.
+        pet.mesh.rotation.y=Math.atan2(avatar.position.x-pet.mesh.position.x,
+          avatar.position.z-pet.mesh.position.z);
+        kwgAnimatePetRig(pet,dt);
       }
     }
 
