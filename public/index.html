@@ -2429,6 +2429,32 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     #kwg-ui-dialog-actions button:focus-visible,#kwg-ui-dialog-input:focus-visible{
       outline:2px solid #fff;outline-offset:3px}
     @media(max-width:480px){#kwg-ui-dialog{padding:18px 15px;box-shadow:5px 5px 0 #050c17}}
+
+    /* KWG V3.49: two-shop storefront and in-world pets inventory. */
+    #store-pane .kwg-shop-switch{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 16px}
+    #store-pane .kwg-shop-switch-btn{font-family:inherit;font-weight:900;font-size:12px;letter-spacing:.05em;padding:13px 20px;cursor:pointer;
+      background:#122136;color:#adc3d8;border:2px solid #47627c;box-shadow:3px 3px 0 #070f1a;border-radius:0}
+    #store-pane .kwg-shop-switch-btn.active{background:#244c65;color:#e8f9ff;border-color:#8ee7ef;box-shadow:3px 3px 0 #071e2b}
+    .kwg-pet-shop-intro{color:#b7d4e8;font-size:12px;line-height:1.8;margin:0 0 14px}
+    .kwg-pet-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+    .kwg-pet-card{min-width:0;background:#102034;border:2px solid #44627e;padding:12px;box-shadow:3px 3px 0 #070f1a;display:flex;flex-direction:column;gap:9px}
+    .kwg-pet-preview{height:145px;background:radial-gradient(circle at 50% 35%,#2b5067,#0a1728 75%);border:2px solid #365570;display:flex;align-items:center;justify-content:center;color:#aac7db;font-size:11px;overflow:hidden}
+    .kwg-pet-preview img{width:100%;height:100%;object-fit:contain;display:block}
+    .kwg-pet-card-title{color:#f1faff;font-size:14px;font-weight:900}
+    .kwg-pet-card-subtitle{font-size:10px;line-height:1.7;color:#b0cadb;flex:1}
+    .kwg-pet-card-price{color:#ffdf83;font-size:12px;font-weight:900}
+    .kwg-pet-card button,.kwg-pet-unequip{background:#246348;color:#f2fff5;border:2px solid #85dcac;box-shadow:2px 2px 0 #071a17;padding:10px;font:inherit;font-size:11px;font-weight:900;cursor:pointer;border-radius:0}
+    .kwg-pet-card button:disabled{background:#253848;border-color:#5d768b;color:#aabfce;cursor:default}
+    .kwg-pet-inventory-modal{position:fixed;inset:0;background:rgba(3,9,18,.82);z-index:1800;display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+    .kwg-pet-inventory-modal.open{display:flex}
+    .kwg-pet-inventory-card{background:#0f1e30;border:3px solid #7dc7e8;box-shadow:7px 7px 0 #050b12;padding:20px;max-width:660px;width:100%;max-height:85vh;overflow:auto;color:#eff9ff}
+    .kwg-pet-inventory-header{display:flex;justify-content:space-between;gap:12px;align-items:start}
+    .kwg-pet-inventory-header h2{margin:5px 0 0;font-size:20px}
+    .kwg-pet-inventory-header button{background:#24364d;border:2px solid #83a7c7;color:#fff;padding:9px;font:inherit;font-size:11px;cursor:pointer}
+    .kwg-pet-inventory-card>p{font-size:11px;color:#b6cbde;line-height:1.7}
+    .kwg-pet-unequip{margin-top:15px;background:#4b3545;border-color:#ca9ca8}
+    #kwg-pets-inventory-message{font-size:11px;margin-top:10px;color:#9cdeba;min-height:18px}
+    @media(max-width:500px){.kwg-pet-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.kwg-pet-preview{height:105px}.kwg-pet-inventory-card{padding:12px}.kwg-pet-card{padding:8px}}
 </style>
 </head>
 <body>
@@ -2660,9 +2686,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         <div id="home-error-msg" class="error-msg"></div>
       </div>
       <div id="store-pane" class="home-pane">
-        <div class="kwg-page-heading store-topbar"><div><div class="profile-kicker">COSMETICS</div><h2>STORE</h2><p>Build your collection with coins.</p></div><span class="coin-badge kwg-store-balance"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="store-coin-count">100</span></span></div>
-        <div class="store-tabs"><button class="store-tab active" data-store-category="eyes">Eyes</button><button class="store-tab" data-store-category="mouth">Mouths</button><button class="store-tab" data-store-category="torso_decal">Shirts / Decals</button><button class="store-tab" data-store-category="hat">Hats</button><button class="store-tab" data-store-category="head_shape">Head Shapes</button></div>
-        <div id="store-items-grid"></div><div id="store-message" class="error-msg"></div>
+        <div class="kwg-page-heading store-topbar"><div><div class="profile-kicker">AVATARS & COMPANIONS</div><h2>STORE</h2><p>Make your look your own, and find a hopping friend.</p></div><span class="coin-badge kwg-store-balance"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="store-coin-count">100</span></span></div>
+        <div class="kwg-shop-switch" role="tablist" aria-label="Store department">
+          <button type="button" class="kwg-shop-switch-btn active" data-shop="avatar" role="tab" aria-selected="true">AVATAR STORE</button>
+          <button type="button" class="kwg-shop-switch-btn" data-shop="pets" role="tab" aria-selected="false">PETS STORE</button>
+        </div>
+        <div id="kwg-avatar-shop">
+          <div class="store-tabs"><button class="store-tab active" data-store-category="eyes">Eyes</button><button class="store-tab" data-store-category="mouth">Mouths</button><button class="store-tab" data-store-category="torso_decal">Shirts / Decals</button><button class="store-tab" data-store-category="hat">Hats</button><button class="store-tab" data-store-category="head_shape">Head Shapes</button></div>
+          <div id="store-items-grid"></div>
+        </div>
+        <div id="kwg-pets-shop" style="display:none">
+          <p class="kwg-pet-shop-intro">Meet your new companion! Buy a pet once, then equip it from your Pets inventory.</p>
+          <div id="kwg-pets-store-grid" class="kwg-pet-grid"></div>
+        </div>
+        <div id="store-message" class="error-msg"></div>
       </div>
       <div id="avatar-editor-pane" class="home-pane">
         <div class="kwg-page-heading"><div><div class="profile-kicker">CUSTOMIZE</div><h2>AVATAR EDITOR</h2><p>Equip cosmetics and tune your character colors.</p></div></div>
@@ -2707,8 +2744,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   <div id="hud">
     <button class="hud-btn kwg-control-icon" id="toggle-edit-btn" title="Enable Edit Mode" aria-label="Enable Edit Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M5 15l10-10 4 4-10 10H5zM13 7l4 4"/></svg><span class="kwg-hud-button-label" id="kwg-edit-mode-label">EDIT</span></button>
     <button class="hud-btn kwg-control-icon" id="respawn-btn" title="Respawn" aria-label="Respawn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 1-3-6M20 4v7h-7"/></svg><span class="kwg-hud-button-label">RESPAWN</span></button>
+    <button class="hud-btn kwg-control-icon" id="kwg-open-pets-btn" title="Pets Inventory" aria-label="Pets Inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="8" r="1.5"/><circle cx="12" cy="5" r="1.5"/><circle cx="17" cy="8" r="1.5"/><circle cx="19" cy="13" r="1.5"/><path d="M8 14c1.3-2 2.5-2.8 4-2.8s2.7.8 4 2.8c3.4 4.7-2.1 6.2-4 4.6-1.9 1.6-7.4.1-4-4.6z"/></svg><span class="kwg-hud-button-label">PETS</span></button>
     <button class="hud-btn kwg-control-icon" id="leave-world-btn" title="Leave World" aria-label="Leave World"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg><span class="kwg-hud-button-label">LEAVE</span></button>
     <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
+  </div>
+
+  <div id="kwg-pet-inventory-modal" class="kwg-pet-inventory-modal" aria-hidden="true">
+    <div class="kwg-pet-inventory-card" role="dialog" aria-modal="true" aria-labelledby="kwg-pet-inventory-title">
+      <div class="kwg-pet-inventory-header"><div><div class="profile-kicker">COMPANIONS</div><h2 id="kwg-pet-inventory-title">MY PETS</h2></div><button type="button" id="kwg-close-pets-btn" aria-label="Close pets inventory">CLOSE X</button></div>
+      <p>Choose one pet to hop alongside you, or unequip your companion.</p>
+      <div id="kwg-pets-inventory-grid" class="kwg-pet-grid"></div>
+      <button type="button" id="kwg-unequip-pet-btn" class="kwg-pet-unequip">UNEQUIP PET</button>
+      <div id="kwg-pets-inventory-message" aria-live="polite"></div>
+    </div>
   </div>
 
   <div id="room-info-label"><span class="kwg-world-label">CURRENT WORLD</span><span id="current-room-text">Default World</span></div>
@@ -2978,7 +3026,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // numeric percentages; other requests use an indeterminate animated bar.
     const kwgLoadingEvents=new Set([
       'login','register','resume_session','get_worlds','join_world','create_world',
-      'get_world_templates','get_store','buy_store_item','save_appearance',
+      'get_world_templates','get_store','buy_store_item','get_pets','buy_pet','equip_pet','save_appearance',
       'update_appearance','toggle_world_like','delete_own_world',
       'admin_search_users','admin_search_worlds','admin_make_world_template',
       'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user',
@@ -2990,7 +3038,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       login:'SIGNING IN',register:'CREATING ACCOUNT',resume_session:'RESTORING SESSION',
       get_worlds:'LOADING WORLDS',join_world:'LOADING WORLD',create_world:'CREATING WORLD',
       get_world_templates:'LOADING TEMPLATES',get_store:'LOADING STORE',
-      buy_store_item:'PURCHASING ITEM',save_appearance:'SAVING AVATAR',
+      buy_store_item:'PURCHASING ITEM',get_pets:'LOADING PETS',buy_pet:'ADOPTING PET',equip_pet:'EQUIPPING PET',save_appearance:'SAVING AVATAR',
       update_appearance:'SAVING AVATAR',toggle_world_like:'UPDATING WORLD',
       delete_own_world:'DELETING WORLD',get_profile:'LOADING PROFILE',
       update_profile:'SAVING PROFILE',get_friends:'LOADING FRIENDS',
@@ -3260,6 +3308,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     let ownedStoreItems = [];
     let activeStoreCategory = 'eyes';
     let equippedCosmetics = {};
+    let kwgPetCatalog = [];
+    let kwgOwnedPets = new Set();
+    let kwgEquippedPet = null;
+    const kwgWorldPets = new Map();
     
     const otherPlayers = {};
 
@@ -3484,6 +3536,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       coinBalance = Number(res.coins ?? 100);
       updateCoinDisplays();
       refreshStoreData();
+      kwgRefreshPets();
       document.getElementById('auth-screen').style.display = 'none';
       document.getElementById('home-screen').style.display = 'flex';
       document.getElementById('logged-user-display').textContent = filterKWGUserText(loggedInUsername);
@@ -3526,6 +3579,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         renderStoreItems();
       });
     });
+
+    // --- STORE DEPARTMENTS ---
+    document.querySelectorAll('.kwg-shop-switch-btn').forEach(btn=>btn.addEventListener('click',()=>{
+      const pets=btn.dataset.shop==='pets';
+      document.querySelectorAll('.kwg-shop-switch-btn').forEach(b=>{
+        const active=b===btn;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));
+      });
+      document.getElementById('kwg-avatar-shop').style.display=pets?'none':'block';
+      document.getElementById('kwg-pets-shop').style.display=pets?'block':'none';
+      if(pets)kwgRefreshPets();
+    }));
 
     // --- PART COUNT SYSTEM ---
     function updatePartCounter() {
@@ -3870,6 +3934,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         editBtn.title = canEditCurrentWorld ? 'Edit this world' : 'Only the world owner or an admin can edit this world';
 
         loadWorldData(res.worldData, res.players, res.selfId, res.selfSpawn);
+        kwgEquippedPet=res.selfPetKey||null;
+        kwgSetWorldPet(socket.id,kwgEquippedPet);
         resetWorldInfoEditor(res.worldData,roomName);
         document.getElementById('world-chat').style.display = 'block';
         startWorldIdleWatch();
@@ -4071,6 +4137,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     function performLeaveWorld() {
+      kwgClearWorldPets();
+      kwgClosePetsInventory();
       clearInterval(worldIdleTimer);
       worldIdleTimer = null;
       socket.emit('leave_world');
@@ -5041,6 +5109,243 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       showToast(hidden?'Blocked player messages are now hidden.':'Player privacy settings updated.');
     });
 
+
+    // KWG V3.49: original bouncy legless companions, built entirely from Three.js primitives.
+    function kwgBuildPet(petKey){
+      if(!['dog_1','cat_1'].includes(petKey))return null;
+      const dog=petKey==='dog_1';
+      const root=new THREE.Group();
+      const bouncer=new THREE.Group();root.add(bouncer);
+      const fur=new THREE.MeshLambertMaterial({color:dog?0xd7a16a:0xbfc6e1});
+      const lightFur=new THREE.MeshLambertMaterial({color:dog?0xf7dfb4:0xf3efff});
+      const earFur=new THREE.MeshLambertMaterial({color:dog?0x9d5b3d:0x8790b8});
+      const pink=new THREE.MeshLambertMaterial({color:0xe69bb1});
+      const dark=new THREE.MeshLambertMaterial({color:0x242034});
+      const eyeMat=new THREE.MeshPhongMaterial({color:0x111529,shininess:110,specular:0xffffff});
+      const sparkle=new THREE.MeshBasicMaterial({color:0xffffff});
+      const geometry=(radius=1)=>new THREE.SphereGeometry(radius,16,12);
+      const orb=(parent,mat,x,y,z,sx,sy,sz)=>{
+        const m=new THREE.Mesh(geometry(),mat);m.position.set(x,y,z);m.scale.set(sx,sy,sz);parent.add(m);return m;
+      };
+      // Squishy torso: no legs. The entire body hops.
+      const torso=orb(bouncer,fur,0,.27,0,.28,.30,.23);
+      orb(bouncer,lightFur,0,.26,.193,.19,.22,.055);
+      const head=new THREE.Group();head.position.y=.72;bouncer.add(head);
+      orb(head,fur,0,0,0,.38,.35,.33);
+      // Plush little arms; separate pivot points let them wiggle while bouncing.
+      const arms=[];
+      for(const side of [-1,1]){
+        const arm=new THREE.Group();arm.position.set(side*.255,.45,.04);bouncer.add(arm);
+        orb(arm,fur,side*.095,-.10,.04,.115,.20,.12);
+        orb(arm,lightFur,side*.105,-.25,.095,.105,.075,.10);
+        arms.push(arm);
+      }
+      // Distinct dog and cat ears.
+      if(dog){
+        for(const side of [-1,1]){
+          const ear=orb(head,earFur,side*.31,.13,-.005,.15,.29,.11);ear.rotation.z=side*.45;
+          orb(head,pink,side*.33,.13,.095,.07,.16,.022);
+        }
+        orb(head,lightFur,0,-.13,.26,.20,.15,.13);
+      }else{
+        for(const side of [-1,1]){
+          const ear=new THREE.Mesh(new THREE.ConeGeometry(.18,.34,4),fur);
+          ear.position.set(side*.25,.37,-.01);ear.rotation.y=Math.PI/4;head.add(ear);
+          const inner=new THREE.Mesh(new THREE.ConeGeometry(.095,.19,4),pink);
+          inner.position.set(side*.25,.39,.12);inner.rotation.y=Math.PI/4;head.add(inner);
+        }
+        orb(head,lightFur,0,-.14,.265,.18,.12,.095);
+      }
+      // Large glossy eyes, pupils and off-centre white glints.
+      for(const side of [-1,1]){
+        orb(head,lightFur,side*.145,.045,.285,.124,.15,.068);
+        orb(head,eyeMat,side*.145,.04,.344,.084,.109,.043);
+        orb(head,sparkle,side*.125,.092,.381,.033,.037,.016);
+        orb(head,sparkle,side*.172,.014,.381,.014,.017,.009);
+        if(!dog){
+          for(const dy of [-.02,.025]){
+            const whisker=new THREE.Mesh(new THREE.BoxGeometry(.17,.008,.008),lightFur);
+            whisker.position.set(side*.36,-.17+dy,.26);whisker.rotation.z=side*(dy>0?-.17:.17);head.add(whisker);
+          }
+        }
+      }
+      orb(head,dog?dark:pink,0,-.145,.386,dog?.075:.07,.055,.045);
+      const smile=orb(head,dark,0,-.223,.345,.075,.016,.018);
+      if(dog){
+        const tongue=orb(head,pink,0,-.26,.356,.048,.064,.025);
+        tongue.visible=true;
+      }
+      const tail=new THREE.Group();tail.position.set(0,.28,-.20);bouncer.add(tail);
+      if(dog){
+        const wag=orb(tail,fur,0,.11,-.14,.09,.20,.10);wag.rotation.x=-.65;
+      }else{
+        orb(tail,fur,0,.16,-.12,.07,.23,.07);
+        orb(tail,earFur,0,.37,-.18,.08,.11,.08);
+      }
+      root.scale.setScalar(.85);
+      root.userData.kwgPetParts={bouncer,head,arms,tail};
+      return root;
+    }
+
+    function kwgSetWorldPet(playerId,petKey){
+      const old=kwgWorldPets.get(playerId);
+      if(old){scene.remove(old.mesh);kwgWorldPets.delete(playerId);}
+      if(!petKey||!currentWorldName)return;
+      const mesh=kwgBuildPet(petKey);
+      if(!mesh)return;
+      const avatar=playerId===socket.id?localPlayerAvatar:otherPlayers[playerId]?.mesh;
+      if(!avatar)return;
+      const yaw=avatar.rotation.y;
+      mesh.position.set(avatar.position.x-Math.sin(yaw)*1.25+Math.cos(yaw)*.85,
+        avatar.position.y,avatar.position.z-Math.cos(yaw)*1.25-Math.sin(yaw)*.85);
+      scene.add(mesh);
+      kwgWorldPets.set(playerId,{mesh,petKey,phase:Math.random()*Math.PI*2,clock:0});
+    }
+    function kwgClearWorldPets(){
+      for(const pet of kwgWorldPets.values())scene.remove(pet.mesh);
+      kwgWorldPets.clear();
+    }
+    function kwgAnimateWorldPets(dt){
+      if(!currentWorldName)return;
+      for(const [id,pet] of kwgWorldPets){
+        const avatar=id===socket.id?localPlayerAvatar:otherPlayers[id]?.mesh;
+        if(!avatar){scene.remove(pet.mesh);kwgWorldPets.delete(id);continue;}
+        pet.clock+=dt;
+        const yaw=avatar.rotation.y;
+        const tx=avatar.position.x-Math.sin(yaw)*1.25+Math.cos(yaw)*.85;
+        const tz=avatar.position.z-Math.cos(yaw)*1.25-Math.sin(yaw)*.85;
+        const dx=tx-pet.mesh.position.x,dz=tz-pet.mesh.position.z;
+        const distance=Math.hypot(dx,dz);
+        if(distance>14){pet.mesh.position.x=tx;pet.mesh.position.z=tz;}
+        else{
+          const speed=Math.min(1,dt*(distance>2?6:3.7));
+          pet.mesh.position.x+=dx*speed;pet.mesh.position.z+=dz*speed;
+        }
+        const hop=Math.max(0,Math.sin(pet.clock*8+pet.phase));
+        pet.mesh.position.y+=(avatar.position.y+.05+hop*.23-pet.mesh.position.y)*Math.min(1,dt*10);
+        // Turn toward the owner and wag ears, arms and tail while hopping.
+        pet.mesh.rotation.y=Math.atan2(avatar.position.x-pet.mesh.position.x,avatar.position.z-pet.mesh.position.z);
+        const parts=pet.mesh.userData.kwgPetParts;
+        parts.bouncer.scale.y=1+Math.sin(pet.clock*8+pet.phase)*.06;
+        parts.head.rotation.z=Math.sin(pet.clock*4+pet.phase)*.055;
+        parts.arms[0].rotation.z=Math.sin(pet.clock*8+pet.phase)*.23;
+        parts.arms[1].rotation.z=-Math.sin(pet.clock*8+pet.phase)*.23;
+        parts.tail.rotation.z=Math.sin(pet.clock*11+pet.phase)*.45;
+      }
+    }
+
+    const kwgPetThumbnailCache=new Map();
+    function kwgPetThumbnail(petKey){
+      if(kwgPetThumbnailCache.has(petKey))return kwgPetThumbnailCache.get(petKey);
+      const renderer=getThumbnailRenderer(180,135);
+      const sc=new THREE.Scene();
+      sc.add(new THREE.AmbientLight(0xffffff,1.25));
+      const light=new THREE.DirectionalLight(0xffffff,1.5);light.position.set(3,5,5);sc.add(light);
+      const mesh=kwgBuildPet(petKey);if(!mesh)return null;
+      sc.add(mesh);
+      const cam=new THREE.PerspectiveCamera(32,180/135,.01,50);
+      cam.position.set(1,1.45,3.4);cam.lookAt(0,.46,0);
+      renderer.render(sc,cam);
+      const url=renderer.domElement.toDataURL('image/png');
+      kwgPetThumbnailCache.set(petKey,url);
+      return url;
+    }
+    function kwgPetCard(pet,inventory){
+      const owned=kwgOwnedPets.has(pet.petKey),equipped=kwgEquippedPet===pet.petKey;
+      const card=document.createElement('div');card.className='kwg-pet-card';
+      const preview=document.createElement('div');preview.className='kwg-pet-preview';
+      try{const url=kwgPetThumbnail(pet.petKey);if(url){const img=document.createElement('img');img.src=url;img.alt=pet.name+' 3D preview';preview.append(img);}}
+      catch(err){console.warn('Pet preview unavailable',err);preview.textContent=pet.name;}
+      const title=document.createElement('div');title.className='kwg-pet-card-title';title.textContent=pet.name;
+      const desc=document.createElement('div');desc.className='kwg-pet-card-subtitle';
+      desc.textContent=pet.species==='dog'?'A cheerful puppy with floppy ears and a wagging tail.':'A sweet kitty with pointy ears and a swishy tail.';
+      const price=document.createElement('div');price.className='kwg-pet-card-price';
+      price.textContent=owned?'OWNED':pet.price+' COINS';
+      const button=document.createElement('button');
+      if(inventory){
+        button.textContent=equipped?'EQUIPPED':'EQUIP';button.disabled=equipped;
+        button.onclick=()=>kwgEquipPet(pet.petKey);
+      }else if(owned){
+        button.textContent=equipped?'EQUIPPED':'OWNED';button.disabled=true;
+      }else{
+        button.textContent='BUY PET';button.disabled=coinBalance<pet.price;
+        button.onclick=()=>{
+          button.disabled=true;
+          socket.emit('buy_pet',{petKey:pet.petKey},res=>{
+            if(!res?.success){setStoreMessage(res?.message||'Purchase failed.',true);button.disabled=false;return;}
+            coinBalance=Number(res.coins);updateCoinDisplays();
+            setStoreMessage(pet.name+' is now yours! Open your Pets inventory to equip.');
+            kwgRefreshPets();
+          });
+        };
+      }
+      card.append(preview,title,desc,price,button);return card;
+    }
+    function kwgRenderPets(){
+      const shop=document.getElementById('kwg-pets-store-grid');
+      const inv=document.getElementById('kwg-pets-inventory-grid');
+      if(shop){shop.replaceChildren(...kwgPetCatalog.map(p=>kwgPetCard(p,false)));}
+      if(inv){
+        const owned=kwgPetCatalog.filter(p=>kwgOwnedPets.has(p.petKey));
+        inv.replaceChildren(...owned.map(p=>kwgPetCard(p,true)));
+        if(!owned.length){const empty=document.createElement('p');empty.textContent='No pets yet! Visit the Pets Store to adopt your first companion.';inv.append(empty);}
+      }
+      document.getElementById('kwg-unequip-pet-btn').disabled=!kwgEquippedPet;
+    }
+    function kwgRefreshPets(done){
+      if(!loggedInUsername)return;
+      socket.emit('get_pets',res=>{
+        if(res?.success){
+          kwgPetCatalog=Array.isArray(res.pets)?res.pets:[];
+          kwgOwnedPets=new Set(res.owned||[]);
+          kwgEquippedPet=res.equippedPet||null;
+          kwgRenderPets();
+        }else console.warn(res?.message||'Could not load pets.');
+        if(done)done(res);
+      });
+    }
+    function kwgEquipPet(petKey){
+      socket.emit('equip_pet',{petKey},res=>{
+        const msg=document.getElementById('kwg-pets-inventory-message');
+        if(!res?.success){msg.textContent=res?.message||'Could not equip pet.';return;}
+        kwgEquippedPet=res.equippedPet||null;
+        kwgSetWorldPet(socket.id,kwgEquippedPet);
+        kwgRenderPets();
+        msg.textContent=kwgEquippedPet?'Your pet is now following you!':'Pet unequipped.';
+      });
+    }
+    function kwgOpenPetsInventory(){
+      if(!currentWorldName)return;
+      const modal=document.getElementById('kwg-pet-inventory-modal');
+      modal.classList.add('open');modal.setAttribute('aria-hidden','false');
+      document.getElementById('kwg-pets-inventory-message').textContent='';
+      kwgRefreshPets();
+      document.getElementById('kwg-close-pets-btn').focus();
+    }
+    function kwgClosePetsInventory(){
+      const modal=document.getElementById('kwg-pet-inventory-modal');
+      modal.classList.remove('open');modal.setAttribute('aria-hidden','true');
+    }
+    document.getElementById('kwg-open-pets-btn').addEventListener('click',kwgOpenPetsInventory);
+    document.getElementById('kwg-close-pets-btn').addEventListener('click',kwgClosePetsInventory);
+    document.getElementById('kwg-unequip-pet-btn').addEventListener('click',()=>kwgEquipPet(null));
+    document.getElementById('kwg-pet-inventory-modal').addEventListener('click',e=>{
+      if(e.target.id==='kwg-pet-inventory-modal')kwgClosePetsInventory();
+    });
+    // Prevent game shortcuts or movement keys from firing while this modal is open.
+    window.addEventListener('keydown',e=>{
+      if(!document.getElementById('kwg-pet-inventory-modal').classList.contains('open'))return;
+      if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();kwgClosePetsInventory();return;}
+      if(e.key==='Tab')return;
+      if(!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){
+        e.preventDefault();e.stopImmediatePropagation();
+      }
+    },true);
+    socket.on('pet_equipped',({id,petKey})=>{
+      if(id===socket.id){kwgEquippedPet=petKey||null;kwgRenderPets();}
+      kwgSetWorldPet(id,petKey);
+    });
+
     // --- MULTIPLAYER PLAYER SYNC ---
     socket.on('player_joined', (pData) => {
       if (pData.id === socket.id) return;
@@ -5049,6 +5354,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       mesh.position.set(pData.x, pData.y, pData.z);
       scene.add(mesh);
       otherPlayers[pData.id] = { mesh, username: pData.username };
+      kwgSetWorldPet(pData.id,pData.petKey);
     });
 
     socket.on('player_appearance_updated', (pData) => {
@@ -5079,6 +5385,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if (otherPlayers[id]) {
         scene.remove(otherPlayers[id].mesh);
         delete otherPlayers[id];
+        kwgSetWorldPet(id,null);
       }
     });
 
@@ -5400,6 +5707,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     function loadWorldData(world, initialPlayers, selfId, selfSpawn) {
+      kwgClearWorldPets();
       currentWorldData = world;
       if (localPlayerAvatar) { scene.remove(localPlayerAvatar); localPlayerAvatar = null; }
       for (const id in otherPlayers) {
@@ -5444,6 +5752,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           mesh.position.set(pData.x, pData.y, pData.z);
           scene.add(mesh);
           otherPlayers[pId] = { mesh, username: pData.username };
+          kwgSetWorldPet(pId,pData.petKey);
         }
       }
 
@@ -5725,7 +6034,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     },true);
     window.addEventListener('blur',()=>kwgFreeCamera.keys.clear());
     function captureWorldThumbnail(){
-      const hidden=[spawnMarker,gizmoGroup,hoverOutlineGroup,selectionOutlineGroup,localPlayerAvatar,previewMesh,...Object.values(otherPlayers).map(p=>p.mesh)].filter(Boolean);
+      const hidden=[spawnMarker,gizmoGroup,hoverOutlineGroup,selectionOutlineGroup,localPlayerAvatar,previewMesh,...Object.values(otherPlayers).map(p=>p.mesh),...Array.from(kwgWorldPets.values()).map(p=>p.mesh)].filter(Boolean);
       const was=hidden.map(o=>o.visible);
       const previousAspect=camera.aspect;
       const w=960,h=540;
@@ -8629,6 +8938,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         }
       }
 
+      kwgAnimateWorldPets(delta);
       renderer.render(scene, camera);
     }
 
