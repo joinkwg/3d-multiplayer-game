@@ -901,7 +901,7 @@ io.on('connection', (socket) => {
         `,[u.id]),
         pool.query(`
           SELECT m.id,m.body,m.created_at AS "createdAt",m.author_user_id AS "authorId",
-                 author.username AS "authorUsername"
+                 author.username AS "authorUsername",author.appearance AS "authorAppearance"
           FROM profile_messages m
           JOIN users author ON author.id=m.author_user_id
           WHERE m.profile_user_id=$1
@@ -912,6 +912,7 @@ io.on('connection', (socket) => {
         id:Number(w.id),name:w.name,
         displayName:filterKWGUserText(String(w.data?.displayName||w.name)),
         likeCount:Number(w.like_count??w.likeCount??0),
+        thumbnailUrl:String(w.data?.thumbnailUrl||''),
         ownerUsername:w.owner_username||null
       });
       const topWorlds=ownedWithIds.rows.slice().sort((a,b)=>
@@ -922,6 +923,7 @@ io.on('connection', (socket) => {
       }));
       const messages=messageRows.rows.map(m=>({
         id:Number(m.id),authorUsername:m.authorUsername,
+        authorAppearance:m.authorAppearance||{},
         body:filterKWGUserText(m.body),createdAt:m.createdAt,
         canDelete:Number(m.authorId)===Number(socket.user.id)||Number(u.id)===Number(socket.user.id)
       }));
