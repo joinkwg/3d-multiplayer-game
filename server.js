@@ -495,7 +495,15 @@ async function migrate() {
       ('owl_1','Owl 1',165,'owl'),('owl_2','Owl 2',175,'owl'),
       ('owl_3','Owl 3',185,'owl'),('owl_4','Owl 4',195,'owl'),
       ('alien_1','Alien 1',185,'alien'),('alien_2','Alien 2',195,'alien'),
-      ('alien_3','Alien 3',205,'alien'),('alien_4','Alien 4',215,'alien')
+      ('alien_3','Alien 3',205,'alien'),('alien_4','Alien 4',215,'alien'),
+      ('skeleton_1','Skeleton 1',175,'skeleton'),('skeleton_2','Skeleton 2',185,'skeleton'),
+      ('skeleton_3','Skeleton 3',195,'skeleton'),('skeleton_4','Skeleton 4',205,'skeleton'),
+      ('mummy_1','Mummy 1',175,'mummy'),('mummy_2','Mummy 2',185,'mummy'),
+      ('mummy_3','Mummy 3',195,'mummy'),('mummy_4','Mummy 4',205,'mummy'),
+      ('pumpkin_1','Jack O Lantern 1',195,'pumpkin'),('pumpkin_2','Jack O Lantern 2',205,'pumpkin'),
+      ('pumpkin_3','Jack O Lantern 3',215,'pumpkin'),('pumpkin_4','Jack O Lantern 4',225,'pumpkin'),
+      ('zombie_1','Zombie 1',175,'zombie'),('zombie_2','Zombie 2',185,'zombie'),
+      ('zombie_3','Zombie 3',195,'zombie'),('zombie_4','Zombie 4',205,'zombie')
     ON CONFLICT(pet_key) DO NOTHING;
 
     CREATE TABLE IF NOT EXISTS world_templates (
@@ -1857,7 +1865,7 @@ io.on('connection', (socket) => {
     if (!requireAuth(socket,cb)) return;
     try {
       const [catalog,owned,equipped]=await Promise.all([
-        pool.query('SELECT pet_key AS "petKey",name,price,species FROM pet_catalog WHERE is_visible=true ORDER BY pet_key'),
+        pool.query(`SELECT pet_key AS "petKey",name,price,species,is_visible AS "isVisible" FROM pet_catalog WHERE ($1::boolean OR is_visible=true OR pet_key IN (SELECT pet_key FROM user_pets WHERE user_id=$2)) ORDER BY species,pet_key`,[!!socket.user.isAdmin,socket.user.id]),
         pool.query('SELECT pet_key AS "petKey" FROM user_pets WHERE user_id=$1',[socket.user.id]),
         pool.query('SELECT pet_key AS "petKey" FROM user_pet_equipment WHERE user_id=$1',[socket.user.id])
       ]);
@@ -1913,9 +1921,9 @@ io.on('connection', (socket) => {
       const [visible, owned, user] = await Promise.all([
         pool.query(`
           SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible
-          FROM store_items WHERE is_visible=true
+          FROM store_items WHERE ($1::boolean OR is_visible=true)
           ORDER BY category ASC, created_at DESC
-        `),
+        `,[!!socket.user.isAdmin]),
         pool.query(`
           SELECT s.id,s.category,s.name,s.price,s.asset_url,s.asset_kind,s.metadata,s.is_visible
           FROM user_store_items o
@@ -1982,6 +1990,30 @@ io.on('connection', (socket) => {
     } finally {
       client.release();
     }
+  });
+
+  // KWG V3.55: edit price / shop visibility for any avatar or pet item.
+  // Only the authenticated admin flag from the database is trusted.
+  socket.on('admin_catalog_edit', async (payload = {}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    if (typeof cb !== 'function') return;
+    const {kind, itemId, petKey, price, isVisible} = payload || {};
+    if (!Number.isSafeInteger(price) || price < 0 || price > 1000000 || typeof isVisible !== 'boolean')
+      return cb({success:false,message:'Price must be a whole number from 0 to 1,000,000.'});
+    try {
+      let updated;
+      if (kind === 'pet') {
+        if (typeof petKey !== 'string' || !/^[a-z0-9_]{1,32}$/.test(petKey))
+          return cb({success:false,message:'Invalid pet.'});
+        updated=await pool.query('UPDATE pet_catalog SET price=$1,is_visible=$2 WHERE pet_key=$3 RETURNING pet_key',[price,isVisible,petKey]);
+      } else if (kind === 'avatar') {
+        const id=cleanStoreItemId(itemId);
+        if (!id) return cb({success:false,message:'Invalid avatar item.'});
+        updated=await pool.query('UPDATE store_items SET price=$1,is_visible=$2,updated_at=NOW() WHERE id=$3 RETURNING id',[price,isVisible,id]);
+      } else return cb({success:false,message:'Unknown store type.'});
+      if (!updated.rowCount) return cb({success:false,message:'Item not found.'});
+      cb({success:true});
+    } catch(err){console.error('Catalog edit failed',err);cb({success:false,message:'Could not update store item.'});}
   });
 
   socket.on('admin_store_list', async (cb) => {
