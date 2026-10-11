@@ -2233,6 +2233,50 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       .kwg-search-player-avatar{width:52px;height:52px}
       .kwg-search-profile-btn{grid-column:2;justify-self:start}
     }
+    /* KWG V3.45.4: friends alongside liked and created worlds */
+    .kwg-profile-v345 .kwg-profile-world-grid{
+      display:grid!important;
+      grid-template-columns:repeat(3,minmax(0,1fr))!important;
+      gap:12px!important;align-items:start;
+    }
+    .kwg-profile-v345 .kwg-profile-world-grid>.profile-panel{min-width:0!important;width:auto!important}
+    .kwg-profile-v345 .kwg-profile-friends-card{padding:14px 18px!important}
+    .kwg-profile-v345 .kwg-profile-friends-card .kwg-profile-friends-list{
+      display:grid!important;grid-template-columns:minmax(0,1fr)!important;
+      gap:8px!important;max-height:450px!important;overflow-y:auto;
+    }
+    .kwg-profile-v345 .kwg-profile-friend{
+      display:flex!important;align-items:center!important;gap:10px!important;
+      padding:8px!important;min-width:0!important;text-align:left!important;
+    }
+    .kwg-profile-v345 .kwg-profile-friend-headshot{
+      display:block;flex:0 0 48px;width:48px;height:48px;
+      box-sizing:border-box;border:2px solid #527b99;background:#0b1b2d;
+      color:#a4c0d4;font-size:8px;line-height:44px;text-align:center;overflow:hidden;
+    }
+    .kwg-profile-v345 .kwg-profile-friend-headshot img{display:block;width:100%;height:100%;object-fit:cover}
+    .kwg-profile-v345 .kwg-profile-friend-info{display:flex;flex:1;min-width:0;flex-direction:column;gap:6px;align-items:flex-start}
+    .kwg-profile-v345 .kwg-profile-friend-name{font-size:11px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .kwg-profile-v345 .kwg-profile-friend-status{display:inline-flex;align-items:center;gap:6px;font-size:9px;color:#a9bfd3}
+    .kwg-profile-v345 .kwg-profile-friend-status .kwg-profile-presence{flex:0 0 auto}
+    .kwg-profile-v345 #profile-friends-sort{font-family:inherit;font-size:10px;font-weight:900;cursor:pointer;
+      color:#ecf9ff;background:#132d43;border:2px solid #6db5d7;border-radius:0;
+      padding:7px 9px;box-shadow:2px 2px 0 #07131e;max-width:100%}
+    .kwg-profile-v345 #profile-friends-sort:focus-visible{outline:2px solid #c8f3ff;outline-offset:2px}
+    @media(max-width:1120px){
+      .kwg-profile-v345 .kwg-profile-world-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+      .kwg-profile-v345 .kwg-profile-friends-card{grid-column:1/-1}
+      .kwg-profile-v345 .kwg-profile-friends-card .kwg-profile-friends-list{
+        grid-template-columns:repeat(2,minmax(0,1fr))!important;
+      }
+    }
+    @media(max-width:680px){
+      .kwg-profile-v345 .kwg-profile-world-grid{grid-template-columns:minmax(0,1fr)!important}
+      .kwg-profile-v345 .kwg-profile-friends-card{grid-column:auto}
+      .kwg-profile-v345 .kwg-profile-friends-card .kwg-profile-friends-list{
+        grid-template-columns:minmax(0,1fr)!important;
+      }
+    }
 </style>
 </head>
 <body>
@@ -2373,10 +2417,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               </div>
             </section>
           </div>
-          <section class="profile-panel kwg-profile-friends-card">
-            <div class="profile-panel-title">FRIENDS <span id="profile-friends-count" class="kwg-profile-count">0</span></div>
-            <div id="profile-friends-list" class="kwg-profile-friends-list"></div>
-          </section>
           <section class="profile-panel kwg-profile-board">
             <div class="profile-panel-title">MESSAGE BOARD</div>
             <div id="profile-message-list" class="kwg-profile-message-list"></div>
@@ -2410,6 +2450,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
                 </label>
               </div>
               <div id="profile-top-worlds" class="profile-showcase-worlds"></div>
+            </section>
+            <section class="profile-panel kwg-profile-friends-card">
+              <div class="kwg-profile-created-header">
+                <div class="profile-panel-title">FRIENDS <span id="profile-friends-count" class="kwg-profile-count">0</span></div>
+                <label class="kwg-profile-sort-label" for="profile-friends-sort">SORT BY
+                  <select id="profile-friends-sort" aria-label="Sort friends by friendship date">
+                    <option value="newest">NEWEST</option>
+                    <option value="oldest">OLDEST</option>
+                  </select>
+                </label>
+              </div>
+              <div id="profile-friends-list" class="kwg-profile-friends-list"></div>
             </section>
           </div>
         </div>
@@ -6673,9 +6725,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(!friends?.length){const empty=document.createElement('div');empty.className='kwg-profile-empty';empty.textContent='No friends to show yet.';box.append(empty);return;}
       friends.forEach(friend=>{
         const btn=document.createElement('button');btn.type='button';btn.className='kwg-profile-friend';
+        const portrait=document.createElement('span');portrait.className='kwg-profile-friend-headshot';
+        const portraitImg=document.createElement('img');
+        portraitImg.alt=filterKWGUserText(friend.username)+' headshot';
+        try{portraitImg.src=kwgMakeProfileHeadshot(friend.appearance||{});portrait.append(portraitImg);}
+        catch(err){console.warn('Friend headshot unavailable',err);portrait.textContent='PLAYER';}
+        const info=document.createElement('span');info.className='kwg-profile-friend-info';
+        const name=document.createElement('span');name.className='kwg-profile-friend-name';
+        name.textContent=filterKWGUserText(friend.username);
+        const status=document.createElement('span');status.className='kwg-profile-friend-status';
         const dot=document.createElement('span');dot.className='kwg-profile-presence'+(friend.online?' online':'');
-        const name=document.createElement('span');name.textContent=filterKWGUserText(friend.username);
-        btn.append(dot,name);btn.addEventListener('click',()=>openPlayerProfile(friend.username));box.append(btn);
+        const statusText=document.createElement('span');statusText.textContent=friend.online?'ONLINE':'OFFLINE';
+        status.append(dot,statusText);
+        info.append(name,status);
+        btn.append(portrait,info);btn.addEventListener('click',()=>openPlayerProfile(friend.username));box.append(btn);
       });
     }
     function renderProfileMessages(profile){
@@ -6770,7 +6833,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       };
       createdSort.onchange=drawCreatedWorlds;
       drawCreatedWorlds();
-      renderProfileFriends(profile.friends);
+      const friendsSort=document.getElementById('profile-friends-sort');
+      friendsSort.value='newest';
+      const drawFriends=()=>{
+        const friends=[...(profile.friends||[])];
+        friends.sort((a,b)=>{
+          const aDate=new Date(a.friendsSince||0).getTime()||0;
+          const bDate=new Date(b.friendsSince||0).getTime()||0;
+          return (friendsSort.value==='newest'?bDate-aDate:aDate-bDate)
+            ||String(a.username).localeCompare(String(b.username));
+        });
+        renderProfileFriends(friends);
+      };
+      friendsSort.onchange=drawFriends;
+      drawFriends();
       renderProfileMessages(profile);
 
       const edit=document.getElementById('profile-edit-area');
