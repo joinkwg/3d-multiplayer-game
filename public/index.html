@@ -2091,6 +2091,43 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 #home-pane .kwg-home-notice-time{font-size:9px;color:#95adc0;margin-top:6px}
 @media(max-width:790px){#home-pane .kwg-home-layout{grid-template-columns:1fr}#home-pane .kwg-home-feature,#home-pane .kwg-home-recent,#home-pane .kwg-home-notices{grid-column:1;grid-row:auto}}
 @media(max-width:480px){#home-pane .kwg-home-panel{padding:11px}#home-pane .kwg-home-feature-card{grid-template-columns:1fr}#home-pane .kwg-home-feature-card>.kwg-home-thumb{height:175px}#home-pane .kwg-home-recent-grid{grid-template-columns:1fr}#home-pane .kwg-home-panel-head{flex-wrap:wrap}}
+
+    /* KWG V3.45: player profile - pixel arcade, responsive headshot + boards */
+    .kwg-profile-v345{max-width:1120px;margin:0 auto;gap:12px!important}
+    .kwg-profile-v345 .profile-hero{grid-template-columns:180px minmax(0,1fr)!important;min-height:190px!important;align-items:stretch}
+    .kwg-profile-v345 .profile-avatar-preview{height:190px!important;min-height:190px!important;border:2px solid #526c88!important;background:#0b1726!important}
+    .kwg-profile-v345 .profile-avatar-preview img{width:100%!important;height:100%!important;object-fit:cover!important;image-rendering:auto}
+    .kwg-profile-v345 .profile-identity{padding:12px!important;min-width:0}
+    .kwg-profile-v345 .profile-identity h1{overflow-wrap:anywhere}
+    .kwg-profile-v345 .profile-grid{grid-template-columns:1fr 1fr!important;gap:12px!important}
+    .kwg-profile-v345 .profile-panel{min-width:0;min-height:0!important}
+    .kwg-profile-count{font-size:10px;color:#89dfff;margin-left:6px}
+    .kwg-profile-friends-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;max-height:255px;overflow:auto}
+    .kwg-profile-friend{display:flex;align-items:center;gap:9px;padding:9px;background:#142336;border:1px solid #3c5772;cursor:pointer;color:#d5e7ff;text-align:left;font:inherit;min-width:0}
+    .kwg-profile-friend:hover{background:#233b55;border-color:#74b5f1}
+    .kwg-profile-friend span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .kwg-profile-presence{width:8px;height:8px;flex:none;background:#687689}
+    .kwg-profile-presence.online{background:#45dd8c;box-shadow:0 0 7px #45dd8c}
+    .kwg-profile-v345 .profile-world-card{background:#152536!important;border:1px solid #38526b!important;padding:9px!important;min-width:0}
+    .kwg-profile-v345 .profile-world-name{overflow-wrap:anywhere;font-size:11px}
+    .kwg-profile-v345 .profile-world-meta{font-size:10px}
+    .kwg-profile-v345 .profile-world-card button{background:#214c6c;border:1px solid #7cc8ec;font-family:inherit;font-size:10px;white-space:nowrap}
+    .kwg-profile-message-list{display:grid;gap:7px;max-height:480px;overflow:auto}
+    .kwg-profile-message{border:1px solid #3c526a;background:#142335;padding:11px;display:grid;gap:7px;min-width:0}
+    .kwg-profile-message-header{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+    .kwg-profile-message-author{font:inherit;color:#9fe5ff;background:none;border:0;padding:0;cursor:pointer;font-weight:900}
+    .kwg-profile-message-meta{color:#91a7bd;font-size:9px}
+    .kwg-profile-message-body{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;font-size:12px;color:#e0edfa}
+    .kwg-profile-message-delete{font:inherit;font-size:9px;background:#4c2634;color:#fff;border:1px solid #d77c92;padding:4px 8px;cursor:pointer}
+    .kwg-profile-compose{margin-top:12px;border-top:1px solid #3c526a;padding-top:12px;display:grid;gap:8px}
+    .kwg-profile-compose label{font-size:10px;color:#a6c7e8}
+    #profile-message-input{box-sizing:border-box;width:100%;min-height:78px;resize:vertical;padding:10px;background:#0c1724;color:#fff;border:2px solid #47617b;font-family:inherit;font-size:12px}
+    .kwg-profile-compose-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#9aadc4;font-size:10px}
+    .kwg-profile-compose-actions button{width:auto!important;padding:10px 16px!important}
+    .kwg-profile-empty{padding:13px 3px;color:#8ca0b8;font-size:11px}
+    @media(max-width:740px){.kwg-profile-v345 .profile-grid{grid-template-columns:1fr!important}.kwg-profile-v345 .profile-hero{grid-template-columns:120px minmax(0,1fr)!important}.kwg-profile-v345 .profile-avatar-preview{height:150px!important;min-height:150px!important}}
+    @media(max-width:430px){.kwg-profile-v345 .profile-hero{grid-template-columns:1fr!important}.kwg-profile-v345 .profile-avatar-preview{height:190px!important;min-height:190px!important}.kwg-profile-v345 .profile-action-row{gap:7px!important}}
+
 </style>
 </head>
 <body>
@@ -2189,42 +2226,54 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         <div id="notifications-list" class="notifications-list"></div>
       </section></div>
       <div id="profile-pane" class="home-pane">
-        <div class="profile-shell">
+        <div class="profile-shell kwg-profile-v345">
           <div class="profile-hero">
-            <div id="profile-avatar-preview" class="profile-avatar-preview"><div class="profile-avatar-placeholder">AVATAR</div></div>
+            <div id="profile-avatar-preview" class="profile-avatar-preview"><div class="profile-avatar-placeholder">HEADSHOT</div></div>
             <div class="profile-identity">
               <div class="profile-kicker">PLAYER PROFILE</div>
               <h1 id="profile-username">PLAYER</h1>
               <div id="profile-status" class="profile-status offline"><span class="profile-status-dot"></span><span>OFFLINE</span></div>
               <div id="profile-joined" class="profile-joined"></div>
               <div class="profile-action-row">
-                <button id="profile-join-world-btn" class="submit-btn profile-join-btn" style="display:none">JOIN WORLD</button>
+                <button id="profile-join-world-btn" class="submit-btn profile-join-btn" style="display:none">VISIT FRIEND</button>
                 <div id="profile-friend-actions" class="profile-friend-actions"></div>
               </div>
             </div>
           </div>
-          <div class="profile-stats">
-            <div class="profile-stat"><strong id="profile-stat-worlds">0</strong><span>WORLDS</span></div>
-            <div class="profile-stat"><strong id="profile-stat-likes">0</strong><span>LIKES GIVEN</span></div>
-            <div class="profile-stat"><strong id="profile-stat-items">0</strong><span>ITEMS OWNED</span></div>
-          </div>
-          <div class="profile-grid">
+          <div class="profile-grid kwg-profile-top-grid">
             <section class="profile-panel">
-              <div class="profile-panel-title">ABOUT</div>
+              <div class="profile-panel-title">ABOUT ME</div>
               <div id="profile-bio-view" class="profile-bio"></div>
               <div id="profile-edit-area" style="display:none">
                 <textarea id="profile-bio-input" maxlength="300" placeholder="Tell other players about yourself..."></textarea>
                 <div class="profile-edit-note"><span id="profile-bio-count">0</span>/300</div>
-                <div class="profile-panel-title profile-showcase-editor-title">CHOOSE SHOWCASE WORLDS <span>(UP TO 3)</span></div>
-                <div id="profile-showcase-picker" class="profile-showcase-picker"></div>
-                <button id="profile-save-btn" class="submit-btn">SAVE PROFILE</button>
+                <button id="profile-save-btn" class="submit-btn">SAVE ABOUT ME</button>
               </div>
             </section>
             <section class="profile-panel">
-              <div class="profile-panel-title">SHOWCASED WORLDS</div>
-              <div id="profile-showcase-worlds" class="profile-showcase-worlds"></div>
+              <div class="profile-panel-title">FRIENDS <span id="profile-friends-count" class="kwg-profile-count">0</span></div>
+              <div id="profile-friends-list" class="kwg-profile-friends-list"></div>
             </section>
           </div>
+          <div class="profile-grid kwg-profile-world-grid">
+            <section class="profile-panel">
+              <div class="profile-panel-title">LIKED WORLDS</div>
+              <div id="profile-liked-worlds" class="profile-showcase-worlds"></div>
+            </section>
+            <section class="profile-panel">
+              <div class="profile-panel-title">TOP-LIKED CREATIONS</div>
+              <div id="profile-top-worlds" class="profile-showcase-worlds"></div>
+            </section>
+          </div>
+          <section class="profile-panel kwg-profile-board">
+            <div class="profile-panel-title">MESSAGE BOARD</div>
+            <div id="profile-message-list" class="kwg-profile-message-list"></div>
+            <div id="profile-message-compose" class="kwg-profile-compose">
+              <label for="profile-message-input">LEAVE A MESSAGE</label>
+              <textarea id="profile-message-input" maxlength="240" rows="3" placeholder="Write something friendly..."></textarea>
+              <div class="kwg-profile-compose-actions"><span id="profile-message-count">0/240</span><button id="profile-message-send" class="submit-btn" type="button">POST MESSAGE</button></div>
+            </div>
+          </section>
         </div>
       </div>
       <div id="friends-pane" class="home-pane">
@@ -3327,21 +3376,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.getElementById('world-sort').addEventListener('change', renderRoomList);
     document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click',()=>switchHomeTab(b.dataset.goTab)));
 
-    function joinSelectedWorld(roomName) {
+    function joinSelectedWorld(roomName, visitUsername = null) {
       isEditMode = false;
       buildSubTool = null;
       document.body.classList.remove('kwg-editing');
       updateEditorCursor();
-      currentWorldName = roomName;
       currentCheckpoint = null;
       canEditCurrentWorld = false;
 
-      socket.emit('join_world', { worldName: roomName, appearance: playerAppearance }, (res) => {
-        if (!res.success) {
-          alert(res.message);
+      socket.emit('join_world', { worldName: roomName, appearance: playerAppearance, visitUsername }, (res) => {
+        if (!res?.success) {
+          showToast(res?.message || 'Could not join world.');
           return;
         }
-
+        currentWorldName = roomName;
         document.getElementById('home-screen').style.display = 'none';
         document.getElementById('create-world-modal').style.display = 'none';
         document.body.classList.add('kwg-in-world');
@@ -6311,44 +6359,99 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       catch { return ''; }
     }
 
+    let kwgProfileAvatarSeq=0;
     function renderProfileAvatar(appearance) {
       const box=document.getElementById('profile-avatar-preview');
       if(!box)return;
-      box.innerHTML='<div class="profile-avatar-placeholder">LOADING AVATAR...</div>';
+      const seq=++kwgProfileAvatarSeq;
+      box.innerHTML='<div class="profile-avatar-placeholder">LOADING HEADSHOT...</div>';
       const draw=()=>{
+        if(seq!==kwgProfileAvatarSeq)return;
         try{
-          const avatar=buildBlockyAvatar(appearance || {},cosmeticsForAppearance(appearance || {}));
-          thumbImageFromObject(box,avatar);
-        }catch(e){console.warn('Profile avatar preview failed:',e);box.innerHTML='<div class="profile-avatar-placeholder">AVATAR UNAVAILABLE</div>';}
+          const w=Math.max(box.clientWidth||180,100),h=Math.max(box.clientHeight||190,100);
+          const renderer=getThumbnailRenderer(w,h);
+          const scene=new THREE.Scene();
+          scene.add(new THREE.AmbientLight(0xffffff,1.15));
+          const light=new THREE.DirectionalLight(0xffffff,1.3);light.position.set(3,6,5);scene.add(light);
+          const avatar=buildBlockyAvatar(appearance||{},cosmeticsForAppearance(appearance||{}));
+          scene.add(avatar);
+          // Frame the head and upper shoulders, rather than the full avatar.
+          const camera=new THREE.PerspectiveCamera(34,w/h,.05,30);
+          const lookAt=new THREE.Vector3(0,1.98,0);
+          const distance=(h>w?1.75:1.95);
+          camera.position.set(0,1.98,distance);camera.lookAt(lookAt);
+          renderer.render(scene,camera);
+          const img=document.createElement('img');img.alt='Player avatar headshot';
+          img.src=renderer.domElement.toDataURL('image/png');
+          box.replaceChildren(img);
+        }catch(e){console.warn('Profile headshot failed:',e);box.innerHTML='<div class="profile-avatar-placeholder">HEADSHOT UNAVAILABLE</div>';}
       };
-      draw(); setTimeout(draw,700);
+      draw();setTimeout(draw,650);
     }
 
     function renderProfileWorldCard(world) {
-      const row=document.createElement('div'); row.className='profile-world-card';
-      const info=document.createElement('div');
-      info.innerHTML=`<div class="profile-world-name">${escapeChatText(filterKWGUserText(world.displayName||world.name))}</div><div class="profile-world-meta">♥ ${Number(world.likeCount||0)} LIKES</div>`;
-      const btn=document.createElement('button'); btn.textContent='VIEW';
-      btn.addEventListener('click',()=>{switchHomeTab('worlds');});
-      row.append(info,btn); return row;
+      const row=document.createElement('div');row.className='profile-world-card';
+      const info=document.createElement('div');info.style.minWidth='0';
+      const name=document.createElement('div');name.className='profile-world-name';
+      name.textContent=filterKWGUserText(world.displayName||world.name);
+      const meta=document.createElement('div');meta.className='profile-world-meta';
+      meta.textContent=Number(world.likeCount||0)+' LIKES'+(world.ownerUsername?' · BY '+filterKWGUserText(world.ownerUsername):'');
+      info.append(name,meta);
+      const btn=document.createElement('button');btn.type='button';btn.textContent='PLAY';
+      btn.addEventListener('click',()=>joinSelectedWorld(world.name));
+      row.append(info,btn);return row;
+    }
+    function renderProfileWorldList(id,worlds,emptyMessage){
+      const box=document.getElementById(id);box.replaceChildren();
+      if(!worlds?.length){const empty=document.createElement('div');empty.className='kwg-profile-empty';empty.textContent=emptyMessage;box.append(empty);return;}
+      worlds.forEach(w=>box.append(renderProfileWorldCard(w)));
+    }
+    function renderProfileFriends(friends){
+      const box=document.getElementById('profile-friends-list');box.replaceChildren();
+      document.getElementById('profile-friends-count').textContent=String(friends?.length||0);
+      if(!friends?.length){const empty=document.createElement('div');empty.className='kwg-profile-empty';empty.textContent='No friends to show yet.';box.append(empty);return;}
+      friends.forEach(friend=>{
+        const btn=document.createElement('button');btn.type='button';btn.className='kwg-profile-friend';
+        const dot=document.createElement('span');dot.className='kwg-profile-presence'+(friend.online?' online':'');
+        const name=document.createElement('span');name.textContent=filterKWGUserText(friend.username);
+        btn.append(dot,name);btn.addEventListener('click',()=>openPlayerProfile(friend.username));box.append(btn);
+      });
+    }
+    function renderProfileMessages(profile){
+      const box=document.getElementById('profile-message-list');box.replaceChildren();
+      if(!profile.messages?.length){const empty=document.createElement('div');empty.className='kwg-profile-empty';empty.textContent='No messages yet. Be the first to post!';box.append(empty);}
+      (profile.messages||[]).forEach(msg=>{
+        const row=document.createElement('article');row.className='kwg-profile-message';
+        const head=document.createElement('div');head.className='kwg-profile-message-header';
+        const author=document.createElement('button');author.type='button';author.className='kwg-profile-message-author';
+        author.textContent=filterKWGUserText(msg.authorUsername);author.onclick=()=>openPlayerProfile(msg.authorUsername);
+        const meta=document.createElement('span');meta.className='kwg-profile-message-meta';meta.textContent=timeAgo(msg.createdAt);
+        head.append(author,meta);
+        if(msg.canDelete){const del=document.createElement('button');del.type='button';del.className='kwg-profile-message-delete';del.textContent='DELETE';
+          del.onclick=()=>socket.emit('delete_profile_message',{messageId:msg.id},res=>{
+            if(!res?.success){showToast(res?.message||'Could not delete message.');return;}
+            loadProfile(profile.username);
+          });head.append(del);
+        }
+        const body=document.createElement('div');body.className='kwg-profile-message-body';body.textContent=filterKWGUserText(msg.body);
+        row.append(head,body);box.append(row);
+      });
+      document.getElementById('profile-message-compose').style.display=loggedInUsername?'grid':'none';
     }
 
     function renderProfile(profile) {
       viewedProfile=profile;
       document.getElementById('profile-username').textContent=filterKWGUserText(profile.username);
       document.getElementById('profile-joined').textContent='JOINED '+formatProfileDate(profile.createdAt).toUpperCase();
-      document.getElementById('profile-stat-worlds').textContent=profile.stats?.worlds ?? 0;
-      document.getElementById('profile-stat-likes').textContent=profile.stats?.likesGiven ?? 0;
-      document.getElementById('profile-stat-items').textContent=profile.stats?.inventory ?? 0;
 
       const status=document.getElementById('profile-status');
       status.classList.toggle('online',!!profile.online);
       status.innerHTML=`<span class="profile-status-dot"></span><span>${profile.online ? (profile.currentWorld ? 'ONLINE · '+escapeChatText(filterKWGUserText(profile.currentWorld)) : 'ONLINE') : 'OFFLINE'}</span>`;
 
       const join=document.getElementById('profile-join-world-btn');
-      if(profile.currentWorld && profile.currentWorld!==currentWorldName){
-        join.style.display='block'; join.textContent='JOIN '+profile.currentWorld;
-        join.onclick=()=>joinWorld(profile.currentWorld);
+      if(profile.friendship?.state==='friends' && profile.currentWorld){
+        join.style.display='inline-flex';join.textContent='VISIT '+filterKWGUserText(profile.username);
+        join.onclick=()=>joinSelectedWorld(profile.currentWorld,profile.username);
       }else join.style.display='none';
 
       const bio=document.getElementById('profile-bio-view');
@@ -6369,30 +6472,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       if(rel==='friends') addAction('REMOVE FRIEND',()=>friendAction('remove_friend',profile.username),true);
 
-            renderProfileAvatar(profile.appearance);
-
-      const showcase=document.getElementById('profile-showcase-worlds'); showcase.innerHTML='';
-      if(!profile.showcasedWorlds?.length) showcase.innerHTML='<div style="color:#6f7e92;padding:12px 0">No showcased worlds yet.</div>';
-      else profile.showcasedWorlds.forEach(w=>showcase.appendChild(renderProfileWorldCard(w)));
+      renderProfileAvatar(profile.appearance);
+      renderProfileWorldList('profile-liked-worlds',profile.likedWorlds,'No liked worlds yet.');
+      renderProfileWorldList('profile-top-worlds',profile.topWorlds,'No worlds created yet.');
+      renderProfileFriends(profile.friends);
+      renderProfileMessages(profile);
 
       const edit=document.getElementById('profile-edit-area');
       edit.style.display=profile.isOwnProfile?'block':'none';
       if(profile.isOwnProfile){
-        const input=document.getElementById('profile-bio-input'); input.value=profile.bio||'';
+        const input=document.getElementById('profile-bio-input');input.value=profile.bio||'';
         document.getElementById('profile-bio-count').textContent=input.value.length;
-        const selected=new Set((profile.showcasedWorlds||[]).map(w=>Number(w.id)));
-        const picker=document.getElementById('profile-showcase-picker'); picker.innerHTML='';
-        if(!profile.ownedWorlds?.length) picker.innerHTML='<div style="color:#6f7e92">Create a world to showcase it here.</div>';
-        else profile.ownedWorlds.forEach(w=>{
-          const label=document.createElement('label'); label.className='profile-showcase-choice';
-          const check=document.createElement('input'); check.type='checkbox'; check.value=w.id; check.checked=selected.has(Number(w.id));
-          check.addEventListener('change',()=>{
-            const checked=[...picker.querySelectorAll('input:checked')];
-            if(checked.length>3){check.checked=false;showToast('You can showcase up to 3 worlds.');}
-          });
-          const text=document.createElement('span'); text.textContent=w.name;
-          label.append(check,text); picker.appendChild(label);
-        });
       }
     }
 
@@ -6508,7 +6598,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         b.onclick=fn;actions.appendChild(b);
       };
       if(kind==='friend'){
-        if(user.currentWorld)button('JOIN',()=>joinWorld(user.currentWorld));
+        if(user.currentWorld)button('VISIT',()=>joinSelectedWorld(user.currentWorld,user.username));
         button('PROFILE',()=>openPlayerProfile(user.username));
         button('REMOVE',()=>friendListAction('remove_friend',user.username),true);
       } else if(kind==='incoming'){
@@ -6563,20 +6653,38 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       loadProfile(username);
     }
 
+    let kwgProfileRequestSeq=0;
     function loadProfile(username) {
       if(!username)return;
+      const requestId=++kwgProfileRequestSeq;
       socket.emit('get_profile',{username},res=>{
+        if(requestId!==kwgProfileRequestSeq)return;
         if(!res?.success){showToast(res?.message||'Could not load profile.');return;}
         renderProfile(res.profile);
       });
     }
 
+    document.getElementById('profile-message-input').addEventListener('input',e=>{
+      document.getElementById('profile-message-count').textContent=e.target.value.length+'/240';
+    });
+    document.getElementById('profile-message-send').addEventListener('click',()=>{
+      const profile=viewedProfile;
+      const input=document.getElementById('profile-message-input');
+      const body=input.value.trim();
+      if(!profile||!body){showToast('Write a message first.');return;}
+      const btn=document.getElementById('profile-message-send');btn.disabled=true;
+      socket.emit('post_profile_message',{username:profile.username,body},res=>{
+        btn.disabled=false;
+        if(!res?.success){showToast(res?.message||'Could not post message.');return;}
+        input.value='';document.getElementById('profile-message-count').textContent='0/240';
+        loadProfile(profile.username);
+      });
+    });
     document.getElementById('profile-bio-input').addEventListener('input',e=>{
       document.getElementById('profile-bio-count').textContent=e.target.value.length;
     });
     document.getElementById('profile-save-btn').addEventListener('click',()=>{
-      const ids=[...document.querySelectorAll('#profile-showcase-picker input:checked')].map(x=>Number(x.value));
-      socket.emit('update_profile',{bio:document.getElementById('profile-bio-input').value,showcaseWorldIds:ids},res=>{
+      socket.emit('update_profile',{bio:document.getElementById('profile-bio-input').value},res=>{
         if(!res?.success){showToast(res?.message||'Could not save profile.');return;}
         showToast('Profile saved.'); loadProfile(loggedInUsername);
       });
