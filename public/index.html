@@ -2387,6 +2387,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       #home-main-card .kwg-icon-nav .nav-label{font-size:8px!important}
       #home-main-card .kwg-dashboard-header{flex-wrap:wrap!important}
     }
+    /* KWG V3.47: in-world blocked-user confirmation, retro pixel UI */
+    #kwg-block-join-modal{position:fixed;inset:0;z-index:35000;display:none;align-items:center;justify-content:center;
+      background:rgba(4,10,20,.85);padding:18px;box-sizing:border-box;font-family:'Pixelify Sans',monospace}
+    #kwg-block-join-card{width:min(480px,100%);background:#172639;border:3px solid #77b7d8;
+      box-shadow:8px 8px 0 #070e1a;padding:23px;box-sizing:border-box;color:#eaf6ff}
+    #kwg-block-join-card h2{font-size:18px;letter-spacing:.07em;margin:0 0 16px;color:#f7d684}
+    #kwg-block-join-card p{font-size:13px;line-height:1.65;margin:0 0 20px}
+    #kwg-block-join-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+    #kwg-block-join-actions button{font-family:inherit;font-size:12px;font-weight:900;padding:12px 15px;
+      border:2px solid #a2d5ed;border-radius:0;background:#264861;color:#fff;cursor:pointer;box-shadow:3px 3px 0 #07111e}
+    #kwg-block-join-yes{background:#26734e!important;border-color:#a6eab6!important}
+    #kwg-block-join-actions button:focus-visible{outline:2px solid #fff;outline-offset:3px}
 </style>
 </head>
 <body>
@@ -3676,7 +3688,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.getElementById('world-sort').addEventListener('change', renderRoomList);
     document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click',()=>switchHomeTab(b.dataset.goTab)));
 
-    function joinSelectedWorld(roomName, visitUsername = null) {
+    function kwgConfirmBlockedWorld(count){
+      return new Promise(resolve=>{
+        const overlay=document.getElementById('kwg-block-join-modal');
+        const message=document.getElementById('kwg-block-join-message');
+        const yes=document.getElementById('kwg-block-join-yes');
+        const no=document.getElementById('kwg-block-join-no');
+        message.textContent=(count===1?'A blocked user is':'Blocked users are')+
+          ' currently in this world. Their usernames and messages will be hidden for both sides.';
+        overlay.style.display='flex';
+        const finish=answer=>{overlay.style.display='none';yes.onclick=null;no.onclick=null;resolve(answer);};
+        yes.onclick=()=>finish(true);no.onclick=()=>finish(false);
+      });
+    }
+    function joinSelectedWorld(roomName, visitUsername = null, confirmBlocked = false) {
       isEditMode = false;
       buildSubTool = null;
       document.body.classList.remove('kwg-editing');
@@ -3684,7 +3709,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       currentCheckpoint = null;
       canEditCurrentWorld = false;
 
-      socket.emit('join_world', { worldName: roomName, appearance: playerAppearance, visitUsername }, (res) => {
+      socket.emit('join_world', { worldName: roomName, appearance: playerAppearance, visitUsername, confirmBlocked }, async (res) => {
+        if(res?.requiresBlockConfirmation){
+          if(await kwgConfirmBlockedWorld(res.blockedCount||1))
+            joinSelectedWorld(roomName,visitUsername,true);
+          return;
+        }
         if (!res?.success) {
           showToast(res?.message || 'Could not join world.');
           return;
@@ -4054,6 +4084,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return raw.split('').map((ch,i)=>masked.has(i)?'*':ch).join('');
     }
     
+    const KWG_HIDDEN_MESSAGE='This message has been hidden because your or the user are blocked.';
     // --- PER-WORLD CHAT ---
     function escapeChatText(value) {
       const div = document.createElement('div');
@@ -4067,8 +4098,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const row = document.createElement('div');
       row.className = 'chat-line';
       const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
-      row.innerHTML = `<span class="chat-name">${escapeChatText(filterKWGUserText(msg.username || 'Player'))}:</span> ${escapeChatText(filterKWGUserText(msg.message || ''))}<span class="chat-time">${escapeChatText(time)}</span>`;
-      row.querySelector('.chat-name').dataset.profileUsername=String(msg.username||'Player');
+      row.innerHTML = `<span class="chat-name">${escapeChatText(msg.hidden?'Hidden User':filterKWGUserText(msg.username || 'Player'))}:</span> ${escapeChatText(msg.hidden?KWG_HIDDEN_MESSAGE:filterKWGUserText(msg.message || ''))}<span class="chat-time">${escapeChatText(time)}</span>`;
+      if(!msg.hidden)row.querySelector('.chat-name').dataset.profileUsername=String(msg.username||'Player');
+      else row.querySelector('.chat-name').classList.add('kwg-blocked-name');
       box.appendChild(row);
       while (box.children.length > 100) box.removeChild(box.firstChild);
       box.scrollTop = box.scrollHeight;
@@ -4120,7 +4152,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     socket.on('world_chat_message', (msg) => {
       if (msg.worldName === currentWorldName) {
         appendChatMessage(msg);
-        showKWGChatBubble(msg.username,msg.message);
+        if(!msg.hidden)showKWGChatBubble(msg.username,msg.message);
       }
     });
 
@@ -4854,6 +4886,23 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         animateLimbs(avatarMesh, isMoving);
       }
     }
+
+    // Rebuild a remote name tag when either player blocks/unblocks the other.
+    socket.on('kwg_block_relation_changed',({playerId,hidden,username})=>{
+      const other=otherPlayers[playerId];
+      if(other){
+        other.username=hidden?'Hidden User':username;
+        const oldTag=other.mesh.children.find(ch=>ch.name==='kwg-name-tag');
+        if(oldTag){other.mesh.remove(oldTag);disposeKWGSprite(oldTag);}
+        other.mesh.add(createNameTagSprite(other.username));
+        if(hidden&&other.mesh.userData.kwgBubble){
+          disposeKWGSprite(other.mesh.userData.kwgBubble);
+          other.mesh.userData.kwgBubble=null;
+        }
+      }
+      if(currentWorldName)loadWorldChat();
+      showToast(hidden?'Blocked player messages are now hidden.':'Player privacy settings updated.');
+    });
 
     // --- MULTIPLAYER PLAYER SYNC ---
     socket.on('player_joined', (pData) => {
@@ -6859,7 +6908,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const avatar=document.createElement('button');avatar.type='button';
         avatar.className='kwg-profile-message-avatar';
         avatar.title='View '+filterKWGUserText(msg.authorUsername)+'\'s profile';
-        avatar.onclick=()=>openPlayerProfile(msg.authorUsername);
+        avatar.onclick=()=>{if(!msg.hidden)openPlayerProfile(msg.authorUsername);};
         const avatarImg=document.createElement('img');
         avatarImg.alt=filterKWGUserText(msg.authorUsername)+' headshot';
         try{avatarImg.src=kwgMakeProfileHeadshot(msg.authorAppearance||{});}
@@ -6868,7 +6917,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const content=document.createElement('div');content.className='kwg-profile-message-content';
         const head=document.createElement('div');head.className='kwg-profile-message-header';
         const author=document.createElement('button');author.type='button';author.className='kwg-profile-message-author';
-        author.textContent=filterKWGUserText(msg.authorUsername);author.onclick=()=>openPlayerProfile(msg.authorUsername);
+        author.textContent=filterKWGUserText(msg.authorUsername);author.onclick=()=>{if(!msg.hidden)openPlayerProfile(msg.authorUsername);};
         const meta=document.createElement('span');meta.className='kwg-profile-message-meta';meta.textContent=timeAgo(msg.createdAt);
         head.append(author,meta);
         if(msg.canDelete){const del=document.createElement('button');del.type='button';del.className='kwg-profile-message-delete';del.textContent='DELETE';
@@ -6908,13 +6957,23 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const b=document.createElement('button'); b.className='submit-btn'+(danger?' danger':'');
         b.textContent=label; b.addEventListener('click',fn); friendActions.appendChild(b);
       };
-      if(rel==='none') addAction('ADD FRIEND',()=>friendAction('send_friend_request',profile.username));
+      if(rel==='none'&&!profile.blockBetween) addAction('ADD FRIEND',()=>friendAction('send_friend_request',profile.username));
       if(rel==='outgoing') addAction('CANCEL REQUEST',()=>friendAction('cancel_friend_request',profile.username),true);
       if(rel==='incoming'){
         addAction('ACCEPT FRIEND',()=>friendAction('respond_friend_request',profile.username,{accept:true}));
         addAction('DECLINE',()=>friendAction('respond_friend_request',profile.username,{accept:false}),true);
       }
       if(rel==='friends') addAction('REMOVE FRIEND',()=>friendAction('remove_friend',profile.username),true);
+      if(!profile.isOwnProfile){
+        if(profile.blockedByMe){
+          addAction('UNBLOCK PLAYER',()=>kwgBlockProfileAction('unblock_player',profile.username));
+        }else{
+          addAction('BLOCK PLAYER',()=>{
+            if(confirm('Block '+profile.username+'? Both players will see hidden usernames and messages. Any friendship will be removed.'))
+              kwgBlockProfileAction('block_player',profile.username);
+          },true);
+        }
+      }
 
       renderProfileAvatar(profile.appearance);
       const likedSort=document.getElementById('profile-liked-sort');
@@ -7051,6 +7110,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       socket.emit('clear_notifications',{},res=>{if(res?.success)refreshNotifications();});
     });
 
+    function kwgBlockProfileAction(eventName,username){
+      socket.emit(eventName,{username},res=>{
+        if(!res?.success){showToast(res?.message||'Could not update player block.');return;}
+        showToast(res.message||'Player block updated.');
+        loadProfile(username);refreshFriendBadge();
+      });
+    }
     function friendAction(eventName,username,extra={}) {
       socket.emit(eventName,{username,...extra},res=>{
         if(!res?.success){showToast(res?.message||'Friend action failed.');return;}
@@ -8491,7 +8557,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const nameEl=line.querySelector('.chat-name');
         if(!nameEl || nameEl.classList.contains('kwg-profile-link'))return;
         const raw=nameEl.dataset.profileUsername||(nameEl.textContent||'').replace(/:\s*$/,'').trim();
-        if(!raw)return;
+        if(!raw||nameEl.classList.contains('kwg-blocked-name')||raw==='Hidden User')return;
         nameEl.classList.add('kwg-profile-link');
         nameEl.dataset.profileUsername=raw;
         nameEl.title=`View ${raw}'s profile`;
@@ -8518,5 +8584,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     setInterval(()=>{if(loggedInUsername)refreshNotifications();},20000);
 
   </script>
+<div id="kwg-block-join-modal" role="dialog" aria-modal="true" aria-labelledby="kwg-block-join-title">
+  <div id="kwg-block-join-card">
+    <h2 id="kwg-block-join-title">BLOCKED PLAYER IN WORLD</h2>
+    <p id="kwg-block-join-message">A blocked user is in this world. Their usernames and messages will be hidden.</p>
+    <div id="kwg-block-join-actions">
+      <button type="button" id="kwg-block-join-no">CANCEL</button>
+      <button type="button" id="kwg-block-join-yes">JOIN ANYWAY</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
