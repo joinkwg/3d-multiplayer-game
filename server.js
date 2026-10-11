@@ -464,6 +464,29 @@ async function migrate() {
       PRIMARY KEY (user_id, item_id)
     );
 
+    -- KWG V3.49: permanent, server-authoritative pets and equipped companion.
+    CREATE TABLE IF NOT EXISTS pet_catalog (
+      pet_key VARCHAR(32) PRIMARY KEY,
+      name VARCHAR(40) NOT NULL,
+      price INTEGER NOT NULL CHECK (price >= 0),
+      species VARCHAR(20) NOT NULL,
+      is_visible BOOLEAN NOT NULL DEFAULT TRUE
+    );
+    CREATE TABLE IF NOT EXISTS user_pets (
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      pet_key VARCHAR(32) NOT NULL REFERENCES pet_catalog(pet_key),
+      purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(user_id,pet_key)
+    );
+    CREATE TABLE IF NOT EXISTS user_pet_equipment (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      pet_key VARCHAR(32) NOT NULL REFERENCES pet_catalog(pet_key),
+      equipped_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    INSERT INTO pet_catalog(pet_key,name,price,species) VALUES
+      ('dog_1','Dog 1',75,'dog'),('cat_1','Cat 1',95,'cat')
+    ON CONFLICT(pet_key) DO NOTHING;
+
     CREATE TABLE IF NOT EXISTS world_templates (
       id BIGSERIAL PRIMARY KEY,
       name VARCHAR(40) UNIQUE NOT NULL,
@@ -1485,6 +1508,8 @@ io.on('connection', (socket) => {
 
       const app = await validateAppearanceForUser(socket.user.id, socket.user.appearance || {});
       const cosmetics = await resolveAppearanceAssets(app);
+      const equippedPetRow=await pool.query('SELECT pet_key FROM user_pet_equipment WHERE user_id=$1',[userId]);
+      const petKey=equippedPetRow.rows[0]?.pet_key||null;
       if (!socket.connected || !socket.user) throw new Error('Disconnected during world join.');
       socket.user.appearance = app;
 
@@ -1507,7 +1532,7 @@ io.on('connection', (socket) => {
         id: socket.id, username: socket.user.username,
         x:selfSpawn.x,y:selfSpawn.y,z:selfSpawn.z,
         rotationY: 0, walkClock: 0, isMoving:false, isGrounded:true,
-        appearance: app, cosmetics, worldName: world.name
+        appearance: app, cosmetics, petKey, worldName: world.name
       };
       playersBySocket.set(socket.id, p);
       refreshPrimarySocketForUser(userId);
@@ -1530,7 +1555,7 @@ io.on('connection', (socket) => {
         `,[socket.user.id,world.id]);
       } catch(visitError) {console.error('Could not record recent world visit:',visitError);}
       joinedSuccessfully=true;
-      cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics});
+      cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics,selfPetKey:petKey});
     } catch (e) {
       console.error(e);
       if (reservedWorldName && worldJoinReservations.has(reservedWorldName)) {
@@ -1814,6 +1839,61 @@ io.on('connection', (socket) => {
       console.error(e);
       cb && cb({success:false,message:'Could not save appearance.'});
     }
+  });
+
+  // KWG V3.49: pet shop, ownership and equipped companion.
+  socket.on('get_pets', async (cb) => {
+    if (!requireAuth(socket,cb)) return;
+    try {
+      const [catalog,owned,equipped]=await Promise.all([
+        pool.query('SELECT pet_key AS "petKey",name,price,species FROM pet_catalog WHERE is_visible=true ORDER BY pet_key'),
+        pool.query('SELECT pet_key AS "petKey" FROM user_pets WHERE user_id=$1',[socket.user.id]),
+        pool.query('SELECT pet_key AS "petKey" FROM user_pet_equipment WHERE user_id=$1',[socket.user.id])
+      ]);
+      cb({success:true,pets:catalog.rows,owned:owned.rows.map(r=>r.petKey),equippedPet:equipped.rows[0]?.petKey||null});
+    } catch(err){console.error('Get pets failed',err);cb({success:false,message:'Could not load pets.'});}
+  });
+
+  socket.on('buy_pet', async ({petKey}={},cb) => {
+    if (!requireAuth(socket,cb)) return;
+    if (typeof petKey!=='string'||!/^([a-z0-9_]{1,32})$/.test(petKey))
+      return cb({success:false,message:'Invalid pet.'});
+    const client=await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const user=await client.query('SELECT coins FROM users WHERE id=$1 FOR UPDATE',[socket.user.id]);
+      const pet=await client.query('SELECT price FROM pet_catalog WHERE pet_key=$1 AND is_visible=true',[petKey]);
+      if(!pet.rowCount){await client.query('ROLLBACK');return cb({success:false,message:'Pet unavailable.'});}
+      const owned=await client.query('SELECT 1 FROM user_pets WHERE user_id=$1 AND pet_key=$2',[socket.user.id,petKey]);
+      if(owned.rowCount){await client.query('COMMIT');return cb({success:true,alreadyOwned:true,coins:Number(user.rows[0].coins)});}
+      const coins=Number(user.rows[0].coins),price=Number(pet.rows[0].price);
+      if(coins<price){await client.query('ROLLBACK');return cb({success:false,message:`You need ${price-coins} more coins.`});}
+      const updated=await client.query('UPDATE users SET coins=coins-$1 WHERE id=$2 RETURNING coins',[price,socket.user.id]);
+      await client.query('INSERT INTO user_pets(user_id,pet_key) VALUES($1,$2)',[socket.user.id,petKey]);
+      await client.query('COMMIT');
+      socket.user.coins=Number(updated.rows[0].coins);
+      cb({success:true,coins:socket.user.coins});
+    } catch(err){await client.query('ROLLBACK').catch(()=>{});console.error('Pet purchase failed',err);cb({success:false,message:'Could not purchase pet.'});}
+    finally{client.release();}
+  });
+
+  socket.on('equip_pet', async ({petKey}={},cb) => {
+    if (!requireAuth(socket,cb)) return;
+    if(petKey!==null && (typeof petKey!=='string'||!/^([a-z0-9_]{1,32})$/.test(petKey)))
+      return cb({success:false,message:'Invalid pet.'});
+    try {
+      if(petKey){
+        const owned=await pool.query('SELECT 1 FROM user_pets WHERE user_id=$1 AND pet_key=$2',[socket.user.id,petKey]);
+        if(!owned.rowCount)return cb({success:false,message:'You do not own this pet.'});
+        await pool.query(`INSERT INTO user_pet_equipment(user_id,pet_key) VALUES($1,$2)
+          ON CONFLICT(user_id) DO UPDATE SET pet_key=EXCLUDED.pet_key,equipped_at=NOW()`,[socket.user.id,petKey]);
+      }else{
+        await pool.query('DELETE FROM user_pet_equipment WHERE user_id=$1',[socket.user.id]);
+      }
+      const p=playersBySocket.get(socket.id);
+      if(p){p.petKey=petKey;io.to(`world:${p.worldName}`).emit('pet_equipped',{id:socket.id,petKey});}
+      cb({success:true,equippedPet:petKey});
+    }catch(err){console.error('Equip pet failed',err);cb({success:false,message:'Could not change equipped pet.'});}
   });
 
   socket.on('get_store', async (cb) => {
