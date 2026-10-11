@@ -884,13 +884,17 @@ io.on('connection', (socket) => {
       // liked creations, accepted friends, and latest message-board posts.
       const [likedRows, friendRows, messageRows] = await Promise.all([
         pool.query(`
-          SELECT w.id,w.name,w.data,owner.username AS owner_username,
+          SELECT w.id,w.name,
+                 jsonb_build_object('displayName',w.data->>'displayName',
+                                    'thumbnailUrl',w.data->>'thumbnailUrl') AS data,
+                 owner.username AS owner_username,
+                 liked.created_at AS "likedAt",
                  (SELECT COUNT(*)::int FROM world_likes l2 WHERE l2.world_id=w.id) AS like_count
           FROM world_likes liked
           JOIN worlds w ON w.id=liked.world_id
           LEFT JOIN users owner ON owner.id=w.owner_user_id
           WHERE liked.user_id=$1
-          ORDER BY liked.created_at DESC,w.id DESC LIMIT 12
+          ORDER BY liked.created_at DESC,w.id DESC
         `,[u.id]),
         pool.query(`
           SELECT other.id,other.username
@@ -914,6 +918,7 @@ io.on('connection', (socket) => {
         likeCount:Number(w.like_count??w.likeCount??0),
         thumbnailUrl:String(w.data?.thumbnailUrl||''),
         createdAt:w.createdAt||null,
+        likedAt:w.likedAt||null,
         ownerUsername:w.owner_username||null
       });
       const topWorlds=ownedWithIds.rows.slice().sort((a,b)=>
@@ -1078,6 +1083,51 @@ io.on('connection', (socket) => {
     } catch(error) {
       console.error('Home dashboard error:',error);
       cb({success:false,message:'Could not load home dashboard.'});
+    }
+  });
+
+  // KWG V3.45.3: public search, separate from admin account management.
+  // Never expose passwords, email/session data or private account settings.
+  socket.on('search_public', async ({query,kind} = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
+    if (typeof cb !== 'function') return;
+    const term=String(query||'').trim().slice(0,60);
+    const category=kind==='players'?'players':'worlds';
+    if(term.length<2) return cb({success:false,message:'Enter at least two characters.'});
+    try {
+      if(category==='players'){
+        const rows=await pool.query(`
+          SELECT id,username,appearance
+          FROM users
+          WHERE POSITION(lower($1) IN lower(username))>0
+          ORDER BY CASE WHEN lower(username)=lower($1) THEN 0
+                        WHEN lower(username) LIKE lower($1)||'%' THEN 1 ELSE 2 END,
+                   lower(username)
+          LIMIT 25
+        `,[term]);
+        return cb({success:true,kind:category,users:rows.rows.map(u=>({
+          username:u.username,appearance:u.appearance||{},
+          online:!!socketsByUser.get(u.id)
+        }))});
+      }
+      const rows=await pool.query(`
+        SELECT w.name,w.data,w.created_at,u.username AS owner_username,
+               (SELECT COUNT(*)::int FROM world_likes wl WHERE wl.world_id=w.id) AS like_count,
+               EXISTS(SELECT 1 FROM world_likes wl WHERE wl.world_id=w.id AND wl.user_id=$1) AS liked_by_me
+        FROM worlds w LEFT JOIN users u ON u.id=w.owner_user_id
+        WHERE POSITION(lower($2) IN lower(w.name))>0
+           OR POSITION(lower($2) IN lower(COALESCE(w.data->>'displayName','')))>0
+           OR POSITION(lower($2) IN lower(COALESCE(w.data->>'description','')))>0
+           OR POSITION(lower($2) IN lower(COALESCE(u.username,'')))>0
+        ORDER BY CASE WHEN lower(w.name)=lower($2) THEN 0
+                      WHEN lower(w.name) LIKE lower($2)||'%' THEN 1 ELSE 2 END,
+                 like_count DESC,w.created_at DESC
+        LIMIT 30
+      `,[socket.user.id,term]);
+      return cb({success:true,kind:category,worlds:await Promise.all(rows.rows.map(worldSummary))});
+    }catch(err){
+      console.error('Public search failed:',err);
+      cb({success:false,message:'Search is temporarily unavailable.'});
     }
   });
 
