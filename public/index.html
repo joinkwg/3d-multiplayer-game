@@ -5579,8 +5579,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const x=side*.159,y=.844;
         // The entire visible eye is the dark pupil: no white rim or iris ring.
         oval(bone,x,y-.004,.315,.109,.132,.058,C.eye,36);
-        oval(bone,x-.030,y+.048,.369,.025,.030,.010,white,20);
-        oval(bone,x+.035,y-.039,.368,.013,.016,.007,new THREE.Color('#c5e9ff'),14);
+        // Large, crisp catchlights are intentionally raised just above the dark eye
+        // surface so they remain visible at normal camera distances and in previews.
+        oval(bone,x-.032,y+.043,.379,.037,.040,.009,white,24);
+        oval(bone,x+.039,y-.032,.377,.019,.021,.008,new THREE.Color('#d9f3ff'),18);
       }
       // Closed-eye smiles live on the HEAD behind the eyeballs. They are
       // exposed briefly when the actual eye geometry folds shut. Unlike the
