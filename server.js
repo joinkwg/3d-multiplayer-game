@@ -2087,6 +2087,26 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb({success:false,message:'Could not send message.'}); }
   });
 
+  // V3.50: test coins can ONLY be added by an authenticated server-side admin,
+  // and ONLY to that admin's own account. Never trust a client-provided user ID.
+  socket.on('admin_grant_self_coins', async ({amount} = {}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    if (typeof cb !== 'function') return;
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 100000)
+      return cb({success:false,message:'Amount must be a whole number from 1 to 100,000.'});
+    try {
+      const result = await pool.query(`
+        UPDATE users SET coins=coins+$1
+        WHERE id=$2 AND coins <= 2147483647-$1
+        RETURNING coins
+      `,[amount,socket.user.id]);
+      if (!result.rowCount)
+        return cb({success:false,message:'Coin balance limit reached.'});
+      socket.user.coins=Number(result.rows[0].coins);
+      cb({success:true,coins:socket.user.coins});
+    } catch (e) { console.error('Admin coin grant failed:',e); cb({success:false,message:'Could not add coins.'}); }
+  });
+
   socket.on('admin_search_users', async ({query} = {}, cb) => {
     if (!requireAdmin(socket, cb)) return;
     try {
