@@ -5687,8 +5687,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const landing=Math.pow(Math.max(0,-Math.sin(hopPhase)),7);
       const takeoff=Math.max(0,Math.sin(hopPhase));
 
-      // Playful routines happen while resting. The dance is a full little
-      // two-second sequence rather than a barely visible twitch.
+      // Only subtle idle gestures: curious head tilt, small paw wave, ear perk.
+      // The former whole-body wiggle/dance gesture is deliberately excluded.
       if(pet.trickCountdown===undefined){
         pet.trickCountdown=1.8+Math.random()*2.5;
         pet.trickAge=-1;pet.trickType=0;
@@ -5705,34 +5705,30 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }else{
         pet.trickCountdown-=dt*still;
         if(pet.trickCountdown<=0){
-          pet.trickType=1+Math.floor(Math.random()*4);
+          pet.trickType=[1,2,4][Math.floor(Math.random()*3)];
           pet.trickAge=0;
         }
       }
       const gesture=pet.trickAge>=0?Math.pow(Math.sin(Math.PI*Math.min(1,pet.trickAge/2.2)),.65)*still:0;
       const curious=pet.trickType===1?gesture:0;
       const wave=pet.trickType===2?gesture:0;
-      const wiggle=pet.trickType===3?gesture:0;
       const perky=pet.trickType===4?gesture:0;
-      const dance=0; // Removed the awkward full-body dance; keep the four subtle gestures.
-      const danceBeat=Math.sin(t*13.5);
-      const happyWiggle=wiggle*Math.sin(t*17);
 
       // Soft, squishy idle, grounded at all times; springy stretch on jumps.
       const squash=still*(.068*idleWave+.014*Math.sin(t*3.2+pet.phase))
-        +blend*(.072*takeoff-.105*landing)+dance*.045*danceBeat;
+        +blend*(.072*takeoff-.105*landing);
       p.body.scale.set(1-squash*.43,1+squash,1-squash*.37);
       p.body.position.y=still*(.016+.010*idlePulse)+blend*(.008-.006*landing);
       p.body.rotation.z=still*.025*Math.sin(t*3.1+pet.phase)
-        +dance*.13*danceBeat+happyWiggle*.10;
+;
       p.body.rotation.x=still*.012*Math.sin(t*2.4)+blend*.04*Math.sin(hopPhase);
 
       // Head has its own lively follow-through; big curious tilts are readable.
       p.headBone.rotation.set(
         still*.075*Math.sin(t*3.0+pet.phase)+blend*.14*Math.sin(hopPhase)+curious*.20,
-        curious*.27+wiggle*.20*Math.sin(t*9)+dance*.13*danceBeat,
+        curious*.27,
         still*.065*Math.sin(t*2.5+pet.phase)+blend*.085*Math.sin(hopPhase)
-          +curious*.34+happyWiggle*.18+dance*.12*danceBeat
+          +curious*.34
       );
 
       // Shoulder bones pivot actual arms. Negative Z lifts the left paw out;
@@ -5741,13 +5737,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const idleArm=.055+.12*idlePulse;
       p.leftArm.rotation.z=-(still*idleArm+armFlop)
         -wave*(.75+.38*Math.sin(t*17))
-        -dance*(.48+.52*Math.max(0,danceBeat));
+;
       p.rightArm.rotation.z=still*idleArm+armFlop
-        +dance*(.48+.52*Math.max(0,-danceBeat));
+;
       p.leftArm.rotation.x=still*.16*Math.sin(t*4+pet.phase)+blend*.66*Math.sin(hopPhase-.32)
-        +wave*.38*Math.sin(t*17)+dance*.34*danceBeat;
+        +wave*.38*Math.sin(t*17);
       p.rightArm.rotation.x=-still*.16*Math.sin(t*4+pet.phase)-blend*.66*Math.sin(hopPhase-.32)
-        -dance*.40*Math.sin(t*13.5);
+;
 
       // Wag in the horizontal plane as well as up and down. Dog 1 gets
       // excited tail-wag speed; Cat 1 swishes more slowly and deliberately.
@@ -5757,13 +5753,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const wagSpeed=cat?(5.2+blend*4.3):(10+blend*5);
       pet.tailPhase=(pet.tailPhase??pet.phase)+dt*wagSpeed;
       const wag=Math.sin(pet.tailPhase);
-      p.tailBone.rotation.y=wag*(cat?.35:.67)*(1+blend*.30)+dance*.27*danceBeat;
+      p.tailBone.rotation.y=wag*(cat?.35:.67)*(1+blend*.30);
       p.tailBone.rotation.z=Math.sin(t*(cat?4.3:7.5)+pet.phase)*(.17+blend*.15)
-        +happyWiggle*.23;
+;
       p.tailBone.rotation.x=Math.sin(t*5+pet.phase)*(.12+blend*.08);
-      p.leftEar.rotation.z=-curious*.17+happyWiggle*.15+perky*.22
+      p.leftEar.rotation.z=-curious*.17+perky*.22
         +blend*.10*Math.sin(hopPhase);
-      p.rightEar.rotation.z=curious*.17-happyWiggle*.15-perky*.22
+      p.rightEar.rotation.z=curious*.17-perky*.22
         -blend*.10*Math.sin(hopPhase);
       // Ears lag the hop by a quarter beat; the puppy flops more than kitty.
       const earFlop=blend*(cat?.18:.34)*Math.sin(hopPhase-1.0);
