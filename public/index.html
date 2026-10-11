@@ -4541,78 +4541,80 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       uv.needsUpdate=true;
     }
 
-    // KWG V3.42.9: The end caps are right triangles, not squares.
-    // Their icon stamps must sit inside the triangular silhouette while the
-    // background grid/brick/wood stays in its normal, undistorted UV space.
-    // Repeating is still controlled by each face's physical dimensions.
-    function getWedgeCapTexture(materialType, actionType, face) {
-      const baseType=['grid','brick','wood'].includes(materialType)?materialType:'grid';
-      const iconType=['kill','checkpoint','spawn'].includes(actionType)?actionType:null;
-      if(!iconType)return getMaterialTexture(baseType);
-      const key='wedge-cap-429:'+baseType+':'+iconType+':'+face;
-      if(textureCache[key])return textureCache[key];
-      const canvas=document.createElement('canvas');
-      canvas.width=128;canvas.height=128;
-      const ctx=canvas.getContext('2d');
-      ctx.drawImage(getMaterialTexture(baseType).image,0,0,128,128);
-      // In the existing UV orientation, the left cap occupies the lower
-      // left triangle and the right cap occupies the lower right triangle.
-      // Their centroids are (1/3,1/3) and (2/3,1/3), respectively.
-      // Stamp the icon at the centroid, at 65% of its normal size, so
-      // it isn't chopped in half by the sloping diagonal boundary.
-      const icon=getMaterialTexture(iconType).image;
-      const size=84;
-      const cx=(face===2?1/3:2/3)*128;
-      const cy=(2/3)*128; // Canvas Y is inverted relative to UV Y.
-      ctx.globalCompositeOperation='multiply';
-      ctx.drawImage(icon,cx-size/2,cy-size/2,size,size);
-      ctx.globalCompositeOperation='source-over';
-      const texture=new THREE.CanvasTexture(canvas);
-      texture.wrapS=THREE.RepeatWrapping;
-      texture.wrapT=THREE.RepeatWrapping;
-      texture.magFilter=THREE.NearestFilter;
-      textureCache[key]=texture;
-      return texture;
-    }
-
-    // KWG V3.42.9: Independent per-face repeats with flat, undistorted
-    // UVs on both triangular end caps.
-    // wedge surface's independent material texture
-    // transform. A single repeated UV map cannot express five different
-    // physical face dimensions, and the old atlas produced invalid sampling.
-    // This only changes the mesh's UVs/materials, not its collision geometry.
+    // KWG V3.42.10: Render wedge textures into independent face-sized
+    // canvases. The texture repeats are baked into the face image, so
+    // triangle UVs never depend on a repeat/offset matrix or texture atlas.
+    // The mesh's positions, normals, and physics geometry stay unchanged.
     function buildWedgeFaceMaterials(geometry, surfaceTexture, blockData, matOptions) {
       const sx=Math.max(.001,Math.abs(Number(blockData.scaleX)||1));
       const sy=Math.max(.001,Math.abs(Number(blockData.scaleY)||1));
       const sz=Math.max(.001,Math.abs(Number(blockData.scaleZ)||1));
-      const slope=Math.hypot(sy,sz);
+      const faceSizes=[
+        [sx,sz],                   // underside
+        [sx,sy],                   // vertical rear wall
+        [sz,sy],                   // left triangular end
+        [sz,sy],                   // right triangular end
+        [sx,Math.hypot(sy,sz)]     // sloping roof
+      ];
+      const faceRanges=[[0,6],[6,6],[12,3],[15,3],[18,6]];
       const uv=geometry.getAttribute('uv');
       const pos=geometry.getAttribute('position');
-      const faceTiles=[
-        [sx,sz],      // bottom (two triangles)
-        [sx,sy],      // vertical back (two triangles)
-        [sz,sy],      // left triangular end
-        [sz,sy],      // right triangular end
-        [sx,slope]    // sloped roof (two triangles)
-      ];
+      const baseType=['grid','brick','wood'].includes(blockData.material)
+        ?blockData.material:'grid';
+      const iconType=['kill','checkpoint','spawn'].includes(blockData.actionType)
+        ?blockData.actionType:null;
       geometry.clearGroups();
-      const ranges=[[0,6],[6,6],[12,3],[15,3],[18,6]];
       const materials=[];
+
+      // Draw a texture pattern at a chosen physical tile size without
+      // iterating once for every tile (parts can be hundreds of units long).
+      const paintTiles=(ctx,img,tileW,tileH,offsetX=0,offsetY=0)=>{
+        const w=img.width||128,h=img.height||128;
+        ctx.save();
+        ctx.translate(offsetX,offsetY);
+        ctx.scale(tileW/w,tileH/h);
+        ctx.fillStyle=ctx.createPattern(img,'repeat');
+        ctx.fillRect(-offsetX*w/tileW,-offsetY*h/tileH,
+                     (ctx.canvas.width+Math.abs(offsetX))*w/tileW,
+                     (ctx.canvas.height+Math.abs(offsetY))*h/tileH);
+        ctx.restore();
+      };
       for(let face=0;face<5;face++){
-        const [first,count]=ranges[face];
-        geometry.addGroup(first,count,face);
-        // Every face gets its own texture clone so its repeats cannot
-        // affect the other faces (or any other block).
-        const faceSource=(face===2||face===3)
-          ?getWedgeCapTexture(blockData.material||'grid',blockData.actionType||'normal',face)
-          :surfaceTexture;
-        const tex=faceSource.clone();
-        tex.wrapS=THREE.RepeatWrapping;
-        tex.wrapT=THREE.RepeatWrapping;
-        tex.repeat.set(...faceTiles[face]);
-        tex.offset.set(0,0);
+        const [width,height]=faceSizes[face];
+        // 128 source pixels per world unit, capped to avoid large GPU
+        // allocations for huge parts. Power-of-two is not required because
+        // these textures use ClampToEdge and no texture repeat.
+        const canvas=document.createElement('canvas');
+        canvas.width=Math.max(128,Math.min(2048,Math.ceil(width*128)));
+        canvas.height=Math.max(128,Math.min(2048,Math.ceil(height*128)));
+        const ctx=canvas.getContext('2d');
+        ctx.imageSmoothingEnabled=false;
+        const tileW=canvas.width/width;
+        const tileH=canvas.height/height;
+        if((face===2||face===3)&&iconType){
+          // Keep the material aligned to world units. Only move the icon
+          // artwork toward the center of each triangular end, at FULL
+          // tile size; do not shrink or warp the icon or its background.
+          paintTiles(ctx,getMaterialTexture(baseType).image,tileW,tileH);
+          ctx.globalCompositeOperation='multiply';
+          paintTiles(ctx,getMaterialTexture(iconType).image,tileW,tileH,
+                     (face===2?-1:1)*tileW/6,tileH/6);
+          ctx.globalCompositeOperation='source-over';
+        }else{
+          // Combined material + icon artwork at one repeat per world unit.
+          paintTiles(ctx,surfaceTexture.image,tileW,tileH);
+        }
+        const tex=new THREE.CanvasTexture(canvas);
+        tex.wrapS=THREE.ClampToEdgeWrapping;
+        tex.wrapT=THREE.ClampToEdgeWrapping;
+        tex.minFilter=THREE.LinearMipmapLinearFilter;
+        tex.magFilter=THREE.NearestFilter;
+        tex.anisotropy=4;
         tex.needsUpdate=true;
         materials.push(new THREE.MeshLambertMaterial({...matOptions,map:tex}));
+
+        const [first,count]=faceRanges[face];
+        geometry.addGroup(first,count,face);
         for(let i=first;i<first+count;i++){
           const x=pos.getX(i),y=pos.getY(i),z=pos.getZ(i);
           let u,v;
