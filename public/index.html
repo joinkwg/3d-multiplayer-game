@@ -5947,20 +5947,27 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const noseW=Math.max(.001,.050-(.815-y)*.48);
           c.lerp(orangeGlow,(1-smooth(noseW,noseW+.013,Math.abs(x)))
             *smooth(.751,.768,y)*(1-smooth(.815,.828,y))*front);
-          // Broad crescent-shaped glowing grin, with dark pumpkin teeth.
+          // Broad crescent grin with a real dark carved outline. The inner
+          // yellow glow is narrower in both X and Y, leaving a visible rim.
           const smile=.678+.080*Math.pow(x/.31,2);
-          const wide=1-smooth(.287,.323,Math.abs(x));
-          const grin=wide*(1-smooth(.060,.076,Math.abs(y-smile)))*front;
-          c.lerp(ink,grin);
-          c.lerp(orangeGlow,grin*.98);
+          const mouthOuter=(1-smooth(.293,.329,Math.abs(x)))
+            *(1-smooth(.074,.086,Math.abs(y-smile)))*front;
+          const mouthInner=(1-smooth(.270,.290,Math.abs(x)))
+            *(1-smooth(.048,.060,Math.abs(y-smile)))*front;
+          c.lerp(ink,mouthOuter);
+          c.lerp(orangeGlow,mouthInner);
+          // Pumpkin-rind teeth cut into the bright opening, inside the rim.
           for(const tx of [-.156,.047,.190]){
-            const tooth=oval(x,y,tx,smile+.032,.027,.030)*front;
+            const tooth=oval(x,y,tx,smile+.026,.027,.024)*mouthInner;
             c.lerp(head,tooth);
           }
           return c;
         });
         // Single gnarled stem and a curling vine, rooted in the pumpkin top.
-        tube(1,[[0,1.226,0],[.031,1.307,0],[.076,1.365,-.022]],.044,shade,34);
+        // Both the main stalk and its curled tendril use the vine palette.
+        // The pumpkin's shade color is orange and must never color the stalk.
+        const stemGreen=accent.clone().multiplyScalar(.68);
+        tube(1,[[0,1.226,0],[.031,1.307,0],[.076,1.365,-.022]],.044,stemGreen,34);
         tube(1,[[-.050,1.238,-.006],[-.127,1.307,-.009],[-.165,1.306,-.012],
           [-.176,1.269,-.011],[-.151,1.251,-.009]],.023,accent,28);
         for(const side of [-1,1]){
@@ -6732,7 +6739,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       pet.settleTimer=0;pet.motionBlend=0;
       pet.mesh.position.y=pet.groundY+.05;
     }
+    // Temporarily shelved designs remain saved on the server for a future return.
+    function kwgRetiredPetKey(key){return typeof key==='string' && /^(skeleton|mummy|zombie)_[1-4]$/.test(key);}
     function kwgSetWorldPet(playerId,petKey){
+      if(kwgRetiredPetKey(petKey))petKey=null;
       const old=kwgWorldPets.get(playerId);
       if(old){scene.remove(old.mesh);kwgWorldPets.delete(playerId);}
       if(!petKey||!currentWorldName)return;
@@ -6917,9 +6927,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(!loggedInUsername)return;
       socket.emit('get_pets',res=>{
         if(res?.success){
-          kwgPetCatalog=Array.isArray(res.pets)?res.pets:[];
-          kwgOwnedPets=new Set(res.owned||[]);
-          kwgEquippedPet=res.equippedPet||null;
+          kwgPetCatalog=(Array.isArray(res.pets)?res.pets:[])
+            .filter(p=>!kwgRetiredPetKey(p.petKey));
+          kwgOwnedPets=new Set((res.owned||[]).filter(k=>!kwgRetiredPetKey(k)));
+          kwgEquippedPet=kwgRetiredPetKey(res.equippedPet)?null:(res.equippedPet||null);
           kwgRenderPets();
         }else console.warn(res?.message||'Could not load pets.');
         if(done)done(res);
