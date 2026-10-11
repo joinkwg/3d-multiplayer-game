@@ -5765,6 +5765,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const [fur,head,light,shade,cream,accent,eye]=swatches.map(c=>new THREE.Color(c));
       const white=new THREE.Color('#ffffff');
       const dark=new THREE.Color('#3b2934');
+      // V3.55.2: Surface-painted facial features. All of these masks are evaluated
+      // on the head's own vertices: no hovering muzzle, mouth, teeth or cheek props.
+      const faceInk=new THREE.Color('#29252d');
+      const socketInk=new THREE.Color('#302a32');
+      const bandageShadow=new THREE.Color('#837664');
+      const pumpkinGlow=new THREE.Color('#ffe0a0');
+      const faceOval=(x,y,cx,cy,rx,ry)=>1-smooth(.79,1.04,Math.hypot((x-cx)/rx,(y-cy)/ry));
+      const faceStroke=(x,y,x1,y1,x2,y2,width)=>{
+        const dx=x2-x1,dy=y2-y1;
+        const t=clamp(((x-x1)*dx+(y-y1)*dy)/(dx*dx+dy*dy+1e-9));
+        return 1-smooth(width*.60,width*1.40,Math.hypot(x-x1-t*dx,y-y1-t*dy));
+      };
+
       const points=[],normals=[],colors=[],skinIndices=[],skinWeights=[];
       const clamp=(v)=>Math.max(0,Math.min(1,v));
       const smooth=(a,b,x)=>{let t=clamp((x-a)/(b-a));return t*t*(3-2*t);};
@@ -5823,10 +5836,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         });
       }
       {
-        const g=new THREE.SphereGeometry(1,72,52),p=g.getAttribute('position');
+        const g=new THREE.SphereGeometry(1,96,72),p=g.getAttribute('position');
         for(let i=0;i<p.count;i++){
           const x=p.getX(i),y=p.getY(i),z=p.getZ(i);
-          const cheek=1+.085*gauss(y,-.26,.28);
+          const cheek=1+.085*gauss(y,-.26,.28)+(skeleton?.075*gauss(y,-.37,.18):0);
           const pumpkinR=pumpkin?(1+.055*Math.cos(Math.atan2(z,x)*7)):1;
           p.setXYZ(i,x*(owl?.372:alien?.375:monkey?.373:skeleton?.350:.366)*cheek*pumpkinR,
             .836+y*(owl?.338:alien?.343:.318),
@@ -5884,8 +5897,76 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             c.lerp(accent,gauss(x,.26,.065)*gauss(y,.73,.075)*smooth(.15,.28,z)*.28);
           }
           if(monkey){
-            // Small tuft on the forehead, painted into the skull.
-            c.lerp(shade,gauss(x,0,.038)*gauss(y,1.12,.06)*smooth(.17,.28,z)*.18);
+            // Broad contrasting monkey face mask, naturally following the skull.
+            const front=smooth(.12,.245,z);
+            const mask=faceOval(x,y,0,.823,.284,.221);
+            c.lerp(cream,mask*front*.98);
+            const muzzle=faceOval(x,y,0,.676,.175,.093);
+            c.lerp(light,muzzle*front*.92);
+            c.lerp(faceInk,faceOval(x,y,0,.701,.037,.025)*front);
+            c.lerp(faceInk,faceStroke(x,y,-.062,.644,0,.631,.010)*front);
+            c.lerp(faceInk,faceStroke(x,y,0,.631,.062,.644,.010)*front);
+          }
+          if(bunny){
+            const front=smooth(.12,.24,z);
+            for(const side of [-1,1])c.lerp(cream,faceOval(x,y,side*.083,.674,.107,.082)*front);
+            c.lerp(accent,faceOval(x,y,0,.694,.039,.030)*front);
+            c.lerp(faceInk,faceStroke(x,y,0,.670,0,.637,.009)*front);
+            c.lerp(faceInk,faceStroke(x,y,-.049,.636,0,.622,.009)*front);
+            c.lerp(faceInk,faceStroke(x,y,0,.622,.049,.636,.009)*front);
+          }
+          if(owl){
+            const front=smooth(.10,.22,z);
+            for(const side of [-1,1])c.lerp(cream,faceOval(x,y,side*.164,.847,.174,.208)*front*.98);
+            // Small triangular golden beak is a color marking, not a cone.
+            const beakWidth=Math.max(.003,(.754-y)*.52);
+            const beak=(1-smooth(beakWidth,beakWidth+.016,Math.abs(x)))*smooth(.670,.696,y)*(1-smooth(.763,.781,y));
+            c.lerp(accent,beak*front);
+          }
+          if(alien){
+            const front=smooth(.12,.235,z);
+            for(const side of [-1,1])c.lerp(accent,faceOval(x,y,side*.243,.707,.046,.031)*front*.58);
+            c.lerp(faceInk,faceStroke(x,y,-.072,.653,0,.636,.011)*front);
+            c.lerp(faceInk,faceStroke(x,y,0,.636,.072,.653,.011)*front);
+          }
+          if(skeleton){
+            const front=smooth(.12,.24,z);
+            // Skull's jaw and tooth row are inked into its surface.
+            const jaw=faceOval(x,y,0,.643,.217,.096);
+            c.lerp(light,jaw*front*.9);
+            const mouth=faceOval(x,y,0,.622,.172,.046);
+            c.lerp(socketInk,mouth*front);
+            for(let tooth=-3;tooth<=3;tooth++){
+              const tx=tooth*.042;
+              const enamel=faceOval(x,y,tx,.627,.017,.028);
+              c.lerp(cream,enamel*front);
+            }
+            const nose=faceOval(x,y,0,.730,.029,.039);
+            c.lerp(socketInk,nose*front);
+          }
+          if(mummy){
+            const front=smooth(.12,.24,z);
+            // Continuous fabric wraps with shaded seams, all on the head skin.
+            const stripe=Math.sin(y*54+x*15+z*6);
+            const edge=1-smooth(.12,.28,Math.abs(stripe));
+            c.lerp(bandageShadow,edge*front*.37);
+            c.lerp(cream,smooth(.36,.8,stripe)*front*.24);
+            c.lerp(faceInk,faceOval(x,y,0,.702,.030,.021)*front);
+            c.lerp(faceInk,faceStroke(x,y,-.065,.648,0,.633,.009)*front);
+            c.lerp(faceInk,faceStroke(x,y,0,.633,.065,.648,.009)*front);
+          }
+          if(zombie){
+            const front=smooth(.12,.24,z);
+            // Crooked, flat grin, one tooth and a stitched cheek scar.
+            c.lerp(faceInk,faceStroke(x,y,-.132,.641,-.036,.616,.014)*front);
+            c.lerp(faceInk,faceStroke(x,y,-.036,.616,.112,.661,.014)*front);
+            c.lerp(cream,faceOval(x,y,-.034,.621,.022,.030)*front);
+            c.lerp(shade,faceStroke(x,y,-.255,.963,-.123,.946,.012)*front);
+            for(let stitch=0;stitch<3;stitch++){
+              const xx=-.224+stitch*.041;
+              c.lerp(shade,faceStroke(x,y,xx,.969,xx+.016,.934,.009)*front);
+            }
+            c.lerp(shade,faceOval(x,y,.246,.734,.060,.072)*front*.58);
           }
           return c;
         });
@@ -5953,8 +6034,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           });
         }else if(monkey){
           // Round little monkey ears with contrasting inner surfaces.
-          ellipsoid(bone,side*.361,.846,.035,.135,.150,.085,head,38);
-          ellipsoid(bone,side*.372,.850,.107,.088,.101,.016,accent,30);
+          ellipsoid(bone,side*.361,.846,.035,.135,.150,.085,(x,y,z)=>{
+            const c=head.clone();
+            const inside=faceOval(x,y,side*.367,.850,.088,.102)*smooth(.065,.10,z);
+            return c.lerp(accent,inside*.90);
+          },38);
         }else if(owl){
           // Feather tufts, not mammalian ears.
           const g=new THREE.SphereGeometry(1,32,28),p=g.getAttribute('position');
@@ -5969,72 +6053,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           // Soft, short feelers with little colored glowing tips, skinned to ear bones.
           line(bone,[[side*.20,1.08,.01],[side*.255,1.24,.018],[side*.30,1.32,.026]],.025,fur);
           ellipsoid(bone,side*.30,1.335,.026,.068,.072,.064,accent,26);
-          ellipsoid(bone,side*.316,1.355,.078,.019,.022,.010,light,18);
         }
       }
-      // Faces have distinctive species silhouettes, without the previous
-      // balloon-like protruding eyes or separate sparkle geometry.
-      if(skeleton){
-        // A defined, squared-off tooth row under the skull, with a dark gap.
-        ellipsoid(1,0,.624,.276,.200,.075,.053,light,40);
-        ellipsoid(1,0,.620,.325,.159,.030,.009,shade,32);
-        for(let j=-3;j<=3;j++){
-          const x=j*.041;
-          ellipsoid(1,x,.622,.338,.017,.032,.008,cream,16);
-          line(1,[[x+.020,.598,.346],[x+.020,.646,.346]],.0026,shade);
-        }
-        // Hollow nasal cavity, slightly in front of the tooth row.
-        const nasal=new THREE.ConeGeometry(.031,.062,3,1);
-        nasal.rotateZ(Math.PI);nasal.translate(0,.716,.321);add(nasal,1,shade);
-      }else if(mummy){
-        // Painted bandage crossings, little nose, friendly wrapped smile.
-        ellipsoid(1,0,.675,.296,.139,.074,.052,cream,32);
-        ellipsoid(1,0,.701,.351,.028,.018,.010,shade,20);
-        line(1,[[-.075,.636,.348],[0,.619,.362],[.075,.636,.348]],.0035,shade);
-        line(1,[[-.26,.994,.21],[.18,.939,.26]],.017,cream);
-      }else if(pumpkin){
-        // The grin and triangle eyes are painted directly into the skull mesh.
-        // Keep only the little stem on top of the pumpkin.
-        ellipsoid(1,0,1.191,-.005,.070,.117,.065,accent,26);
-      }else if(zombie){
-        // A crooked mouth with an exposed tooth, stitches and a torn cheek.
-        line(1,[[-.136,.637,.295],[-.035,.610,.328],[.100,.657,.300]],.009,shade);
-        ellipsoid(1,-.039,.620,.334,.027,.035,.008,cream,18);
-        line(1,[[-.253,.981,.208],[-.126,.949,.280]],.007,shade);
-        for(let j=0;j<3;j++){
-          const xx=-.218+j*.036;
-          line(1,[[xx,.964+(j*.010),.271],[xx+.013,.936+(j*.010),.278]],.005,accent);
-        }
-        // Flat irregular forehead patch rather than a round animal muzzle.
-        ellipsoid(1,.228,.724,.249,.051,.064,.012,shade,22);
-      }else if(monkey){
-        // The pale monkey mask wraps around the eyes and little snout.
-        ellipsoid(1,0,.763,.278,.270,.215,.053,cream,48);
-        ellipsoid(1,0,.657,.316,.178,.106,.064,cream,36);
-        ellipsoid(1,0,.697,.380,.047,.032,.018,dark,24);
-        line(1,[[-.047,.637,.373],[0,.622,.383],[.047,.637,.373]],.004,dark);
-        for(const side of [-1,1])ellipsoid(1,side*.155,.659,.347,.044,.023,.009,accent,18);
-      }else if(bunny){
-        for(const side of [-1,1])ellipsoid(1,side*.077,.669,.298,.102,.083,.061,cream,34);
-        ellipsoid(1,0,.686,.364,.039,.029,.018,accent,24);
-        line(1,[[0,.668,.369],[0,.633,.359]],.0035,dark);
-        line(1,[[-.041,.628,.351],[0,.615,.361],[.041,.628,.351]],.0035,dark);
-        for(const side of [-1,1])for(let j=0;j<2;j++)
-          line(1,[[side*.139,.655-j*.025,.325],[side*.242,.668-j*.047,.272]],.0024,shade);
-      }else if(owl){
-        // Two creamy face disks, a small golden beak, tiny forehead feathers.
-        for(const side of [-1,1])ellipsoid(1,side*.162,.833,.260,.169,.203,.063,cream,44);
-        const beak=new THREE.ConeGeometry(.060,.108,5,1);beak.rotateX(Math.PI/2);
-        beak.translate(0,.695,.341);add(beak,1,accent);
-        for(const side of [-1,1])ellipsoid(1,side*.273,.677,.205,.049,.028,.010,light,18);
-      }else if(alien){
-        // Friendly cheek dots and tiny curved smile.
-        for(const side of [-1,1]){
-          ellipsoid(1,side*.244,.701,.226,.049,.027,.009,accent,20);
-          ellipsoid(1,side*.268,.755,.218,.019,.020,.008,light,16);
-        }
-        line(1,[[-.074,.658,.290],[0,.641,.312],[.074,.658,.290]],.004,dark);
-      }
+      // V3.55.2: All facial markings are painted on the head surface above.
+      // Only actual eyes remain as skinned geometry so blinking still works.
       // Two broad, low-profile glossy eyes, highlights painted as vertex colors.
       // Eyeball geometry is assigned to the SAME two eye bones as cats/dogs.
       for(const side of [-1,1]){
@@ -6043,7 +6065,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const bone=side<0?5:6;
         const x=side*.159,y=.840;
         const rx=skeleton?.079:owl?.102:alien?.117:.106,ry=skeleton?.092:owl?.119:alien?.146:.130;
-        const z=skeleton?.314:owl?.322:monkey?.331:bunny?.293:.292;
+        const z=skeleton?.279:owl?.283:monkey?.283:bunny?.278:.280;
         const g=new THREE.SphereGeometry(1,72,54),p=g.getAttribute('position');
         for(let i=0;i<p.count;i++){
           const nx=p.getX(i),ny=p.getY(i),nz=p.getZ(i);
