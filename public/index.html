@@ -5603,14 +5603,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           return col;
         });
       }
-      // Closed-eye smiles live on the HEAD behind the eyeballs. They are
-      // exposed briefly when the actual eye geometry folds shut. Unlike the
-      // old eyelid disks, these do not sit over the eyes while the pet is awake.
-      for(const side of [-1,1]){
-        const x=side*.159;
-        stroke(1,[[x-.061,.840,.331],[x-.029,.823,.337],
-          [x,.819,.339],[x+.029,.823,.337],[x+.061,.840,.331]],.0055,C.shade);
-      }
+      // No extra closed-eye arcs: these used to remain visible while the
+      // eyes were open, looking like floating fur-colored eyelid pieces.
+      // Blinking still works by flattening the actual skinned eyes.
       // V3.53: no collars, pendants, or other neck accessories.
       // Animated, curved tail: ginger kitten's question mark / puppy's wag.
       const tail=cat?[
@@ -5681,8 +5676,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(pet.doubleBlink && t>.55)closed=Math.max(closed,lid(t-.55));
         if(t>(pet.doubleBlink?.99:.43))pet.blinkAge=null;
       }
-      // Fold the actual glossy eyes shut, revealing the small smile arcs
-      // behind them. No separate flesh-colored disks obscuring the pupils.
+      // Fold the actual glossy eyes shut. No extra lid disks or smile arcs.
       const open=1-closed;
       p.leftEye.scale.y=p.rightEye.scale.y=Math.max(.012,open);
       p.leftEye.position.z=p.rightEye.position.z=.325-closed*.022;
@@ -5884,10 +5878,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const rightX=Math.cos(yaw),rightZ=-Math.sin(yaw);
       const backX=-Math.sin(yaw),backZ=-Math.cos(yaw);
       const ax=avatar.position.x,az=avatar.position.z;
+      // Only side-biased spots: the old zero-side candidates and large
+      // backward offsets made the pet appear behind the avatar instead.
+      // The small back offsets keep the pet slightly behind the shoulders,
+      // without turning a side placement into a rear placement.
       return [
-        [ .92, .12],[-.92, .12],[1.22, .16],[-1.22, .16],
-        [ .82,-.45],[-.82,-.45],[ .95, .62],[-.95, .62],
-        [1.45,.25],[-1.45,.25],[0,1.05],[0,-1.05]
+        [ .94, .05],[-.94, .05],[1.17, .02],[-1.17, .02],
+        [ .87,-.23],[-.87,-.23],[1.02, .28],[-1.02, .28],
+        [1.36,0],[-1.36,0]
       ].map(([side,back])=>({x:ax+rightX*side+backX*back,
                             z:az+rightZ*side+backZ*back}));
     }
@@ -5930,9 +5928,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const d=Math.hypot(spot.x-pet.mesh.position.x,spot.z-pet.mesh.position.z);
         if(d<bestDist){best=spot;bestDist=d;}
       }
-      // Avoid a conspicuous teleport if no nearby side spot is reachable.
-      // Catch-up's center fallback is reserved for genuine rescue teleports.
-      if(best&&bestDist<1.35){
+      // Prefer a genuinely lateral parking spot even if the pet approached
+      // from behind. Never choose a rear-only spot just because it's closer.
+      // Keep a distance cap so routine settling can't jump across the world.
+      if(best&&bestDist<1.85){
         pet.mesh.position.set(best.x,best.y+.05,best.z);
         pet.groundY=best.y;
       }
@@ -5949,9 +5948,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(!mesh)return;
       const avatar=playerId===socket.id?localPlayerAvatar:otherPlayers[playerId]?.mesh;
       if(!avatar)return;
-      const yaw=avatar.rotation.y;
-      mesh.position.set(avatar.position.x-Math.sin(yaw)*1.25+Math.cos(yaw)*.85,
-        avatar.position.y,avatar.position.z-Math.cos(yaw)*1.25-Math.sin(yaw)*.85);
+      // Spawn beside the avatar too, rather than a full step behind them.
+      // Use the same safe lateral search as rescue teleports where possible.
+      const sideSpawn=kwgPetSideSpots(avatar).map(candidate=>
+        kwgPetSafeSpot(candidate.x,candidate.z,avatar.position.y,1.05)
+      ).find(Boolean);
+      if(sideSpawn)mesh.position.set(sideSpawn.x,sideSpawn.y+.05,sideSpawn.z);
+      else{
+        const yaw=avatar.rotation.y;
+        mesh.position.set(avatar.position.x+Math.cos(yaw)*.94,
+          avatar.position.y,avatar.position.z-Math.sin(yaw)*.94);
+      }
       scene.add(mesh);
       const spawnFloor=kwgPetFloorAt(mesh.position.x,mesh.position.z,avatar.position.y+.65,8);
       const petFloor=spawnFloor===null?avatar.position.y:spawnFloor;
