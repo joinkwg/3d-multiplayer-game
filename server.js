@@ -913,6 +913,7 @@ io.on('connection', (socket) => {
         displayName:filterKWGUserText(String(w.data?.displayName||w.name)),
         likeCount:Number(w.like_count??w.likeCount??0),
         thumbnailUrl:String(w.data?.thumbnailUrl||''),
+        createdAt:w.createdAt||null,
         ownerUsername:w.owner_username||null
       });
       const topWorlds=ownedWithIds.rows.slice().sort((a,b)=>
@@ -947,7 +948,9 @@ io.on('connection', (socket) => {
             inventory:Number(inventoryCount.rows[0]?.n || 0)
           },
           showcasedWorlds,
-          likedWorlds:likedRows.rows.map(worldCard),topWorlds,friends,messages,
+          likedWorlds:likedRows.rows.map(worldCard),topWorlds,
+          createdWorlds:ownedWithIds.rows.map(w=>worldCard({...w,like_count:w.likeCount})),
+          friends,messages,
           ownedWorlds: u.id === socket.user.id ? ownedWithIds.rows.map(w => ({
             id:Number(w.id),name:w.name,displayName:filterKWGUserText(String(w.data?.displayName||w.name)),thumbnailUrl:String(w.data?.thumbnailUrl||''),createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
           })) : []
