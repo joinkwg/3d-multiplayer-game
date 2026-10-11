@@ -2399,6 +2399,36 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       border:2px solid #a2d5ed;border-radius:0;background:#264861;color:#fff;cursor:pointer;box-shadow:3px 3px 0 #07111e}
     #kwg-block-join-yes{background:#26734e!important;border-color:#a6eab6!important}
     #kwg-block-join-actions button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+    /* KWG V3.48 — all browser alerts/confirms/prompts use one in-game pixel dialog */
+    #kwg-ui-dialog-overlay{position:fixed;inset:0;z-index:45000;display:none;
+      align-items:center;justify-content:center;padding:18px;box-sizing:border-box;
+      background:rgba(3,9,19,.88);font-family:'Pixelify Sans',monospace}
+    #kwg-ui-dialog-overlay.kwg-open{display:flex}
+    #kwg-ui-dialog{width:min(490px,100%);max-height:min(86vh,740px);overflow-y:auto;
+      background:#152539;border:3px solid #83b9dc;box-shadow:8px 8px 0 #050c17;
+      padding:22px 23px;box-sizing:border-box;color:#eaf6ff}
+    #kwg-ui-dialog-kicker{font-size:10px;font-weight:900;letter-spacing:.14em;
+      color:#83c9e8;margin-bottom:10px}
+    #kwg-ui-dialog-title{font-size:19px;line-height:1.35;letter-spacing:.06em;
+      color:#f7d783;margin:0 0 12px;overflow-wrap:anywhere}
+    #kwg-ui-dialog-message{font-size:14px;line-height:1.65;white-space:pre-wrap;
+      overflow-wrap:anywhere;margin:0 0 19px}
+    #kwg-ui-dialog-input{display:none;width:100%;height:43px;box-sizing:border-box;
+      padding:8px 10px;background:#0c192a;border:2px solid #6597b5;
+      color:#fff;font:700 14px 'Pixelify Sans',monospace;border-radius:0;
+      margin:0 0 19px;box-shadow:inset 3px 3px 0 #08111d}
+    #kwg-ui-dialog-input.kwg-visible{display:block}
+    #kwg-ui-dialog-actions{display:flex;justify-content:flex-end;gap:11px;flex-wrap:wrap}
+    #kwg-ui-dialog-actions button{min-width:105px;padding:11px 14px;
+      background:#294961;border:2px solid #96c4de;border-radius:0;color:#f5fbff;
+      font:900 12px 'Pixelify Sans',monospace;cursor:pointer;
+      box-shadow:3px 3px 0 #08121e}
+    #kwg-ui-dialog-actions button.kwg-primary{background:#266e55;border-color:#9de6bd}
+    #kwg-ui-dialog-actions button.kwg-danger{background:#8c3c49;border-color:#f2a0a7}
+    #kwg-ui-dialog-actions button:hover{filter:brightness(1.15)}
+    #kwg-ui-dialog-actions button:focus-visible,#kwg-ui-dialog-input:focus-visible{
+      outline:2px solid #fff;outline-offset:3px}
+    @media(max-width:480px){#kwg-ui-dialog{padding:18px 15px;box-shadow:5px 5px 0 #050c17}}
 </style>
 </head>
 <body>
@@ -2417,6 +2447,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   </div>
 
 
+  <!-- V3.48: shared pixel-styled message, confirmation and text-entry dialog. -->
+  <div id="kwg-ui-dialog-overlay" role="presentation" aria-hidden="true">
+    <div id="kwg-ui-dialog" role="dialog" aria-modal="true" aria-labelledby="kwg-ui-dialog-title" aria-describedby="kwg-ui-dialog-message" tabindex="-1">
+      <div id="kwg-ui-dialog-kicker">KWG / NOTICE</div>
+      <h2 id="kwg-ui-dialog-title">NOTICE</h2>
+      <p id="kwg-ui-dialog-message"></p>
+      <input id="kwg-ui-dialog-input" type="text" maxlength="100" autocomplete="off" aria-label="Enter text">
+      <div id="kwg-ui-dialog-actions">
+        <button type="button" id="kwg-ui-dialog-cancel">CANCEL</button>
+        <button type="button" id="kwg-ui-dialog-ok" class="kwg-primary">OK</button>
+      </div>
+    </div>
+  </div>
   <!-- Persistent retro sound controls (available on login, home, and in worlds). -->
   <div id="kwg-audio-dock">
     <div id="kwg-audio-menu" role="group" aria-label="Sound settings" hidden>
@@ -2846,6 +2889,90 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   <script>
     // --- SOCKET.IO BACKEND CONNECTION ---
     const socket = (typeof io !== 'undefined') ? io() : null;
+
+    // V3.48 — a single accessible pixel-arcade replacement for native browser dialogs.
+    // Never use window.alert/confirm/prompt: they interrupt multiplayer rendering and
+    // look inconsistent with the game. Queue dialogs so no server notice is lost.
+    const kwgDialogOverlay=document.getElementById('kwg-ui-dialog-overlay');
+    const kwgDialogTitle=document.getElementById('kwg-ui-dialog-title');
+    const kwgDialogMessage=document.getElementById('kwg-ui-dialog-message');
+    const kwgDialogKicker=document.getElementById('kwg-ui-dialog-kicker');
+    const kwgDialogInput=document.getElementById('kwg-ui-dialog-input');
+    const kwgDialogCancel=document.getElementById('kwg-ui-dialog-cancel');
+    const kwgDialogOK=document.getElementById('kwg-ui-dialog-ok');
+    const kwgDialogQueue=[];
+    let kwgActiveDialog=null;
+    function kwgRunNextDialog(){
+      if(kwgActiveDialog||!kwgDialogQueue.length)return;
+      const next=kwgDialogQueue.shift();
+      const {options,resolve}=next;
+      const type=options.type||'alert';
+      const previousFocus=document.activeElement;
+      kwgActiveDialog={type,resolve,previousFocus};
+      kwgDialogKicker.textContent='KWG / '+(type==='confirm'?'CONFIRM':type==='prompt'?'INPUT':'NOTICE');
+      kwgDialogTitle.textContent=options.title||(type==='confirm'?'ARE YOU SURE?':type==='prompt'?'ENTER TEXT':'NOTICE');
+      kwgDialogMessage.textContent=String(options.message||'');
+      kwgDialogInput.classList.toggle('kwg-visible',type==='prompt');
+      kwgDialogInput.value=type==='prompt'?String(options.defaultValue||''):'';
+      kwgDialogInput.maxLength=options.maxLength||100;
+      kwgDialogCancel.style.display=type==='alert'?'none':'';
+      kwgDialogOK.textContent=options.okLabel||(type==='confirm'?'CONFIRM':type==='prompt'?'SAVE':'OK');
+      kwgDialogCancel.textContent=options.cancelLabel||'CANCEL';
+      kwgDialogOK.classList.toggle('kwg-danger',!!options.danger);
+      kwgDialogOK.classList.toggle('kwg-primary',!options.danger);
+      kwgDialogOverlay.classList.add('kwg-open');
+      kwgDialogOverlay.setAttribute('aria-hidden','false');
+      (type==='prompt'?kwgDialogInput:options.danger?kwgDialogCancel:kwgDialogOK).focus();
+      if(type==='prompt')kwgDialogInput.select();
+    }
+    function kwgFinishDialog(accepted){
+      const current=kwgActiveDialog;
+      if(!current)return;
+      const result=current.type==='prompt'?(accepted?kwgDialogInput.value:null)
+        :current.type==='confirm'?!!accepted:undefined;
+      kwgActiveDialog=null;
+      kwgDialogOverlay.classList.remove('kwg-open');
+      kwgDialogOverlay.setAttribute('aria-hidden','true');
+      kwgDialogOK.classList.remove('kwg-danger');
+      if(current.previousFocus?.isConnected)current.previousFocus.focus({preventScroll:true});
+      current.resolve(result);
+      // Wait a microtask before showing the next queued dialog.
+      queueMicrotask(kwgRunNextDialog);
+    }
+    kwgDialogOK.addEventListener('click',()=>kwgFinishDialog(true));
+    kwgDialogCancel.addEventListener('click',()=>kwgFinishDialog(false));
+    window.addEventListener('keydown',e=>{
+      if(!kwgActiveDialog)return;
+      if(e.key==='Escape'){
+        e.preventDefault();e.stopImmediatePropagation();kwgFinishDialog(false);return;
+      }
+      if(e.key==='Enter'){
+        e.preventDefault();e.stopImmediatePropagation();kwgFinishDialog(true);return;
+      }
+      if(e.key==='Tab'){
+        const focusable=kwgActiveDialog.type==='prompt'
+          ?[kwgDialogInput,kwgDialogCancel,kwgDialogOK]
+          :kwgActiveDialog.type==='confirm'?[kwgDialogCancel,kwgDialogOK]:[kwgDialogOK];
+        const current=focusable.indexOf(document.activeElement);
+        const index=e.shiftKey?(current<=0?focusable.length-1:current-1)
+          :(current<0||current===focusable.length-1?0:current+1);
+        e.preventDefault();e.stopImmediatePropagation();focusable[index].focus();return;
+      }
+      // Don't let movement, building shortcuts or chat controls fire behind a dialog.
+      e.stopImmediatePropagation();
+    },true);
+    function kwgShowDialog(options){
+      return new Promise(resolve=>{kwgDialogQueue.push({options,resolve});kwgRunNextDialog();});
+    }
+    function kwgAlert(message,options={}){
+      return kwgShowDialog({...options,type:'alert',message});
+    }
+    function kwgConfirm(message,options={}){
+      return kwgShowDialog({...options,type:'confirm',message});
+    }
+    function kwgPrompt(message,defaultValue='',options={}){
+      return kwgShowDialog({...options,type:'prompt',message,defaultValue});
+    }
 
     // V3.34 — Shared loading dialog. Only real completed save requests receive
     // numeric percentages; other requests use an indeterminate animated bar.
@@ -3557,7 +3684,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const actions=card.lastElementChild;
         const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE';
         del.title='Delete your world permanently';
-        del.onclick=()=>{ if(confirm(`Permanently delete your world "${w.name}"? This cannot be undone.`)) socket.emit('delete_own_world',{worldName:w.name},res=>{ if(res?.success){renderRoomList();renderHomeOverview();} else alert(res?.message||'Could not delete world.'); }); };
+        del.onclick=async()=>{
+          if(!await kwgConfirm(`Permanently delete your world "${w.name}"? This cannot be undone.`,
+            {title:'DELETE WORLD?',okLabel:'DELETE',danger:true}))return;
+          socket.emit('delete_own_world',{worldName:w.name},res=>{
+            if(res?.success){renderRoomList();renderHomeOverview();}
+            else kwgAlert(res?.message||'Could not delete world.',{title:'DELETE FAILED'});
+          });
+        };
         actions.insertBefore(del, actions.querySelector('.join-btn'));
       }
       return card;
@@ -3929,7 +4063,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           worldIdleTimer = null;
           performLeaveWorld();
           setTimeout(() => {
-            alert('You were disconnected from the world because you were idle for 10 minutes.');
+            kwgAlert('You were disconnected from the world because you were idle for 10 minutes.',
+              {title:'DISCONNECTED'});
           }, 50);
         }
       }, 5000);
@@ -3986,8 +4121,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(worldCommitInProgress)return;
       if(isEditMode){if(!(await commitStagedWorldEdits()))return;}
       if (pendingWorldSaves > 0) {
-        const leaveAnyway = confirm(
-          `There ${pendingWorldSaves === 1 ? 'is' : 'are'} still ${pendingWorldSaves} unsaved ${pendingWorldSaves === 1 ? 'change' : 'changes'} being saved.\n\nThe server has not finished saving them yet. Leaving now could lose those changes. Are you sure you want to leave?`
+        const leaveAnyway = await kwgConfirm(
+          `There ${pendingWorldSaves === 1 ? 'is' : 'are'} still ${pendingWorldSaves} unsaved ${pendingWorldSaves === 1 ? 'change' : 'changes'} being saved.\n\nThe server has not finished saving them yet. Leaving now could lose those changes. Are you sure you want to leave?`,
+          {title:'UNSAVED CHANGES',okLabel:'LEAVE ANYWAY',danger:true}
         );
         if (!leaveAnyway) return;
       }
@@ -4084,7 +4220,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return raw.split('').map((ch,i)=>masked.has(i)?'*':ch).join('');
     }
     
-    const KWG_HIDDEN_MESSAGE='This message has been hidden because your or the user are blocked.';
+    const KWG_HIDDEN_MESSAGE='This message has been hidden because you or the user are blocked.';
     // --- PER-WORLD CHAT ---
     function escapeChatText(value) {
       const div = document.createElement('div');
@@ -4156,15 +4292,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     });
 
-    socket.on('account_deleted', () => {
+    socket.on('account_deleted', async () => {
       localStorage.removeItem('kwg_session_token');
-      alert('Your account was permanently deleted by an administrator.');
+      await kwgAlert('Your account was permanently deleted by an administrator.',{title:'ACCOUNT DELETED'});
       window.location.reload();
     });
 
-    socket.on('admin_kicked', () => {
+    socket.on('admin_kicked', async () => {
       localStorage.removeItem('kwg_session_token');
-      alert('You were kicked from the game by an administrator.');
+      await kwgAlert('You were kicked from the game by an administrator.',{title:'DISCONNECTED'});
       window.location.reload();
     });
 
@@ -4174,10 +4310,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       showToast('World chat was cleared by an administrator.');
     });
 
-    socket.on('world_deleted', ({worldName}) => {
+    socket.on('world_deleted', async ({worldName}) => {
       if (worldName !== currentWorldName) return;
-      alert('This world was permanently deleted by an administrator.');
-      document.getElementById('leave-world-btn').click();
+      // Leave immediately; the deleted world must not remain playable while dialog is open.
+      performLeaveWorld();
+      await kwgAlert('This world was permanently deleted by an administrator.',{title:'WORLD DELETED'});
     });
 
     // --- ADMIN MANAGEMENT ---
@@ -4212,8 +4349,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         meta.textContent = `${u.isAdmin ? 'ADMIN' : 'USER'} • ${u.online ? 'ONLINE' : 'OFFLINE'} • 🪙 ${u.coins ?? 0}`; info.appendChild(meta); row.appendChild(info);
         const actions = document.createElement('div'); actions.className = 'admin-actions';
         if (!u.isAdmin) {
-          if (u.online) { const kick=document.createElement('button'); kick.className='admin-action warn'; kick.textContent='KICK'; kick.onclick=()=>{if(confirm(`Kick "${u.username}" from the game?`)) adminRequest('admin_kick_user',{username:u.username},`${u.username} was kicked.`)}; actions.appendChild(kick); }
-          const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE ACCOUNT'; del.onclick=()=>{if(confirm(`Permanently delete account "${u.username}"? This cannot be undone.`)) adminRequest('admin_delete_user',{username:u.username},`${u.username} was permanently deleted.`)}; actions.appendChild(del);
+          if (u.online) { const kick=document.createElement('button'); kick.className='admin-action warn'; kick.textContent='KICK'; kick.onclick=async()=>{if(await kwgConfirm(`Kick "${u.username}" from the game?`,{title:'KICK PLAYER?',okLabel:'KICK',danger:true})) adminRequest('admin_kick_user',{username:u.username},`${u.username} was kicked.`)}; actions.appendChild(kick); }
+          const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE ACCOUNT'; del.onclick=async()=>{if(await kwgConfirm(`Permanently delete account "${u.username}"? This cannot be undone.`,{title:'DELETE ACCOUNT?',okLabel:'DELETE',danger:true})) adminRequest('admin_delete_user',{username:u.username},`${u.username} was permanently deleted.`)}; actions.appendChild(del);
         }
         row.appendChild(actions); users.appendChild(row);
       });
@@ -4226,9 +4363,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const row=document.createElement('div'); row.className='admin-row'; const info=document.createElement('span'); const name=document.createElement('b'); name.textContent=w.name; info.appendChild(name);
         const meta=document.createElement('small'); meta.style.cssText='color:#aaa;margin-left:7px;'; meta.textContent=`owner: ${w.ownerUsername || 'unknown'} • ${w.onlineCount || 0} online • ${w.chatCount || 0} messages`; info.appendChild(meta); row.appendChild(info);
         const actions=document.createElement('div'); actions.className='admin-actions';
-        const clear=document.createElement('button'); clear.className='admin-action warn'; clear.textContent='CLEAR CHAT'; clear.onclick=()=>{if(confirm(`Permanently clear all chat messages in "${w.name}"?`)) adminRequest('admin_clear_world_chat',{worldName:w.name},`Chat cleared for ${w.name}.`)}; actions.appendChild(clear);
-        const templ=document.createElement('button'); templ.className='admin-action'; templ.textContent='MAKE TEMPLATE'; templ.onclick=()=>{const templateName=prompt('Template name:',w.name); if(templateName) adminRequest('admin_make_world_template',{worldName:w.name,templateName},`${w.name} is now available as the "${templateName}" template.`)}; actions.appendChild(templ);
-        const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE WORLD'; del.onclick=()=>{if(confirm(`Permanently delete world "${w.name}"? This cannot be undone.`)) adminRequest('admin_delete_world',{worldName:w.name},`${w.name} was permanently deleted.`)}; actions.appendChild(del);
+        const clear=document.createElement('button'); clear.className='admin-action warn'; clear.textContent='CLEAR CHAT'; clear.onclick=async()=>{if(await kwgConfirm(`Permanently clear all chat messages in "${w.name}"?`,{title:'CLEAR CHAT?',okLabel:'CLEAR CHAT',danger:true})) adminRequest('admin_clear_world_chat',{worldName:w.name},`Chat cleared for ${w.name}.`)}; actions.appendChild(clear);
+        const templ=document.createElement('button'); templ.className='admin-action'; templ.textContent='MAKE TEMPLATE'; templ.onclick=async()=>{const templateName=await kwgPrompt('Template name:',w.name,{title:'MAKE TEMPLATE',okLabel:'CREATE'}); if(templateName?.trim()) adminRequest('admin_make_world_template',{worldName:w.name,templateName:templateName.trim()},`${w.name} is now available as the "${templateName.trim()}" template.`)}; actions.appendChild(templ);
+        const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE WORLD'; del.onclick=async()=>{if(await kwgConfirm(`Permanently delete world "${w.name}"? This cannot be undone.`,{title:'DELETE WORLD?',okLabel:'DELETE',danger:true})) adminRequest('admin_delete_world',{worldName:w.name},`${w.name} was permanently deleted.`)}; actions.appendChild(del);
         row.appendChild(actions); worlds.appendChild(row);
       });
     }
@@ -6572,7 +6709,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
         if (buildSubTool === 'place') {
           if (Object.keys(currentWorldData.blocks).length >= 1400) {
-            alert("Part limit reached (1400/1400 parts).");
+            kwgAlert('Part limit reached (1400/1400 parts).',{title:'PART LIMIT REACHED'});
             return;
           }
 
@@ -6968,8 +7105,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(profile.blockedByMe){
           addAction('UNBLOCK PLAYER',()=>kwgBlockProfileAction('unblock_player',profile.username));
         }else{
-          addAction('BLOCK PLAYER',()=>{
-            if(confirm('Block '+profile.username+'? Both players will see hidden usernames and messages. Any friendship will be removed.'))
+          addAction('BLOCK PLAYER',async()=>{
+            if(await kwgConfirm('Block '+profile.username+'? Both players will see hidden usernames and messages. Any friendship will be removed.',
+              {title:'BLOCK PLAYER?',okLabel:'BLOCK PLAYER',danger:true}))
               kwgBlockProfileAction('block_player',profile.username);
           },true);
         }
