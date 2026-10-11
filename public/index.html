@@ -2277,6 +2277,58 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         grid-template-columns:minmax(0,1fr)!important;
       }
     }
+
+    /* KWG V3.45.5: Equal-height world/friend panels with independent list scrolling.
+       Keep the headings and sort controls visible while lists scroll. */
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel {
+      height: 460px !important;
+      min-height: 0 !important;
+      max-height: 460px !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+      align-self: start;
+    }
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel > .kwg-profile-created-header {
+      flex: 0 0 auto !important;
+      min-height: 58px;
+      align-content: start;
+    }
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel > .profile-showcase-worlds,
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel > .kwg-profile-friends-list {
+      flex: 1 1 auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      height: auto !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain;
+      align-content: start !important;
+      grid-auto-rows: max-content;
+      padding-right: 5px;
+      scrollbar-width: thin;
+      scrollbar-color: #587b98 #0e1b2a;
+    }
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel > .profile-showcase-worlds::-webkit-scrollbar,
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel > .kwg-profile-friends-list::-webkit-scrollbar {
+      width: 9px;
+    }
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel > .profile-showcase-worlds::-webkit-scrollbar-track,
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel > .kwg-profile-friends-list::-webkit-scrollbar-track {
+      background: #0e1b2a;
+    }
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel > .profile-showcase-worlds::-webkit-scrollbar-thumb,
+    .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel > .kwg-profile-friends-list::-webkit-scrollbar-thumb {
+      background: #587b98;
+      border: 2px solid #0e1b2a;
+    }
+    @media (max-width: 680px) {
+      .kwg-profile-v345 .kwg-profile-world-grid > .profile-panel {
+        height: 410px !important;
+        max-height: 410px !important;
+      }
+    }
 </style>
 </head>
 <body>
