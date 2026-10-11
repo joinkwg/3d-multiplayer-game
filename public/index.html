@@ -5566,22 +5566,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           oval(1,side*(.095+j*.024),.671-j*.031,.395-j*.014,.006,.006,.004,C.shade,12);
         }
       }
-      // Rosy cheeks and eyebrows (restrained, with no pasted-on giant circles).
+      // Subtle rosy cheeks; no eyebrows on either pet.
       for(const side of [-1,1]){
         oval(1,side*.278,.705,.237,.057,.026,.012,C.pink,20);
-        const browY=cat?.986:.981;
-        stroke(1,[[side*.102,browY,.284],[side*.169,browY+.013,.285],[side*.219,browY,.259]],.006,C.shade);
       }
-      // Eye whites, irises, pupils and TWO specular glints. Each entire eye
+      // Big, nearly all-pupil eyes with just a fine soft rim and TWO glints. Each entire eye
       // is skinned to an eye bone, allowing clean occasional blinks.
       for(const side of [-1,1]){
         const bone=side<0?5:6;
         const x=side*.159,y=.844;
-        oval(bone,x,y,.289,.095,.119,.043,C.cream,32);
-        oval(bone,x,y-.006,.326,.079,.102,.027,iris,30);
-        oval(bone,x,y-.006,.344,.068,.090,.024,C.eye,28);
-        oval(bone,x-.026,y+.043,.368,.024,.029,.009,white,20);
-        oval(bone,x+.029,y-.035,.369,.012,.014,.005,new THREE.Color('#c5e9ff'),14);
+        oval(bone,x,y,.289,.100,.124,.043,C.cream,32);
+        oval(bone,x,y-.004,.326,.095,.117,.028,iris,30);
+        oval(bone,x,y-.004,.346,.089,.111,.025,C.eye,32);
+        oval(bone,x-.029,y+.047,.371,.024,.029,.009,white,20);
+        oval(bone,x+.033,y-.037,.371,.012,.014,.005,new THREE.Color('#c5e9ff'),14);
       }
       // Closed-eye smiles live on the HEAD behind the eyeballs. They are
       // exposed briefly when the actual eye geometry folds shut. Unlike the
