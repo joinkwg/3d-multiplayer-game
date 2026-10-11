@@ -5857,55 +5857,89 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       pet.groundY=nextFloor;
       return permitted;
     }
-    // V3.53.3: Catch-up is a last resort, not a replacement for grounded
-    // collision-aware walking. Test several nearby locations so the pet does
-    // not reappear inside a wall or over a void when the owner is on a ledge.
+    // V3.53.4: Always try safe SIDE landings before considering the space
+    // occupied by the owner. All candidates need real ground and clearance.
+    function kwgPetSafeSpot(x,z,ownerY,maxHeightGap=.9){
+      const floor=kwgPetFloorAt(x,z,ownerY+1.15,8);
+      if(floor===null||Math.abs(floor-ownerY)>maxHeightGap)return null;
+      // Check the entire landing footprint, not only its center. This prevents
+      // a pet being placed partly off a one-block floating platform.
+      for(const [ox,oz] of [[.19,0],[-.19,0],[0,.19],[0,-.19]]){
+        const edgeFloor=kwgPetFloorAt(x+ox,z+oz,floor+.22,.5);
+        if(edgeFloor===null||Math.abs(edgeFloor-floor)>.27)return null;
+      }
+      for(const b of kwgPetNearbyBlocks(x,z,.55)){
+        const bounds=getBlockAABB(b);
+        if(bounds.maxY<=floor+.14||bounds.minY>=floor+1.02)continue;
+        if(x>bounds.minX-KWG_PET_RADIUS&&x<bounds.maxX+KWG_PET_RADIUS&&
+           z>bounds.minZ-KWG_PET_RADIUS&&z<bounds.maxZ+KWG_PET_RADIUS)
+          return null;
+      }
+      return {x,z,y:floor};
+    }
+    function kwgPetSideSpots(avatar){
+      // Yaw is sampled only when finding a spot. Turning in place never
+      // moves a settled pet or continuously recalculates its location.
+      const yaw=avatar.rotation.y;
+      const rightX=Math.cos(yaw),rightZ=-Math.sin(yaw);
+      const backX=-Math.sin(yaw),backZ=-Math.cos(yaw);
+      const ax=avatar.position.x,az=avatar.position.z;
+      return [
+        [ .92, .12],[-.92, .12],[1.22, .16],[-1.22, .16],
+        [ .82,-.45],[-.82,-.45],[ .95, .62],[-.95, .62],
+        [1.45,.25],[-1.45,.25],[0,1.05],[0,-1.05]
+      ].map(([side,back])=>({x:ax+rightX*side+backX*back,
+                            z:az+rightZ*side+backZ*back}));
+    }
     function kwgPetCatchupSpot(avatar,pet){
       const ax=avatar.position.x,az=avatar.position.z;
-      const dx=ax-pet.mesh.position.x,dz=az-pet.mesh.position.z;
-      const len=Math.hypot(dx,dz);
-      const ux=len>.01?dx/len:0,uz=len>.01?dz/len:1;
-      const sx=-uz,sz=ux;
-      const offsets=[
-        [-.95,.7],[-.95,-.7],[-1.35,0],[-.65,0],
-        [0,1.05],[0,-1.05],[1.1,.7],[1.1,-.7],
-        [-1.8,1],[-1.8,-1],[1.8,0],[0,0]
-      ];
       let best=null,bestScore=Infinity;
-      for(const [back,side] of offsets){
-        const x=ax+ux*back+sx*side,z=az+uz*back+sz*side;
-        const floor=kwgPetFloorAt(x,z,avatar.position.y+1.25,8);
-        if(floor===null)continue;
-        // Prefer a surface near the owner's feet, not the bottom of a pit.
-        const heightGap=Math.abs(floor-avatar.position.y);
-        if(heightGap>2.2)continue;
-        let blocked=false;
-        for(const b of kwgPetNearbyBlocks(x,z,.55)){
-          const bounds=getBlockAABB(b);
-          if(bounds.maxY<=floor+.14||bounds.minY>=floor+1.02)continue;
-          // Conservative horizontal body clearance; also prevents teleporting
-          // into the side of a rotated or unusually stretched part.
-          if(x>bounds.minX-KWG_PET_RADIUS&&x<bounds.maxX+KWG_PET_RADIUS&&
-             z>bounds.minZ-KWG_PET_RADIUS&&z<bounds.maxZ+KWG_PET_RADIUS){
-            blocked=true;break;
-          }
-        }
-        if(blocked)continue;
-        const score=heightGap*2.5+Math.hypot(back,side)*.15;
-        if(score<bestScore){bestScore=score;best={x,z,y:floor};}
+      for(const candidate of kwgPetSideSpots(avatar)){
+        const spot=kwgPetSafeSpot(candidate.x,candidate.z,avatar.position.y,1.05);
+        if(!spot)continue;
+        // Prefer nearby, level side spots; do not favor the avatar's center.
+        const score=Math.abs(spot.y-avatar.position.y)*3+
+          Math.hypot(spot.x-ax,spot.z-az)*.14+
+          Math.hypot(spot.x-pet.mesh.position.x,spot.z-pet.mesh.position.z)*.035;
+        if(score<bestScore){best=spot;bestScore=score;}
       }
-      return best;
+      if(best)return best;
+      // A single floating block may have no room beside the player. Only
+      // then fall back to their position, and only if it is a safe surface.
+      return kwgPetSafeSpot(ax,az,avatar.position.y,1.05);
     }
     function kwgPetCatchup(pet,avatar){
       const spot=kwgPetCatchupSpot(avatar,pet);
-      if(!spot)return false; // Never force a teleport into unsafe geometry.
+      if(!spot)return false;
       pet.mesh.position.set(spot.x,spot.y+.05,spot.z);
       pet.groundY=spot.y;
       pet.followX=spot.x;pet.followZ=spot.z;
       pet.lastOwnerX=avatar.position.x;pet.lastOwnerZ=avatar.position.z;
       pet.stuckFor=0;pet.catchupCooldown=2.5;
-      pet.motionBlend=0;pet.settleTimer=0;
+      pet.motionBlend=0;pet.settleTimer=0;pet.followActive=false;
       return true;
+    }
+    // When the companion finishes catching up, settle at a nearby safe side
+    // spot and immediately switch to its grounded idle animation. The pet
+    // does not keep performing tiny hops while parked beside its owner.
+    function kwgPetSettleBeside(pet,avatar){
+      let best=null,bestDist=Infinity;
+      for(const candidate of kwgPetSideSpots(avatar)){
+        const spot=kwgPetSafeSpot(candidate.x,candidate.z,avatar.position.y,.65);
+        if(!spot)continue;
+        const d=Math.hypot(spot.x-pet.mesh.position.x,spot.z-pet.mesh.position.z);
+        if(d<bestDist){best=spot;bestDist=d;}
+      }
+      // Avoid a conspicuous teleport if no nearby side spot is reachable.
+      // Catch-up's center fallback is reserved for genuine rescue teleports.
+      if(best&&bestDist<1.35){
+        pet.mesh.position.set(best.x,best.y+.05,best.z);
+        pet.groundY=best.y;
+      }
+      pet.followX=pet.mesh.position.x;pet.followZ=pet.mesh.position.z;
+      pet.followActive=false;
+      pet.settleTimer=0;pet.motionBlend=0;
+      pet.mesh.position.y=pet.groundY+.05;
     }
     function kwgSetWorldPet(playerId,petKey){
       const old=kwgWorldPets.get(playerId);
@@ -5929,7 +5963,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         blinkCountdown:.9+Math.random()*1.8,blinkAge:null,doubleBlink:false,motionBlend:0,
         hopClock:0,settleTimer:0,groundY:petFloor,tailPhase:Math.random()*Math.PI*2,
         trickCountdown:2.5+Math.random()*3,trickAge:-1,trickType:0,
-        stuckFor:0,catchupCooldown:0});
+        stuckFor:0,catchupCooldown:0,followActive:false});
     }
     function kwgClearWorldPets(){
       for(const pet of kwgWorldPets.values())scene.remove(pet.mesh);
@@ -5960,42 +5994,54 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           pet.lastOwnerX=avatar.position.x;
           pet.lastOwnerZ=avatar.position.z;
         }
+        const ownerDistance=Math.hypot(avatar.position.x-pet.mesh.position.x,
+          avatar.position.z-pet.mesh.position.z);
+        // Hysteresis: park at close range, and resume following only after
+        // the owner has actually walked out of range. Avoids rapid mode flips.
+        if(!pet.followActive&&ownerDistance>2.55&&moved>.015)
+          pet.followActive=true;
         const dx=pet.followX-pet.mesh.position.x;
         const dz=pet.followZ-pet.mesh.position.z;
         const distance=Math.hypot(dx,dz);
-        let travel=0;
-        if(distance>14){
-          // Use the same safe landing search as stuck recovery.
-          if(pet.catchupCooldown===0)kwgPetCatchup(pet,avatar);
-        }else if(distance>.01){
-          const step=distance*Math.min(1,dt*(distance>2?6:3.7));
-          travel=kwgPetMoveGrounded(pet,dx/distance*step,dz/distance*step);
+        let travel=0,justSettled=false;
+        if(pet.followActive){
+          if(distance>14){
+            if(pet.catchupCooldown===0)kwgPetCatchup(pet,avatar);
+          }else if(distance>.01){
+            const step=distance*Math.min(1,dt*(distance>2?6:3.7));
+            travel=kwgPetMoveGrounded(pet,dx/distance*step,dz/distance*step);
+          }
         }
-        // If the owner reaches an upper platform, the pet can get stranded
-        // below even while its horizontal distance looks small. Wait briefly
-        // before rescuing it, so normal owner jumps do not trigger catch-up.
+        // Detect a pet stranded below an elevated platform even if the
+        // horizontal distance is small. Jumping in place remains harmless.
         const ownerGap=Math.abs(avatar.position.y-pet.groundY);
-        const stillBehind=distance>1.85;
+        const stillBehind=pet.followActive&&distance>1.85;
         const stranded=ownerGap>2.25;
-        const noProgress=travel<.008;
-        if((stillBehind&&noProgress)||stranded){
+        if((stillBehind&&travel<.008)||stranded){
           pet.stuckFor=(pet.stuckFor||0)+dt;
         }else{
           pet.stuckFor=Math.max(0,(pet.stuckFor||0)-dt*2);
         }
-        const farBehind=Math.hypot(avatar.position.x-pet.mesh.position.x,
-          avatar.position.z-pet.mesh.position.z)>9;
-        if(pet.catchupCooldown===0 &&
+        const farBehind=ownerDistance>9;
+        if(pet.catchupCooldown===0&&
            (farBehind||pet.stuckFor>(stranded?1.35:2.0))){
-          if(kwgPetCatchup(pet,avatar))travel=0;
+          if(kwgPetCatchup(pet,avatar)){travel=0;justSettled=true;}
         }
-        // Only ACTUAL pet travel causes hopping. A jumping owner or a pet
-        // waiting at a wall does not trigger a phantom airborne hop.
-        if(travel>.0025)pet.settleTimer=.13;
-        else pet.settleTimer=Math.max(0,pet.settleTimer-dt);
-        const moving=pet.settleTimer>0;
-        pet.motionBlend+=(Number(moving)-pet.motionBlend)*Math.min(1,dt*(moving?5.5:4));
-        // Smoothly fade jump height at the end of a hop; no vertical snapping.
+        const closeEnough=Math.hypot(avatar.position.x-pet.mesh.position.x,
+          avatar.position.z-pet.mesh.position.z)<1.78;
+        if(pet.followActive&&closeEnough&&
+           Math.abs(avatar.position.y-pet.groundY)<.9){
+          kwgPetSettleBeside(pet,avatar);
+          travel=0;justSettled=true;
+        }
+        if(!justSettled){
+          if(pet.followActive&&travel>.0025)pet.settleTimer=.13;
+          else pet.settleTimer=Math.max(0,pet.settleTimer-dt);
+          const moving=pet.followActive&&pet.settleTimer>0;
+          pet.motionBlend+=(Number(moving)-pet.motionBlend)*Math.min(1,dt*(moving?5.5:4));
+        }
+        // The grounded idle starts immediately when parked, without an
+        // awkward final mini-hop from the old following animation.
         pet.hopClock+=dt*2.35;
         const hop=Math.pow(Math.max(0,Math.sin(pet.hopClock*Math.PI*2)),.85);
         const targetY=pet.groundY+.05+hop*.44*pet.motionBlend;
