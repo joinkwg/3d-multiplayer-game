@@ -461,7 +461,7 @@ async function migrate() {
       name VARCHAR(40) NOT NULL,
       price INTEGER NOT NULL CHECK (price >= 0),
       asset_url TEXT NOT NULL,
-      asset_kind VARCHAR(16) NOT NULL CHECK (asset_kind IN ('image','glb')),
+      asset_kind VARCHAR(16) NOT NULL CHECK (asset_kind IN ('image','glb','avatar_glb','procedural')),
       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
       is_visible BOOLEAN NOT NULL DEFAULT TRUE,
       created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
@@ -472,7 +472,7 @@ async function migrate() {
     ALTER TABLE store_items DROP CONSTRAINT IF EXISTS store_items_category_check;
     ALTER TABLE store_items ADD CONSTRAINT store_items_category_check CHECK (category IN ('eyes','mouth','torso_decal','hat','head_shape','hair','hats','heads','eyes','mouth','skin','tops','bottoms','shoes','flightsuits'));
     ALTER TABLE store_items DROP CONSTRAINT IF EXISTS store_items_asset_kind_check;
-    ALTER TABLE store_items ADD CONSTRAINT store_items_asset_kind_check CHECK (asset_kind IN ('image','glb','procedural'));
+    ALTER TABLE store_items ADD CONSTRAINT store_items_asset_kind_check CHECK (asset_kind IN ('image','glb','avatar_glb','procedural'));
     CREATE UNIQUE INDEX IF NOT EXISTS store_items_procedural_key ON store_items(asset_url) WHERE asset_kind='procedural';
 INSERT INTO store_items(category,name,price,asset_url,asset_kind,metadata) VALUES
 ('hair','Bald',45,'procedural:hair-0-0','procedural','{"key": "hair-0-0", "style": "Bald", "color": "#e6e6e6", "styleIndex": 0, "colorIndex": 0}'::jsonb),
