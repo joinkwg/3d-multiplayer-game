@@ -5635,7 +5635,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           offset+=at.count;g.dispose();
         }
         const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();
-        const m=new THREE.Mesh(g,mat(c));group.add(m);return m;
+        const finish=new THREE.MeshStandardMaterial({color:c,roughness:.78,metalness:0,flatShading:false,side:THREE.DoubleSide});const m=new THREE.Mesh(g,finish);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;
       };
       const part=(geo,x=0,y=0,z=0,rx=0,ry=0,rz=0)=>({geo,x,y,z,rx,ry,rz});
       const ell=(x,y,z,sx,sy,sz)=>{const g=new THREE.SphereGeometry(1,20,12);g.scale(sx,sy,sz);return part(g,x,y,z);};
@@ -5694,6 +5694,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           default:fringe(6,.18);break;
         }
         sculpt(parts,c);
+        // Hair accessories and part lines are model details, not duplicate styles.
+        if(st==='Ponytail'||st==='Pigtails'||st==='Braids'){
+          const band='#d7ad6b';
+          const xs=st==='Pigtails'?[-.40,.40]:st==='Braids'?[-.34,.34]:[0];
+          for(const x of xs){
+            const z=st==='Ponytail'?-.42:-.06;
+            const y=st==='Braids'?2.22:2.25;
+            const tie=add(group,new THREE.TorusGeometry(.078,.023,7,18),band,x,y,z);
+            tie.rotation.x=Math.PI/2;
+          }
+        }
+        if(st==='Undercut'||st==='Side Part'){
+          const line=add(group,new THREE.BoxGeometry(.014,.015,.30),new THREE.Color(c).offsetHSL(0,0,-.22),st==='Side Part'?-.20:.27,2.52,.06);
+          line.rotation.y=.14;
+        }
       }
       if(selected.hats&&style('hats')!=='None'){
         const st=style('hats'),c=color('hats','#202020'),parts=[];
@@ -5719,6 +5734,70 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           default:parts.push(ell(0,2.56,0,.34,.20,.34));break;
         }
         sculpt(parts,c);
+        // Art-directed secondary details. These are separate materials, not additional
+        // catalog variants: contrast bands, seams, hardware and emblem elements.
+        const accent=new THREE.Color(c).offsetHSL(0,-.08,-.18);
+        const trim='#e5c27a', dark=accent.getStyle();
+        const ring=(radius,tube,y,paint=dark)=>{
+          const mesh=add(group,new THREE.TorusGeometry(radius,tube,7,40),paint,0,y,0);
+          mesh.rotation.x=Math.PI/2;return mesh;
+        };
+        if(['Top Hat','Bowler','Fedora','Cowboy Hat','Sun Hat'].includes(st)){
+          ring(st==='Cowboy Hat'?.295:st==='Sun Hat'?.305:.30,.023,2.49);
+          if(st==='Fedora'||st==='Top Hat'){
+            add(group,new THREE.BoxGeometry(.095,.064,.018),trim,0,2.50,.302);
+            add(group,new THREE.BoxGeometry(.048,.040,.022),dark,0,2.50,.314);
+          }
+        }
+        if(st==='Baseball Cap'){
+          // Six-panel cap seams and a raised front patch.
+          for(const x of [-.20,0,.20]){
+            const seam=add(group,new THREE.TorusGeometry(.29,.007,5,28,Math.PI*.64),dark,x*.13,2.53,-.03);
+            seam.rotation.set(Math.PI/2,0,x*.75);
+          }
+          add(group,new THREE.BoxGeometry(.17,.10,.018),trim,0,2.57,.343);
+        }
+        if(st==='Beanie'){
+          for(let i=-4;i<=4;i++){
+            const stitch=add(group,new THREE.BoxGeometry(.018,.075,.014),dark,i*.068,2.45,.343);
+            stitch.rotation.z=i*.035;
+          }
+        }
+        if(st==='Bucket Hat'){
+          for(const y of [2.48,2.52,2.57])ring(.325,.007,y,dark);
+        }
+        if(st==='Crown'){
+          for(let i=0;i<7;i++){
+            const a=i*Math.PI*2/7;
+            add(group,new THREE.OctahedronGeometry(.047),i%2?'#61c8de':'#e94e7d',Math.sin(a)*.355,2.60,Math.cos(a)*.355);
+          }
+          ring(.35,.017,2.48,trim);
+        }
+        if(st==='Viking Helmet'){
+          ring(.35,.025,2.46,'#c6b5a2');
+          for(const x of [-.33,.33])add(group,new THREE.SphereGeometry(.035,10,8),trim,x,2.53,.06);
+        }
+        if(st==='Helmet'){
+          const visor=add(group,new THREE.BoxGeometry(.56,.115,.08),'#283d4d',0,2.49,.352);
+          visor.material=new THREE.MeshStandardMaterial({color:'#283d4d',metalness:.32,roughness:.34});
+          for(const x of [-.27,.27])add(group,new THREE.SphereGeometry(.028,10,8),trim,x,2.49,.399);
+        }
+        if(st==='Chef Hat'){
+          ring(.295,.025,2.46,'#d8d6d0');
+          for(const x of [-.18,-.06,.06,.18])add(group,new THREE.BoxGeometry(.009,.16,.016),'#d8d6d0',x,2.52,.292);
+        }
+        if(st==='Headphones'){
+          for(const x of [-.39,.39]){
+            add(group,new THREE.BoxGeometry(.035,.20,.22),'#232c39',x,2.32,.03);
+            add(group,new THREE.BoxGeometry(.018,.11,.13),trim,x+(x>0?.025:-.025),2.32,.035);
+          }
+        }
+        if(st==='Party Hat'){
+          for(let i=0;i<4;i++){
+            const y=2.56+i*.11,rad=.24-i*.045;
+            ring(rad,.014,y,i%2?trim:dark);
+          }
+        }
       }
       // Layered face detailing: each expression has its own outline and proportions.
       if(selected.eyes){
