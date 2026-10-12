@@ -5582,63 +5582,83 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const part=(geo,x=0,y=0,z=0,rx=0,ry=0,rz=0)=>({geo,x,y,z,rx,ry,rz});
       const ell=(x,y,z,sx,sy,sz)=>{const g=new THREE.SphereGeometry(1,20,12);g.scale(sx,sy,sz);return part(g,x,y,z);};
       const strand=(x,y,z,len,r=.085,tilt=0)=>part(new THREE.ConeGeometry(r,len,7),x,y,z,0,0,tilt);
+      // Art-directed hair construction: sculpted tapered locks, swept surfaces and
+      // recognizable profiles. Every style uses a different silhouette language.
+      const hairLock=(points,width=.11,depth=.09)=>{
+        const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));
+        const verts=[],idx=[],rings=12,sides=7;
+        for(let i=0;i<=rings;i++){
+          const t=i/rings,center=curve.getPoint(t),tan=curve.getTangent(t);
+          const across=new THREE.Vector3(1,0,0).addScaledVector(tan,-tan.x).normalize();
+          const outward=new THREE.Vector3().crossVectors(tan,across).normalize();
+          const taper=Math.pow(Math.sin(Math.PI*(.07+.88*t)),.45)*(1-.68*t);
+          for(let j=0;j<sides;j++){
+            const ang=2*Math.PI*j/sides;
+            const v=center.clone().addScaledVector(across,Math.cos(ang)*width*taper).addScaledVector(outward,Math.sin(ang)*depth*taper);
+            verts.push(v.x,v.y,v.z);
+            if(i<rings){const q=i*sides+j,n=i*sides+(j+1)%sides;idx.push(q,n,q+sides,n,n+sides,q+sides);}
+          }
+        }
+        const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));geo.setIndex(idx);geo.computeVertexNormals();return part(geo);
+      };
+      const sweptHair=(x,y,z,dx,dy,dz,w=.13)=>hairLock([[x,y,z],[x+dx*.4,y+dy*.25,z+dz*.4],[x+dx*.85,y+dy*.78,z+dz*.85],[x+dx,y+dy,z+dz]],w,w*.8);
       if(selected.hair&&style('hair')!=='Bald'){
         const st=style('hair'),c=color('hair','#3a261b'),parts=[];
-        const cap=()=>parts.push(ell(0,2.35,0,.382,.155,.38));
-        if(['Buzz Cut','Crew Cut','Pixie','Side Part','Pompadour','Spiky','Mohawk','Wavy','Curly','Afro','Bob','Long Waves','Braids','Ponytail','Bun','Dreadlocks','Pigtails','Slick Back','Undercut','Shag','Mullet','Flat Top','Curtains','Twists'].includes(st)){
-          if(!['Afro','Flat Top','Mohawk'].includes(st))cap();
-          switch(st){
-            case 'Buzz Cut':break;
-            case 'Crew Cut':parts.push(ell(0,2.43,-.02,.31,.10,.32));break;
-            case 'Pixie':for(let i=0;i<8;i++){const t=i*Math.PI*2/8;parts.push(strand(Math.sin(t)*.27,2.45,Math.cos(t)*.26,.19,.075,-Math.sin(t)*.5));}break;
-            case 'Side Part':for(let i=0;i<7;i++)parts.push(ell(-.24+i*.077,2.46,-.04,.11,.075,.30));break;
-            case 'Pompadour':parts.push(ell(0,2.52,.19,.34,.19,.22));break;
-            case 'Spiky':for(let i=0;i<9;i++)parts.push(strand((i%3-1)*.23,2.55,((i/3|0)-1)*.22,.30+(i%3)*.055,.095,(i%3-1)*-.3));break;
-            case 'Mohawk':for(let i=0;i<6;i++)parts.push(strand(0,2.56,-.31+i*.12,.38,.105));break;
-            case 'Wavy':for(let i=0;i<8;i++)parts.push(ell((i%4-1.5)*.19,2.39-(i/4|0)*.13,(i/4|0)?.25:-.19,.12,.15,.14));break;
-            case 'Curly':for(let i=0;i<15;i++){const t=i*2.399;parts.push(ell(Math.sin(t)*.29,2.42+Math.cos(i*1.9)*.13,Math.cos(t)*.26,.14,.14,.14));}break;
-            case 'Afro':parts.push(ell(0,2.46,0,.49,.45,.47));break;
-            case 'Bob':parts.push(ell(-.31,2.17,0,.13,.31,.30),ell(.31,2.17,0,.13,.31,.30));break;
-            case 'Long Waves':for(const x of [-.29,.29])for(let i=0;i<3;i++)parts.push(ell(x,2.20-i*.20,(i%2)*.055,.14,.17,.18));break;
-            case 'Braids':for(const x of [-.30,.30])for(let i=0;i<5;i++)parts.push(ell(x,2.18-i*.14,-.08,.105,.09,.105));break;
-            case 'Ponytail':parts.push(ell(0,2.24,-.39,.15,.15,.15),ell(0,1.98,-.47,.12,.31,.12));break;
-            case 'Bun':parts.push(ell(0,2.58,-.20,.23,.23,.23));break;
-            case 'Dreadlocks':for(let i=0;i<11;i++){const t=i*Math.PI*2/11;parts.push(ell(Math.sin(t)*.32,2.09,Math.cos(t)*.30,.075,.33,.075));}break;
-            case 'Pigtails':for(const x of [-.45,.45])parts.push(ell(x,2.22,-.08,.19,.26,.18));break;
-            case 'Slick Back':parts.push(ell(0,2.38,-.15,.34,.11,.37));break;
-            case 'Undercut':parts.push(ell(0,2.48,0,.27,.17,.32));break;
-            case 'Shag':for(let i=0;i<9;i++){const t=i*Math.PI*2/9;parts.push(strand(Math.sin(t)*.3,2.24,Math.cos(t)*.3,.27,.12,Math.sin(t)*.5));}break;
-            case 'Mullet':parts.push(ell(0,2.02,-.32,.30,.39,.14));break;
-            case 'Flat Top':parts.push(part(new THREE.CylinderGeometry(.34,.34,.24,12),0,2.46,0));break;
-            case 'Curtains':for(const x of [-.20,.20])parts.push(ell(x,2.34,.24,.18,.22,.16));break;
-            case 'Twists':for(let i=0;i<12;i++){const t=i*2.399;parts.push(strand(Math.sin(t)*.26,2.49,Math.cos(t)*.27,.22,.085));}break;
-            default:break;
-          }
-        }else cap();
+        const cap=()=>parts.push(ell(0,2.35,-.018,.371,.142,.366));
+        const fringe=(count,fall=.20,parting=0)=>{for(let i=0;i<count;i++){const x=-.30+i*.60/(count-1);parts.push(hairLock([[x,2.45,.21],[x+parting*.10,2.43,.32],[x+parting*.16,2.33,.38],[x+parting*.22,2.45-fall,.36]],.075,.068));}};
+        const rope=(x,y,z,fall,w=.07)=>parts.push(hairLock([[x,y,z],[x*1.08,y-fall*.30,z-.05],[x*1.12,y-fall*.68,z+.02],[x*1.07,y-fall,z+.04]],w,w));
+        cap();
+        switch(st){
+          case 'Buzz Cut':parts.push(ell(0,2.39,0,.363,.08,.352));break;
+          case 'Crew Cut':fringe(7,.095);break;
+          case 'Pixie':fringe(5,.24,1);for(let i=0;i<5;i++)parts.push(sweptHair(-.3+i*.15,2.42,-.09,.16,.12,-.17,.095));break;
+          case 'Side Part':fringe(7,.23,1);for(let i=0;i<6;i++)parts.push(sweptHair(-.27+i*.10,2.43,-.08,.22,.08,.15,.11));break;
+          case 'Pompadour':for(let i=0;i<7;i++)parts.push(hairLock([[-.29+i*.096,2.37,.25],[-.27+i*.096,2.62,.23],[-.20+i*.085,2.72,.04],[-.19+i*.085,2.51,-.22]],.10,.105));break;
+          case 'Spiky':for(let i=0;i<11;i++){const x=(i%4-1.5)*.18,z=(Math.floor(i/4)-1)*.21;parts.push(hairLock([[x,2.38,z],[x*1.1,2.48,z],[x*1.3,2.62+(i%3)*.06,z-.02],[x*1.4,2.72+(i%3)*.07,z-.05]],.115,.10));}break;
+          case 'Mohawk':for(let i=0;i<9;i++){const z=-.31+i*.078;parts.push(hairLock([[0,2.36,z],[0,2.51,z],[0,2.74,z+.06],[0,2.80,z+.09]],.13,.09));}break;
+          case 'Wavy':fringe(5,.18);for(const side of [-1,1])for(let i=0;i<3;i++)parts.push(hairLock([[side*.27,2.38,-.21+i*.19],[side*.39,2.19,-.18+i*.19],[side*.31,2.01,-.17+i*.19],[side*.40,1.86,-.16+i*.19]],.11,.09));break;
+          case 'Curly':for(let i=0;i<19;i++){const a=i*2.399,rad=.23+.09*(i%3)/2;parts.push(hairLock([[Math.sin(a)*rad,2.40,Math.cos(a)*rad],[Math.sin(a)*rad*1.2,2.58,Math.cos(a)*rad*1.2],[Math.sin(a+.7)*rad,2.64,Math.cos(a+.7)*rad],[Math.sin(a+1.2)*rad,2.47,Math.cos(a+1.2)*rad]],.12,.12));}break;
+          case 'Afro':parts.length=0;parts.push(ell(0,2.52,-.02,.49,.41,.48));for(let i=0;i<12;i++){const a=i*2.399;parts.push(ell(Math.sin(a)*.33,2.56+Math.sin(i*1.7)*.12,Math.cos(a)*.31,.13,.13,.13));}break;
+          case 'Bob':fringe(6,.18);for(const side of [-1,1])for(let i=0;i<4;i++)parts.push(rope(side*(.23+i*.028),2.35,-.22+i*.16,.52,.11));break;
+          case 'Long Waves':fringe(6,.15);for(const side of [-1,1])for(let i=0;i<4;i++)parts.push(hairLock([[side*.27,2.40,-.24+i*.15],[side*.37,2.15,-.20+i*.15],[side*.29,1.86,-.23+i*.15],[side*.40,1.58,-.18+i*.15]],.10,.095));break;
+          case 'Braids':fringe(5,.12);for(const side of [-1,1])for(let i=0;i<8;i++){const y=2.26-i*.09;parts.push(ell(side*(.33+.025*(i%2)),y,-.08,.082,.067,.082));}break;
+          case 'Ponytail':fringe(6,.11);parts.push(ell(0,2.34,-.36,.15,.13,.14));parts.push(hairLock([[0,2.35,-.39],[0,2.18,-.54],[0,1.89,-.55],[0,1.73,-.44]],.17,.14));break;
+          case 'Bun':fringe(5,.11);parts.push(ell(0,2.57,-.22,.25,.22,.24));for(let i=0;i<5;i++){const a=i*Math.PI*2/5;parts.push(hairLock([[0,2.63,-.22],[Math.sin(a)*.17,2.76,-.22+Math.cos(a)*.14],[Math.sin(a)*.23,2.62,-.22+Math.cos(a)*.20],[0,2.55,-.22]],.065,.06));}break;
+          case 'Dreadlocks':for(let i=0;i<13;i++){const a=i*Math.PI*2/13;rope(Math.sin(a)*.33,2.36,Math.cos(a)*.32,.56+(i%3)*.12,.065);}break;
+          case 'Pigtails':fringe(5,.17);for(const side of [-1,1]){parts.push(ell(side*.39,2.28,-.06,.13,.12,.13));for(let i=0;i<3;i++)parts.push(rope(side*(.44+i*.02),2.19,-.15+i*.12,.52,.09));}break;
+          case 'Slick Back':for(let i=0;i<9;i++)parts.push(hairLock([[-.30+i*.075,2.38,.31],[-.29+i*.075,2.53,.18],[-.28+i*.075,2.47,-.13],[-.28+i*.075,2.30,-.33]],.065,.08));break;
+          case 'Undercut':parts.push(ell(0,2.47,0,.28,.16,.32));for(let i=0;i<5;i++)parts.push(sweptHair(-.21+i*.10,2.48,.14,.20,.07,-.26,.08));break;
+          case 'Shag':fringe(7,.26);for(const side of [-1,1])for(let i=0;i<4;i++)parts.push(sweptHair(side*.30,2.35-i*.13,-.14+i*.12,side*.13,-.24,.05,.10));break;
+          case 'Mullet':fringe(6,.18);for(let i=0;i<7;i++)parts.push(rope(-.28+i*.093,2.32,-.31,.55,.10));break;
+          case 'Flat Top':parts.length=0;parts.push(part(new THREE.CylinderGeometry(.33,.34,.25,12),0,2.47,0));break;
+          case 'Curtains':for(const side of [-1,1])for(let i=0;i<4;i++)parts.push(hairLock([[side*(.06+i*.065),2.51,.13],[side*(.15+i*.065),2.42,.30],[side*(.20+i*.065),2.29,.35],[side*(.26+i*.055),2.18,.28]],.095,.09));break;
+          case 'Twists':for(let i=0;i<13;i++){const a=i*2.399,x=Math.sin(a)*.27,z=Math.cos(a)*.27;parts.push(hairLock([[x,2.39,z],[x+.05,2.52,z],[x-.05,2.61,z],[x+.04,2.69,z]],.075,.07));}break;
+          default:fringe(6,.18);break;
+        }
         sculpt(parts,c);
       }
       if(selected.hats&&style('hats')!=='None'){
         const st=style('hats'),c=color('hats','#202020'),parts=[];
-        const cyl=(rt,rb,h,y,z=0)=>parts.push(part(new THREE.CylinderGeometry(rt,rb,h,24),0,y,z));
-        const brim=(r,inner,y)=>parts.push(part(new THREE.TorusGeometry(r,.065,8,32),0,y,0,Math.PI/2));
+        const cyl=(rt,rb,h,y,z=0)=>parts.push(part(new THREE.CylinderGeometry(rt,rb,h,32),0,y,z));
+        const brim=(rx,rz,y)=>parts.push(ell(0,y,0,rx,.032,rz));
         switch(st){
-          case 'Top Hat':cyl(.28,.29,.48,2.67);brim(.40,0,2.43);break;
-          case 'Bowler':parts.push(ell(0,2.59,0,.33,.25,.34));brim(.39,0,2.44);break;
-          case 'Cowboy Hat':cyl(.25,.30,.23,2.57);parts.push(ell(0,2.44,0,.53,.045,.38));break;
-          case 'Wizard Hat':parts.push(part(new THREE.ConeGeometry(.34,.72,24),0,2.82,0));brim(.46,0,2.46);break;
-          case 'Baseball Cap':parts.push(ell(0,2.53,0,.36,.20,.36),ell(0,2.45,.38,.32,.035,.26));break;
-          case 'Beanie':parts.push(ell(0,2.57,0,.36,.26,.36));cyl(.35,.35,.10,2.44);break;
-          case 'Bucket Hat':cyl(.27,.34,.31,2.58);parts.push(ell(0,2.43,0,.44,.045,.44));break;
-          case 'Beret':parts.push(ell(-.07,2.65,0,.44,.13,.39));break;
-          case 'Fedora':cyl(.27,.31,.30,2.59);brim(.43,0,2.43);break;
-          case 'Viking Helmet':parts.push(ell(0,2.55,0,.35,.22,.35));for(const x of [-.37,.37])parts.push(part(new THREE.ConeGeometry(.10,.38,9),x,2.77,0,0,0,x>0?-.35:.35));break;
-          case 'Crown':cyl(.35,.35,.16,2.53);for(let i=0;i<7;i++){const t=i*Math.PI*2/7;parts.push(strand(Math.sin(t)*.34,2.70,Math.cos(t)*.34,.20,.07));}break;
-          case 'Party Hat':parts.push(part(new THREE.ConeGeometry(.28,.54,18),0,2.73,0));break;
-          case 'Sun Hat':parts.push(ell(0,2.57,0,.31,.18,.31),ell(0,2.43,0,.60,.035,.60));break;
-          case 'Chef Hat':cyl(.29,.29,.19,2.51);for(const x of [-.20,0,.20])parts.push(ell(x,2.75,0,.19,.19,.25));break;
-          case 'Helmet':parts.push(ell(0,2.56,0,.39,.29,.39));break;
-          case 'Headphones':parts.push(part(new THREE.TorusGeometry(.37,.055,8,30,Math.PI),0,2.57,0,0,0,0));for(const x of [-.39,.39])parts.push(ell(x,2.31,0,.09,.17,.17));break;
-          default:parts.push(ell(0,2.56,0,.35,.21,.35));break;
+          case 'Top Hat':cyl(.28,.30,.45,2.69);brim(.43,.43,2.45);break;
+          case 'Bowler':parts.push(ell(0,2.58,0,.34,.24,.34));brim(.42,.41,2.44);break;
+          case 'Cowboy Hat':cyl(.24,.31,.25,2.59);brim(.58,.43,2.45);for(const x of [-.49,.49])parts.push(hairLock([[x,2.44,-.28],[x*1.06,2.46,0],[x,2.55,.28]],.055,.04));break;
+          case 'Wizard Hat':parts.push(hairLock([[0,2.47,0],[.01,2.79,0],[.11,3.02,0],[.27,3.11,.04]],.32,.31));brim(.47,.47,2.46);break;
+          case 'Baseball Cap':parts.push(ell(0,2.53,0,.36,.21,.35));parts.push(ell(0,2.44,.38,.31,.025,.28));break;
+          case 'Beanie':parts.push(ell(0,2.57,0,.36,.27,.35));cyl(.35,.35,.11,2.45);parts.push(ell(0,2.84,0,.055,.055,.055));break;
+          case 'Bucket Hat':cyl(.28,.34,.28,2.58);brim(.46,.46,2.45);break;
+          case 'Beret':parts.push(ell(-.085,2.64,0,.44,.14,.40));parts.push(ell(-.08,2.78,0,.035,.05,.035));break;
+          case 'Fedora':cyl(.28,.30,.28,2.59);brim(.46,.40,2.45);parts.push(ell(0,2.75,0,.21,.035,.23));break;
+          case 'Viking Helmet':parts.push(ell(0,2.55,0,.36,.22,.35));for(const x of [-.37,.37])parts.push(hairLock([[x,2.52,0],[x*1.34,2.64,0],[x*1.52,2.85,0],[x*1.34,2.97,0]],.11,.10));break;
+          case 'Crown':cyl(.35,.35,.16,2.52);for(let i=0;i<7;i++){const t=i*Math.PI*2/7;parts.push(hairLock([[Math.sin(t)*.34,2.54,Math.cos(t)*.34],[Math.sin(t)*.35,2.63,Math.cos(t)*.35],[Math.sin(t)*.35,2.76,Math.cos(t)*.35]],.07,.055));}break;
+          case 'Party Hat':parts.push(part(new THREE.ConeGeometry(.29,.56,20),0,2.74,0));parts.push(ell(0,3.04,0,.075,.075,.075));break;
+          case 'Sun Hat':parts.push(ell(0,2.56,0,.32,.18,.31));brim(.63,.58,2.44);break;
+          case 'Chef Hat':cyl(.29,.29,.18,2.50);for(let i=0;i<5;i++)parts.push(ell(-.24+i*.12,2.72,-.03+(i%2)*.09,.16,.18,.19));break;
+          case 'Helmet':parts.push(ell(0,2.55,0,.39,.29,.38));parts.push(ell(0,2.40,.30,.34,.06,.13));break;
+          case 'Headphones':parts.push(part(new THREE.TorusGeometry(.37,.058,10,36,Math.PI),0,2.57,0));for(const x of [-.39,.39])parts.push(ell(x,2.32,0,.095,.18,.17));break;
+          default:parts.push(ell(0,2.56,0,.34,.20,.34));break;
         }
         sculpt(parts,c);
       }
