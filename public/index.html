@@ -3754,7 +3754,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // retain the neutral default head to communicate fit and placement.
     function kwgBuildItemOnlyPreview(item){
       const category=item.category;
-      const base={...defaultAppearance,
+      const base={...(playerAppearance || {}),
         hairStyle:'none',hat:'none',headShape:'sphere',builtinEyes:'none',builtinMouth:'none',
         headColor:'#d9a679',skinColor:'#d9a679',torsoColor:'#3b82d0',shirtColor:'#3b82d0',
         leftLegColor:'#263447',rightLegColor:'#263447',pantsColor:'#263447',shoesColor:'#15191f'};
@@ -3786,7 +3786,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
     function kwgProceduralThumbnail(box,item){
       try{thumbImageFromObject(box,kwgBuildItemOnlyPreview(item));}
-      catch(e){console.warn('Procedural item preview failed',e);box.textContent=item.metadata?.style||item.name;}
+      catch(e){console.warn('Procedural item preview failed',e);box.textContent='PREVIEW UNAVAILABLE';}
     }
     function kwgStoreThumb(box,item){
       if(kwgStoreDepartment==='pets'){
