@@ -1807,11 +1807,35 @@ INSERT INTO store_items(category,name,price,asset_url,asset_kind,metadata) VALUE
     CREATE INDEX IF NOT EXISTS user_store_items_user_idx ON user_store_items(user_id);
   `);
 
+  // Four intentionally curated hair shades per hairstyle. Keep stable item IDs so
+  // existing ownership/equipment references continue to resolve.
+  await pool.query(`
+    UPDATE store_items
+    SET metadata = jsonb_set(metadata, '{color}',
+      to_jsonb((CASE (metadata->>'colorIndex')::int
+        WHEN 0 THEN '#35231D'  -- dark brown
+        WHEN 1 THEN '#91492F'  -- auburn
+        WHEN 2 THEN '#E6C36D'  -- blonde
+        WHEN 3 THEN '#7850AE'  -- purple
+      END)::text), true),
+      name = (metadata->>'style') || ' / ' ||
+        (CASE (metadata->>'colorIndex')::int
+          WHEN 0 THEN 'Dark Brown' WHEN 1 THEN 'Auburn'
+          WHEN 2 THEN 'Blonde' WHEN 3 THEN 'Purple' END)
+    WHERE category='hair' AND asset_kind='procedural'
+      AND (metadata->>'styleIndex')::int > 0
+      AND (metadata->>'colorIndex')::int BETWEEN 0 AND 3
+  `);
   // Curated storefront: hide redundant generated variants without deleting rows,
   // ownership, purchase history, or existing equipped item references.
   await pool.query(`
     UPDATE store_items
     SET is_visible = CASE
+      WHEN category = 'hair' THEN
+        COALESCE((metadata->>'styleIndex')::int,-1) > 0
+        AND COALESCE((metadata->>'colorIndex')::int,-1) BETWEEN 0 AND 3
+        OR COALESCE((metadata->>'styleIndex')::int,-1) = 0
+        AND COALESCE((metadata->>'colorIndex')::int,-1) = 0
       WHEN category = 'skin' THEN
         COALESCE((metadata->>'styleIndex')::int,-1) = 0
         AND COALESCE((metadata->>'colorIndex')::int,-1) IN (0,1,2,3,4,8,9,10,11,12,13)
