@@ -5662,65 +5662,74 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const sweptHair=(x,y,z,dx,dy,dz,w=.13)=>hairLock([[x,y,z],[x+dx*.4,y+dy*.25,z+dz*.4],[x+dx*.85,y+dy*.78,z+dz*.85],[x+dx,y+dy,z+dz]],w,w*.8);
       if(selected.hair&&style('hair')!=='Bald'){
         const st=style('hair'),c=color('hair','#3a261b'),parts=[];
+        // Soft-cartoon scalp: one continuous, smoothly shaded surface with a
+        // shaped hairline (no raised cylindrical brim or stacked cap).
         const cap=()=>{
-          // A fitted shell built from concentric elliptical rings, following the scalp.
-          // This avoids the obvious flattened-sphere hairpiece silhouette.
-          const verts=[],faces=[],segments=28;
-          const rings=[[2.245,.338,.332],[2.305,.368,.365],[2.385,.365,.356],[2.455,.305,.293],[2.502,.19,.18],[2.516,.015,.015]];
-          rings.forEach(([y,rx,rz],ri)=>{for(let j=0;j<segments;j++){
-            const a=j*Math.PI*2/segments;
-            verts.push(Math.sin(a)*rx,y-.025*Math.cos(a),Math.cos(a)*rz-.018);
-            if(ri<rings.length-1){const p=ri*segments+j,q=ri*segments+(j+1)%segments;
-              faces.push(p,q,p+segments,q,q+segments,p+segments);}
-          }});
-          const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.setIndex(faces);g.computeVertexNormals();parts.push(part(g));
+          const vertices=[],faces=[],seg=48,rows=18;
+          for(let i=0;i<=rows;i++){
+            const t=i/rows,theta=t*Math.PI*.56;
+            for(let j=0;j<seg;j++){
+              const a=j*2*Math.PI/seg,front=Math.cos(a),side=Math.sin(a);
+              const edge=front>0 ? .045*front*front : -.018;
+              const hairline=2.26+edge+((st==='Side Part'||st==='Pixie')?.038*side:0);
+              const y=hairline+.255*Math.cos(theta);
+              const rad=Math.sin(theta);
+              const rx=.366*rad,rz=.355*rad;
+              const wave=(st==='Pompadour'?.028:st==='Side Part'?.015:.007)*Math.sin(2*a+2*t)*Math.sin(Math.PI*t);
+              vertices.push(side*(rx+wave),y,front*(rz+wave)-.014);
+              if(i<rows){const p=i*seg+j,q=i*seg+(j+1)%seg;faces.push(p,p+seg,q,q,p+seg,q+seg);}
+            }
+          }
+          const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));g.setIndex(faces);g.computeVertexNormals();parts.push(part(g));
         };
         const fringe=(count,fall=.20,parting=0)=>{for(let i=0;i<count;i++){const x=-.30+i*.60/(count-1);parts.push(hairLock([[x,2.45,.21],[x+parting*.10,2.43,.32],[x+parting*.16,2.33,.38],[x+parting*.22,2.45-fall,.36]],.075,.068));}};
         const rope=(x,y,z,fall,w=.07)=>parts.push(hairLock([[x,y,z],[x*1.08,y-fall*.30,z-.05],[x*1.12,y-fall*.68,z+.02],[x*1.07,y-fall,z+.04]],w,w));
         cap();
         switch(st){
           case 'Buzz Cut':{
-            // Close-cropped, fitted scalp with a shaped front hairline: no upright locks.
-            parts.length=0;cap();
-            parts.push(ell(0,2.402,-.01,.348,.105,.347));
+            // The close crop is entirely the fitted shell; no mushroom brim.
             break;
           }
           case 'Crew Cut':{
-            // Squared, softly bevelled crop: sculpted top surface, not a comb of cylinders.
-            parts.push(part(new THREE.BoxGeometry(.575,.115,.545,3,1,3),0,2.487,-.015));
-            parts.push(hairLock([[-.30,2.425,.22],[-.20,2.46,.34],[.07,2.46,.36],[.29,2.425,.23]],.055,.055));
+            // Low, soft, forward-swept crown; restrained silhouette.
+            for(let i=0;i<3;i++){
+              const x=-.20+i*.20;
+              parts.push(hairLock([[x,2.47,-.20],[x+.025,2.57,-.07],[x+.02,2.53,.17],[x+.015,2.39,.31]],.112,.082));
+            }
             break;
           }
           case 'Pixie':{
-            // Off-centre fringe, short tapered temple sections and swept crown.
-            for(let i=0;i<4;i++){
-              const x=-.26+i*.145;
-              parts.push(hairLock([[x,2.48,-.15],[x+.11,2.55,.04],[x+.16,2.44,.26],[x+.17,2.28,.32]],.11-i*.009,.075));
-            }
-            for(const side of [-1,1])parts.push(hairLock([[side*.30,2.36,.04],[side*.37,2.28,.12],[side*.34,2.17,.15],[side*.31,2.14,.12]],.075,.058));
+            // Short asymmetric feathered layers, not a row of identical bangs.
+            const locks=[
+              [[-.29,2.38,-.05],[-.24,2.53,.10],[-.10,2.48,.31],[.09,2.30,.35]],
+              [[-.11,2.48,-.19],[.02,2.57,.02],[.17,2.43,.27],[.29,2.30,.25]],
+              [[.22,2.39,-.14],[.33,2.42,.03],[.34,2.30,.17],[.30,2.20,.18]]
+            ];
+            locks.forEach((p,i)=>parts.push(hairLock(p,.14-i*.016,.085)));
             break;
           }
           case 'Side Part':{
-            // Broad asymmetrical sweeping wave, with only three intentional major sections.
-            for(let i=0;i<3;i++){
-              const z=-.17+i*.15;
-              parts.push(hairLock([[-.27,2.46,z],[-.13,2.63,z+.07],[.17,2.55,z+.15],[.33,2.30,z+.17]],.155-i*.015,.115));
-            }
-            parts.push(hairLock([[-.33,2.40,.12],[-.36,2.32,.20],[-.31,2.22,.25],[-.27,2.20,.25]],.10,.075));
+            // One dominant flowing forelock with subordinate supporting volume.
+            parts.push(hairLock([[-.30,2.40,-.18],[-.22,2.61,.01],[.05,2.62,.24],[.29,2.31,.30]],.21,.125));
+            parts.push(hairLock([[-.31,2.42,-.21],[-.23,2.56,-.06],[.10,2.51,.14],[.31,2.36,.18]],.14,.075));
+            parts.push(hairLock([[-.30,2.34,.05],[-.37,2.31,.14],[-.34,2.24,.20],[-.29,2.20,.18]],.085,.075));
             break;
           }
           case 'Pompadour':{
-            // Three interlocking large wave forms; front lifted then swept backwards.
-            for(let i=0;i<3;i++){
-              const x=-.20+i*.20;
-              parts.push(hairLock([[x,2.42,.29],[x,2.73,.30],[x+.03,2.77,.02],[x+.02,2.48,-.30]],.16,.14));
-            }
+            // Horizontal sculpted wave with lift at the front, not upright tubes.
+            parts.push(hairLock([[-.31,2.41,.10],[-.19,2.67,.29],[.09,2.72,.20],[.32,2.46,-.19]],.225,.16));
+            parts.push(hairLock([[-.28,2.49,-.19],[-.12,2.66,.02],[.17,2.60,.08],[.30,2.44,-.24]],.17,.12));
             break;
           }
           case 'Spiky':{
-            // Uneven sculpted spikes, staggered across the scalp rather than a crown row.
-            const spikes=[[-.24,.18,-.10,.29],[-.02,.25,.09,.40],[.23,.14,.11,.31],[-.16,-.12,-.13,.22],[.12,-.18,.13,.27]];
-            for(const [x,z,lean,h] of spikes)parts.push(hairLock([[x,2.40,z],[x+lean*.25,2.52,z+.04],[x+lean*.75,2.45+h*.70,z-.04],[x+lean,2.40+h,z-.08]],.13,.115));
+            // Swept tapered tufts with irregular height, angle and depth.
+            const tufts=[
+              [[-.29,2.42,.11],[-.34,2.52,.18],[-.38,2.66,.13],[-.43,2.72,.07]],
+              [[-.13,2.47,.17],[-.12,2.61,.23],[-.05,2.75,.20],[.02,2.82,.11]],
+              [[.08,2.48,.13],[.16,2.58,.19],[.23,2.69,.13],[.32,2.72,.02]],
+              [[.27,2.42,-.10],[.35,2.52,-.04],[.39,2.62,-.11],[.42,2.65,-.19]]
+            ];
+            tufts.forEach((p,i)=>parts.push(hairLock(p,.13+(i%2)*.02,.11)));
             break;
           }
           case 'Mohawk':for(let i=0;i<9;i++){const z=-.31+i*.078;parts.push(hairLock([[0,2.36,z],[0,2.51,z],[0,2.74,z+.06],[0,2.80,z+.09]],.13,.09));}break;
@@ -5746,7 +5755,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         sculpt(parts,c);
         // Fine directional parting grooves, fitted to the hair shell, with a
         // subtle material shift rather than exaggerated blocky attachments.
-        if(['Slick Back','Side Part','Pompadour','Undercut','Crew Cut'].includes(st)){
+        if(['Slick Back','Undercut'].includes(st)){
           const shade=new THREE.Color(c).multiplyScalar(.76);
           for(let i=0;i<5;i++){
             const x=-.23+i*.105;
@@ -5770,7 +5779,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             tie.rotation.x=Math.PI/2;
           }
         }
-        if(st==='Undercut'||st==='Side Part'){
+        if(st==='Undercut'){
           const line=add(group,new THREE.BoxGeometry(.014,.015,.30),new THREE.Color(c).offsetHSL(0,0,-.22),st==='Side Part'?-.20:.27,2.52,.06);
           line.rotation.y=.14;
         }
