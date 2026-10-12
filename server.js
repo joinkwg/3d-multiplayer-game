@@ -170,7 +170,8 @@ function rowToStoreItem(row) {
     assetUrl: row.asset_url,
     assetKind: row.asset_kind,
     metadata: row.metadata || {},
-    isVisible: !!row.is_visible
+    isVisible: !!row.is_visible,
+    isUploaded: !!row.is_uploaded
   };
 }
 
@@ -1928,12 +1929,14 @@ io.on('connection', (socket) => {
     try {
       const [visible, owned, user] = await Promise.all([
         pool.query(`
-          SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible
+          SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible,
+                 (created_by IS NOT NULL) AS is_uploaded
           FROM store_items WHERE ($1::boolean OR is_visible=true)
           ORDER BY category ASC, created_at DESC
         `,[!!socket.user.isAdmin]),
         pool.query(`
-          SELECT s.id,s.category,s.name,s.price,s.asset_url,s.asset_kind,s.metadata,s.is_visible
+          SELECT s.id,s.category,s.name,s.price,s.asset_url,s.asset_kind,s.metadata,s.is_visible,
+                 (s.created_by IS NOT NULL) AS is_uploaded
           FROM user_store_items o
           JOIN store_items s ON s.id=o.item_id
           WHERE o.user_id=$1
@@ -2029,7 +2032,8 @@ io.on('connection', (socket) => {
     if (!requireAdmin(socket, cb)) return;
     try {
       const r = await pool.query(`
-        SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible
+        SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible,
+               (created_by IS NOT NULL) AS is_uploaded
         FROM store_items ORDER BY created_at DESC
       `);
       cb({success:true,items:r.rows.map(rowToStoreItem),uploadConfigured:storeStorageConfigured()});
@@ -2053,6 +2057,80 @@ io.on('connection', (socket) => {
       console.error(e);
       cb({success:false,message:'Could not update store visibility.'});
     }
+  });
+
+  // V3.56.5: hard delete admin-uploader items only. Deleting the catalog row
+  // cascades user_store_items purchases; no pet/builtin item is deletable here.
+  socket.on('admin_store_delete', async (payload = {}, cb) => {
+    if (!requireAdmin(socket, cb)) return;
+    if (typeof cb !== 'function') return;
+    const itemId = cleanStoreItemId(payload?.itemId);
+    if (!itemId) return cb({success:false,message:'Invalid uploaded item.'});
+    const client = await pool.connect();
+    let deleted;
+    try {
+      await client.query('BEGIN');
+      const item = await client.query(`
+        SELECT id,category,name,asset_url,created_by FROM store_items
+        WHERE id=$1 FOR UPDATE
+      `,[itemId]);
+      if (!item.rowCount || item.rows[0].created_by == null) {
+        await client.query('ROLLBACK');
+        return cb({success:false,message:'Only items created with the admin item uploader can be deleted.'});
+      }
+      deleted=item.rows[0];
+      // Clear equipped cosmetics for all owners before their purchase records cascade.
+      const slotByCategory={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'};
+      const slot=slotByCategory[deleted.category];
+      if (slot) await client.query(`
+        UPDATE users SET appearance=appearance-$2::text
+        WHERE (appearance->>$2::text)=$1::text
+      `,[itemId,slot]);
+      await client.query('DELETE FROM store_items WHERE id=$1',[itemId]);
+      await client.query('COMMIT');
+      // Update cached online appearances too; deleted items cannot be equipped again.
+      if(slot){
+        for(const peer of io.sockets.sockets.values()){
+          if(peer.user?.appearance && Number(peer.user.appearance[slot])===itemId){
+            peer.user.appearance={...peer.user.appearance,[slot]:null};
+            const player=playersBySocket.get(peer.id);
+            if(player){
+              player.appearance={...player.appearance,[slot]:null};
+              if(player.cosmetics)delete player.cosmetics[deleted.category];
+            }
+          }
+        }
+      }
+    }catch(err){
+      await client.query('ROLLBACK').catch(()=>{});
+      console.error('Admin uploaded-item delete failed',err);
+      return cb({success:false,message:'Could not delete uploaded item.'});
+    }finally{client.release();}
+
+    // Remove only the exact file created by our uploader in our own store bucket.
+    // The catalog deletion is authoritative even if Supabase Storage is unavailable.
+    let assetCleanupFailed=false;
+    if(storeStorageConfigured()){
+      const prefix=`${SUPABASE_URL}/storage/v1/object/public/${encodeURIComponent(SUPABASE_STORE_BUCKET)}/`;
+      const assetUrl=String(deleted.asset_url||'');
+      if(assetUrl.startsWith(prefix)){
+        const key=assetUrl.slice(prefix.length);
+        if(/^(eyes|mouth|torso_decal|hat|head_shape)\/\d+-[a-f0-9]{16}\.(png|jpg|webp|glb)$/.test(key)){
+          try{
+            const bucket=encodeURIComponent(SUPABASE_STORE_BUCKET);
+            const path=key.split('/').map(encodeURIComponent).join('/');
+            const response=await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`,{
+              method:'DELETE',headers:storageHeaders()
+            });
+            if(!response.ok&&response.status!==404){
+              assetCleanupFailed=true;
+              console.error('Uploaded asset cleanup failed',response.status,deleted.id);
+            }
+          }catch(err){assetCleanupFailed=true;console.error('Uploaded asset cleanup failed',deleted.id,err);}
+        }else{assetCleanupFailed=true;console.error('Uploaded asset path did not match uploader format',deleted.id);}
+      }else{assetCleanupFailed=true;console.error('Uploaded asset is outside the configured store bucket',deleted.id);}
+    }else{assetCleanupFailed=true;console.error('Storage not configured; uploaded asset cleanup skipped',deleted.id);}
+    cb({success:true,assetCleanupFailed});
   });
 
   socket.on('admin_store_create', async (payload = {}, cb) => {
