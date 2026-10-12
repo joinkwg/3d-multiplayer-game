@@ -2163,6 +2163,36 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
   #store-pane .kwg-store-preview-3d{height:auto;flex:1 1 0;min-height:210px}
 }
 
+/* V3.56.4 — full-width inventory slots and larger storefront item images. */
+#store-pane .kwg-store-showcase{
+  grid-template-columns:minmax(118px,.56fr) minmax(250px,2.25fr) minmax(210px,1.6fr);
+}
+#store-pane .kwg-store-owned-grid{
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:repeat(4,minmax(0,1fr));
+  justify-items:stretch;
+  align-items:stretch;
+  min-width:0;
+}
+#store-pane .kwg-store-owned-thumb{
+  width:100%;height:auto;max-width:100%;max-height:100%;
+  aspect-ratio:1 / 1;justify-self:stretch;align-self:center;
+}
+#store-pane .kwg-store-tile img,
+#store-pane .kwg-store-owned-thumb img{transform:scale(1.10);transform-origin:center;}
+#store-pane .kwg-store-tile img.kwg-store-pet-image,
+#store-pane .kwg-store-owned-thumb img.kwg-store-pet-image{
+  object-fit:cover;transform:scale(1.13);transform-origin:center;
+}
+@media(max-width:850px){
+  #store-pane .kwg-store-showcase{
+    grid-template-columns:minmax(90px,.54fr) minmax(180px,2fr) minmax(170px,1.55fr);
+  }
+}
+@media(max-width:570px){
+  #store-pane .kwg-store-showcase{grid-template-columns:90px minmax(0,1fr)}
+  #store-pane .kwg-store-owned-thumb{height:auto;aspect-ratio:1 / 1;align-self:start}
+}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -3649,8 +3679,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     let kwgStorePreviewLoadId=0;
     function kwgStoreCatalogItems(){
       if(kwgStoreDepartment==='pets')return kwgPetCatalog.filter(p=>(isAdmin||p.isVisible!==false)&&
+        !kwgOwnedPets.has(p.petKey)&&
         (kwgStoreSpecies==='all'||p.petKey.startsWith(kwgStoreSpecies+'_')));
-      return storeItems.filter(item=>item.category===activeStoreCategory);
+      const ownedIds=ownedStoreIdSet();
+      return storeItems.filter(item=>item.category===activeStoreCategory&&!ownedIds.has(Number(item.id)));
     }
     function kwgStoreOwnedItems(){
       if(kwgStoreDepartment==='pets')return kwgPetCatalog.filter(p=>kwgOwnedPets.has(p.petKey));
@@ -3659,7 +3691,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgStoreIdentity(item){return kwgStoreDepartment==='pets'?String(item.petKey):String(item.id);}
     function kwgStoreThumb(box,item){
       if(kwgStoreDepartment==='pets'){
-        try{const url=kwgPetThumbnail(item.petKey);if(url){const img=document.createElement('img');img.src=url;img.alt=item.name;box.append(img);return;}}
+        try{const url=kwgPetThumbnail(item.petKey);if(url){const img=document.createElement('img');img.src=url;img.alt=item.name;img.className='kwg-store-pet-image';box.append(img);return;}}
         catch(err){console.warn('Store pet thumbnail failed',err);}
       }else if(item.assetKind==='image'&&item.assetUrl){
         const img=document.createElement('img');img.src=item.assetUrl;img.alt=item.name;box.append(img);return;
@@ -3772,13 +3804,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           if(kwgStoreDepartment==='pets')socket.emit('buy_pet',{petKey:item.petKey},res=>{
             if(!res?.success){setStoreMessage(res?.message||'Purchase failed.',true);kwgStoreRender();return;}
             coinBalance=Number(res.coins??coinBalance);updateCoinDisplays();
-            setStoreMessage('');kwgAudio.play('success');kwgAlert('Purchase Successful!',{title:'PURCHASE SUCCESSFUL!',okLabel:'AWESOME!'});kwgRefreshPets();
+            setStoreMessage('');kwgAudio.play('success');kwgAlert('Purchase Successful!',{title:'PURCHASE SUCCESSFUL!',okLabel:'OK'});kwgRefreshPets();
           });
           else socket.emit('buy_store_item',{itemId:item.id},res=>{
             if(!res?.success){setStoreMessage(res?.message||'Purchase failed.',true);kwgStoreRender();return;}
             coinBalance=Number(res.coins??coinBalance);updateCoinDisplays();
             setStoreMessage('');
-            if(!res.alreadyOwned){kwgAudio.play('success');kwgAlert('Purchase Successful!',{title:'PURCHASE SUCCESSFUL!',okLabel:'AWESOME!'});}
+            if(!res.alreadyOwned){kwgAudio.play('success');kwgAlert('Purchase Successful!',{title:'PURCHASE SUCCESSFUL!',okLabel:'OK'});}
             else setStoreMessage('You already own that item.');
             refreshStoreData();
           });
@@ -3793,7 +3825,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgStoreRender(){
       const items=kwgStoreCatalogItems();
       if(!kwgStoreCurrentItem()){
-        kwgStoreSelection=items.length?{department:kwgStoreDepartment,id:kwgStoreIdentity(items[0])}:null;
+        const fallback=items[0]||kwgStoreOwnedItems()[0]||null;
+        kwgStoreSelection=fallback?{department:kwgStoreDepartment,id:kwgStoreIdentity(fallback)}:null;
       }
       kwgStoreRenderSpecies();kwgStoreRenderInventory();kwgStoreRenderCatalog();kwgStoreRenderCheckout();
     }
@@ -7243,7 +7276,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           socket.emit('buy_pet',{petKey:pet.petKey},res=>{
             if(!res?.success){setStoreMessage(res?.message||'Purchase failed.',true);button.disabled=false;return;}
             coinBalance=Number(res.coins);updateCoinDisplays();
-            setStoreMessage('');kwgAudio.play('success');kwgAlert('Purchase Successful!',{title:'PURCHASE SUCCESSFUL!',okLabel:'AWESOME!'});
+            setStoreMessage('');kwgAudio.play('success');kwgAlert('Purchase Successful!',{title:'PURCHASE SUCCESSFUL!',okLabel:'OK'});
             kwgRefreshPets();
           });
         };
