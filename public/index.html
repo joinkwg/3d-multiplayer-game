@@ -3718,7 +3718,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         !kwgOwnedPets.has(p.petKey)&&
         (kwgStoreSpecies==='all'||p.petKey.startsWith(kwgStoreSpecies+'_')));
       const ownedIds=ownedStoreIdSet();
-      return storeItems.filter(item=>item.category===activeStoreCategory&&!ownedIds.has(Number(item.id))&&['procedural','image','glb','builtin'].includes(item.assetKind));
+      return storeItems.filter(item=>item.category===activeStoreCategory&&!ownedIds.has(Number(item.id))&&item.isVisible!==false&&['procedural','image','glb','builtin'].includes(item.assetKind)).sort((a,b)=>{
+        const ia=Number(a.metadata?.styleIndex??9999),ib=Number(b.metadata?.styleIndex??9999);
+        if(ia!==ib)return ia-ib;
+        const ca=Number(a.metadata?.colorIndex??9999),cb=Number(b.metadata?.colorIndex??9999);
+        return ca-cb||String(a.name).localeCompare(String(b.name));
+      });
     }
     function kwgStoreOwnedItems(){
       if(kwgStoreDepartment==='pets')return kwgPetCatalog.filter(p=>kwgOwnedPets.has(p.petKey));
@@ -5637,9 +5642,69 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         }
         sculpt(parts,c);
       }
-      if(selected.eyes){const c=color('eyes','#161616'),st=style('eyes');const eyeRoot=new THREE.Group();group.add(eyeRoot);eyeRoot.position.set(0,2.10,.355);for(const x of [-.145,.145]){const e=add(eyeRoot,new THREE.SphereGeometry(st==='Big Sparkle'?.105:.077,12,10),c,x,0,0);e.scale.y=st==='Sleepy'?.45:1;add(eyeRoot,new THREE.SphereGeometry(.022,8,6),'#ffffff',x-.025,.025,.055);}eyeRoot.userData.kwgBlink=true;group.userData.kwgEyeRoot=eyeRoot;}
-      if(selected.mouth){const st=style('mouth'),c=color('mouth','#54242c');const mouth=add(group,new THREE.TorusGeometry(st==='Open'||st==='Surprised'?.075:.11,.024,8,18,st==='Smile'||st==='Grin'?Math.PI:Math.PI*2),c,0,1.88,.363);if(st==='Smile'||st==='Grin')mouth.rotation.z=Math.PI;}
-      if(selected.flightsuits){const c=color('flightsuits','#e54545');const suit=add(group,new THREE.BoxGeometry(.83,.72,.48),c,0,1.30,0);suit.material.transparent=true;suit.material.opacity=.88;for(const x of [-1,1]){const wing=add(group,new THREE.BoxGeometry(.65,.045,.47),c,x*.77,1.32,-.13);wing.rotation.z=x*.16;}group.userData.hasFlightsuit=true;}
+      // Layered face detailing: each expression has its own outline and proportions.
+      if(selected.eyes){
+        const c=color('eyes','#20242d'),st=style('eyes');
+        const eyeRoot=new THREE.Group();group.add(eyeRoot);eyeRoot.position.set(0,2.095,.356);
+        const sleepy=/Sleepy|Relaxed|Half/i.test(st),angry=/Angry|Fierce/i.test(st),
+              sparkle=/Sparkle|Star/i.test(st),wide=/Big|Wide|Surprised/i.test(st);
+        for(const x of [-.145,.145]){
+          const scl=wide?1.24:sleepy?.73:1;
+          const socket=add(eyeRoot,new THREE.SphereGeometry(.103,20,14),'#f8f4ee',x,0,0);
+          socket.scale.set(.94,scl,.40);
+          const iris=add(eyeRoot,new THREE.SphereGeometry(.065,18,12),c,x,0,.047);
+          iris.scale.set(1,sleepy?.76:1,.45);
+          add(eyeRoot,new THREE.SphereGeometry(.034,16,10),'#141923',x,0,.075).scale.z=.50;
+          add(eyeRoot,new THREE.SphereGeometry(sparkle?.024:.014,10,8),'#ffffff',x-.020,.024,.097);
+          if(sleepy){const lid=add(eyeRoot,new THREE.BoxGeometry(.18,.028,.025),'#413b40',x,.049,.069);lid.rotation.z=x>0?-.08:.08;}
+          if(angry){const brow=add(eyeRoot,new THREE.BoxGeometry(.18,.032,.034),'#343039',x,.130,.035);brow.rotation.z=x>0?.25:-.25;}
+          if(/Lashes|Doll/i.test(st))for(const dx of [-.065,0,.065]){
+            const lash=add(eyeRoot,new THREE.ConeGeometry(.012,.055,7),'#20212a',x+dx,.11,.03);
+            lash.rotation.z=dx*3;
+          }
+        }
+        eyeRoot.userData.kwgBlink=true;group.userData.kwgEyeRoot=eyeRoot;
+      }
+      if(selected.mouth){
+        const st=style('mouth'),c=color('mouth','#713c47');
+        const isOpen=/Open|Surprised|Ooh|Gasp/i.test(st),isSmile=/Smile|Grin|Happy|Cheer/i.test(st),
+              isFrown=/Frown|Sad|Grumpy/i.test(st),isTeeth=/Teeth|Grin/i.test(st);
+        if(isOpen){
+          const opening=add(group,new THREE.SphereGeometry(.078,20,16),'#41202d',0,1.88,.37);
+          opening.scale.set(1,isTeeth?.65:1.25,.32);
+          if(isTeeth)add(group,new THREE.BoxGeometry(.105,.035,.025),'#fff7ec',0,1.895,.405);
+        }else{
+          const curve=new THREE.CatmullRomCurve3([
+            new THREE.Vector3(-.105,1.88,.378),
+            new THREE.Vector3(0,isSmile?1.83:isFrown?1.93:1.88,.398),
+            new THREE.Vector3(.105,1.88,.378)]);
+          add(group,new THREE.TubeGeometry(curve,20,.018,8,false),c,0,0,0);
+          if(isTeeth)add(group,new THREE.BoxGeometry(.13,.045,.018),'#fff8ed',0,1.866,.392);
+        }
+      }
+      if(selected.flightsuits){
+        const c=color('flightsuits','#e54545'),st=style('flightsuits');
+        const fabric=mat(c),dark=mat('#26303c'),trim=mat('#e4e8e9');
+        const suit=add(group,new THREE.BoxGeometry(.86,.76,.50),c,0,1.31,0);
+        suit.material=fabric;
+        for(const x of [-1,1]){
+          // Tapered wing membrane, articulated seams and wrist attachment.
+          const shape=new THREE.Shape();shape.moveTo(0,0);shape.lineTo(.73,.07);shape.lineTo(.57,-.42);shape.lineTo(.18,-.31);shape.closePath();
+          const geo=new THREE.ShapeGeometry(shape);
+          const wing=new THREE.Mesh(geo,fabric);wing.position.set(x*.34,1.55,-.03);
+          if(x<0)wing.scale.x=-1;
+          wing.rotation.y=x*.16;group.add(wing);
+          const seam=new THREE.Mesh(new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(x*.37,1.53,-.015),new THREE.Vector3(x*.95,1.31,-.012)]),
+            new THREE.LineBasicMaterial({color:'#26303c'}));group.add(seam);
+          add(group,new THREE.BoxGeometry(.10,.36,.09),'#26303c',x*.42,1.36,.26);
+        }
+        add(group,new THREE.BoxGeometry(.10,.64,.035),'#e8e8e8',0,1.34,.275);
+        add(group,new THREE.BoxGeometry(.87,.10,.54),'#26303c',0,1.04,0);
+        for(const x of [-.31,.31])add(group,new THREE.BoxGeometry(.11,.11,.08),'#e4e8e9',x,1.53,.27);
+        if(/Stealth|Night|Shadow/i.test(st))add(group,new THREE.BoxGeometry(.38,.07,.035),'#52c6db',0,1.56,.286);
+        group.userData.hasFlightsuit=true;
+      }
       group.userData.kwgProcedural=selected;
     }
     function kwgUpdateBlink(mesh,time){const root=mesh?.userData?.kwgEyeRoot;if(!root)return;const phase=(time/1000+((mesh.id*13)%19))%4.7;root.scale.y=phase>4.49&&phase<4.64?.10:1;}
