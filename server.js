@@ -3179,7 +3179,7 @@ io.on('connection', (socket) => {
         pool.query(`
           SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible,
                  (created_by IS NOT NULL) AS is_uploaded
-          FROM store_items WHERE ($1::boolean OR is_visible=true)
+          FROM store_items WHERE ($1::boolean OR is_visible=true) AND (asset_kind <> 'avatar_glb' OR $1::boolean)
           ORDER BY category ASC, created_at DESC
         `,[!!socket.user.isAdmin]),
         pool.query(`
