@@ -5517,7 +5517,104 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(!customEyes)add('eyes',app.builtinEyes||'none',.45,.19,2.115);
       if(!customMouth)add('mouth',app.builtinMouth||'none',.31,.13,1.94);
     }
-    function addBuiltinHair(group,app,headShape,customHead){if(customHead||headShape==='headless')return;const s=app.hairStyle||'classic';if(s==='none')return;const mat=new THREE.MeshLambertMaterial({color:app.hairColor||'#3a261b'});const add=(g,x,y,z)=>{const m=new THREE.Mesh(g,mat);m.position.set(x,y,z);group.add(m)};if(s==='classic')add(new THREE.SphereGeometry(.382,20,12,0,Math.PI*2,0,Math.PI*.30),0,2.07,0);else if(s==='sidepart'){add(new THREE.BoxGeometry(.64,.13,.63),0,2.34,0);add(new THREE.BoxGeometry(.14,.18,.60),-.25,2.26,0)}else if(s==='spiky'){add(new THREE.BoxGeometry(.62,.10,.60),0,2.32,0);[-.22,0,.22].forEach(x=>add(new THREE.ConeGeometry(.10,.24,4),x,2.48,0))}else if(s==='bob'){add(new THREE.BoxGeometry(.64,.12,.61),0,2.34,0);add(new THREE.BoxGeometry(.12,.34,.58),-.28,2.21,0);add(new THREE.BoxGeometry(.12,.34,.58),.28,2.21,0)}else if(s==='mohawk')add(new THREE.BoxGeometry(.13,.32,.62),0,2.48,0);else if(s==='flattop')add(new THREE.BoxGeometry(.58,.20,.56),0,2.41,0);else if(s==='ponytail'){add(new THREE.BoxGeometry(.62,.11,.60),0,2.34,0);add(new THREE.SphereGeometry(.14,12,10),0,2.20,-.41);add(new THREE.BoxGeometry(.15,.38,.15),0,1.99,-.42)}}
+    // Round 3: soft sculpted native hairstyles. Geometry only; inventory/store logic untouched.
+    function addBuiltinHair(group,app,headShape,customHead){
+      if(customHead||headShape==='headless')return;
+      const style=app.hairStyle||'classic';
+      if(style==='none')return;
+      const mat=new THREE.MeshLambertMaterial({color:app.hairColor||'#3a261b',side:THREE.DoubleSide});
+      const add=(geometry,x=0,y=0,z=0,rx=0,ry=0,rz=0)=>{
+        const mesh=new THREE.Mesh(geometry,mat);
+        mesh.position.set(x,y,z);mesh.rotation.set(rx,ry,rz);group.add(mesh);return mesh;
+      };
+      const oval=(x,y,z,sx,sy,sz,rz=0,ry=0)=>{
+        const mesh=add(new THREE.SphereGeometry(1,20,14),x,y,z,0,ry,rz);
+        mesh.scale.set(sx,sy,sz);return mesh;
+      };
+      // The rounded foundation follows the avatar's ~0.37-radius head rather than a boxy helmet.
+      const cap=(height=.34,wide=1)=>{
+        const mesh=add(new THREE.SphereGeometry(1,32,20,0,Math.PI*2,0,Math.PI*.52),0,2.038,0);
+        mesh.scale.set(.383*wide,height,.383*wide);
+        return mesh;
+      };
+      // Smooth tube with varying radius: softly tapered clumps, rather than cones or hard cylinders.
+      const strand=(coords,radii,sides=9)=>{
+        const curve=new THREE.CatmullRomCurve3(coords.map(p=>new THREE.Vector3(...p)));
+        const count=Math.max(14,coords.length*8),vertices=[],normals=[],indices=[];
+        for(let i=0;i<=count;i++){
+          const t=i/count,p=curve.getPoint(t),tangent=curve.getTangent(t).normalize();
+          let guide=new THREE.Vector3(0,0,1);
+          if(Math.abs(tangent.dot(guide))>.94)guide.set(1,0,0);
+          const a=new THREE.Vector3().crossVectors(tangent,guide).normalize();
+          const b=new THREE.Vector3().crossVectors(tangent,a).normalize();
+          const u=t*(radii.length-1),j=Math.min(radii.length-2,Math.floor(u)),f=u-j;
+          const radius=THREE.MathUtils.lerp(radii[j],radii[j+1],f);
+          for(let k=0;k<=sides;k++){
+            const angle=k/sides*Math.PI*2;
+            const direction=a.clone().multiplyScalar(Math.cos(angle)).addScaledVector(b,Math.sin(angle));
+            const v=p.clone().addScaledVector(direction,radius);
+            vertices.push(v.x,v.y,v.z);normals.push(direction.x,direction.y,direction.z);
+          }
+        }
+        for(let i=0;i<count;i++)for(let k=0;k<sides;k++){
+          const a=i*(sides+1)+k,b=a+sides+1;indices.push(a,b,a+1,b,b+1,a+1);
+        }
+        const g=new THREE.BufferGeometry();
+        g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+        g.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));g.setIndex(indices);
+        add(g);
+      };
+      if(style==='classic'){
+        cap(.385);
+        oval(-.12,2.339,.15,.23,.080,.20,-.10);
+        oval(.155,2.336,.12,.21,.067,.19,.11);
+      }else if(style==='sidepart'){
+        cap(.357);
+        oval(-.15,2.355,.075,.235,.100,.27,-.16);
+        strand([[-.22,2.34,.20],[-.08,2.406,.29],[.15,2.366,.30],[.30,2.29,.20]],[.105,.127,.085,.018]);
+        strand([[-.19,2.33,.11],[-.07,2.40,.12],[.13,2.365,.11]],[.070,.086,.016]);
+      }else if(style==='spiky'){
+        cap(.348);
+        const spikes=[
+          [[-.29,2.31,.17],[-.33,2.43,.18],[-.39,2.50,.17]],
+          [[-.17,2.35,.21],[-.16,2.50,.26],[-.21,2.59,.28]],
+          [[-.015,2.36,.19],[.035,2.52,.27],[.065,2.60,.30]],
+          [[.17,2.34,.18],[.20,2.47,.22],[.28,2.53,.25]],
+          [[.28,2.28,.06],[.31,2.41,.10],[.37,2.47,.10]],
+          [[-.15,2.39,-.06],[-.20,2.53,-.09],[-.23,2.57,-.14]],
+          [[.09,2.39,-.11],[.14,2.54,-.15],[.17,2.59,-.20]]
+        ];
+        spikes.forEach((points,i)=>strand(points,[.105+(i%3)*.008,.071,.002]));
+      }else if(style==='bob'){
+        cap(.36,1.03);
+        oval(-.293,2.12,.015,.119,.285,.307,-.07);
+        oval(.293,2.12,.015,.119,.285,.307,.07);
+        oval(0,2.37,.115,.30,.105,.29);
+        strand([[-.22,2.35,.22],[-.06,2.36,.34],[.13,2.32,.33],[.26,2.26,.25]],[.10,.115,.08,.008]);
+      }else if(style==='mohawk'){
+        cap(.315);
+        const centers=[.28,.13,-.04,-.20,-.31];
+        centers.forEach((z,i)=>{
+          const h=[.25,.33,.37,.30,.23][i];
+          strand([[0,2.34,z],[.01,2.34+h*.65,z-.02],[.028,2.34+h,z-.085]],[.113,.095,.003]);
+        });
+      }else if(style==='flattop'){
+        cap(.335);
+        // Rounded, tidy upright volume with a subtly flattened crown.
+        const g=new THREE.CylinderGeometry(.292,.332,.24,32,3);
+        const m=add(g,0,2.418,0);m.scale.z=.94;
+        oval(0,2.535,0,.29,.033,.27);
+        oval(-.238,2.402,.09,.085,.09,.195);
+        oval(.238,2.402,.09,.085,.09,.195);
+      }else if(style==='ponytail'){
+        cap(.37);
+        oval(0,2.33,-.23,.25,.11,.17);
+        oval(0,2.31,-.36,.115,.13,.12);
+        strand([[0,2.31,-.41],[.02,2.20,-.48],[.025,2.04,-.48],[0,1.94,-.44]],[.112,.124,.10,.045]);
+        strand([[-.075,2.27,-.47],[-.10,2.13,-.53],[-.075,1.98,-.47]],[.053,.066,.008]);
+        oval(-.09,2.35,.20,.21,.065,.17,-.1);
+      }
+    }
 
     const KWG_NEW_CATEGORIES=['hair','hats','heads','eyes','mouth','skin','tops','bottoms','shoes','flightsuits'];
     const kwgProceduralSlot=cat=>cat+'ItemId';
