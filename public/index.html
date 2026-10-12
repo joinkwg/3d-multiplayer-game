@@ -5511,43 +5511,86 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function addBuiltinHair(group,app,headShape,customHead){if(customHead||headShape==='headless')return;const s=app.hairStyle||'classic';if(s==='none')return;const mat=new THREE.MeshLambertMaterial({color:app.hairColor||'#3a261b'});const add=(g,x,y,z)=>{const m=new THREE.Mesh(g,mat);m.position.set(x,y,z);group.add(m)};if(s==='classic')add(new THREE.SphereGeometry(.382,20,12,0,Math.PI*2,0,Math.PI*.30),0,2.07,0);else if(s==='sidepart'){add(new THREE.BoxGeometry(.64,.13,.63),0,2.34,0);add(new THREE.BoxGeometry(.14,.18,.60),-.25,2.26,0)}else if(s==='spiky'){add(new THREE.BoxGeometry(.62,.10,.60),0,2.32,0);[-.22,0,.22].forEach(x=>add(new THREE.ConeGeometry(.10,.24,4),x,2.48,0))}else if(s==='bob'){add(new THREE.BoxGeometry(.64,.12,.61),0,2.34,0);add(new THREE.BoxGeometry(.12,.34,.58),-.28,2.21,0);add(new THREE.BoxGeometry(.12,.34,.58),.28,2.21,0)}else if(s==='mohawk')add(new THREE.BoxGeometry(.13,.32,.62),0,2.48,0);else if(s==='flattop')add(new THREE.BoxGeometry(.58,.20,.56),0,2.41,0);else if(s==='ponytail'){add(new THREE.BoxGeometry(.62,.11,.60),0,2.34,0);add(new THREE.SphereGeometry(.14,12,10),0,2.20,-.41);add(new THREE.BoxGeometry(.15,.38,.15),0,1.99,-.42)}}
     // V3.57 — Low-poly stylized MMO avatars. Every wearable/color is a server-owned
     // procedural catalog item; no unrestricted palette controls are used.
+    // V3.57.2 — Graphic, hand-drawn-style cartoon facial atlases. The artwork
+    // follows the actual skull surface, not detached eyeballs / mouth objects.
     function kwgAvatarDecal(kind,style,color){
-      const c=document.createElement('canvas');c.width=256;c.height=128;
-      const g=c.getContext('2d');g.lineCap='round';g.lineJoin='round';
+      const canvas=document.createElement('canvas');canvas.width=512;canvas.height=256;
+      const g=canvas.getContext('2d');g.scale(2,2);g.lineCap='round';g.lineJoin='round';
+      const ink='#283044',white='#fffdf5',iris=color||'#3d648b';
+      function path(points,fill,stroke,width=3){
+        g.beginPath();points(g);if(fill){g.fillStyle=fill;g.fill();}
+        if(stroke){g.strokeStyle=stroke;g.lineWidth=width;g.stroke();}
+      }
       if(kind==='eyes'){
-        const pupil=color||'#242b3b';
-        for(const x of [75,181]){
-          g.save();g.translate(x,63);
-          const w=['wide','anime','round','monster'].includes(style)?36:29;
-          const h=['sleepy','shy'].includes(style)?23:style==='happy'?13:39;
-          g.fillStyle='#fffaf3';g.beginPath();g.ellipse(0,0,w,h,0,0,Math.PI*2);g.fill();
-          if(style==='happy'){
-            g.strokeStyle='#283143';g.lineWidth=10;g.beginPath();g.arc(0,7,27,Math.PI*1.1,Math.PI*1.9);g.stroke();
+        for(const side of [-1,1]){
+          const x=128+side*53,y=71;
+          g.save();g.translate(x,y);
+          const narrow=['sleepy','shy'].includes(style),happy=style==='happy';
+          const cat=style==='cat'||style==='monster';
+          const wide=['wide','anime','round','star'].includes(style);
+          const w=wide?33:29,h=narrow?20:wide?35:30;
+          // Upper eyelid, dark liner and sclera share the same continuous shape.
+          if(happy){
+            path(c=>{c.moveTo(-w,7);c.quadraticCurveTo(0,-22,w,7);},null,ink,5.2);
           }else{
-            g.fillStyle='#2c3240';g.beginPath();g.ellipse(style==='cat'?3:0,0,style==='cat'?14:22,style==='cat'?32:27,0,0,Math.PI*2);g.fill();
-            g.fillStyle=pupil;g.beginPath();g.ellipse(style==='cat'?3:0,0,style==='cat'?11:19,style==='cat'?29:24,0,0,Math.PI*2);g.fill();
-            g.fillStyle='#ffffff';g.beginPath();g.ellipse(-7,-10,7,9,0,0,Math.PI*2);g.fill();
-            if(style==='star'){g.fillStyle='#fff1a0';g.font='32px sans-serif';g.fillText('★',-16,14);}
+            path(c=>{
+              c.moveTo(-w,0);c.bezierCurveTo(-w,-h*1.12,w*.65,-h*1.3,w,0);
+              c.bezierCurveTo(w*.9,h*.75,-w*.7,h*.95,-w,0);c.closePath();
+            },white,ink,4.5);
+            g.save();g.beginPath();g.ellipse(0,1,w-4,h-3,0,0,Math.PI*2);g.clip();
+            g.fillStyle=ink;g.beginPath();g.ellipse(cat?side*4:0,2,cat?18:21,cat?26:27,0,0,Math.PI*2);g.fill();
+            g.fillStyle=iris;g.beginPath();g.ellipse(cat?side*4:0,2,cat?15:18,cat?24:23,0,0,Math.PI*2);g.fill();
+            g.fillStyle=cat?'#1b2032':'#151b2a';g.beginPath();g.ellipse(cat?side*4:0,3,cat?5:10,cat?21:15,0,0,Math.PI*2);g.fill();
+            g.fillStyle='#ffffff';g.beginPath();g.ellipse(-8,-9,7,10,-.3,0,Math.PI*2);g.fill();
+            g.globalAlpha=.83;g.beginPath();g.ellipse(10,11,3.5,4,0,0,Math.PI*2);g.fill();g.globalAlpha=1;
+            if(style==='star'){
+              g.fillStyle='#fff2b3';g.font='bold 19px sans-serif';g.fillText('★',-9,7);
+            }
+            g.restore();
+            path(c=>{c.moveTo(-w+2,-7);c.quadraticCurveTo(0,-h*1.20,w-2,-8);},null,ink,5);
+            if(['anime','wide','shy','star'].includes(style))for(let k=0;k<2;k++){
+              path(c=>{c.moveTo(-w+2+k*6,-7-k*4);c.lineTo(-w-5+k*5,-16-k*4);},null,ink,3.5);
+            }
+            if(narrow){g.fillStyle='#f1b2a4';g.globalAlpha=.45;g.beginPath();g.ellipse(0,23,20,5,0,0,Math.PI*2);g.fill();g.globalAlpha=1;}
           }
-          if(style==='sleepy'||style==='shy'){g.strokeStyle='#27313c';g.lineWidth=9;g.beginPath();g.moveTo(-29,-15);g.quadraticCurveTo(0,-26,29,-15);g.stroke();}
+          // Brows add expression without extra floating 3D shapes.
+          const browY=style==='sleepy'?-39:style==='monster'?-41:-43;
+          path(c=>{c.moveTo(-21,browY+2);c.quadraticCurveTo(style==='monster'?7:0,browY-(style==='monster'?-5:6),22,browY);},null,ink,style==='anime'?4.6:3.5);
           g.restore();
         }
       }else{
-        g.translate(128,54);g.strokeStyle=color||'#6b3348';g.fillStyle=color||'#6b3348';g.lineWidth=12;
-        if(['surprised','monster'].includes(style)){g.beginPath();g.ellipse(0,0,style==='monster'?50:22,style==='monster'?29:28,0,0,Math.PI*2);g.fill();}
-        else if(style==='frown'){g.beginPath();g.arc(0,35,50,Math.PI*1.16,Math.PI*1.84);g.stroke();}
-        else if(style==='tiny'){g.beginPath();g.ellipse(0,5,12,7,0,0,Math.PI*2);g.fill();}
-        else if(style==='glossy_lips'||style==='heart_lips'){g.beginPath();g.moveTo(-50,0);g.quadraticCurveTo(-25,-26,0,-10);g.quadraticCurveTo(25,-26,50,0);g.quadraticCurveTo(0,40,-50,0);g.fill();g.fillStyle='#fff0ef';g.fillRect(-20,5,40,3);}
-        else{g.beginPath();g.moveTo(-50,style==='smirk'?4:-10);g.quadraticCurveTo(0,style==='grin'||style==='toothy'?55:33,50,style==='smirk'?-13:-10);g.stroke();}
-        if(['fangs','monster','toothy','grin'].includes(style)){
-          g.fillStyle='#fff9ef';
-          for(const x of [-30,-10,10,30]){g.beginPath();g.moveTo(x-7,-3);g.lineTo(x+7,-3);g.lineTo(x,style==='fangs'?20:10);g.fill();}
+        g.save();g.translate(128,65);g.strokeStyle=ink;g.lineWidth=5.5;
+        const lipstick=['glossy_lips','heart_lips'].includes(style);
+        if(style==='tiny'){
+          path(c=>{c.moveTo(-10,0);c.quadraticCurveTo(0,8,10,0);},null,ink,5);
+        }else if(style==='surprised'){
+          path(c=>{c.ellipse(0,2,14,23,0,0,Math.PI*2);},'#613747',ink,4);
+          path(c=>{c.ellipse(-4,-6,4,6,0,0,Math.PI*2);},'#e9a2a8');
+        }else if(style==='monster'||style==='fangs'){
+          path(c=>{c.moveTo(-41,-10);c.quadraticCurveTo(0,-18,41,-10);c.quadraticCurveTo(36,33,0,32);c.quadraticCurveTo(-36,31,-41,-10);c.closePath();},'#542d40',ink,5);
+          g.fillStyle=white;
+          for(const sx of [-27,-8,12,30])path(c=>{c.moveTo(sx-8,-9);c.lineTo(sx+8,-9);c.lineTo(sx,style==='fangs'?14:9);c.closePath();},white);
+        }else if(style==='toothy'||style==='grin'){
+          path(c=>{c.moveTo(-44,-7);c.quadraticCurveTo(0,0,44,-7);c.quadraticCurveTo(34,27,0,26);c.quadraticCurveTo(-34,26,-44,-7);c.closePath();},white,ink,4.5);
+          for(const sx of [-22,0,22])path(c=>{c.moveTo(sx,-3);c.lineTo(sx,23);},null,'#a7a7b2',2.5);
+        }else if(lipstick){
+          const lip=color||'#b14f75';
+          path(c=>{c.moveTo(-40,0);c.quadraticCurveTo(-18,-19,0,-7);c.quadraticCurveTo(19,-19,40,0);c.quadraticCurveTo(0,28,-40,0);c.closePath();},lip,'#69354b',3);
+          path(c=>{c.moveTo(-22,5);c.quadraticCurveTo(0,10,23,4);},null,'#fbd4df',3);
+        }else if(style==='frown'){
+          path(c=>{c.moveTo(-35,19);c.quadraticCurveTo(0,-20,35,19);},null,ink,5);
+        }else{
+          const smirk=style==='smirk';
+          path(c=>{c.moveTo(-38,smirk?2:-8);c.quadraticCurveTo(0,smirk?29:25,38,smirk?-14:-8);},null,ink,5.5);
+          if(style==='smile')path(c=>{c.moveTo(-38,-8);c.lineTo(-42,-2);c.moveTo(38,-8);c.lineTo(41,-3);},null,ink,3);
         }
+        g.restore();
       }
-      const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;
-      return new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false,side:THREE.DoubleSide});
+      const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
+      tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;
+      return new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1});
     }
-    // V3.57.1 — Sculpted low-poly cartoon avatars. Custom ring lofts, swept
+    // V3.57.2 — Reference-proportioned cartoon avatars. Sculpted ring lofts, swept
     // tapered limbs, angular hair cards and shaped shoes replace ball primitives.
     // All wearable catalog IDs, animation pivots and ownership stay unchanged.
     function buildBlockyAvatar(app={},cosmetics={}){
@@ -5558,9 +5601,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const head=entry('heads','round','#f2f1e9'),eyes=entry('eyes','classic','#242b3b');
       const mouth=entry('mouths','smile','#a15361'),skin=entry('skincolors','natural','#efbc97');
       const suit=cosmetics.flightsuits?.metadata||null;
-      const material=(color,roughness=.83)=>new THREE.MeshStandardMaterial({color:color||'#888',roughness,metalness:0,flatShading:false,side:THREE.FrontSide});
+      const material=(color,roughness=.94)=>new THREE.MeshStandardMaterial({color:color||'#888',roughness,metalness:0,flatShading:false,side:THREE.FrontSide});
       const skinMat=material(skin.color),topMat=material(top.color),bottomMat=material(bottom.color),shoeMat=material(shoes.color),hairMat=material(hair.color);
-      const trimMat=material('#28303b'),whiteMat=material('#f3f0e7'),soleMat=material('#e9e9e4'),seamMat=material('#202a38');
+      const trimMat=material('#28303b'),whiteMat=material('#f3f0e7'),soleMat=material('#e9e9e4'),seamMat=material('#202a38'),softShadow=material('#414456');
       const add=(parent,geometry,mat,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geometry,mat);o.position.set(x,y,z);parent.add(o);return o;};
       const box=(p,m,x,y,z,w,h,d)=>add(p,new THREE.BoxGeometry(w,h,d),m,x,y,z);
       // Each ring: [y, width radius, depth radius, centerX, centerZ].
@@ -5607,101 +5650,133 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.setIndex(ids);g.computeVertexNormals();return add(p,g,m);
       }
       function cone(p,m,x,y,z,rt,rb,h,n=6){return add(p,new THREE.CylinderGeometry(rt,rb,h,n),m,x,y,z);}
-      // Legs are single tailored forms with a fitted knee and tapered ankle.
+      // The JumpStart-like silhouette: an oversized head on a short neck,
+      // compact sloping shoulders, narrow waist, tapered legs, expressive hands
+      // and chunky shaped shoes. Nothing is made of disconnected ball joints.
       const leftLeg=new THREE.Group(),rightLeg=new THREE.Group();
-      leftLeg.position.set(-.205,.91,0);rightLeg.position.set(.205,.91,0);
-      const legShort=['shorts','short_shorts'].includes(bottom.style);
+      leftLeg.position.set(-.174,.92,0);rightLeg.position.set(.174,.92,0);
+      const shortHem=bottom.style==='short_shorts'?-.22:bottom.style==='shorts'?-.41:-.74;
+      const isShort=['shorts','short_shorts'].includes(bottom.style);
+      const skirt=bottom.style==='skirt';
       for(const leg of [leftLeg,rightLeg]){
-        const hem=bottom.style==='short_shorts'?-.31:bottom.style==='shorts'?-.43:-.73;
-        loft(leg,[[.08,.215,.225],[.015,.222,.235],[-.19,.205,.215],[hem+.04,.185,.195],[hem,.187,.198]],bottomMat,12,2.5);
-        if(legShort||bottom.style==='skirt')loft(leg,[[hem+.018,.156,.164],[hem-.07,.156,.16],[-.59,.137,.145],[-.76,.119,.126]],skinMat,10);
-        else loft(leg,[[-.70,.147,.157],[-.78,.13,.14]],bottomMat,10);
-        const boot=shoes.style==='boots';
-        if(boot){loft(leg,[[-.51,.173,.176],[-.58,.19,.20],[-.78,.20,.22],[-.86,.21,.24]],shoeMat,10,2.8);}
-        else if(['sandals','flip_flops'].includes(shoes.style)){
-          loft(leg,[[-.77,.134,.145],[-.82,.16,.19],[-.86,.18,.21]],skinMat,10);
-        }
-        // Sculpted shoe silhouette: narrow ankle, wider forefoot, protruding toe.
-        loft(leg,[[-.78,.16,.18,0,.035],[-.82,.205,.23,0,.08],[-.865,.23,.32,0,.14],[-.90,.235,.34,0,.15],[-.928,.228,.335,0,.15]],shoeMat,12,2.9);
-        loft(leg,[[-.91,.23,.34,0,.15],[-.95,.237,.345,0,.15],[-.96,.215,.31,0,.15]],soleMat,12,3);
-        if(shoes.style==='sneakers'){
-          ribbon(leg,[[-.10,-.822,.29,.17],[0,-.842,.37,.18],[.10,-.84,.30,.14]],whiteMat,.02);
-          for(let i=0;i<3;i++)ribbon(leg,[[-.09,-.819+i*.018,.298,.035],[.09,-.819+i*.018,.298,.035]],soleMat,.01);
-        }else if(shoes.style==='boots'){
-          ribbon(leg,[[-.16,-.61,.18,.12],[0,-.625,.215,.20],[.16,-.61,.18,.12]],trimMat,.018);
+        const pantsEnd=skirt?-.15:shortHem;
+        loft(leg,[[.09,.175,.18],[.02,.181,.185],[-.15,.165,.172],[pantsEnd+.06,.151,.16],[pantsEnd,.154,.158]],bottomMat,14,2.65);
+        if(isShort||skirt){
+          loft(leg,[[pantsEnd+.015,.133,.14],[pantsEnd-.10,.134,.14],[-.52,.113,.12],[-.74,.098,.108]],skinMat,12,2.6);
         }else{
-          ribbon(leg,[[-.15,-.79,.26,.11],[0,-.77,.32,.12],[.15,-.79,.26,.11]],shoeMat,.025);
+          loft(leg,[[-.73,.125,.139],[-.79,.116,.132]],bottomMat,12,2.6);
+          // A real hem instead of a painted-on pant cuff.
+          loft(leg,[[-.70,.134,.148],[-.75,.14,.153],[-.775,.134,.148]],bottomMat,12,2.6);
+        }
+        if(shoes.style==='boots'){
+          loft(leg,[[-.48,.144,.152],[-.58,.166,.175],[-.72,.17,.184],[-.79,.166,.181]],shoeMat,12,2.8);
+          loft(leg,[[-.48,.147,.154],[-.51,.16,.164]],trimMat,12);
+        }else if(['sandals','flip_flops'].includes(shoes.style)){
+          loft(leg,[[-.75,.104,.12],[-.82,.12,.135],[-.855,.15,.19]],skinMat,12);
+        }
+        // Separate vamp, rounded toe cap and colored outsole share a fitted
+        // shoe shape. The long toe points toward the front of the avatar (+Z).
+        loft(leg,[[-.79,.12,.15,0,.025],[-.825,.16,.215,0,.09],[-.86,.195,.28,0,.15],[-.898,.198,.29,0,.15],[-.919,.187,.275,0,.15]],shoeMat,16,2.8);
+        loft(leg,[[-.91,.196,.292,0,.15],[-.941,.205,.302,0,.15],[-.951,.184,.276,0,.15]],soleMat,16,2.9);
+        if(shoes.style==='sneakers'){
+          ribbon(leg,[[-.09,-.844,.298,.075],[0,-.85,.382,.12],[.09,-.844,.298,.075]],whiteMat,.012);
+          for(let k=0;k<3;k++)ribbon(leg,[[-.067,-.821-k*.011,.298+k*.009,.022],[.067,-.821-k*.011,.298+k*.009,.022]],soleMat,.008);
+          ribbon(leg,[[-.14,-.91,.37,.035],[0,-.91,.44,.065],[.14,-.91,.37,.035]],whiteMat,.014);
+        }else if(shoes.style==='boots'){
+          ribbon(leg,[[-.14,-.55,.155,.09],[0,-.555,.21,.13],[.14,-.55,.155,.09]],trimMat,.018);
+        }else{
+          ribbon(leg,[[-.15,-.816,.22,.075],[0,-.814,.35,.09],[.15,-.816,.22,.075]],shoeMat,.02);
         }
       }
       group.add(leftLeg,rightLeg);
-      // Human torso: sloped shoulders, narrow waist, defined hem and neck.
-      loft(group,[[.82,.305,.22],[.92,.34,.245],[1.15,.34,.27],[1.37,.385,.28],[1.59,.445,.285],[1.71,.35,.25],[1.75,.15,.14]],skinMat,14,2.35);
+      // The hidden under-body is deliberately narrow: clothes define the
+      // silhouette rather than a wide skin-colored ball poking through.
+      loft(group,[[.85,.245,.185],[1.02,.247,.192],[1.31,.273,.212],[1.57,.305,.218],[1.68,.26,.19],[1.72,.105,.105]],skinMat,16,2.65);
       const crop=top.style==='crop_top',tank=top.style==='tank_top';
-      const topBottom=crop?1.15:.94;
-      loft(group,[[topBottom,.31,.25],[topBottom+.055,.345,.27],[crop?1.29:1.17,.345,.272],[1.40,.393,.30],[1.58,.443,.29],[1.68,.365,.245],[1.72,.16,.16]],topMat,14,2.45);
-      if(bottom.style==='skirt')loft(group,[[.96,.305,.25],[.80,.365,.30],[.60,.50,.39],[.55,.51,.39]],bottomMat,14,2.3);
-      else loft(group,[[.96,.31,.235],[.88,.33,.255],[.80,.32,.24]],bottomMat,14,2.4);
-      if(top.style==='hoodie'){
-        // Raised hood rim and a recessed kangaroo pocket.
-        loft(group,[[1.64,.27,.245],[1.73,.285,.27],[1.78,.24,.25]],topMat,12);
-        const pocket=box(group,topMat,0,1.10,.278,.35,.18,.035);pocket.rotation.x=-.07;
-        for(const x of [-.055,.055])ribbon(group,[[x,1.72,.26,.018],[x,1.52,.31,.018]],whiteMat,.012);
+      const shirtBase=crop?1.13:.935;
+      const coat=top.style==='trench_coat';
+      const hoodie=top.style==='hoodie';
+      loft(group,[[shirtBase,.258,.212],[shirtBase+.045,.275,.222],[1.15,.275,.225],[1.36,.318,.242],[1.52,.359,.247],[1.62,.327,.232],[1.69,.243,.194],[1.73,.105,.108]],topMat,16,2.6);
+      // Waistline and waistband are deliberately slim and layered.
+      if(skirt){
+        loft(group,[[.945,.255,.218],[.84,.302,.255],[.67,.407,.332],[.60,.416,.342],[.57,.397,.329]],bottomMat,16,2.4);
+        loft(group,[[.575,.405,.332],[.555,.406,.33]],bottomMat,16,2.4);
+      }else{
+        loft(group,[[.955,.26,.212],[.91,.27,.218],[.85,.273,.224],[.80,.269,.223]],bottomMat,16,2.65);
+        if(bottom.style==='pants')ribbon(group,[[-.19,.965,.17,.05],[0,.964,.224,.05],[.19,.965,.17,.05]],trimMat,.015);
+      }
+      if(hoodie){
+        // Folded hood behind neck, tapered neckline and sewn-on pouch.
+        loft(group,[[1.60,.234,.222],[1.72,.245,.235],[1.79,.20,.215],[1.80,.127,.145]],topMat,14,2.5);
+        ribbon(group,[[-.15,1.15,.238,.10],[0,1.17,.254,.25],[.15,1.15,.238,.10]],topMat,.027);
+        for(const x of [-.044,.044])ribbon(group,[[x,1.68,.224,.013],[x,1.47,.26,.013]],soleMat,.008);
       }
       if(top.style==='suit'){
-        const lapel=material('#eee9e1');
-        ribbon(group,[[-.31,1.66,.24,.13],[-.12,1.48,.307,.16],[-.04,1.26,.304,.08]],lapel,.02);
-        ribbon(group,[[.31,1.66,.24,.13],[.12,1.48,.307,.16],[.04,1.26,.304,.08]],lapel,.02);
-        ribbon(group,[[0,1.61,.307,.05],[0,1.32,.312,.05]],trimMat,.02);
+        const lapel=material('#f2ede4');
+        ribbon(group,[[-.26,1.65,.20,.095],[-.10,1.47,.267,.115],[-.01,1.29,.249,.045]],lapel,.018);
+        ribbon(group,[[.26,1.65,.20,.095],[.10,1.47,.267,.115],[.01,1.29,.249,.045]],lapel,.018);
+        ribbon(group,[[0,1.61,.259,.047],[0,1.35,.26,.045]],trimMat,.018);
+        for(const y of [1.31,1.23])add(group,new THREE.SphereGeometry(.011,8,6),trimMat,0,y,.25);
       }
-      if(top.style==='trench_coat'){
-        for(const x of [-.22,.22])ribbon(group,[[x,1.42,.28,.27],[x*1.2,.96,.26,.28],[x*1.32,.70,.24,.32]],topMat,.075);
-        ribbon(group,[[-.34,1.06,.27,.10],[0,1.055,.30,.10],[.34,1.06,.27,.10]],trimMat,.025);
+      if(coat){
+        for(const sign of [-1,1]){
+          ribbon(group,[[sign*.16,1.40,.244,.23],[sign*.19,.97,.23,.22],[sign*.23,.72,.20,.245]],topMat,.085);
+          ribbon(group,[[sign*.29,1.59,.18,.11],[sign*.13,1.40,.26,.13]],soleMat,.02);
+        }
+        ribbon(group,[[-.25,1.02,.24,.07],[0,1.025,.27,.08],[.25,1.02,.24,.07]],trimMat,.016);
       }
-      if(top.style==='tank_top'){
-        for(const x of [-.30,.30])ribbon(group,[[x,1.73,.12,.105],[x,1.60,.27,.105]],topMat,.035);
+      if(tank){
+        for(const sign of [-1,1])ribbon(group,[[sign*.275,1.70,.14,.078],[sign*.26,1.52,.239,.079]],topMat,.018);
       }
-      // Arms are swept, slightly bent sleeves and tapered forearms, not capsules.
+      // Thin, tapered arms angled outward. Sleeve/skin seam is flush;
+      // small polygon hands and individual fingers stay in proportion.
       const leftArm=new THREE.Group(),rightArm=new THREE.Group();
-      leftArm.position.set(-.455,1.59,0);rightArm.position.set(.455,1.59,0);
+      leftArm.position.set(-.354,1.55,0);rightArm.position.set(.354,1.55,0);
       for(const [index,p] of [leftArm,rightArm].entries()){
         const sign=index===0?-1:1;
         const long=['long_sleeve','hoodie','suit','trench_coat'].includes(top.style);
-        const sleeveEnd=tank||crop?-.09:long?-.59:-.29;
-        sweep(p,[[0,.075,0],[sign*.055,-.07,0],[sign*.105,sleeveEnd,0]],[[.175,.17],[.16,.155],[long?.127:.145,long?.135:.15]],tank||crop?skinMat:topMat,10);
-        sweep(p,[[sign*.105,sleeveEnd,0],[sign*.13,sleeveEnd-.05,0],[sign*.205,-.68,.012]],[[.132,.135],[.129,.133],[.096,.103]],long?topMat:skinMat,10);
-        // Wrist, palm and three angular little fingers, matching the references.
-        sweep(p,[[sign*.205,-.67,.012],[sign*.215,-.77,.035],[sign*.205,-.83,.05]],[[.105,.105],[.12,.092],[.095,.082]],skinMat,9);
-        for(let f=0;f<3;f++){
-          const fx=sign*.205+(f-1)*.077;
-          sweep(p,[[fx,-.79,.065],[fx+(f-1)*.014,-.87,.08],[fx+(f-1)*.025,-.905,.087]],[[.037,.039],[.032,.033],[.013,.016]],skinMat,6);
+        const sleeveEnd=tank||crop?-.10:long?-.58:-.26;
+        sweep(p,[[0,.075,0],[sign*.055,-.08,0],[sign*.10,sleeveEnd,0]],[[.131,.132],[.124,.125],[long?.103:.115,long?.108:.115]],tank||crop?skinMat:topMat,12);
+        sweep(p,[[sign*.10,sleeveEnd,0],[sign*.14,sleeveEnd-.05,0],[sign*.21,-.69,.02]],[[.106,.112],[.102,.108],[.073,.083]],long?topMat:skinMat,12);
+        if(long)loft(p,[[sleeveEnd+.012,.112,.116,sign*.10,0],[sleeveEnd-.012,.107,.11,sign*.10,0]],topMat,10);
+        sweep(p,[[sign*.21,-.685,.02],[sign*.23,-.77,.035],[sign*.22,-.824,.055]],[[.075,.078],[.092,.072],[.077,.064]],skinMat,10);
+        for(let f=0;f<4;f++){
+          const fx=sign*.22+(f-1.5)*.044;
+          sweep(p,[[fx,-.792,.072],[fx+(f-1.5)*.007,-.858,.08],[fx+(f-1.5)*.009,-.883,.08]],[[.024,.027],[.021,.023],[.008,.01]],skinMat,7);
         }
-        sweep(p,[[sign*.13,-.75,.07],[sign*.04,-.81,.135],[sign*.02,-.85,.15]],[[.053,.048],[.04,.04],[.015,.016]],skinMat,6);
-        p.rotation.z=sign*.14;
+        sweep(p,[[sign*.155,-.747,.10],[sign*.09,-.807,.14],[sign*.07,-.84,.15]],[[.032,.034],[.028,.03],[.01,.012]],skinMat,7);
+        p.rotation.z=sign*.12;
       }
       group.add(leftArm,rightArm);
-      // Neck remains separate for a strong cartoon silhouette and clean collars.
-      loft(group,[[1.69,.115,.116],[1.86,.118,.115],[1.90,.135,.125]],skinMat,10);
-      const headGroup=new THREE.Group();headGroup.position.set(0,2.13,0);group.add(headGroup);
+      // Small neck that disappears naturally under the oversized head.
+      loft(group,[[1.68,.093,.10],[1.82,.102,.106],[1.91,.11,.116]],skinMat,12,2.5);
+      const headGroup=new THREE.Group();headGroup.position.set(0,2.12,0);group.add(headGroup);
       const headStyle=head.style||'round';
       const fantasy=['boxy','cat','alien','elf','robot'].includes(headStyle);
       const headMat=fantasy?material(head.color):skinMat;
       const angular=['square','boxy','robot'].includes(headStyle);
-      const wide=headStyle==='alien'?.465:headStyle==='oval'?.34:.385;
-      const deep=headStyle==='alien'?.355:.345;
-      const roundness=angular?5.5:headStyle==='heart'?2.7:2.25;
-      // A custom skull with cheekbones, a tapered chin, temple and brow. Its
-      // dimensions match the supplied big-headed MMO references.
-      const skull=[[-.405,.18,.19],[-.36,.29,.285],[-.245,wide*.92,deep*.97],[-.07,wide,deep],[.13,wide*1.015,deep],[.30,wide*.87,deep*.94],[.39,wide*.52,deep*.67],[.43,.10,.12]];
-      if(angular){for(const ring of skull){ring[1]=Math.max(ring[1],.325);ring[2]=Math.max(ring[2],.30);}skull[0][1]=.28;skull[7][1]=.30;}
-      loft(headGroup,skull,headMat,16,roundness);
-      if(headStyle==='cat')for(const sign of [-1,1]){
-        const ear=cone(headGroup,headMat,sign*.285,.44,-.015,.008,.19,.40,3);ear.rotation.z=-sign*.17;
-        const inner=cone(headGroup,material('#d68da1'),sign*.285,.45,.072,.006,.087,.25,3);inner.rotation.z=-sign*.17;
+      const wide=headStyle==='alien'?.446:headStyle==='oval'?.36:headStyle==='heart'?.425:.405;
+      const deep=headStyle==='alien'?.337:.327;
+      const roundness=angular?5.2:headStyle==='heart'?2.7:2.25;
+      // A custom rounded cranium with a broad upper face, cheekbones and a
+      // narrowed jaw. This is the defining silhouette of the supplied refs.
+      const skull=[[-.425,.155,.145],[-.395,.265,.24],[-.33,.345,.286],[-.21,wide*.94,deep*.98],[-.045,wide,deep],[.16,wide*.98,deep],[.295,wide*.86,deep*.91],[.385,wide*.57,deep*.68],[.425,.11,.12]];
+      if(angular){for(const r of skull){r[1]=Math.max(r[1],.33);r[2]=Math.max(r[2],.295);}skull[0][1]=.29;skull[skull.length-1][1]=.30;}
+      loft(headGroup,skull,headMat,20,roundness);
+      // Ears are gently attached to the head, not separate spherical balls.
+      if(!['robot','alien'].includes(headStyle))for(const sign of [-1,1]){
+        loft(headGroup,[[-.20,.07,.066,sign*(wide*.98),-.025],[-.10,.088,.07,sign*(wide*1.045),-.025],[.015,.073,.063,sign*(wide*.99),-.028]],headMat,10,2.7);
       }
-      if(headStyle==='elf')for(const sign of [-1,1]){const ear=cone(headGroup,headMat,sign*.425,-.06,0,.008,.12,.30,4);ear.rotation.z=-sign*1.15;}
-      if(headStyle==='alien')for(const sign of [-1,1])cone(headGroup,headMat,sign*.25,.37,-.10,.06,.13,.21,5);
-      // Conforming face graphics: place vertices on the *actual sculpted skull*
-      // rather than on a floating plane. Keep blink groups from V3.57.
+      if(headStyle==='cat')for(const sign of [-1,1]){
+        const ear=cone(headGroup,headMat,sign*.29,.424,-.005,.008,.185,.34,4);ear.rotation.z=-sign*.17;
+        const inner=cone(headGroup,material('#d68da1'),sign*.29,.43,.061,.005,.092,.22,4);inner.rotation.z=-sign*.17;
+      }
+      if(headStyle==='elf')for(const sign of [-1,1]){
+        const ear=cone(headGroup,headMat,sign*.455,-.045,0,.007,.10,.28,4);ear.rotation.z=-sign*1.13;
+      }
+      if(headStyle==='alien')for(const sign of [-1,1]){
+        const stalk=cone(headGroup,headMat,sign*.26,.425,-.11,.015,.075,.19,6);stalk.rotation.z=sign*.18;
+      }
       function skullRadius(y){
         for(let i=0;i<skull.length-1;i++)if(y>=skull[i][0]&&y<=skull[i+1][0]){
           const t=(y-skull[i][0])/(skull[i+1][0]-skull[i][0]);
@@ -5710,59 +5785,82 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         return [wide,deep];
       }
       function facePatch(w,h,cy){
-        const g=new THREE.PlaneGeometry(w,h,24,12),pos=g.getAttribute('position');
+        const g=new THREE.PlaneGeometry(w,h,32,16),pos=g.getAttribute('position');
         for(let i=0;i<pos.count;i++){
           const x=pos.getX(i),y=pos.getY(i)+cy,[rx,rz]=skullRadius(y);
-          const norm=Math.min(.93,Math.abs(x)/rx);
-          const z=rz*Math.pow(Math.max(.001,1-Math.pow(norm,roundness)),1/roundness)+.009;
+          const norm=Math.min(.97,Math.abs(x)/rx);
+          const z=rz*Math.pow(Math.max(.001,1-Math.pow(norm,roundness)),1/roundness)+.007;
           pos.setZ(i,z);
         }
         g.computeVertexNormals();return g;
       }
       const eyeLayer=new THREE.Group();headGroup.add(eyeLayer);
-      add(eyeLayer,facePatch(.67,.30,.105),kwgAvatarDecal('eyes',eyes.style,eyes.color),0,.105,0);
+      add(eyeLayer,facePatch(.67,.285,.085),kwgAvatarDecal('eyes',eyes.style,eyes.color),0,.085,0);
       const mouthLayer=new THREE.Group();headGroup.add(mouthLayer);
-      add(mouthLayer,facePatch(.39,.17,-.225),kwgAvatarDecal('mouth',mouth.style,mouth.color),0,-.225,0);
-      // Small sculpted nose bridge, shallow enough not to look pasted on.
+      add(mouthLayer,facePatch(.39,.15,-.235),kwgAvatarDecal('mouth',mouth.style,mouth.color),0,-.235,0);
+      // Tiny graphic nose, integrated into the face rather than a protruding cone.
       if(!['robot','alien','cat'].includes(headStyle)){
-        const nose=cone(headGroup,headMat,0,-.085,deep+.008,.01,.045,.09,4);
-        nose.rotation.x=Math.PI/2;
+        const noseCanvas=document.createElement('canvas');noseCanvas.width=64;noseCanvas.height=64;
+        const nc=noseCanvas.getContext('2d');nc.strokeStyle='#8b655c';nc.globalAlpha=.42;
+        nc.lineWidth=4;nc.lineCap='round';nc.beginPath();nc.moveTo(27,16);nc.lineTo(24,34);nc.quadraticCurveTo(33,39,40,34);nc.stroke();
+        const tex=new THREE.CanvasTexture(noseCanvas);tex.colorSpace=THREE.SRGBColorSpace;
+        add(headGroup,facePatch(.065,.073,-.115),new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}),0,-.115,0);
       }
-      // Stylized angular layered hair, not spherical caps. A shaped scalp shell
-      // plus swept polygon hair locks produces the reference's sharp bangs.
+      // Solid sculpted hair shell and directional, tapered locks. Hair follows
+      // the cranium and sweeps around the face instead of using floating cards.
       const hs=hair.style||'side_part';
       if(hs!=='bald'&&hs!=='none'){
         const hMat=hairMat;
-        const hairRings=[[.18,wide*.97,deep*.99],[.29,wide*1.055,deep*1.08],[.39,wide*.90,deep*.99],[.47,wide*.47,deep*.54],[.49,.04,.06]];
-        loft(headGroup,hairRings,hMat,16,roundness);
-        const fringe=['side_part','classic','pixie','bob','spiky','curly','long_waves','braids','pigtails','ponytail','afro','mohawk'].includes(hs);
-        if(fringe){
-          const n=hs==='side_part'?5:hs==='spiky'?7:hs==='mohawk'?3:6;
-          for(let i=0;i<n;i++){
-            const x=-.33+i*(.66/Math.max(1,n-1));
-            const side=(i/n-.5);
-            const tipY=hs==='side_part'?.05+Math.abs(side+.17)*.22:hs==='pixie'?.21:hs==='spiky'?.24:.15+Math.abs(side)*.10;
-            ribbon(headGroup,[[x,.41,deep*.76,.15],[x+side*.05,.29,deep*1.025,.14],[x+(hs==='side_part'?.09:-side*.02),tipY,deep*1.07,.012]],hMat,.038);
+        const buzz=hs==='buzzcut';
+        const capRings=buzz?
+          [[.265,wide*.96,deep*.99],[.32,wide*1.02,deep*1.045],[.402,wide*.68,deep*.80],[.45,.045,.055]]:
+          [[.205,wide*.99,deep*1.015],[.28,wide*1.06,deep*1.10],[.36,wide*1.03,deep*1.08],[.44,wide*.68,deep*.77],[.495,.065,.08]];
+        loft(headGroup,capRings,hMat,20,roundness);
+        function lock(rings,segments=9){loft(headGroup,rings,hMat,segments,2.35);}
+        const isLong=['bob','long_waves','braids','pigtails','ponytail'].includes(hs);
+        if(!buzz){
+          // Long layered fringe is broken into deliberate sculpted chunks, with
+          // asymmetric swoops for side-part, pixie and anime-like hairstyles.
+          const bangs=hs==='mohawk'?3:hs==='side_part'?6:hs==='spiky'?7:8;
+          for(let i=0;i<bangs;i++){
+            const t=i/Math.max(1,bangs-1),x=-.325+t*.65;
+            const part=hs==='side_part'?x+.16:x;
+            const tip=hs==='side_part'?.08+Math.abs(part)*.30:
+              hs==='pixie'?.21:hs==='spiky'?.18:hs==='afro'?.26:.15+Math.abs(x)*.22;
+            const lean=hs==='side_part'?.115:hs==='spiky'?(t-.5)*.065:-(t-.5)*.035;
+            lock([[.405,.082,.083,x,deep*.78],[.32,.082,.079,x+lean*.35,deep*1.07],
+                  [.245,.066,.063,x+lean*.7,deep*1.12],[tip,.004,.007,x+lean,deep*1.065]],9);
+          }
+          // Temple locks soften the silhouette and frame the cheeks.
+          for(const sign of [-1,1]){
+            const length=isLong?-.40:hs==='pixie'?-.04:-.19;
+            lock([[.29,.12,.13,sign*.344,-.05],[.12,.13,.13,sign*.397,-.045],
+                  [length+.12,.105,.105,sign*.40,-.045],[length,.012,.02,sign*.387,-.035]],10);
           }
         }
         if(['bob','long_waves','braids','pigtails','ponytail'].includes(hs)){
           for(const sign of [-1,1]){
-            const len=['long_waves','braids'].includes(hs)?-.58:-.30;
-            ribbon(headGroup,[[sign*.32,.33,-.05,.15],[sign*.41,.02,-.09,.18],[sign*.43,len,-.10,.15]],hMat,.16);
-            if(hs==='braids')for(let j=0;j<3;j++)ribbon(headGroup,[[sign*.43,-.05-j*.14,-.002,.17],[sign*.45,-.12-j*.14,-.002,.14]],material(j%2?'#5e4851':hair.color),.015);
+            const len=hs==='long_waves'?-.72:hs==='braids'?-.63:hs==='bob'?-.37:-.49;
+            lock([[.31,.135,.135,sign*.35,-.19],[.06,.15,.13,sign*.40,-.21],
+                  [len+.16,.138,.12,sign*.39,-.22],[len,.025,.035,sign*.36,-.19]],12);
+            if(hs==='braids')for(let j=0;j<4;j++){
+              const y=-.12-j*.13;
+              lock([[y,.065,.07,sign*.43,-.14],[y-.06,.077,.07,sign*.45,-.12],[y-.13,.035,.04,sign*.42,-.13]],7);
+            }
           }
         }
-        if(hs==='ponytail')ribbon(headGroup,[[0,.31,-.35,.22],[0,.03,-.48,.22],[0,-.37,-.47,.10]],hMat,.15);
-        if(hs==='pigtails')for(const sign of [-1,1])ribbon(headGroup,[[sign*.35,.25,-.20,.20],[sign*.55,-.07,-.19,.21],[sign*.53,-.34,-.19,.10]],hMat,.14);
-        if(['spiky','mohawk'].includes(hs))for(let i=0;i<(hs==='mohawk'?4:7);i++){
-          const x=hs==='mohawk'?0:-.29+i*.096,z=hs==='mohawk'?- .25+i*.16:-.03;
-          const spike=cone(headGroup,hMat,x,.52,z,.005,.09,hs==='mohawk'?.32:.22,5);spike.rotation.z=(i-3)*.10;
+        if(hs==='ponytail')lock([[.35,.14,.12,0,-.32],[.13,.16,.15,0,-.46],[-.22,.14,.13,0,-.47],[-.58,.018,.022,0,-.45]],12);
+        if(hs==='pigtails')for(const sign of [-1,1])lock([[.25,.13,.13,sign*.38,-.20],[.03,.17,.15,sign*.56,-.19],[-.32,.15,.12,sign*.56,-.18],[-.55,.012,.018,sign*.53,-.18]],10);
+        if(hs==='spiky'||hs==='mohawk')for(let i=0;i<(hs==='mohawk'?5:8);i++){
+          const x=hs==='mohawk'?0:-.30+i*.085,z=hs==='mohawk'?- .23+i*.12:-.04;
+          const spike=cone(headGroup,hMat,x,.50,z,.006,.083,hs==='mohawk'?.30:.18,5);
+          spike.rotation.z=(i-3)*.095;
         }
         if(hs==='afro'||hs==='curly'){
-          const locks=hs==='afro'?13:9;
-          for(let i=0;i<locks;i++){
-            const a=i*2.399,x=Math.cos(a)*.29,z=Math.sin(a)*.22;
-            loft(headGroup,[[.26,.12,.12,x,z],[.37,.15,.14,x,z],[.50,.12,.12,x,z],[.57,.025,.03,x,z]],hMat,7);
+          const count=hs==='afro'?15:11;
+          for(let i=0;i<count;i++){
+            const a=i*2.399,x=Math.cos(a)*.29,z=Math.sin(a)*.23;
+            lock([[.27,.10,.11,x,z],[.38,.145,.14,x,z],[.53,.12,.12,x,z],[.60,.012,.016,x,z]],8);
           }
         }
       }
