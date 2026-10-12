@@ -2032,6 +2032,57 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 #kwg-recolor-panel .kwg-recolor-color-wrap .kwg-rgb-control{flex:1}
 #kwg-recolor-panel .kwg-recolor-color-wrap .kwg-rgb-field{width:125px!important}
 #save-status{display:none!important}
+
+/* V3.56 — retro arcade storefront inspired by the supplied three-panel layout.
+   These rules only affect the Store tab, not the avatar editor or pet inventory. */
+#store-pane .kwg-shop-switch{margin:10px 0 11px!important}
+#store-pane .kwg-shop-categories{margin:0 0 11px}
+#store-pane .kwg-shop-categories .store-tabs,
+#store-pane .kwg-store-species-tabs{display:flex!important;flex-wrap:wrap;gap:6px!important;padding:0!important;margin:0!important;background:transparent!important;border:0!important}
+#store-pane .kwg-shop-categories button{flex:1 1 auto;min-width:80px;padding:10px 12px!important;border:2px solid #4d718d!important;background:#192c41!important;color:#d5eafa!important;box-shadow:2px 3px 0 #07111e!important;border-radius:3px!important;font-size:11px!important;font-weight:900!important;letter-spacing:.04em!important;cursor:pointer}
+#store-pane .kwg-shop-categories button.active{background:#2a6073!important;color:#fff8d5!important;border-color:#a5e9e7!important;box-shadow:inset 0 -3px 0 #174456,2px 3px 0 #07111e!important}
+#store-pane .kwg-store-showcase{display:grid;grid-template-columns:minmax(108px,.75fr) minmax(240px,2.2fr) minmax(215px,1.6fr);gap:11px;align-items:stretch;min-height:470px}
+#store-pane .kwg-store-owned,#store-pane .kwg-store-catalog,#store-pane .kwg-store-feature{min-width:0;background:#13283b;border:3px solid #477c89;box-shadow:4px 4px 0 #07111c;padding:11px;display:flex;flex-direction:column;gap:9px}
+#store-pane .kwg-store-owned{border-color:#916445;background:#2c2632}
+#store-pane .kwg-store-portrait{height:110px;min-height:110px;border:3px solid #b7824d;background:radial-gradient(circle at 50% 28%,#344a62,#0d192a);display:flex;align-items:center;justify-content:center;overflow:hidden}
+#store-pane .kwg-store-portrait img{width:100%;height:100%;object-fit:contain}
+#store-pane .kwg-store-section-title{background:#8e573a;color:#fff0d0;text-align:center;font-size:12px;font-weight:900;letter-spacing:.1em;padding:7px 2px;border:2px solid #bc865a}
+#store-pane .kwg-store-owned-grid{display:grid;grid-template-columns:1fr;grid-template-rows:repeat(4,minmax(57px,1fr));gap:7px;flex:1;min-height:280px}
+#store-pane .kwg-store-owned-thumb{display:flex;align-items:center;justify-content:center;background:#101d2c;border:2px solid #6b6777;min-width:0;min-height:0;overflow:hidden;cursor:pointer;padding:3px;position:relative}
+#store-pane .kwg-store-owned-thumb img{width:100%;height:100%;object-fit:contain;pointer-events:none}
+#store-pane .kwg-store-owned-thumb.selected{border:3px solid #f2c45e;background:#23394a}
+#store-pane .kwg-store-owned-thumb:focus-visible,#store-pane .kwg-store-tile:focus-visible{outline:3px solid #f7d87b;outline-offset:1px}
+#store-pane .kwg-store-owned-empty{color:#9fb4c9;font-size:10px;text-align:center;align-self:center;grid-row:span 4;padding:10px}
+#store-pane .kwg-store-inv-nav,#store-pane .kwg-store-page-nav{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:auto}
+#store-pane .kwg-store-inv-nav button,#store-pane .kwg-store-page-nav button{background:#23465d;color:#e5f8ff;border:2px solid #74adbd;box-shadow:2px 2px 0 #08121d;cursor:pointer;font-size:18px;font-weight:900;min-width:36px;min-height:34px;padding:4px}
+#store-pane .kwg-store-inv-nav button:disabled,#store-pane .kwg-store-page-nav button:disabled{opacity:.38;cursor:default}
+#store-pane .kwg-store-inv-nav span,#store-pane .kwg-store-page-nav span{color:#f1d78c;font-size:10px;font-weight:900;text-align:center}
+#store-pane .kwg-store-panel-heading{font-size:11px;color:#aee5e8;font-weight:900;letter-spacing:.09em;border-bottom:2px solid #41677b;padding-bottom:9px;min-height:16px}
+#store-pane .kwg-store-panel-heading span{color:#f6db91}
+#store-pane #store-items-grid,#store-pane #kwg-pets-store-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;grid-auto-rows:minmax(93px,1fr);gap:8px!important;align-content:start;flex:1;min-height:327px}
+#store-pane #store-items-grid{display:grid}
+#store-pane #kwg-pets-store-grid{display:none}
+#store-pane .kwg-store-tile{display:flex;align-items:center;justify-content:center;position:relative;min-width:0;min-height:93px;overflow:hidden;background:#0b1a29;border:2px solid #476780;cursor:pointer;padding:5px;box-shadow:inset 0 0 0 2px #1c3244}
+#store-pane .kwg-store-tile:hover{border-color:#a5dce9;background:#1c3044}
+#store-pane .kwg-store-tile.selected{border:3px solid #f7cf70;background:#254358;box-shadow:inset 0 0 0 2px #986c29}
+#store-pane .kwg-store-tile img{width:100%;height:100%;object-fit:contain;pointer-events:none}
+#store-pane .kwg-store-tile .kwg-store-tile-label{position:absolute;bottom:2px;left:2px;right:2px;background:#091724d9;color:#e2f1ff;font-size:8px;text-align:center;padding:3px 1px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;pointer-events:none}
+#store-pane .kwg-store-tile .kwg-store-tile-hidden{position:absolute;top:2px;right:2px;background:#5b3042;color:#ffe6eb;font-size:8px;font-weight:900;padding:2px 3px;pointer-events:none}
+#store-pane .kwg-store-preview-3d{height:305px;min-height:220px;flex:1;position:relative;background:radial-gradient(ellipse at 50% 32%,#28445a 0%,#0a1727 80%);border:2px solid #527e93;overflow:hidden;touch-action:pan-y}
+#store-pane .kwg-store-preview-3d canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+#store-pane .kwg-store-preview-3d canvas:active{cursor:grabbing}
+#store-pane .kwg-store-preview-placeholder{display:flex;align-items:center;justify-content:center;color:#90a8b9;font-size:12px;font-weight:900;height:100%;text-align:center;padding:12px}
+#store-pane .kwg-store-selected-name{font-size:12px;color:#f1f6ff;font-weight:900;text-align:center;min-height:18px;overflow-wrap:anywhere}
+#store-pane .kwg-store-checkout{display:grid;grid-template-columns:minmax(85px,1fr) minmax(88px,1.15fr);gap:8px;align-items:stretch}
+#store-pane .kwg-store-selected-price{border:2px solid #647f8d;background:#0d1d2c;color:#f4d57c;display:flex;align-items:center;justify-content:center;text-align:center;font-size:11px;font-weight:900;padding:9px 5px;min-width:0}
+#store-pane #kwg-store-action{background:#246348;border:2px solid #85dcac;color:#f2fff5;font-family:inherit;font-size:12px;font-weight:900;box-shadow:2px 2px 0 #071a17;cursor:pointer;min-height:43px;padding:8px 4px}
+#store-pane #kwg-store-action:disabled{background:#2b3c49;border-color:#627a8b;color:#9eb2c0;cursor:default}
+#store-pane .kwg-store-selected-admin{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+#store-pane .kwg-store-selected-admin .kwg-store-edit-btn{font-size:10px!important;padding:7px 15px!important}
+#store-pane #store-message{margin:12px 0 0;min-height:16px}
+@media(max-width:850px){#store-pane .kwg-store-showcase{grid-template-columns:minmax(85px,.7fr) minmax(180px,1.7fr) minmax(170px,1.35fr);gap:7px}#store-pane .kwg-store-owned,#store-pane .kwg-store-catalog,#store-pane .kwg-store-feature{padding:7px}#store-pane #store-items-grid,#store-pane #kwg-pets-store-grid{gap:5px!important}#store-pane .kwg-store-tile{min-height:78px}#store-pane .kwg-store-preview-3d{height:245px}}
+@media(max-width:570px){#store-pane .kwg-store-showcase{grid-template-columns:90px minmax(0,1fr);gap:8px}#store-pane .kwg-store-owned{grid-row:1 / span 2}#store-pane .kwg-store-catalog{grid-column:2}#store-pane .kwg-store-feature{grid-column:2}#store-pane #store-items-grid,#store-pane #kwg-pets-store-grid{grid-auto-rows:85px;min-height:285px}#store-pane .kwg-store-owned-grid{min-height:260px}#store-pane .kwg-store-preview-3d{height:235px;flex:none}#store-pane .kwg-store-checkout{grid-template-columns:1fr 1fr}#store-pane .kwg-store-portrait{height:84px;min-height:84px}}
+
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -2725,15 +2776,34 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           <button type="button" class="kwg-shop-switch-btn active" data-shop="avatar" role="tab" aria-selected="true">AVATAR STORE</button>
           <button type="button" class="kwg-shop-switch-btn" data-shop="pets" role="tab" aria-selected="false">PETS STORE</button>
         </div>
-        <div id="kwg-avatar-shop">
-          <div class="store-tabs"><button class="store-tab active" data-store-category="eyes">Eyes</button><button class="store-tab" data-store-category="mouth">Mouths</button><button class="store-tab" data-store-category="torso_decal">Shirts / Decals</button><button class="store-tab" data-store-category="hat">Hats</button><button class="store-tab" data-store-category="head_shape">Head Shapes</button></div>
-          <div id="store-items-grid"></div>
+        <div id="kwg-avatar-shop" class="kwg-shop-categories">
+          <div class="store-tabs" role="tablist" aria-label="Avatar item categories"><button class="store-tab active" data-store-category="eyes">EYES</button><button class="store-tab" data-store-category="mouth">MOUTHS</button><button class="store-tab" data-store-category="torso_decal">SHIRTS / DECALS</button><button class="store-tab" data-store-category="hat">HATS</button><button class="store-tab" data-store-category="head_shape">HEADS</button></div>
         </div>
-        <div id="kwg-pets-shop" style="display:none">
-          <p class="kwg-pet-shop-intro">Meet your new companion! Buy a pet once, then equip it from your Pets inventory.</p>
-          <div id="kwg-pets-store-grid" class="kwg-pet-grid"></div>
+        <div id="kwg-pets-shop" class="kwg-shop-categories" style="display:none">
+          <div id="kwg-pet-categories" class="kwg-store-species-tabs" role="tablist" aria-label="Pet categories"></div>
         </div>
-        <div id="store-message" class="error-msg"></div>
+        <div class="kwg-store-showcase">
+          <aside class="kwg-store-owned" aria-label="Your store inventory">
+            <div class="kwg-store-portrait" id="kwg-store-headshot" aria-label="Your avatar headshot"></div>
+            <div class="kwg-store-section-title">MY STUFF</div>
+            <div id="kwg-store-owned-grid" class="kwg-store-owned-grid"></div>
+            <div class="kwg-store-inv-nav"><button id="kwg-store-inv-prev" type="button" aria-label="Previous inventory items">&#x25E2;</button><span id="kwg-store-inv-count">0 / 0</span><button id="kwg-store-inv-next" type="button" aria-label="Next inventory items">&#x25E4;</button></div>
+          </aside>
+          <section class="kwg-store-catalog" aria-label="Store items">
+            <div class="kwg-store-panel-heading">BROWSE <span id="kwg-store-browse-label">EYES</span></div>
+            <div id="store-items-grid"></div>
+            <div id="kwg-pets-store-grid" class="kwg-pet-grid" style="display:none"></div>
+            <div class="kwg-store-page-nav"><button id="kwg-store-page-prev" type="button" aria-label="Previous store page">&#x25C0;</button><span id="kwg-store-page-label">PAGE 1 / 1</span><button id="kwg-store-page-next" type="button" aria-label="Next store page">&#x25B6;</button></div>
+          </section>
+          <section class="kwg-store-feature" aria-label="Selected item preview">
+            <div class="kwg-store-panel-heading">ITEM PREVIEW</div>
+            <div class="kwg-store-preview-3d" id="kwg-store-preview-3d"><span class="kwg-store-preview-placeholder">SELECT AN ITEM</span></div>
+            <div id="kwg-store-selected-name" class="kwg-store-selected-name">SELECT AN ITEM</div>
+            <div class="kwg-store-checkout"><div id="kwg-store-selected-price" class="kwg-store-selected-price">-- COINS</div><button id="kwg-store-action" type="button" disabled>SELECT</button></div>
+            <div id="kwg-store-selected-admin" class="kwg-store-selected-admin"></div>
+          </section>
+        </div>
+        <div id="store-message" class="error-msg" role="status" aria-live="polite"></div>
       </div>
       <div id="avatar-editor-pane" class="home-pane">
         <div class="kwg-page-heading"><div><div class="profile-kicker">CUSTOMIZE</div><h2>AVATAR EDITOR</h2><p>Equip cosmetics and tune your character colors.</p></div></div>
@@ -3485,69 +3555,255 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return edit;
     }
 
-    function renderStoreItems() {
-      const grid = document.getElementById('store-items-grid');
-      if (!grid) return;
-      grid.innerHTML = '';
-      const owned = ownedStoreIdSet();
-      const items = storeItems.filter(item => item.category === activeStoreCategory);
-      if (!items.length) {
-        const empty = document.createElement('div');
-        empty.style.cssText = 'grid-column:1/-1;color:#aaa;padding:20px;text-align:center;border:2px dashed #444;';
-        empty.textContent = `No ${storeCategoryLabel(activeStoreCategory).toLowerCase()} are available right now.`;
-        grid.appendChild(empty);
-        return;
+    // V3.56: three-panel shop. 2D thumbnail browsing, live 3D featured preview,
+    // separate page controls for the catalog and your own inventory.
+    let kwgStoreDepartment='avatar';
+    let kwgStoreSpecies='all';
+    let kwgStorePage=0,kwgStoreInventoryOffset=0;
+    let kwgStoreSelection=null;
+    const kwgStorePageSize=9,kwgStoreInventoryPageSize=4;
+    let kwgStorePreviewRenderer=null,kwgStorePreviewScene=null,kwgStorePreviewCamera=null;
+    let kwgStorePreviewModel=null,kwgStorePreviewPet=null,kwgStorePreviewAngle=0;
+    let kwgStorePreviewLast=0,kwgStorePreviewDrag=false,kwgStorePreviewPointerX=0;
+    let kwgStorePreviewLoadId=0;
+    function kwgStoreCatalogItems(){
+      if(kwgStoreDepartment==='pets')return kwgPetCatalog.filter(p=>(isAdmin||p.isVisible!==false)&&
+        (kwgStoreSpecies==='all'||p.petKey.startsWith(kwgStoreSpecies+'_')));
+      return storeItems.filter(item=>item.category===activeStoreCategory);
+    }
+    function kwgStoreOwnedItems(){
+      if(kwgStoreDepartment==='pets')return kwgPetCatalog.filter(p=>kwgOwnedPets.has(p.petKey));
+      return ownedStoreItems;
+    }
+    function kwgStoreIdentity(item){return kwgStoreDepartment==='pets'?String(item.petKey):String(item.id);}
+    function kwgStoreThumb(box,item){
+      if(kwgStoreDepartment==='pets'){
+        try{const url=kwgPetThumbnail(item.petKey);if(url){const img=document.createElement('img');img.src=url;img.alt=item.name;box.append(img);return;}}
+        catch(err){console.warn('Store pet thumbnail failed',err);}
+      }else if(item.assetKind==='image'&&item.assetUrl){
+        const img=document.createElement('img');img.src=item.assetUrl;img.alt=item.name;box.append(img);return;
+      }else if(item.assetKind==='builtin'){renderBuiltinThumbnail(box,item);return;}
+      else if(item.assetKind==='glb'){renderMeshThumbnail(box,item);return;}
+      box.textContent=item.name||'ITEM';
+    }
+    function kwgStoreUpdateHeadshot(){
+      const box=document.getElementById('kwg-store-headshot');if(!box)return;
+      try{const img=document.createElement('img');img.alt='Your avatar';img.src=kwgMakeProfileHeadshot(playerAppearance,128);box.replaceChildren(img);}
+      catch(e){console.warn('Store avatar headshot unavailable',e);box.textContent='YOUR AVATAR';}
+    }
+    function kwgStoreSelect(item){
+      kwgStoreSelection=item?{department:kwgStoreDepartment,id:kwgStoreIdentity(item)}:null;
+      kwgStoreRender();
+    }
+    function kwgStoreCurrentItem(){
+      if(!kwgStoreSelection||kwgStoreSelection.department!==kwgStoreDepartment)return null;
+      return [...kwgStoreCatalogItems(),...kwgStoreOwnedItems()].find(i=>kwgStoreIdentity(i)===kwgStoreSelection.id)||null;
+    }
+    function kwgStoreRenderInventory(){
+      const grid=document.getElementById('kwg-store-owned-grid');if(!grid)return;
+      const items=kwgStoreOwnedItems();
+      kwgStoreInventoryOffset=Math.max(0,Math.min(kwgStoreInventoryOffset,Math.max(0,items.length-kwgStoreInventoryPageSize)));
+      grid.replaceChildren();
+      const selected=kwgStoreCurrentItem();
+      if(!items.length){const empty=document.createElement('div');empty.className='kwg-store-owned-empty';empty.textContent='NOTHING HERE YET';grid.append(empty);}
+      for(const item of items.slice(kwgStoreInventoryOffset,kwgStoreInventoryOffset+kwgStoreInventoryPageSize)){
+        const btn=document.createElement('button');btn.type='button';btn.className='kwg-store-owned-thumb';btn.title=item.name;
+        btn.setAttribute('aria-label','Preview owned '+item.name);
+        if(selected&&kwgStoreIdentity(selected)===kwgStoreIdentity(item))btn.classList.add('selected');
+        kwgStoreThumb(btn,item);
+        btn.onclick=()=>{
+          if(kwgStoreDepartment==='avatar'&&item.category!==activeStoreCategory){
+            activeStoreCategory=item.category;
+            document.querySelectorAll('.store-tab').forEach(b=>b.classList.toggle('active',b.dataset.storeCategory===activeStoreCategory));
+            kwgStorePage=0;
+          }else if(kwgStoreDepartment==='pets'){
+            const species=item.petKey.split('_')[0];
+            if(kwgStoreSpecies!=='all'&&kwgStoreSpecies!==species){kwgStoreSpecies=species;kwgStorePage=0;}
+          }
+          kwgStoreSelect(item);
+        };
+        grid.append(btn);
       }
-      for (const item of items) {
-        const card = document.createElement('div');
-        card.className = 'store-item-card';
-        const preview = document.createElement('div');
-        preview.className = 'store-item-preview';
-        if (item.assetKind === 'image') {
-          const img = document.createElement('img');
-          img.src = item.assetUrl;
-          img.alt = item.name;
-          preview.appendChild(img);
-        } else {
-          renderMeshThumbnail(preview, item);
-        }
-        const name = document.createElement('div');
-        name.className = 'store-item-name';
-        name.textContent = item.name;
-        const price = document.createElement('div');
-        price.className = 'store-item-price';
-        price.textContent = Number(item.price) === 0 ? 'FREE' : `🪙 ${item.price}`;
-        const button = document.createElement('button');
-        button.className = 'store-buy-btn';
-        if (owned.has(Number(item.id))) {
-          button.textContent = 'OWNED';
-          button.disabled = true;
-        } else {
-          button.textContent = Number(item.price) === 0 ? 'GET' : 'BUY';
-          button.disabled = coinBalance < Number(item.price || 0);
-          button.addEventListener('click', () => {
-            setStoreMessage('Purchasing...');
-            button.disabled = true;
-            socket.emit('buy_store_item', { itemId: item.id }, (res) => {
-              if (!res || !res.success) {
-                setStoreMessage((res && res.message) || 'Purchase failed.', true);
-                button.disabled = false;
-                return;
-              }
-              coinBalance = Number(res.coins ?? coinBalance);
-              updateCoinDisplays();
-              setStoreMessage(res.alreadyOwned ? 'You already own that item.' : `${item.name} added to your inventory!`);
-              refreshStoreData();
-            });
+      document.getElementById('kwg-store-inv-count').textContent=items.length?`${kwgStoreInventoryOffset+1}-${Math.min(items.length,kwgStoreInventoryOffset+4)} / ${items.length}`:'0 / 0';
+      document.getElementById('kwg-store-inv-prev').disabled=kwgStoreInventoryOffset===0;
+      document.getElementById('kwg-store-inv-next').disabled=kwgStoreInventoryOffset+4>=items.length;
+    }
+    function kwgStoreRenderCatalog(){
+      const avatar=document.getElementById('store-items-grid'),pets=document.getElementById('kwg-pets-store-grid');
+      const grid=kwgStoreDepartment==='pets'?pets:avatar;
+      avatar.style.display=kwgStoreDepartment==='avatar'?'grid':'none';
+      pets.style.display=kwgStoreDepartment==='pets'?'grid':'none';
+      const items=kwgStoreCatalogItems();
+      const total=Math.max(1,Math.ceil(items.length/kwgStorePageSize));
+      kwgStorePage=Math.max(0,Math.min(kwgStorePage,total-1));
+      grid.replaceChildren();
+      const selected=kwgStoreCurrentItem();
+      if(!items.length){const empty=document.createElement('div');empty.className='kwg-store-owned-empty';empty.style.gridColumn='1/-1';empty.textContent='NO ITEMS AVAILABLE';grid.append(empty);}
+      for(const item of items.slice(kwgStorePage*kwgStorePageSize,(kwgStorePage+1)*kwgStorePageSize)){
+        const btn=document.createElement('button');btn.type='button';btn.className='kwg-store-tile';btn.title=item.name;
+        btn.setAttribute('aria-label','Preview '+item.name);
+        if(selected&&kwgStoreIdentity(selected)===kwgStoreIdentity(item))btn.classList.add('selected');
+        kwgStoreThumb(btn,item);
+        const label=document.createElement('span');label.className='kwg-store-tile-label';label.textContent=item.name;btn.append(label);
+        if(isAdmin&&item.isVisible===false){const hidden=document.createElement('span');hidden.className='kwg-store-tile-hidden';hidden.textContent='HIDDEN';btn.append(hidden);}
+        btn.onclick=()=>kwgStoreSelect(item);
+        grid.append(btn);
+      }
+      document.getElementById('kwg-store-page-label').textContent=`PAGE ${kwgStorePage+1} / ${total}`;
+      document.getElementById('kwg-store-page-prev').disabled=kwgStorePage===0;
+      document.getElementById('kwg-store-page-next').disabled=kwgStorePage>=total-1;
+      document.getElementById('kwg-store-browse-label').textContent=kwgStoreDepartment==='pets'?(kwgStoreSpecies==='all'?'ALL PETS':kwgStoreSpecies.toUpperCase()+'S'):storeCategoryLabel(activeStoreCategory).toUpperCase();
+    }
+    function kwgStoreRenderCheckout(){
+      const item=kwgStoreCurrentItem();
+      const name=document.getElementById('kwg-store-selected-name');
+      const price=document.getElementById('kwg-store-selected-price');
+      const button=document.getElementById('kwg-store-action');
+      const admin=document.getElementById('kwg-store-selected-admin');
+      name.textContent=item?item.name:'SELECT AN ITEM';
+      price.textContent=item?(Number(item.price)===0?'FREE':`${Number(item.price).toLocaleString()} COINS`):'-- COINS';
+      button.onclick=null;button.disabled=true;button.textContent='SELECT';admin.replaceChildren();
+      if(!item){kwgStoreShowPreview(null);return;}
+      const owned=kwgStoreDepartment==='pets'?kwgOwnedPets.has(item.petKey):ownedStoreIdSet().has(Number(item.id));
+      if(kwgStoreDepartment==='pets'&&owned){
+        button.textContent=kwgEquippedPet===item.petKey?'EQUIPPED':'EQUIP';
+        button.disabled=kwgEquippedPet===item.petKey;
+        button.onclick=()=>{
+          button.disabled=true;
+          socket.emit('equip_pet',{petKey:item.petKey},res=>{
+            if(!res?.success){setStoreMessage(res?.message||'Could not equip pet.',true);kwgStoreRender();return;}
+            kwgEquippedPet=res.equippedPet||null;
+            kwgSetWorldPet(socket.id,kwgEquippedPet);
+            setStoreMessage(item.name+' equipped!');kwgRenderPets();
           });
-        }
-        card.append(preview,name,price,button);
-        if(isAdmin){
-          if(item.isVisible===false){const hidden=document.createElement('div');hidden.className='kwg-item-hidden-label';hidden.textContent='HIDDEN FROM PLAYERS';card.append(hidden);}
-          card.append(kwgAdminEditButton('avatar',item));
-        }
-        grid.appendChild(card);
+        };
+      }else if(owned){button.textContent='OWNED';button.disabled=true;}
+      else{
+        button.textContent=Number(item.price)===0?'GET':'BUY';
+        button.disabled=coinBalance<Number(item.price||0);
+        button.onclick=()=>{
+          button.disabled=true;setStoreMessage('Purchasing...');
+          if(kwgStoreDepartment==='pets')socket.emit('buy_pet',{petKey:item.petKey},res=>{
+            if(!res?.success){setStoreMessage(res?.message||'Purchase failed.',true);kwgStoreRender();return;}
+            coinBalance=Number(res.coins??coinBalance);updateCoinDisplays();
+            setStoreMessage(item.name+' is now yours!');kwgRefreshPets();
+          });
+          else socket.emit('buy_store_item',{itemId:item.id},res=>{
+            if(!res?.success){setStoreMessage(res?.message||'Purchase failed.',true);kwgStoreRender();return;}
+            coinBalance=Number(res.coins??coinBalance);updateCoinDisplays();
+            setStoreMessage(res.alreadyOwned?'You already own that item.':item.name+' added to your inventory!');
+            refreshStoreData();
+          });
+        };
       }
+      if(isAdmin){
+        if(item.isVisible===false){const hidden=document.createElement('span');hidden.className='kwg-item-hidden-label';hidden.textContent='HIDDEN FROM PLAYERS';admin.append(hidden);}
+        admin.append(kwgAdminEditButton(kwgStoreDepartment==='pets'?'pet':'avatar',item));
+      }
+      kwgStoreShowPreview(item);
+    }
+    function kwgStoreRender(){
+      const items=kwgStoreCatalogItems();
+      if(!kwgStoreCurrentItem()){
+        kwgStoreSelection=items.length?{department:kwgStoreDepartment,id:kwgStoreIdentity(items[0])}:null;
+      }
+      kwgStoreRenderSpecies();kwgStoreRenderInventory();kwgStoreRenderCatalog();kwgStoreRenderCheckout();
+    }
+    function renderStoreItems(){if(kwgStoreDepartment==='avatar')kwgStoreRender();}
+    function kwgStoreRenderSpecies(){
+      const row=document.getElementById('kwg-pet-categories');if(!row)return;
+      const all=kwgPetCatalog.filter(p=>isAdmin||p.isVisible!==false);
+      const species=['all',...new Set(all.map(p=>p.petKey.split('_')[0]))];
+      if(!species.includes(kwgStoreSpecies))kwgStoreSpecies='all';
+      row.replaceChildren(...species.map(key=>{
+        const b=document.createElement('button');b.type='button';b.className=key===kwgStoreSpecies?'active':'';
+        b.textContent=key==='all'?'ALL PETS':key.toUpperCase()+'S';
+        b.setAttribute('aria-selected',String(key===kwgStoreSpecies));
+        b.onclick=()=>{kwgStoreSpecies=key;kwgStorePage=0;kwgStoreSelection=null;kwgStoreRender();};
+        return b;
+      }));
+    }
+    function kwgStoreSetDepartment(pets){
+      kwgStoreDepartment=pets?'pets':'avatar';kwgStorePage=0;kwgStoreInventoryOffset=0;
+      document.querySelectorAll('.kwg-shop-switch-btn').forEach(b=>{
+        const active=(b.dataset.shop==='pets')===pets;
+        b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));
+      });
+      document.getElementById('kwg-avatar-shop').style.display=pets?'none':'block';
+      document.getElementById('kwg-pets-shop').style.display=pets?'block':'none';
+      kwgStoreSelection=null;
+      if(pets)kwgRefreshPets();
+      else kwgStoreRender();
+    }
+    document.getElementById('kwg-store-page-prev').addEventListener('click',()=>{if(kwgStorePage>0){kwgStorePage--;kwgStoreRender();}});
+    document.getElementById('kwg-store-page-next').addEventListener('click',()=>{kwgStorePage++;kwgStoreRender();});
+    document.getElementById('kwg-store-inv-prev').addEventListener('click',()=>{kwgStoreInventoryOffset=Math.max(0,kwgStoreInventoryOffset-4);kwgStoreRenderInventory();});
+    document.getElementById('kwg-store-inv-next').addEventListener('click',()=>{kwgStoreInventoryOffset+=4;kwgStoreRenderInventory();});
+
+    // Live Three.js feature display; uses one canvas/context for both departments.
+    function kwgStoreInitPreview(){
+      if(kwgStorePreviewRenderer)return true;
+      const box=document.getElementById('kwg-store-preview-3d');
+      try{
+        const canvas=document.createElement('canvas');
+        const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+        renderer.setClearColor(0x000000,0);
+        kwgStorePreviewRenderer=renderer;
+        kwgStorePreviewScene=new THREE.Scene();
+        kwgStorePreviewScene.add(new THREE.AmbientLight(0xffffff,1.0));
+        const key=new THREE.DirectionalLight(0xffffff,1.25);key.position.set(3,5,6);kwgStorePreviewScene.add(key);
+        const fill=new THREE.DirectionalLight(0x9ac9ff,.45);fill.position.set(-4,2,-3);kwgStorePreviewScene.add(fill);
+        kwgStorePreviewCamera=new THREE.PerspectiveCamera(32,1,.01,100);
+        box.replaceChildren(canvas);
+        canvas.addEventListener('pointerdown',e=>{kwgStorePreviewDrag=true;kwgStorePreviewPointerX=e.clientX;canvas.setPointerCapture(e.pointerId);});
+        canvas.addEventListener('pointermove',e=>{if(!kwgStorePreviewDrag)return;kwgStorePreviewAngle+=(e.clientX-kwgStorePreviewPointerX)*.009;kwgStorePreviewPointerX=e.clientX;});
+        canvas.addEventListener('pointerup',()=>kwgStorePreviewDrag=false);
+        canvas.addEventListener('pointercancel',()=>kwgStorePreviewDrag=false);
+        requestAnimationFrame(kwgStorePreviewTick);
+        return true;
+      }catch(err){console.warn('3D store preview unavailable',err);box.textContent='PREVIEW UNAVAILABLE';return false;}
+    }
+    function kwgStoreShowPreview(item){
+      ++kwgStorePreviewLoadId;
+      if(!document.getElementById('store-pane').classList.contains('active'))return;
+      if(!item){if(kwgStorePreviewModel){kwgStorePreviewScene?.remove(kwgStorePreviewModel);kwgStorePreviewModel=null;}kwgStorePreviewPet=null;return;}
+      if(!kwgStoreInitPreview())return;
+      if(kwgStorePreviewModel){kwgStorePreviewScene.remove(kwgStorePreviewModel);kwgStorePreviewModel=null;}
+      kwgStorePreviewPet=null;kwgStorePreviewAngle=0;
+      if(kwgStoreDepartment==='pets'){
+        const model=kwgBuildPet(item.petKey);if(!model)return;
+        kwgStorePreviewModel=model;kwgStorePreviewScene.add(model);
+        kwgStorePreviewPet={mesh:model,petKey:item.petKey,phase:0,clock:0,motionBlend:0,hopClock:0,tailPhase:0,blinkCountdown:1.6,blinkAge:null,doubleBlink:false,trickCountdown:2.2,trickAge:-1,trickType:0};
+        kwgStorePreviewCamera.position.set(1.15,1.2,3.15);
+        kwgStorePreviewCamera.lookAt(0,.55,0);
+      }else{
+        const appearance={...playerAppearance};
+        const cosmetics={...cosmeticsForAppearance(appearance),[item.category]:item};
+        const model=buildBlockyAvatar(appearance,cosmetics);
+        kwgStorePreviewModel=model;kwgStorePreviewScene.add(model);
+        kwgStorePreviewCamera.position.set(2.1,1.6,4.7);
+        kwgStorePreviewCamera.lookAt(0,1.2,0);
+        // GLB cosmetic loading may finish asynchronously; the same model stays in the live scene.
+      }
+    }
+    function kwgStorePreviewTick(time){
+      requestAnimationFrame(kwgStorePreviewTick);
+      if(!kwgStorePreviewRenderer||!kwgStorePreviewScene)return;
+      const box=document.getElementById('kwg-store-preview-3d');
+      if(!box||!document.getElementById('store-pane').classList.contains('active'))return;
+      const w=Math.max(1,box.clientWidth),h=Math.max(1,box.clientHeight);
+      const canvas=kwgStorePreviewRenderer.domElement;
+      const ratio=Math.min(window.devicePixelRatio||1,2);
+      if(canvas.width!==Math.round(w*ratio)||canvas.height!==Math.round(h*ratio))kwgStorePreviewRenderer.setSize(w,h,false);
+      kwgStorePreviewCamera.aspect=w/h;kwgStorePreviewCamera.updateProjectionMatrix();
+      const dt=Math.min(.05,Math.max(0,(time-(kwgStorePreviewLast||time))/1000));kwgStorePreviewLast=time;
+      if(kwgStorePreviewModel){
+        if(!kwgStorePreviewDrag)kwgStorePreviewAngle+=dt*.20;
+        kwgStorePreviewModel.rotation.y=kwgStorePreviewAngle;
+        if(kwgStorePreviewPet){kwgStorePreviewPet.clock+=dt;kwgStorePreviewPet.hopClock+=dt*.25;kwgAnimatePetRig(kwgStorePreviewPet,dt);}
+      }
+      kwgStorePreviewRenderer.render(kwgStorePreviewScene,kwgStorePreviewCamera);
     }
 
     function refreshCustomizerStoreOptions() {
@@ -3687,21 +3943,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.querySelectorAll('.store-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         activeStoreCategory = btn.dataset.storeCategory;
+        kwgStorePage=0;kwgStoreSelection=null;
         document.querySelectorAll('.store-tab').forEach(b => b.classList.toggle('active', b === btn));
         renderStoreItems();
       });
     });
 
     // --- STORE DEPARTMENTS ---
-    document.querySelectorAll('.kwg-shop-switch-btn').forEach(btn=>btn.addEventListener('click',()=>{
-      const pets=btn.dataset.shop==='pets';
-      document.querySelectorAll('.kwg-shop-switch-btn').forEach(b=>{
-        const active=b===btn;b.classList.toggle('active',active);b.setAttribute('aria-selected',String(active));
-      });
-      document.getElementById('kwg-avatar-shop').style.display=pets?'none':'block';
-      document.getElementById('kwg-pets-shop').style.display=pets?'block':'none';
-      if(pets)kwgRefreshPets();
-    }));
+    document.querySelectorAll('.kwg-shop-switch-btn').forEach(btn=>btn.addEventListener('click',()=>kwgStoreSetDepartment(btn.dataset.shop==='pets')));
 
     // --- PART COUNT SYSTEM ---
     function updatePartCounter() {
@@ -6915,7 +7164,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgRenderPets(){
       const shop=document.getElementById('kwg-pets-store-grid');
       const inv=document.getElementById('kwg-pets-inventory-grid');
-      if(shop){shop.replaceChildren(...kwgPetCatalog.filter(p=>isAdmin||p.isVisible!==false).map(p=>kwgPetCard(p,false)));}
+      if(shop&&kwgStoreDepartment==='pets')kwgStoreRender();
       if(inv){
         const owned=kwgPetCatalog.filter(p=>kwgOwnedPets.has(p.petKey));
         inv.replaceChildren(...owned.map(p=>kwgPetCard(p,true)));
@@ -8864,7 +9113,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       document.querySelectorAll('.home-pane').forEach(p => p.classList.remove('active'));
       const paneId = name === 'avatar' ? 'avatar-editor-pane' : name + '-pane';
       const pane = document.getElementById(paneId); if (pane) pane.classList.add('active');
-      if (name === 'store') { setStoreMessage('Loading...'); refreshStoreData(() => { setStoreMessage(''); renderStoreItems(); }); }
+      if (name === 'store') { setStoreMessage('Loading...'); kwgStoreUpdateHeadshot(); refreshStoreData(() => { setStoreMessage(''); if(kwgStoreDepartment==='pets')kwgRefreshPets(); else renderStoreItems(); }); }
       if (name === 'avatar') openAvatarEditor();
       if (name === 'worlds') renderRoomList();
       if (name === 'home') renderHomeOverview();
