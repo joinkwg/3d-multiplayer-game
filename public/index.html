@@ -5582,48 +5582,70 @@ function avatarStarter(category){return AVATAR_CATALOG.find(i=>i.category===cate
       },6000);
     }
 
-    // --- PROCEDURAL AVATAR MOTION: IDLE, RUN, JUMP, FALL, LAND ---
-    // Bone rotations only: mesh fit, clothing geometry and world physics remain unchanged.
+    // --- COORDINATED AVATAR MOTION V2 ---
+    // All six skinned clothing pieces share one skeleton. Drive the pelvis as
+    // the common parent of the torso and legs to avoid independent waist drift.
     function animateLimbs(avatar,isMoving){
-      // Kept for compatibility with existing callers.
       updateAvatarAnimations(avatar,isMoving,true,1/60);
     }
     function updateAvatarAnimations(avatarMesh,isMoving,isGrounded,delta,walkClockOverride,verticalVelocity=0){
-      if(!avatarMesh?.userData?.limbs)return;
+      const data=avatarMesh?.userData;
+      if(!data?.avatarSkeleton?.bones)return;
       if(avatarMesh===localPlayerAvatar)kwgBlinkAvatar(avatarMesh,delta);
-      const data=avatarMesh.userData, limbs=data.limbs;
-      const dt=Math.max(0.001,Math.min(delta||1/60,0.06));
-      const a=data.kwgMotion||(data.kwgMotion={time:0,phase:0,grounded:true,land:0,blend:0});
-      a.time+=dt;
-      if(isGrounded&&!a.grounded)a.land=1;
-      a.grounded=isGrounded;
-      a.land=Math.max(0,a.land-dt*3.8);
-      const k=1-Math.exp(-dt*11);
-      const approach=(joint,axis,target)=>{joint.rotation[axis]+=(target-joint.rotation[axis])*k;};
-      a.blend+=(Number(!!isMoving&&isGrounded)-a.blend)*k;
-      if(walkClockOverride!==undefined&&isMoving)a.phase=walkClockOverride;
-      else a.phase+=dt*(isMoving?10.5:2.2);
-      const stride=Math.sin(a.phase)*0.73*a.blend;
-      const breath=Math.sin(a.time*2.3);
-      const falling=!isGrounded&&verticalVelocity<=0.004;
-      const rising=!isGrounded&&!falling;
-      const glide=!!data.gliding;
-      const landing=Math.sin(a.land*Math.PI)*0.28;
-      const leftLeg=rising?0.40:falling?-0.20:stride-landing;
-      const rightLeg=rising?-0.18:falling?0.30:-stride-landing;
-      const leftArm=rising?-0.95:falling?-0.36:-stride*0.8+0.12*breath;
-      const rightArm=rising?-0.95:falling?-0.36:stride*0.8-0.12*breath;
-      approach(limbs.leftLeg,'x',leftLeg);
-      approach(limbs.rightLeg,'x',rightLeg);
-      approach(limbs.leftArm,'x',leftArm);
-      approach(limbs.rightArm,'x',rightArm);
-      approach(limbs.leftArm,'z',glide?-.72:(falling?-.23:-.035-0.03*breath));
-      approach(limbs.rightArm,'z',glide?.72:(falling?.23:.09+0.065*breath));
-      if(limbs.torso){
-        approach(limbs.torso,'x',rising?-.08:falling?.12:landing*.38+Math.sin(a.phase*2)*.025*a.blend);
-        approach(limbs.torso,'z',Math.sin(a.time*1.35)*.035*(1-a.blend));
+      const bones=data.avatarSkeleton.bones;
+      const dt=Math.min(Math.max(delta||1/60,0.001),0.05);
+      const m=data.kwgMotion||(data.kwgMotion={time:0,phase:0,grounded:true,land:0,run:0,air:0});
+      m.time+=dt;
+      if(isGrounded&&!m.grounded)m.land=1;
+      m.grounded=!!isGrounded;
+      m.land=Math.max(0,m.land-dt*4.5);
+      const ease=1-Math.exp(-dt*9);
+      const blend=(v,target,speed=9)=>v+(target-v)*(1-Math.exp(-dt*speed));
+      m.run=blend(m.run,isMoving&&isGrounded?1:0,8);
+      m.air=blend(m.air,isGrounded?0:1,12);
+      if(Number.isFinite(walkClockOverride)&&isMoving)m.phase=walkClockOverride;
+      else m.phase+=dt*(2.4+9.2*m.run);
+      const wave=Math.sin(m.time*1.8),slow=Math.sin(m.time*0.75);
+      const gait=Math.sin(m.phase),gait2=Math.cos(m.phase);
+      const lift=Math.max(0,gait),liftR=Math.max(0,-gait);
+      const landing=Math.sin(Math.PI*m.land)*0.12;
+      const rise=!isGrounded&&verticalVelocity>0.03;
+      const fall=!isGrounded&&!rise;
+      const air=m.air;
+      const pose=(index,axis,value)=>{if(bones[index])bones[index].rotation[axis]=blend(bones[index].rotation[axis],value,11);};
+      // Pelvis is the shared waist anchor. Keep translations tiny and grounded.
+      const pelvis=bones[1];
+      if(pelvis){
+        pelvis.position.y=blend(pelvis.position.y,0.97 + (1-m.run)*(0.009*wave-0.005*slow) + m.run*(0.018*Math.cos(m.phase*2)) - landing,9);
+        pose(1,'z',(1-m.run)*0.025*slow + m.run*0.025*gait2);
+        pose(1,'y',m.run*0.045*gait);
+        pose(1,'x',m.run*0.035 - landing*0.35);
       }
-      AvatarGLB.glide(avatarMesh,glide);
+      // A shared waist anchor prevents torso/pants shearing. Upper body only
+      // gets gentle counter-rotation, not a separate lateral translation.
+      pose(2,'z',-0.35*(bones[1]?.rotation.z||0));
+      pose(2,'y',-0.45*(bones[1]?.rotation.y||0));
+      pose(2,'x',(1-m.run)*0.012*wave + m.run*0.07 - landing*0.4);
+      pose(3,'x',-0.012*wave-m.run*0.025);
+      pose(4,'z',0.018*slow*(1-m.run));
+      const leftThigh=(1-air)*(m.run*0.62*gait + (1-m.run)*(0.045*slow+0.022*wave)) + air*(rise?0.35:-0.20);
+      const rightThigh=(1-air)*(-m.run*0.62*gait - (1-m.run)*(0.045*slow+0.022*wave)) + air*(rise?-0.20:0.28);
+      pose(11,'x',leftThigh);pose(14,'x',rightThigh);
+      pose(11,'z',(1-m.run)*(-0.012+0.015*slow));
+      pose(14,'z',(1-m.run)*(0.012-0.015*slow));
+      // Knees and ankles keep the feet from looking rigid or glued in place.
+      pose(12,'x',(1-air)*(m.run*(-0.52*liftR) - (1-m.run)*(0.035+0.025*wave)) + air*(-0.48));
+      pose(15,'x',(1-air)*(m.run*(-0.52*lift) - (1-m.run)*(0.035-0.025*wave)) + air*(-0.48));
+      pose(13,'x',m.run*0.16*gait2 + air*(-0.10));
+      pose(16,'x',-m.run*0.16*gait2 + air*(-0.10));
+      const armSwing=0.42*m.run*gait;
+      pose(5,'x',-armSwing+(1-m.run)*(0.045*wave+0.035*slow) + air*(rise?-0.48:-0.20));
+      pose(8,'x',armSwing+(1-m.run)*(-0.045*wave-0.035*slow) + air*(rise?-0.48:-0.20));
+      pose(5,'z',-0.065-0.02*wave-m.run*0.04);
+      pose(8,'z',0.065+0.02*wave+m.run*0.04);
+      pose(6,'x',-0.10*m.run-0.035*wave);
+      pose(9,'x',-0.10*m.run+0.035*wave);
+      AvatarGLB.glide(avatarMesh,!!data.gliding);
     }
 
     // Rebuild a remote name tag when either player blocks/unblocks the other.
