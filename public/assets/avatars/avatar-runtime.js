@@ -5,20 +5,29 @@
 const ROOT='/assets/avatars/',templates=new Map(),pictures=new Map(),paints=new Map();let manifest,ready=false;
 const categories={hair:'hair',head:'heads',top:'tops',bottom:'bottoms',leftshoe:'shoes',rightshoe:'shoes'};
 const status=document.getElementById('avatar-assets-status');
+ const report=message=>{if(status)status.textContent=message;};
+ const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ async function retryAsset(job,label){let last;for(let attempt=1;attempt<=3;attempt++){try{return await job();}catch(error){last=error;if(attempt<3){report('Retrying '+label+' ('+attempt+'/2)…');await pause(attempt*350);}}}throw new Error(label+': '+(last?.message||last));}
 const image=url=>new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=()=>reject(new Error('Could not load '+url));im.src=url;});
 async function load(){
  if(!global.THREE?.GLTFLoader)throw new Error('Three.js GLTFLoader is unavailable.');
- const response=await fetch(ROOT+'manifest.json');if(!response.ok)throw new Error('Avatar manifest missing ('+response.status+'). Upload the assets folder.');manifest=await response.json();
+ const response=await retryAsset(()=>fetch(ROOT+'manifest.json').then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r;}),'manifest.json');if(!response.ok)throw new Error('Avatar manifest missing ('+response.status+'). Upload the assets folder.');manifest=await response.json();
  const jobs=Object.entries(manifest.templates).map(([key,spec])=>async()=>{
-  const gltf=await new Promise((resolve,reject)=>new THREE.GLTFLoader().load(spec.url,resolve,undefined,reject));let mesh;
+  const gltf=await retryAsset(()=>new Promise((resolve,reject)=>new THREE.GLTFLoader().load(spec.url,resolve,undefined,reject)),spec.url);let mesh;
   gltf.scene.traverse(o=>{if(o.isSkinnedMesh){if(mesh)throw new Error('Template has more than one mesh: '+key);mesh=o;}});
   if(!mesh)throw new Error('Template has no skinned mesh: '+key);
-  templates.set(key,{geometry:mesh.geometry,image:mesh.material.map.image,source:mesh});
+  if(!mesh.material?.map?.image)throw new Error('Missing texture image in '+spec.url);
+   templates.set(key,{geometry:mesh.geometry,image:mesh.material.map.image,source:mesh});
  });
  const eyeStyles=['bright','lashes','sleepy','round','anime','angry','stars','robot','cyclops'];
- for(const s of eyeStyles)for(const suffix of ['', '-closed'])jobs.push(async()=>pictures.set('eyes-'+s+suffix,await image(ROOT+'faces/eyes-'+s+suffix+'.png')));
- for(const s of ['smile','grin','open','smirk','pout','surprised','lipstick','fangs','monster','cat','stitched','beak'])jobs.push(async()=>pictures.set('mouth-'+s,await image(ROOT+'faces/mouth-'+s+'.png')));
- let cursor=0,completed=0;await Promise.all(Array.from({length:4},async()=>{while(cursor<jobs.length){const j=jobs[cursor++];await j();completed++;if(status)status.textContent='Loading avatar artwork… '+Math.round(completed/jobs.length*100)+'%';}}));ready=true;
+ for(const s of eyeStyles)for(const suffix of ['', '-closed'])jobs.push(async()=>pictures.set('eyes-'+s+suffix,await retryAsset(()=>image(ROOT+'faces/eyes-'+s+suffix+'.png'),'eyes-'+s+suffix+'.png')));
+ for(const s of ['smile','grin','open','smirk','pout','surprised','lipstick','fangs','monster','cat','stitched','beak'])jobs.push(async()=>pictures.set('mouth-'+s,await retryAsset(()=>image(ROOT+'faces/mouth-'+s+'.png'),'mouth-'+s+'.png')));
+ let cursor=0,completed=0;const failures=[];
+  // Eight workers avoid the previous four-at-a-time bottleneck; individual failures
+  // no longer abort all other downloads, and the error identifies missing assets.
+  await Promise.all(Array.from({length:8},async()=>{while(cursor<jobs.length){const j=jobs[cursor++];try{await j();}catch(error){failures.push(error.message||String(error));}completed++;report('Loading avatar artwork… '+Math.round(completed/jobs.length*100)+'%');}}));
+  if(failures.length)throw new Error(failures.length+' avatar asset(s) failed: '+failures.slice(0,5).join(' | '));
+  ready=true;
 }
 const rgb=s=>{const n=parseInt((s||'#ffffff').slice(1),16);return [n>>16&255,n>>8&255,n&255];};
 function canvas(size=512){const c=document.createElement('canvas');c.width=c.height=size;return c;}
