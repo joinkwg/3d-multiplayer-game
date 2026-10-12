@@ -2639,6 +2639,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     .kwg-catalog-edit-actions button,.kwg-store-edit-btn{background:#25445e;border:2px solid #83bbdc;color:#fff;padding:9px;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
     .kwg-catalog-edit-actions button:last-child{background:#276448;border-color:#8be5b2}
     .kwg-store-edit-btn{width:100%;background:#473b66;border-color:#ac9ce0}
+    #kwg-catalog-edit-delete{background:#522b37;border:2px solid #f09a9a;color:#ffe9e9;padding:11px;font:inherit;font-size:11px;font-weight:900;cursor:pointer;width:100%;box-sizing:border-box}
+    #kwg-catalog-edit-delete[hidden]{display:none!important}
+    #kwg-catalog-edit-delete:hover{background:#783544}
+    #kwg-catalog-edit-delete:disabled{opacity:.5;cursor:wait}
     .kwg-item-hidden-label{font-size:10px;color:#ffb5ad;text-align:center;font-weight:800}
     .kwg-pet-inventory-modal{position:fixed;inset:0;background:rgba(3,9,18,.82);z-index:1800;display:none;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
     .kwg-pet-inventory-modal.open{display:flex}
@@ -2897,7 +2901,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             <div class="kwg-store-portrait" id="kwg-store-headshot" aria-label="Your avatar headshot"></div>
             <div class="kwg-store-section-title">MY STUFF</div>
             <div id="kwg-store-owned-grid" class="kwg-store-owned-grid"></div>
-            <div class="kwg-store-inv-nav"><button id="kwg-store-inv-prev" type="button" aria-label="Previous inventory items">&#x25E2;</button><span id="kwg-store-inv-count">0 / 0</span><button id="kwg-store-inv-next" type="button" aria-label="Next inventory items">&#x25E4;</button></div>
+            <div class="kwg-store-inv-nav"><button id="kwg-store-inv-prev" type="button" aria-label="Previous inventory items">&#x25E2;</button><button id="kwg-store-inv-next" type="button" aria-label="Next inventory items">&#x25E4;</button></div>
           </aside>
           <section class="kwg-store-catalog" aria-label="Store items">
             <div class="kwg-store-panel-heading">BROWSE <span id="kwg-store-browse-label">EYES</span></div>
@@ -3046,6 +3050,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <label class="kwg-edit-visible"><input id="kwg-catalog-edit-visible" type="checkbox"> VISIBLE TO PLAYERS</label>
       <div id="kwg-catalog-edit-error" style="color:#ffb3b3;font-size:11px;min-height:12px" aria-live="polite"></div>
       <div class="kwg-catalog-edit-actions"><button id="kwg-catalog-edit-cancel" type="button">CANCEL</button><button id="kwg-catalog-edit-save" type="button">SAVE</button></div>
+      <button id="kwg-catalog-edit-delete" type="button" hidden>PERMANENTLY DELETE UPLOADED ITEM</button>
     </div>
   </div>
   <!-- V3.50 admin testing console: only available to authenticated admins. -->
@@ -3624,7 +3629,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     let kwgCatalogEditing=null;
     function kwgOpenCatalogEdit(kind,item){
       if(!isAdmin)return;
-      kwgCatalogEditing={kind,itemId:item.id,petKey:item.petKey};
+      kwgCatalogEditing={kind,itemId:item.id,petKey:item.petKey,itemName:item.name,isUploaded:kind==='avatar'&&item.isUploaded===true};
+      const deleteButton=document.getElementById('kwg-catalog-edit-delete');
+      deleteButton.hidden=!kwgCatalogEditing.isUploaded;
+      deleteButton.disabled=false;
       document.getElementById('kwg-catalog-edit-name').textContent=item.name;
       document.getElementById('kwg-catalog-edit-price').value=Number(item.price)||0;
       document.getElementById('kwg-catalog-edit-visible').checked=item.isVisible!==false;
@@ -3657,6 +3665,33 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgCloseCatalogEdit();
         refreshStoreData();kwgRefreshPets();
         setStoreMessage('Store item updated.');
+      });
+    });
+    // Permanent deletion is available only for admin-uploader items, never built-in
+    // avatar cosmetics or pet catalog entries. Server verifies provenance again.
+    document.getElementById('kwg-catalog-edit-delete').addEventListener('click',async()=>{
+      if(!isAdmin||!kwgCatalogEditing?.isUploaded)return;
+      const {itemId,itemName}=kwgCatalogEditing;
+      if(!await kwgConfirm(`Permanently delete "${itemName}"? It will be removed from the store AND from every player's inventory. This cannot be undone.`,{
+        title:'DELETE UPLOADED ITEM?',okLabel:'DELETE FOREVER',danger:true
+      }))return;
+      if(!kwgCatalogEditing||kwgCatalogEditing.itemId!==itemId)return;
+      const deleteButton=document.getElementById('kwg-catalog-edit-delete');
+      const saveButton=document.getElementById('kwg-catalog-edit-save');
+      const error=document.getElementById('kwg-catalog-edit-error');
+      deleteButton.disabled=true;saveButton.disabled=true;
+      socket.emit('admin_store_delete',{itemId},res=>{
+        deleteButton.disabled=false;saveButton.disabled=false;
+        if(!res?.success){error.textContent=res?.message||'Could not delete item.';return;}
+        kwgCloseCatalogEdit();
+        kwgStoreSelection=null;
+        refreshStoreData();
+        refreshAdminStoreItems();
+        if(res.assetCleanupFailed){
+          kwgAlert('The item and ownership records were deleted, but its uploaded asset could not be removed from storage. Check the server logs.',{title:'ITEM DELETED — STORAGE WARNING'});
+        }else{
+          kwgAlert('Uploaded item permanently deleted.',{title:'ITEM DELETED',okLabel:'OK'});
+        }
       });
     });
     function kwgAdminEditButton(kind,item){
@@ -3737,7 +3772,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         };
         grid.append(btn);
       }
-      document.getElementById('kwg-store-inv-count').textContent=items.length?`${kwgStoreInventoryOffset+1}-${Math.min(items.length,kwgStoreInventoryOffset+4)} / ${items.length}`:'0 / 0';
       document.getElementById('kwg-store-inv-prev').disabled=kwgStoreInventoryOffset===0;
       document.getElementById('kwg-store-inv-next').disabled=kwgStoreInventoryOffset+4>=items.length;
     }
@@ -4983,7 +5017,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           toggle.addEventListener('click', () => {
             adminRequest('admin_store_set_visible', {itemId:item.id,isVisible:!item.isVisible}, `${item.name} is now ${item.isVisible ? 'hidden' : 'visible'}.`);
           });
-          actions.appendChild(toggle);
+          const edit=document.createElement('button');
+          edit.type='button';edit.className='admin-action';edit.textContent='EDIT';
+          edit.addEventListener('click',()=>kwgOpenCatalogEdit('avatar',item));
+          actions.append(edit,toggle);
           row.append(info,actions);
           list.appendChild(row);
         });
