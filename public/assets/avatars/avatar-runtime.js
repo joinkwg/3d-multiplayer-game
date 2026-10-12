@@ -83,6 +83,27 @@ function acquire(slot,key,spec,look){
  entry.refs++;return entry;
 }
 function prune(){if(paints.size<=64)return;for(const [key,e] of paints){if(e.refs===0){e.material.dispose();e.open.dispose();e.closed?.dispose();paints.delete(key);if(paints.size<=64)break;}}}
+// Lower-body proportions (X axis only): preserve height and mesh detailing.
+// These are conservative starting values; adjust after viewing your GLBs.
+const LOWER_FIT={pantsWidth:0.88,shoeSpacing:0.88,shoeWidth:0.97};
+const fittedGeometries=new Map();
+function fittedGeometry(key,slot,original){
+ if(slot!=='bottom'&&slot!=='leftshoe'&&slot!=='rightshoe')return original;
+ if(fittedGeometries.has(key))return fittedGeometries.get(key);
+ const geometry=original.clone(),position=geometry.attributes.position;
+ if(!position)return original;
+ original.computeBoundingBox();
+ const center=(original.boundingBox.min.x+original.boundingBox.max.x)/2;
+ const shoe=slot==='leftshoe'||slot==='rightshoe';
+ for(let i=0;i<position.count;i++){
+  const x=position.getX(i);
+  position.setX(i,shoe?center*LOWER_FIT.shoeSpacing+(x-center)*LOWER_FIT.shoeWidth:x*LOWER_FIT.pantsWidth);
+ }
+ position.needsUpdate=true;
+ geometry.computeBoundingBox();geometry.computeBoundingSphere();
+ fittedGeometries.set(key,geometry);
+ return geometry;
+}
 function build(look){
  if(!ready)throw new Error('Avatar GLB assets have not finished loading.');
  const group=new THREE.Group();group.name='avatar';const bones=manifest.joints.map(([name])=>{const b=new THREE.Bone();b.name=name;return b;});
@@ -91,7 +112,7 @@ function build(look){
  const flight=look.flightsuits;const slotSpecs={hair:look.hair,head:look.heads,top:flight?{...flight,style:'flight_'+flight.style}:look.tops,bottom:flight?{...flight,style:'pants'}:look.bottoms,leftshoe:look.shoes,rightshoe:look.shoes};
  const meshes={};for(const slot of manifest.meshNames){const spec=slotSpecs[slot];const key=slot+'-'+spec.style;const template=templates.get(key);if(!template)throw new Error('Missing avatar part '+key);
   const paint=acquire(slot,key,spec,look);const material=slot==='head'?paint.material.clone():paint.material;
-  const mesh=new THREE.SkinnedMesh(template.geometry,material);mesh.name=slot;mesh.userData.avatarPart=true;mesh.userData.avatarPaint=paint;mesh.userData.avatarSharedGeometry=true;mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;mesh.bind(skeleton,new THREE.Matrix4());group.add(mesh);meshes[slot]=mesh;
+  const mesh=new THREE.SkinnedMesh(fittedGeometry(key,slot,template.geometry),material);mesh.name=slot;mesh.userData.avatarPart=true;mesh.userData.avatarPaint=paint;mesh.userData.avatarSharedGeometry=true;mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;mesh.bind(skeleton,new THREE.Matrix4());group.add(mesh);meshes[slot]=mesh;
   if(slot==='head')group.userData.blink={mesh,openMap:paint.open,closedMap:paint.closed,time:2+Math.random()*3,closed:false};
  }
  group.userData.avatarMeshes=meshes;group.userData.avatarSkeleton=skeleton;group.userData.hasFlightsuit=!!flight;
