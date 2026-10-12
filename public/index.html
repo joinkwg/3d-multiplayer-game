@@ -3713,16 +3713,36 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     let kwgStorePreviewModel=null,kwgStorePreviewPet=null,kwgStorePreviewAngle=0;
     let kwgStorePreviewLast=0,kwgStorePreviewDrag=false,kwgStorePreviewPointerX=0;
     let kwgStorePreviewLoadId=0;
+    // Stable, color-family-first ordering for garments and skin; no diagonal color repeats.
+    function kwgColorFamily(item){
+      const hex=String(item.metadata?.color||'').replace('#','');
+      if(!/^[0-9a-f]{6}$/i.test(hex))return 'zzzz';
+      const r=parseInt(hex.slice(0,2),16)/255,g=parseInt(hex.slice(2,4),16)/255,b=parseInt(hex.slice(4,6),16)/255;
+      const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;
+      let h=0;if(d){if(max===r)h=((g-b)/d+6)%6;else if(max===g)h=(b-r)/d+2;else h=(r-g)/d+4;h/=6;}
+      const light=(max+min)/2;
+      // Keep neutral whites/grays/blacks adjacent and saturated shades by hue.
+      const family=d<.10?'0':light>.88&&d<.20?'1':light<.15?'2':'3';
+      return family+String(Math.round(h*24)).padStart(2,'0')+String(Math.round(light*12)).padStart(2,'0');
+    }
     function kwgStoreCatalogItems(){
       if(kwgStoreDepartment==='pets')return kwgPetCatalog.filter(p=>(isAdmin||p.isVisible!==false)&&
-        !kwgOwnedPets.has(p.petKey)&&
-        (kwgStoreSpecies==='all'||p.petKey.startsWith(kwgStoreSpecies+'_')));
+        !kwgOwnedPets.has(p.petKey)&&(kwgStoreSpecies==='all'||p.petKey.startsWith(kwgStoreSpecies+'_')));
       const ownedIds=ownedStoreIdSet();
-      return storeItems.filter(item=>item.category===activeStoreCategory&&!ownedIds.has(Number(item.id))&&item.isVisible!==false&&['procedural','image','glb','builtin'].includes(item.assetKind)).sort((a,b)=>{
-        const ia=Number(a.metadata?.styleIndex??9999),ib=Number(b.metadata?.styleIndex??9999);
-        if(ia!==ib)return ia-ib;
+      const colorFirst=['bottoms','tops','shoes','skin'].includes(activeStoreCategory);
+      const seen=new Set();
+      return storeItems.filter(item=>{
+        if(item.category!==activeStoreCategory||ownedIds.has(Number(item.id))||item.isVisible===false||!['procedural','image','glb','builtin'].includes(item.assetKind))return false;
+        const key=item.assetKind==='procedural'?`${item.category}|${item.metadata?.style||''}|${String(item.metadata?.color||'').toLowerCase()}`:null;
+        if(key&&seen.has(key))return false;
+        if(key)seen.add(key);
+        return true;
+      }).sort((a,b)=>{
+        if(colorFirst){const cmp=kwgColorFamily(a).localeCompare(kwgColorFamily(b));if(cmp)return cmp;}
+        const sa=Number(a.metadata?.styleIndex??9999),sb=Number(b.metadata?.styleIndex??9999);
+        if(sa!==sb)return sa-sb;
         const ca=Number(a.metadata?.colorIndex??9999),cb=Number(b.metadata?.colorIndex??9999);
-        return ca-cb||String(a.name).localeCompare(String(b.name));
+        return ca-cb||String(a.name).localeCompare(String(b.name))||Number(a.id)-Number(b.id);
       });
     }
     function kwgStoreOwnedItems(){
@@ -3730,7 +3750,44 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return ownedStoreItems;
     }
     function kwgStoreIdentity(item){return kwgStoreDepartment==='pets'?String(item.petKey):String(item.id);}
-    function kwgProceduralThumbnail(box,item){try{const appearance=kwgProceduralPreviewAppearance(playerAppearance||{},item);thumbImageFromObject(box,buildBlockyAvatar(appearance,{[item.category]:item}));}catch(e){box.textContent=item.metadata?.style||item.name;}}
+    // Render the cosmetic itself, not a tiny dressed mannequin. Hair/hats may
+    // retain the neutral default head to communicate fit and placement.
+    function kwgBuildItemOnlyPreview(item){
+      const category=item.category;
+      const base={...defaultAppearance,
+        hairStyle:'none',hat:'none',headShape:'sphere',builtinEyes:'none',builtinMouth:'none',
+        headColor:'#d9a679',skinColor:'#d9a679',torsoColor:'#3b82d0',shirtColor:'#3b82d0',
+        leftLegColor:'#263447',rightLegColor:'#263447',pantsColor:'#263447',shoesColor:'#15191f'};
+      const appearance=kwgProceduralPreviewAppearance(base,item);
+      const source=buildBlockyAvatar(appearance,{[category]:item});
+      source.updateMatrixWorld(true);
+      const out=new THREE.Group();
+      const region={hair:[1.79,3.4],hats:[1.79,3.4],heads:[1.80,3.4],eyes:[1.87,2.42],mouth:[1.78,2.19],skin:[1.80,2.45],tops:[.91,1.85],bottoms:[.18,.99],shoes:[-.2,.24],flightsuits:[.55,2.15]}[category]||[0,3];
+      source.traverse(obj=>{
+        if(!obj.isMesh||!obj.geometry)return;
+        const bounds=new THREE.Box3().setFromObject(obj);
+        const center=bounds.getCenter(new THREE.Vector3());
+        if(center.y<region[0]||center.y>region[1])return;
+        // For face-only thumbnails, exclude the large underlying head surface.
+        if((category==='eyes'||category==='mouth')&&bounds.getSize(new THREE.Vector3()).length()>.65)return;
+        // No arms/legs in shirt thumbnails, no torso in trouser thumbnails.
+        if(category==='tops'&&center.y<1.02)return;
+        const mesh=new THREE.Mesh(obj.geometry,obj.material);
+        mesh.applyMatrix4(obj.matrixWorld);
+        out.add(mesh);
+      });
+      if(!out.children.length)return source;
+      // Hair/hats are shown on a default sphere head, all other categories isolated.
+      if(category==='hair'||category==='hats'){
+        const head=new THREE.Mesh(new THREE.SphereGeometry(.36,24,16),new THREE.MeshLambertMaterial({color:'#d9a679'}));
+        head.position.set(0,2.09,0);out.add(head);
+      }
+      return out;
+    }
+    function kwgProceduralThumbnail(box,item){
+      try{thumbImageFromObject(box,kwgBuildItemOnlyPreview(item));}
+      catch(e){console.warn('Procedural item preview failed',e);box.textContent=item.metadata?.style||item.name;}
+    }
     function kwgStoreThumb(box,item){
       if(kwgStoreDepartment==='pets'){
         try{const url=kwgPetThumbnail(item.petKey);if(url){const img=document.createElement('img');img.src=url;img.alt=item.name;img.className='kwg-store-pet-image';box.append(img);return;}}
@@ -3945,12 +4002,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgStorePreviewCamera.position.set(1.15,1.2,3.15);
         kwgStorePreviewCamera.lookAt(0,.55,0);
       }else{
-        const appearance=kwgProceduralPreviewAppearance(playerAppearance,item);
-        const cosmetics={...cosmeticsForAppearance(appearance),[item.category]:item};
-        const model=buildBlockyAvatar(appearance,cosmetics);
+        const model=item.assetKind==='procedural'?kwgBuildItemOnlyPreview(item):buildBlockyAvatar(kwgProceduralPreviewAppearance(playerAppearance,item),{...cosmeticsForAppearance(playerAppearance),[item.category]:item});
         kwgStorePreviewModel=model;kwgStorePreviewScene.add(model);
-        kwgStorePreviewCamera.position.set(2.1,1.6,4.7);
-        kwgStorePreviewCamera.lookAt(0,1.2,0);
+        const bounds=new THREE.Box3().setFromObject(model);
+        const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
+        const dim=Math.max(size.x,size.y,size.z,.35);
+        kwgStorePreviewCamera.position.set(center.x+dim*.8,center.y+dim*.4,center.z+dim*2.8);
+        kwgStorePreviewCamera.lookAt(center);
         // GLB cosmetic loading may finish asynchronously; the same model stays in the live scene.
       }
     }
