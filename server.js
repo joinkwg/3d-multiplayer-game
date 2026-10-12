@@ -16,6 +16,8 @@ const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY |
 const SUPABASE_STORE_BUCKET = String(process.env.SUPABASE_STORE_BUCKET || 'store-assets');
 const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
 const STORE_CATEGORIES = new Set(['eyes','mouth','torso_decal','hat','head_shape']);
+const KWG_AVATAR_CATEGORIES=['tops','bottoms','shoes','hair','heads','eyes','mouths','skincolors','flightsuits'];
+const KWG_AVATAR_SLOTS=Object.fromEntries(KWG_AVATAR_CATEGORIES.map(c=>[c+'ItemId',c]));
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -42,7 +44,9 @@ const defaultAppearance = {
   mouthItemId: null,
   torsoDecalItemId: null,
   hatItemId: null,
-  headShapeItemId: null
+  headShapeItemId: null,
+  avatarVersion: 357,
+  ...Object.fromEntries(KWG_AVATAR_CATEGORIES.map(c=>[c+'ItemId',null]))
 };
 
 // KWG V3.35 — User-generated text filter. Server is authoritative;
@@ -157,7 +161,9 @@ function sanitizeAppearance(a = {}) {
     mouthItemId: cleanStoreItemId(a.mouthItemId),
     torsoDecalItemId: cleanStoreItemId(a.torsoDecalItemId),
     hatItemId: cleanStoreItemId(a.hatItemId),
-    headShapeItemId: cleanStoreItemId(a.headShapeItemId)
+    headShapeItemId: cleanStoreItemId(a.headShapeItemId),
+    avatarVersion: 357,
+    ...Object.fromEntries(KWG_AVATAR_CATEGORIES.map(c=>[c+'ItemId',cleanStoreItemId(a[c+'ItemId'])]))
   };
 }
 
@@ -175,6 +181,53 @@ function rowToStoreItem(row) {
   };
 }
 
+// V3.57 procedural avatar catalog: immutable style/color variants, purchased independently.
+// A catalog row's kwg:// URL is a stable key; reboots never duplicate items.
+function kwgAvatarCatalogRows(){
+  const colors=[['Ink','#242b3b'],['Cloud','#f2f1e9'],['Cherry','#d64c59'],['Coral','#f18473'],['Gold','#e5b84b'],['Lime','#88c95e'],['Forest','#31765c'],['Mint','#80dfc4'],['Sky','#67b5e8'],['Ocean','#3574c0'],['Lilac','#a28ce0'],['Plum','#7d4e9a']];
+  const rows=[];
+  const add=(cat,style,label,color,price,starter=false,extras={})=>{
+    const slug=(cat+'-'+style+'-'+label).toLowerCase().replace(/[^a-z0-9]+/g,'-');
+    rows.push({category:cat,name:(style.replace(/_/g,' ')+' '+label).replace(/\b\w/g,c=>c.toUpperCase()).slice(0,40),price:starter?0:price,asset_url:'kwg://avatar/v357/'+slug,asset_kind:'procedural',metadata:{kwgAvatar:'v357',style,color,starter,...extras}});
+  };
+  const clothing=(cat,styles,palette,base)=>styles.forEach((style,i)=>palette.forEach(([label,color],j)=>add(cat,style,label,color,base+i*15+(j%3)*5, cat!=='flightsuits'&&i===0&&j===0)));
+  clothing('tops',['tee','long_sleeve','hoodie','suit','trench_coat','tank_top','crop_top'],colors,55);
+  clothing('bottoms',['pants','shorts','short_shorts','skirt'],colors,45);
+  clothing('shoes',['sneakers','flip_flops','sandals','boots'],colors.slice(0,10),40);
+  clothing('hair',['side_part','curly','bob','pixie','spiky','afro','ponytail','pigtails','mohawk','long_waves','braids','buzzcut'],colors,50);
+  ['round','oval','square','heart'].forEach((style,i)=>add('heads',style,'Classic','#f2f1e9',70+i*12,style==='round'));
+  ['boxy','cat','alien','elf','robot'].forEach((style,i)=>colors.slice(0,6).forEach(([label,color],j)=>add('heads',style,label,color,100+i*20+j*4)));
+  clothing('eyes',['classic','wide','sleepy','happy','star','cat','anime','round','shy','monster'],colors.slice(0,10),40);
+  clothing('mouths',['smile','grin','tiny','smirk','surprised','frown','fangs','monster','glossy_lips','heart_lips','toothy'],colors.slice(0,10),35);
+  const skins=[['Porcelain','#f5d8c4'],['Ivory','#efd0b5'],['Peach','#efbc97'],['Warm Beige','#e3ab83'],['Honey','#d99a6b'],['Golden','#c78954'],['Caramel','#b9794b'],['Tan','#a86d47'],['Amber','#9b5d39'],['Chestnut','#85513a'],['Cocoa','#714633'],['Mahogany','#593628'],['Espresso','#482c27'],['Deep Brown','#352322'],['Rosy','#f3b5ae'],['Olive','#c2a57a'],['Mint','#8bdcc3'],['Lime','#a7d95f'],['Azure','#7bb6f5'],['Blue','#6482d5'],['Lavender','#bba4e8'],['Pink','#f3a8d7'],['Purple','#9d7ecf'],['Orange','#ed9a59'],['Red','#d96d70'],['Silver','#b8c7d3'],['Graphite','#6d7a8a'],['Gold','#dfbb67'],['Rainbow','#f3b5c7'],['Galaxy','#5e5a99'],['Marble','#d2d3d9'],['Neon','#8afa9b']];
+  skins.forEach(([label,color],i)=>add('skincolors',i<16?'natural':'fantasy',label,color,i<16?45:95,i===2,{pattern:i>=28?label.toLowerCase():'solid'}));
+  clothing('flightsuits',['classic_wings','glider_cape','bat_wings','butterfly_wings','jet_sail'],colors.slice(0,10),170);
+  return rows;
+}
+async function kwgSeedAvatarCatalog(){
+  // Migrate the two original CHECK constraints without destroying old purchases/uploads.
+  await pool.query(`ALTER TABLE store_items DROP CONSTRAINT IF EXISTS store_items_category_check`);
+  await pool.query(`ALTER TABLE store_items DROP CONSTRAINT IF EXISTS store_items_asset_kind_check`);
+  await pool.query(`ALTER TABLE store_items ADD CONSTRAINT store_items_category_check CHECK (category IN ('eyes','mouth','torso_decal','hat','head_shape','tops','bottoms','shoes','hair','heads','mouths','skincolors','flightsuits'))`);
+  await pool.query(`ALTER TABLE store_items ADD CONSTRAINT store_items_asset_kind_check CHECK (asset_kind IN ('image','glb','procedural'))`);
+  const rows=kwgAvatarCatalogRows();
+  await pool.query(`INSERT INTO store_items(category,name,price,asset_url,asset_kind,metadata,is_visible)
+    SELECT r.category,r.name,r.price,r.asset_url,r.asset_kind,r.metadata,true
+    FROM jsonb_to_recordset($1::jsonb) AS r(category text,name text,price integer,asset_url text,asset_kind text,metadata jsonb)
+    WHERE NOT EXISTS(SELECT 1 FROM store_items s WHERE s.asset_url=r.asset_url)`,[JSON.stringify(rows)]);
+  // Each account gets only one starter item in each category, not a free palette.
+  await pool.query(`INSERT INTO user_store_items(user_id,item_id)
+    SELECT u.id,s.id FROM users u CROSS JOIN store_items s
+    WHERE s.metadata->>'kwgAvatar'='v357' AND s.metadata->>'starter'='true'
+    ON CONFLICT DO NOTHING`);
+  // One-time migration: retire old free color-wheel looks and equip starter wardrobe.
+  const starters=await pool.query(`SELECT category,id FROM store_items WHERE metadata->>'kwgAvatar'='v357' AND metadata->>'starter'='true'`);
+  const appearanceSlots=Object.fromEntries(starters.rows.map(r=>[r.category+'ItemId',Number(r.id)]));
+  await pool.query(`UPDATE users SET appearance=COALESCE(appearance,'{}'::jsonb)||$1::jsonb
+    WHERE COALESCE((appearance->>'avatarVersion')::integer,0)<357`,
+    [JSON.stringify({...appearanceSlots,avatarVersion:357})]);
+}
+
 async function validateAppearanceForUser(userId, rawAppearance = {}) {
   const app = sanitizeAppearance(rawAppearance);
   const slots = [
@@ -182,7 +235,8 @@ async function validateAppearanceForUser(userId, rawAppearance = {}) {
     ['mouthItemId', 'mouth'],
     ['torsoDecalItemId', 'torso_decal'],
     ['hatItemId', 'hat'],
-    ['headShapeItemId', 'head_shape']
+    ['headShapeItemId', 'head_shape'],
+    ...Object.entries(KWG_AVATAR_SLOTS)
   ];
   const ids = [...new Set(slots.map(([slot]) => app[slot]).filter(Boolean))];
   if (!ids.length) return app;
@@ -207,7 +261,8 @@ async function resolveAppearanceAssets(app = {}) {
     mouthItemId: 'mouth',
     torsoDecalItemId: 'torso_decal',
     hatItemId: 'hat',
-    headShapeItemId: 'head_shape'
+    headShapeItemId: 'head_shape',
+    ...KWG_AVATAR_SLOTS
   };
   const ids = [...new Set(Object.keys(slotToCategory).map(k => cleanStoreItemId(app[k])).filter(Boolean))];
   if (!ids.length) return {};
@@ -560,6 +615,7 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS user_store_items_user_idx ON user_store_items(user_id);
   `);
 
+  await kwgSeedAvatarCatalog();
   await pool.query('DELETE FROM auth_sessions WHERE expires_at <= NOW()');
   await pool.query("DELETE FROM active_world_sessions WHERE last_seen < NOW() - INTERVAL '90 seconds'");
 
@@ -736,6 +792,10 @@ io.on('connection', (socket) => {
         [username, hash, JSON.stringify(defaultAppearance)]
       );
       const user = r.rows[0];
+      await pool.query(`INSERT INTO user_store_items(user_id,item_id) SELECT $1,s.id FROM store_items s WHERE s.metadata->>'kwgAvatar'='v357' AND s.metadata->>'starter'='true' ON CONFLICT DO NOTHING`,[user.id]);
+      const starterRows=await pool.query(`SELECT category,id FROM store_items WHERE metadata->>'kwgAvatar'='v357' AND metadata->>'starter'='true'`);
+      user.appearance={...defaultAppearance,...Object.fromEntries(starterRows.rows.map(row=>[row.category+'ItemId',Number(row.id)]))};
+      await pool.query('UPDATE users SET appearance=$1 WHERE id=$2',[JSON.stringify(user.appearance),user.id]);
       await loginSocketUser(socket, user);
       const sessionToken = await createSession(user.id);
       cb(authResponse(user, sessionToken));
@@ -1931,7 +1991,7 @@ io.on('connection', (socket) => {
         pool.query(`
           SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible,
                  (created_by IS NOT NULL) AS is_uploaded
-          FROM store_items WHERE ($1::boolean OR is_visible=true)
+          FROM store_items WHERE metadata->>'kwgAvatar'='v357' AND ($1::boolean OR is_visible=true)
           ORDER BY category ASC, created_at DESC
         `,[!!socket.user.isAdmin]),
         pool.query(`
@@ -1939,7 +1999,7 @@ io.on('connection', (socket) => {
                  (s.created_by IS NOT NULL) AS is_uploaded
           FROM user_store_items o
           JOIN store_items s ON s.id=o.item_id
-          WHERE o.user_id=$1
+          WHERE o.user_id=$1 AND s.metadata->>'kwgAvatar'='v357'
           ORDER BY o.purchased_at ASC
         `, [socket.user.id]),
         pool.query('SELECT coins FROM users WHERE id=$1', [socket.user.id])
@@ -2034,7 +2094,7 @@ io.on('connection', (socket) => {
       const r = await pool.query(`
         SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible,
                (created_by IS NOT NULL) AS is_uploaded
-        FROM store_items ORDER BY created_at DESC
+        FROM store_items WHERE created_by IS NOT NULL ORDER BY created_at DESC
       `);
       cb({success:true,items:r.rows.map(rowToStoreItem),uploadConfigured:storeStorageConfigured()});
     } catch (e) {
@@ -2080,7 +2140,7 @@ io.on('connection', (socket) => {
       }
       deleted=item.rows[0];
       // Clear equipped cosmetics for all owners before their purchase records cascade.
-      const slotByCategory={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'};
+      const slotByCategory={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId',...Object.fromEntries(KWG_AVATAR_CATEGORIES.map(c=>[c,c+'ItemId']))};
       const slot=slotByCategory[deleted.category];
       if (slot) await client.query(`
         UPDATE users SET appearance=appearance-$2::text
