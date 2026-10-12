@@ -3205,7 +3205,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     try{await AvatarGLB.ready;}catch(error){
       wardrobeObserver.disconnect();
       wardrobeTitle.textContent='AVATAR LOADING FAILED';
-      wardrobeDescription.textContent='Could not load avatar assets. Please refresh and try again.';
+      wardrobeDescription.textContent='Avatar loading failed: '+(error.message||'Unknown error');
       wardrobeOverlay.classList.add('kwg-indeterminate');
       throw error;
     }
@@ -5611,17 +5611,17 @@ function avatarStarter(category){return AVATAR_CATALOG.find(i=>i.category===cate
       const landing=Math.sin(a.land*Math.PI)*0.28;
       const leftLeg=rising?0.40:falling?-0.20:stride-landing;
       const rightLeg=rising?-0.18:falling?0.30:-stride-landing;
-      const leftArm=rising?-0.95:falling?-0.36:-stride*0.8+0.055*breath;
-      const rightArm=rising?-0.95:falling?-0.36:stride*0.8-0.055*breath;
+      const leftArm=rising?-0.95:falling?-0.36:-stride*0.8+0.12*breath;
+      const rightArm=rising?-0.95:falling?-0.36:stride*0.8-0.12*breath;
       approach(limbs.leftLeg,'x',leftLeg);
       approach(limbs.rightLeg,'x',rightLeg);
       approach(limbs.leftArm,'x',leftArm);
       approach(limbs.rightArm,'x',rightArm);
       approach(limbs.leftArm,'z',glide?-.72:(falling?-.23:-.035-0.03*breath));
-      approach(limbs.rightArm,'z',glide?.72:(falling?.23:.035+0.03*breath));
+      approach(limbs.rightArm,'z',glide?.72:(falling?.23:.09+0.065*breath));
       if(limbs.torso){
         approach(limbs.torso,'x',rising?-.08:falling?.12:landing*.38+Math.sin(a.phase*2)*.025*a.blend);
-        approach(limbs.torso,'z',Math.sin(a.time*1.35)*.012*(1-a.blend));
+        approach(limbs.torso,'z',Math.sin(a.time*1.35)*.035*(1-a.blend));
       }
       AvatarGLB.glide(avatarMesh,glide);
     }
@@ -7365,7 +7365,7 @@ function avatarStarter(category){return AVATAR_CATALOG.find(i=>i.category===cate
       p.mesh.rotation.y = pData.rotationY;
 
       p.mesh.userData.gliding=!!pData.gliding;
-      updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
+      p.motion={moving:!!pData.isMoving,grounded:pData.isGrounded!==false,verticalVelocity:pData.verticalVelocity||0};
     });
 
     socket.on('player_left', (id) => {
@@ -9704,7 +9704,7 @@ function avatarStarter(category){return AVATAR_CATALOG.find(i=>i.category===cate
       c.addEventListener('pointerdown',e=>{editorDragging=true;editorLastX=e.clientX;c.setPointerCapture?.(e.pointerId)});
       c.addEventListener('pointermove',e=>{if(!editorDragging)return;editorTargetRotation+=(e.clientX-editorLastX)*.015;editorLastX=e.clientX;});
       const release=()=>editorDragging=false;c.addEventListener('pointerup',release);c.addEventListener('pointercancel',release);
-      (function loop(){requestAnimationFrame(loop);if(editorMesh){if(editorDragging)editorMesh.rotation.y=editorTargetRotation;else{editorTargetRotation*=.82;editorMesh.rotation.y*=.82;if(Math.abs(editorMesh.rotation.y)<.002){editorMesh.rotation.y=0;editorTargetRotation=0;}}}if(editorMesh)kwgBlinkAvatar(editorMesh,1/60);editorRenderer.render(editorScene,editorCamera)})();
+      (function loop(){requestAnimationFrame(loop);if(editorMesh){if(editorDragging)editorMesh.rotation.y=editorTargetRotation;else{editorTargetRotation*=.82;editorMesh.rotation.y*=.82;if(Math.abs(editorMesh.rotation.y)<.002){editorMesh.rotation.y=0;editorTargetRotation=0;}}}if(editorMesh){kwgBlinkAvatar(editorMesh,1/60);updateAvatarAnimations(editorMesh,false,true,1/60);}editorRenderer.render(editorScene,editorCamera)})();
     }
     function updateEditorAvatar(){if(!editorScene||!avatarDraft)return;if(editorMesh){editorScene.remove(editorMesh);kwgDisposeAvatar(editorMesh);}editorMesh=buildBlockyAvatar(avatarDraft,cosmeticsForAppearance(avatarDraft));editorMesh.rotation.y=editorTargetRotation;editorScene.add(editorMesh);}
     function openAvatarEditor(){refreshStoreData(res=>{if(!res?.success)return;avatarDraft={...playerAppearance};initEditorPreview();renderAvatarInventory();updateEditorAvatar();});}
@@ -10780,7 +10780,7 @@ function avatarStarter(category){return AVATAR_CATALOG.find(i=>i.category===cate
         cloudsGroup.rotation.y += delta * 0.02 * cloudRotationSpeedMultiplier;
       }
 
-      for(const p of Object.values(otherPlayers))kwgBlinkAvatar(p.mesh,delta);
+      for(const p of Object.values(otherPlayers)){kwgBlinkAvatar(p.mesh,delta);updateAvatarAnimations(p.mesh,!!p.motion?.moving,p.motion?.grounded!==false,delta,undefined,p.motion?.verticalVelocity||0);}
       if (localPlayerAvatar && !kwgFreeCamera.active) {
         // Exact single-player camera: same distance, height, rotation, smoothing,
         // right-click orbit, and automatic re-lock behind the player.
@@ -10914,6 +10914,8 @@ function avatarStarter(category){return AVATAR_CATALOG.find(i=>i.category===cate
     document.getElementById('avatar-assets-status').textContent='Could not load the avatar asset pack. Upload the entire public/assets folder, then retry. '+(error.message||'');
     document.getElementById('avatar-assets-retry').hidden=false;
     document.getElementById('kwg-loading-overlay')?.classList.add('kwg-visible');
+    const loadDescription=document.getElementById('kwg-loading-description');
+    if(loadDescription)loadDescription.textContent=error.message||'Avatar loading failed';
   });
   </script>
 <div id="kwg-block-join-modal" role="dialog" aria-modal="true" aria-labelledby="kwg-block-join-title">
