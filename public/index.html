@@ -3177,12 +3177,41 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     </div>
   </div>
 
-<div id="avatar-assets-loading" style="position:fixed;inset:0;z-index:99999;background:#112033;color:#f5ecd8;display:grid;place-content:center;text-align:center;padding:25px;font:18px system-ui"><h2>Preparing your wardrobe</h2><p id="avatar-assets-status">Loading character models and artwork…</p><button id="avatar-assets-retry" hidden onclick="location.reload()" style="padding:12px">Retry loading</button></div>
+<!-- Wardrobe asset status is routed into the shared KWG loading popup. -->
+<div id="avatar-assets-status" hidden>Loading character models and artwork…</div><button id="avatar-assets-retry" hidden onclick="location.reload()">Retry loading</button>
   <script src="/assets/avatars/avatar-runtime.js"></script>
   <script>
   (async function startGame(){
-    await AvatarGLB.ready;
-    document.getElementById('avatar-assets-loading').remove();
+    const wardrobeOverlay=document.getElementById('kwg-loading-overlay');
+    const wardrobeTitle=document.getElementById('kwg-loading-title');
+    const wardrobeDescription=document.getElementById('kwg-loading-description');
+    const wardrobePercent=document.getElementById('kwg-loading-percent');
+    const wardrobeFill=document.getElementById('kwg-loading-fill');
+    const wardrobeTrack=document.getElementById('kwg-loading-track');
+    const wardrobeStatus=document.getElementById('avatar-assets-status');
+    wardrobeOverlay.classList.add('kwg-visible');
+    wardrobeOverlay.setAttribute('aria-hidden','false');
+    wardrobeTitle.textContent='LOADING AVATARS';
+    wardrobeDescription.textContent='Preparing character artwork';
+    wardrobeOverlay.classList.add('kwg-indeterminate');
+    const wardrobeObserver=new MutationObserver(()=>{
+      const msg=wardrobeStatus.textContent||'';
+      wardrobeDescription.textContent=msg;
+      const match=msg.match(/(\d+)%/);
+      wardrobeOverlay.classList.toggle('kwg-indeterminate',!match);
+      if(match){wardrobeFill.style.width=match[1]+'%';wardrobePercent.textContent=match[1]+'%';wardrobeTrack.setAttribute('aria-valuenow',match[1]);}
+    });
+    wardrobeObserver.observe(wardrobeStatus,{childList:true,characterData:true,subtree:true});
+    try{await AvatarGLB.ready;}catch(error){
+      wardrobeObserver.disconnect();
+      wardrobeTitle.textContent='AVATAR LOADING FAILED';
+      wardrobeDescription.textContent='Could not load avatar assets. Please refresh and try again.';
+      wardrobeOverlay.classList.add('kwg-indeterminate');
+      throw error;
+    }
+    wardrobeObserver.disconnect();
+    wardrobeOverlay.classList.remove('kwg-visible','kwg-indeterminate');
+    wardrobeOverlay.setAttribute('aria-hidden','true');
     // --- SOCKET.IO BACKEND CONNECTION ---
     const socket = (typeof io !== 'undefined') ? io() : null;
 
@@ -5553,59 +5582,48 @@ function avatarStarter(category){return AVATAR_CATALOG.find(i=>i.category===cate
       },6000);
     }
 
-    // --- ANIMATION CONTROLLER FOR RUN / JUMP / IDLE ---
-    // Exact same limb animation used by indexSingle.html.
-    function animateLimbs(avatar, isMoving) {
-      const limbs = avatar.userData.limbs;
-      if (!limbs) return;
-
-      if (isMoving) {
-        // Slightly slower stride animation, shared by local and remote avatars.
-        avatar.userData.walkClock = (avatar.userData.walkClock || 0) + 0.15;
-        const angle = Math.sin(avatar.userData.walkClock) * 0.65;
-        limbs.leftLeg.rotation.x = angle;
-        limbs.rightLeg.rotation.x = -angle;
-        limbs.leftArm.rotation.x = -angle;
-        limbs.rightArm.rotation.x = angle;
-      } else {
-        limbs.leftLeg.rotation.x *= 0.75;
-        limbs.rightLeg.rotation.x *= 0.75;
-        limbs.leftArm.rotation.x *= 0.75;
-        limbs.rightArm.rotation.x *= 0.75;
-      }
+    // --- PROCEDURAL AVATAR MOTION: IDLE, RUN, JUMP, FALL, LAND ---
+    // Bone rotations only: mesh fit, clothing geometry and world physics remain unchanged.
+    function animateLimbs(avatar,isMoving){
+      // Kept for compatibility with existing callers.
+      updateAvatarAnimations(avatar,isMoving,true,1/60);
     }
-
-    function updateAvatarAnimations(avatarMesh, isMoving, isGrounded, delta, walkClockOverride, verticalVelocity = 0) {
-      if (!avatarMesh || !avatarMesh.userData || !avatarMesh.userData.limbs) return;
+    function updateAvatarAnimations(avatarMesh,isMoving,isGrounded,delta,walkClockOverride,verticalVelocity=0){
+      if(!avatarMesh?.userData?.limbs)return;
       if(avatarMesh===localPlayerAvatar)kwgBlinkAvatar(avatarMesh,delta);
-      const limbs=avatarMesh.userData.limbs;
-      const glide=!!avatarMesh.userData.gliding;
-      for(const side of ['leftArm','rightArm']) limbs[side].rotation.z=glide?(side==='leftArm'?-.72:.72):0;
+      const data=avatarMesh.userData, limbs=data.limbs;
+      const dt=Math.max(0.001,Math.min(delta||1/60,0.06));
+      const a=data.kwgMotion||(data.kwgMotion={time:0,phase:0,grounded:true,land:0,blend:0});
+      a.time+=dt;
+      if(isGrounded&&!a.grounded)a.land=1;
+      a.grounded=isGrounded;
+      a.land=Math.max(0,a.land-dt*3.8);
+      const k=1-Math.exp(-dt*11);
+      const approach=(joint,axis,target)=>{joint.rotation[axis]+=(target-joint.rotation[axis])*k;};
+      a.blend+=(Number(!!isMoving&&isGrounded)-a.blend)*k;
+      if(walkClockOverride!==undefined&&isMoving)a.phase=walkClockOverride;
+      else a.phase+=dt*(isMoving?10.5:2.2);
+      const stride=Math.sin(a.phase)*0.73*a.blend;
+      const breath=Math.sin(a.time*2.3);
+      const falling=!isGrounded&&verticalVelocity<=0.004;
+      const rising=!isGrounded&&!falling;
+      const glide=!!data.gliding;
+      const landing=Math.sin(a.land*Math.PI)*0.28;
+      const leftLeg=rising?0.40:falling?-0.20:stride-landing;
+      const rightLeg=rising?-0.18:falling?0.30:-stride-landing;
+      const leftArm=rising?-0.95:falling?-0.36:-stride*0.8+0.055*breath;
+      const rightArm=rising?-0.95:falling?-0.36:stride*0.8-0.055*breath;
+      approach(limbs.leftLeg,'x',leftLeg);
+      approach(limbs.rightLeg,'x',rightLeg);
+      approach(limbs.leftArm,'x',leftArm);
+      approach(limbs.rightArm,'x',rightArm);
+      approach(limbs.leftArm,'z',glide?-.72:(falling?-.23:-.035-0.03*breath));
+      approach(limbs.rightArm,'z',glide?.72:(falling?.23:.035+0.03*breath));
+      if(limbs.torso){
+        approach(limbs.torso,'x',rising?-.08:falling?.12:landing*.38+Math.sin(a.phase*2)*.025*a.blend);
+        approach(limbs.torso,'z',Math.sin(a.time*1.35)*.012*(1-a.blend));
+      }
       AvatarGLB.glide(avatarMesh,glide);
-      const smooth=(current,target,speed=0.16)=>current+(target-current)*speed;
-
-      if (!isGrounded) {
-        // Smooth airborne silhouette: arms lift while rising, then open slightly while falling.
-        const rising = verticalVelocity > 0.004;
-        const armTarget = rising ? -1.05 : -0.55;
-        const legTarget = rising ? 0.38 : -0.18;
-        limbs.leftArm.rotation.x=smooth(limbs.leftArm.rotation.x,armTarget,0.18);
-        limbs.rightArm.rotation.x=smooth(limbs.rightArm.rotation.x,armTarget,0.18);
-        limbs.leftLeg.rotation.x=smooth(limbs.leftLeg.rotation.x,legTarget,0.18);
-        limbs.rightLeg.rotation.x=smooth(limbs.rightLeg.rotation.x,-legTarget*0.45,0.18);
-        return;
-      }
-
-      if (walkClockOverride !== undefined && isMoving) {
-        avatarMesh.userData.walkClock = walkClockOverride;
-        const angle = Math.sin(walkClockOverride) * 0.65;
-        limbs.leftLeg.rotation.x = smooth(limbs.leftLeg.rotation.x, angle, 0.28);
-        limbs.rightLeg.rotation.x = smooth(limbs.rightLeg.rotation.x, -angle, 0.28);
-        limbs.leftArm.rotation.x = smooth(limbs.leftArm.rotation.x, -angle, 0.28);
-        limbs.rightArm.rotation.x = smooth(limbs.rightArm.rotation.x, angle, 0.28);
-      } else {
-        animateLimbs(avatarMesh, isMoving);
-      }
     }
 
     // Rebuild a remote name tag when either player blocks/unblocks the other.
@@ -10895,6 +10913,7 @@ function avatarStarter(category){return AVATAR_CATALOG.find(i=>i.category===cate
     console.error('Avatar startup failed',error);
     document.getElementById('avatar-assets-status').textContent='Could not load the avatar asset pack. Upload the entire public/assets folder, then retry. '+(error.message||'');
     document.getElementById('avatar-assets-retry').hidden=false;
+    document.getElementById('kwg-loading-overlay')?.classList.add('kwg-visible');
   });
   </script>
 <div id="kwg-block-join-modal" role="dialog" aria-modal="true" aria-labelledby="kwg-block-join-title">
