@@ -5644,12 +5644,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       // recognizable profiles. Every style uses a different silhouette language.
       const hairLock=(points,width=.11,depth=.09)=>{
         const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));
-        const verts=[],idx=[],rings=12,sides=7;
+        const verts=[],idx=[],rings=18,sides=9;
         for(let i=0;i<=rings;i++){
           const t=i/rings,center=curve.getPoint(t),tan=curve.getTangent(t);
           const across=new THREE.Vector3(1,0,0).addScaledVector(tan,-tan.x).normalize();
           const outward=new THREE.Vector3().crossVectors(tan,across).normalize();
-          const taper=Math.pow(Math.sin(Math.PI*(.07+.88*t)),.45)*(1-.68*t);
+          const taper=Math.pow(Math.sin(Math.PI*(.10+.89*t)),.35)*Math.pow(1-t,.43);
           for(let j=0;j<sides;j++){
             const ang=2*Math.PI*j/sides;
             const v=center.clone().addScaledVector(across,Math.cos(ang)*width*taper).addScaledVector(outward,Math.sin(ang)*depth*taper);
@@ -5662,7 +5662,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const sweptHair=(x,y,z,dx,dy,dz,w=.13)=>hairLock([[x,y,z],[x+dx*.4,y+dy*.25,z+dz*.4],[x+dx*.85,y+dy*.78,z+dz*.85],[x+dx,y+dy,z+dz]],w,w*.8);
       if(selected.hair&&style('hair')!=='Bald'){
         const st=style('hair'),c=color('hair','#3a261b'),parts=[];
-        const cap=()=>parts.push(ell(0,2.35,-.018,.371,.142,.366));
+        const cap=()=>{
+          // A fitted shell built from concentric elliptical rings, following the scalp.
+          // This avoids the obvious flattened-sphere hairpiece silhouette.
+          const verts=[],faces=[],segments=28;
+          const rings=[[2.245,.338,.332],[2.305,.368,.365],[2.385,.365,.356],[2.455,.305,.293],[2.502,.19,.18],[2.516,.015,.015]];
+          rings.forEach(([y,rx,rz],ri)=>{for(let j=0;j<segments;j++){
+            const a=j*Math.PI*2/segments;
+            verts.push(Math.sin(a)*rx,y-.025*Math.cos(a),Math.cos(a)*rz-.018);
+            if(ri<rings.length-1){const p=ri*segments+j,q=ri*segments+(j+1)%segments;
+              faces.push(p,q,p+segments,q,q+segments,p+segments);}
+          }});
+          const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.setIndex(faces);g.computeVertexNormals();parts.push(part(g));
+        };
         const fringe=(count,fall=.20,parting=0)=>{for(let i=0;i<count;i++){const x=-.30+i*.60/(count-1);parts.push(hairLock([[x,2.45,.21],[x+parting*.10,2.43,.32],[x+parting*.16,2.33,.38],[x+parting*.22,2.45-fall,.36]],.075,.068));}};
         const rope=(x,y,z,fall,w=.07)=>parts.push(hairLock([[x,y,z],[x*1.08,y-fall*.30,z-.05],[x*1.12,y-fall*.68,z+.02],[x*1.07,y-fall,z+.04]],w,w));
         cap();
@@ -5694,6 +5706,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           default:fringe(6,.18);break;
         }
         sculpt(parts,c);
+        // Fine directional parting grooves, fitted to the hair shell, with a
+        // subtle material shift rather than exaggerated blocky attachments.
+        if(['Slick Back','Side Part','Pompadour','Undercut','Crew Cut'].includes(st)){
+          const shade=new THREE.Color(c).multiplyScalar(.76);
+          for(let i=0;i<5;i++){
+            const x=-.23+i*.105;
+            const groove=add(group,new THREE.TubeGeometry(
+              new THREE.CatmullRomCurve3([
+                new THREE.Vector3(x,2.505,.16),
+                new THREE.Vector3(x+.025,2.52,.03),
+                new THREE.Vector3(x+.06,2.48,-.18)
+              ]),14,.006,5,false),shade,0,0,0);
+            groove.castShadow=false;
+          }
+        }
         // Hair accessories and part lines are model details, not duplicate styles.
         if(st==='Ponytail'||st==='Pigtails'||st==='Braids'){
           const band='#d7ad6b';
