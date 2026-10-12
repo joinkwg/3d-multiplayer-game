@@ -1807,6 +1807,21 @@ INSERT INTO store_items(category,name,price,asset_url,asset_kind,metadata) VALUE
     CREATE INDEX IF NOT EXISTS user_store_items_user_idx ON user_store_items(user_id);
   `);
 
+  // Curated storefront: hide redundant generated variants without deleting rows,
+  // ownership, purchase history, or existing equipped item references.
+  await pool.query(`
+    UPDATE store_items
+    SET is_visible = CASE
+      WHEN category = 'skin' THEN
+        COALESCE((metadata->>'styleIndex')::int,-1) = 0
+        AND COALESCE((metadata->>'colorIndex')::int,-1) IN (0,1,2,3,4,8,9,10,11,12,13)
+      WHEN category IN ('hair','hats','heads','eyes','mouth','tops','bottoms','shoes','flightsuits') THEN
+        COALESCE((metadata->>'colorIndex')::int,0) < 4
+      ELSE is_visible
+    END
+    WHERE asset_kind = 'procedural'
+      AND asset_url LIKE 'procedural:%'
+  `);
   await pool.query('DELETE FROM auth_sessions WHERE expires_at <= NOW()');
   await pool.query("DELETE FROM active_world_sessions WHERE last_seen < NOW() - INTERVAL '90 seconds'");
 
@@ -3180,7 +3195,10 @@ io.on('connection', (socket) => {
           SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible,
                  (created_by IS NOT NULL) AS is_uploaded
           FROM store_items WHERE ($1::boolean OR is_visible=true) AND (asset_kind <> 'avatar_glb' OR $1::boolean)
-          ORDER BY category ASC, created_at DESC
+          ORDER BY category ASC,
+                   CASE WHEN asset_kind='procedural' THEN COALESCE((metadata->>'styleIndex')::int,0) ELSE 9999 END ASC,
+                   CASE WHEN asset_kind='procedural' THEN COALESCE((metadata->>'colorIndex')::int,0) ELSE 9999 END ASC,
+                   name ASC, id ASC
         `,[!!socket.user.isAdmin]),
         pool.query(`
           SELECT s.id,s.category,s.name,s.price,s.asset_url,s.asset_kind,s.metadata,s.is_visible,
