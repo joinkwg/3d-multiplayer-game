@@ -85,7 +85,7 @@ function acquire(slot,key,spec,look){
 function prune(){if(paints.size<=64)return;for(const [key,e] of paints){if(e.refs===0){e.material.dispose();e.open.dispose();e.closed?.dispose();paints.delete(key);if(paints.size<=64)break;}}}
 // Lower-body proportions (X axis only): preserve height and mesh detailing.
 // These are conservative starting values; adjust after viewing your GLBs.
-const LOWER_FIT={pantsWidth:0.88,shoeSpacing:0.88,shoeWidth:0.97};
+const LOWER_FIT={pantsWidth:0.88,waistWidth:0.83,shoeSpacing:0.86,shoeWidth:0.95};
 const fittedGeometries=new Map();
 function fittedGeometry(key,slot,original){
  if(slot!=='bottom'&&slot!=='leftshoe'&&slot!=='rightshoe')return original;
@@ -94,10 +94,15 @@ function fittedGeometry(key,slot,original){
  if(!position)return original;
  original.computeBoundingBox();
  const center=(original.boundingBox.min.x+original.boundingBox.max.x)/2;
+ const minY=original.boundingBox.min.y,maxY=original.boundingBox.max.y;
  const shoe=slot==='leftshoe'||slot==='rightshoe';
  for(let i=0;i<position.count;i++){
   const x=position.getX(i);
-  position.setX(i,shoe?center*LOWER_FIT.shoeSpacing+(x-center)*LOWER_FIT.shoeWidth:x*LOWER_FIT.pantsWidth);
+  // Narrow the waistband more than the cuffs, preserving the flared silhouette.
+  const t=Math.max(0,Math.min(1,(position.getY(i)-minY)/Math.max(maxY-minY,0.0001)));
+  const waistBlend=Math.max(0,Math.min(1,(t-0.55)/0.45));
+  const pantsScale=LOWER_FIT.pantsWidth+(LOWER_FIT.waistWidth-LOWER_FIT.pantsWidth)*waistBlend*waistBlend*(3-2*waistBlend);
+  position.setX(i,shoe?center*LOWER_FIT.shoeSpacing+(x-center)*LOWER_FIT.shoeWidth:x*pantsScale);
  }
  position.needsUpdate=true;
  geometry.computeBoundingBox();geometry.computeBoundingSphere();
