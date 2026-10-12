@@ -5691,10 +5691,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             break;
           }
           case 'Crew Cut':{
-            // Low, soft, forward-swept crown; restrained silhouette.
-            for(let i=0;i<3;i++){
-              const x=-.20+i*.20;
-              parts.push(hairLock([[x,2.47,-.20],[x+.025,2.57,-.07],[x+.02,2.53,.17],[x+.015,2.39,.31]],.112,.082));
+            // Close-fitting low crop: soft overlapping swept texture.
+            for(let i=0;i<5;i++){
+              const x=-.24+i*.12;
+              parts.push(hairLock([[x,2.46,-.18],[x+.025,2.535,-.04],
+                [x+.04,2.50,.15],[x+.055,2.37,.29]],.072,.048));
             }
             break;
           }
@@ -5716,20 +5717,34 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             break;
           }
           case 'Pompadour':{
-            // Horizontal sculpted wave with lift at the front, not upright tubes.
-            parts.push(hairLock([[-.31,2.41,.10],[-.19,2.67,.29],[.09,2.72,.20],[.32,2.46,-.19]],.225,.16));
-            parts.push(hairLock([[-.28,2.49,-.19],[-.12,2.66,.02],[.17,2.60,.08],[.30,2.44,-.24]],.17,.12));
+            // Broad, overlapping S-shaped waves: low at the back, full at the
+            // front. Varying widths make one continuous cartoon silhouette.
+            const waves=[
+              [[-.30,2.43,-.23],[-.30,2.58,-.05],[-.25,2.72,.19],[-.04,2.65,.32],[.17,2.47,.30]],
+              [[-.12,2.45,-.25],[-.10,2.61,-.07],[.02,2.74,.14],[.21,2.64,.26],[.31,2.44,.20]],
+              [[.12,2.44,-.24],[.18,2.57,-.08],[.29,2.65,.10],[.33,2.55,.24],[.31,2.40,.27]]
+            ];
+            waves.forEach((p,i)=>parts.push(hairLock(p,.18-i*.018,.115)));
             break;
           }
           case 'Spiky':{
-            // Swept tapered tufts with irregular height, angle and depth.
+            // Nine small, swept, staggered tufts instead of four upright horns.
+            // Tufts emerge from the crown, with a staggered back row.
             const tufts=[
-              [[-.29,2.42,.11],[-.34,2.52,.18],[-.38,2.66,.13],[-.43,2.72,.07]],
-              [[-.13,2.47,.17],[-.12,2.61,.23],[-.05,2.75,.20],[.02,2.82,.11]],
-              [[.08,2.48,.13],[.16,2.58,.19],[.23,2.69,.13],[.32,2.72,.02]],
-              [[.27,2.42,-.10],[.35,2.52,-.04],[.39,2.62,-.11],[.42,2.65,-.19]]
+              [-.29,.21,-.09,.19,-.02],[-.19,.27,-.035,.24,.025],
+              [-.075,.22,.035,.18,.02],[.055,.29,.07,.25,-.015],
+              [.18,.23,.10,.20,-.04],[.29,.18,.07,.16,-.045],
+              [-.21,.14,-.19,.15,-.06],[.00,.19,-.21,.20,-.065],
+              [.22,.13,-.20,.15,-.05]
             ];
-            tufts.forEach((p,i)=>parts.push(hairLock(p,.13+(i%2)*.02,.11)));
+            tufts.forEach(([x,h,z,rise,lean],i)=>{
+              const y=2.44+(z<0?.025:0),tipX=x+lean;
+              parts.push(hairLock([
+                [x,y,z],[x+lean*.2,y+rise*.42,z+.035],
+                [tipX*.98,y+rise*.83,z+.045],
+                [tipX,y+rise,z+.01]
+              ],.077+(i%3)*.009,.070));
+            });
             break;
           }
           case 'Mohawk':for(let i=0;i<9;i++){const z=-.31+i*.078;parts.push(hairLock([[0,2.36,z],[0,2.51,z],[0,2.74,z+.06],[0,2.80,z+.09]],.13,.09));}break;
@@ -5747,7 +5762,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           case 'Undercut':parts.push(ell(0,2.47,0,.28,.16,.32));for(let i=0;i<5;i++)parts.push(sweptHair(-.21+i*.10,2.48,.14,.20,.07,-.26,.08));break;
           case 'Shag':fringe(7,.26);for(const side of [-1,1])for(let i=0;i<4;i++)parts.push(sweptHair(side*.30,2.35-i*.13,-.14+i*.12,side*.13,-.24,.05,.10));break;
           case 'Mullet':fringe(6,.18);for(let i=0;i<7;i++)parts.push(rope(-.28+i*.093,2.32,-.31,.55,.10));break;
-          case 'Flat Top':parts.length=0;parts.push(part(new THREE.CylinderGeometry(.33,.34,.25,12),0,2.47,0));break;
+          case 'Flat Top':parts.length=0;parts.push(ell(0,2.43,-.015,.35,.19,.34));for(let i=0;i<7;i++){const x=-.25+i*.083;parts.push(hairLock([[x,2.49,-.22],[x,2.60,-.08],[x,2.60,.12],[x,2.47,.28]],.048,.045));}break;
           case 'Curtains':for(const side of [-1,1])for(let i=0;i<4;i++)parts.push(hairLock([[side*(.06+i*.065),2.51,.13],[side*(.15+i*.065),2.42,.30],[side*(.20+i*.065),2.29,.35],[side*(.26+i*.055),2.18,.28]],.095,.09));break;
           case 'Twists':for(let i=0;i<13;i++){const a=i*2.399,x=Math.sin(a)*.27,z=Math.cos(a)*.27;parts.push(hairLock([[x,2.39,z],[x+.05,2.52,z],[x-.05,2.61,z],[x+.04,2.69,z]],.075,.07));}break;
           default:fringe(6,.18);break;
