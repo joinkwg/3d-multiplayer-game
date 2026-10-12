@@ -85,7 +85,7 @@ function acquire(slot,key,spec,look){
 function prune(){if(paints.size<=64)return;for(const [key,e] of paints){if(e.refs===0){e.material.dispose();e.open.dispose();e.closed?.dispose();paints.delete(key);if(paints.size<=64)break;}}}
 // Lower-body proportions (X axis only): preserve height and mesh detailing.
 // These are conservative starting values; adjust after viewing your GLBs.
-const LOWER_FIT={pantsWidth:0.88,waistWidth:0.83,shoeSpacing:0.86,shoeWidth:0.95,waistDrop:0.035};
+const LOWER_FIT={pantsWidth:0.88,waistWidth:0.83,shoeSpacing:0.86,shoeWidth:0.95,waistDrop:0.041};
 const fittedGeometries=new Map();
 function fittedGeometry(key,slot,original){
  if(slot!=='bottom'&&slot!=='leftshoe'&&slot!=='rightshoe')return original;
