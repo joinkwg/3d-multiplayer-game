@@ -5476,17 +5476,95 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const add=(parent,geo,c,x,y,z)=>{const mesh=new THREE.Mesh(geo,mat(c));mesh.position.set(x,y,z);parent.add(mesh);return mesh;};
       // Existing avatar proportions, arm/leg pivots and animation are retained.
       if(selected.skin){const c=color('skin','#d9a679');group.traverse(o=>{if(o.isMesh&&o.material?.color&&o.material.color.getHexString()===new THREE.Color(app.skinColor||app.headColor||'#d9a679').getHexString())o.material=mat(c)});}
-      if(selected.tops){const c=color('tops','#3b82d0');group.traverse(o=>{if(o.isMesh&&o.material?.color&&o.material.color.getHexString()===new THREE.Color(app.shirtColor||app.torsoColor||'#3b82d0').getHexString())o.material=mat(c)});const st=style('tops');if(['Hoodie','Trench Coat','Jacket','Suit','Sweater'].includes(st)){const body=add(group,new THREE.BoxGeometry(st==='Trench Coat'?.86:.81,st==='Trench Coat'?1.13:.81,.49),c,0,st==='Trench Coat'?1.17:1.3,0);if(st==='Hoodie')add(group,new THREE.TorusGeometry(.34,.12,8,16),c,0,1.83,-.12).rotation.x=Math.PI/2;}if(st==='Tank Top'||st==='Crop Top'){/* shape details */add(group,new THREE.BoxGeometry(.64,st==='Crop Top'?.40:.55,.47),c,0,1.38,.01);} }
-      if(selected.bottoms){const c=color('bottoms','#263447'),st=style('bottoms');group.traverse(o=>{if(o.isMesh&&o.material?.color&&o.material.color.getHexString()===new THREE.Color(app.pantsColor||app.leftLegColor||'#263447').getHexString())o.material=mat(c)});if(st.includes('Skirt'))add(group,new THREE.CylinderGeometry(.33,st==='Miniskirt'?.47:.56,st==='Miniskirt'?.35:.66,12),c,0,st==='Miniskirt'?.72:.60,0);if(st==='Baggy Sweatpants')for(const x of [-.205,.205])add(group,new THREE.BoxGeometry(.42,.70,.43),c,x,.40,0);}
-      if(selected.shoes){const c=color('shoes','#15191f'),st=style('shoes');for(const x of [-.205,.205]){if(st==='Boots'||st==='High Tops')add(group,new THREE.BoxGeometry(.36,.35,.48),c,x,.20,.04);if(st==='Heels')add(group,new THREE.BoxGeometry(.09,.17,.13),c,x,.07,-.13);if(st==='Flip Flops'||st==='Sandals')add(group,new THREE.BoxGeometry(.35,.05,.49),c,x,.04,.05);}}
+      // Distinct garment constructions: shapes are anchored to the existing avatar.
+      if(selected.tops){
+        const c=color('tops','#3b82d0'),st=style('tops');
+        const garment=(geo,x,y,z,shade=c)=>add(group,geo,shade,x,y,z);
+        group.traverse(o=>{if(o.isMesh&&o.material?.color&&o.material.color.getHexString()===new THREE.Color(app.shirtColor||app.torsoColor||'#3b82d0').getHexString())o.material=mat(c)});
+        if(st==='Hoodie'){
+          garment(new THREE.BoxGeometry(.83,.78,.51),0,1.30,0);
+          const hood=garment(new THREE.TorusGeometry(.28,.105,10,24,Math.PI*1.7),0,1.76,-.17);hood.rotation.x=Math.PI/2;
+          for(const x of [-.08,.08])garment(new THREE.CylinderGeometry(.012,.012,.22,6),x,1.48,.28,'#eeeeee');
+          garment(new THREE.BoxGeometry(.37,.19,.035),0,1.14,.27);
+        }else if(st==='Trench Coat'){
+          for(const x of [-.22,.22]){const flap=garment(new THREE.BoxGeometry(.39,1.19,.12),x,1.13,.27);flap.rotation.z=x>0?-.055:.055;}
+          garment(new THREE.BoxGeometry(.88,.09,.55),0,1.10,0,'#2d2d2d');
+          for(const x of [-.12,.12])for(const y of [1.39,1.17,.96])garment(new THREE.SphereGeometry(.025,8,6),x,y,.35,'#d4bd78');
+        }else if(st==='Suit'){
+          garment(new THREE.BoxGeometry(.80,.74,.47),0,1.29,0,'#f5f5f2');
+          for(const x of [-.22,.22]){const lapel=garment(new THREE.BoxGeometry(.25,.54,.06),x,1.42,.27);lapel.rotation.z=x>0?.33:-.33;}
+          const tie=garment(new THREE.ConeGeometry(.075,.36,4),0,1.35,.32,'#a62f43');tie.rotation.z=Math.PI;
+        }else if(st==='Tank Top'){
+          garment(new THREE.BoxGeometry(.63,.64,.48),0,1.29,.01);
+          for(const x of [-.24,.24])garment(new THREE.BoxGeometry(.12,.23,.46),x,1.66,0);
+        }else if(st==='Crop Top'){
+          garment(new THREE.BoxGeometry(.77,.43,.49),0,1.49,.01);
+          garment(new THREE.BoxGeometry(.78,.065,.52),0,1.26,.01);
+        }else if(st==='Jacket'){
+          for(const x of [-.205,.205])garment(new THREE.BoxGeometry(.39,.77,.51),x,1.31,.02);
+          garment(new THREE.BoxGeometry(.055,.74,.055),0,1.31,.29,'#c5c5c5');
+          garment(new THREE.BoxGeometry(.85,.12,.54),0,.96,0);
+        }else if(st==='Sweater'){
+          garment(new THREE.BoxGeometry(.84,.79,.51),0,1.3,0);
+          garment(new THREE.TorusGeometry(.21,.065,8,20),0,1.68,.06);
+          garment(new THREE.BoxGeometry(.82,.10,.54),0,.95,0);
+        }
+      }
+      if(selected.bottoms){
+        const c=color('bottoms','#263447'),st=style('bottoms');
+        group.traverse(o=>{if(o.isMesh&&o.material?.color&&o.material.color.getHexString()===new THREE.Color(app.pantsColor||app.leftLegColor||'#263447').getHexString())o.material=mat(c)});
+        if(st.includes('Skirt')||st==='Miniskirt'){
+          const mini=st==='Miniskirt';add(group,new THREE.CylinderGeometry(.33,mini?.46:.61,mini?.32:.64,20),c,0,mini?.78:.61,0);
+          add(group,new THREE.CylinderGeometry(.35,.35,.07,20),'#dedede',0,.94,0);
+        }else if(st==='Baggy Sweatpants'){
+          for(const x of [-.205,.205]){
+            add(group,new THREE.CylinderGeometry(.25,.30,.68,12),c,x,.47,0);
+            add(group,new THREE.CylinderGeometry(.19,.19,.09,12),'#eeeeee',x,.12,0);
+          }
+        }else if(st==='Short Shorts'){
+          for(const x of [-.205,.205])add(group,new THREE.BoxGeometry(.38,.27,.43),c,x,.71,0);
+        }
+      }
+      if(selected.shoes){
+        const c=color('shoes','#15191f'),st=style('shoes');
+        for(const x of [-.205,.205]){
+          const sole=(thick=.075)=>add(group,new THREE.BoxGeometry(.36,thick,.53),c,x,.06,.075);
+          if(st==='Boots'){add(group,new THREE.BoxGeometry(.35,.39,.41),c,x,.26,0);sole(.11);}
+          else if(st==='High Tops'||st==='Converse'){add(group,new THREE.BoxGeometry(.34,.27,.42),c,x,.19,0);sole();add(group,new THREE.BoxGeometry(.28,.06,.035),'#f8f8f8',x,.18,.235);}
+          else if(st==='Heels'){sole(.055);add(group,new THREE.BoxGeometry(.09,.17,.12),c,x,.11,-.14);}
+          else if(st==='Flip Flops'){sole(.045);for(const dx of [-.09,.09]){const strap=add(group,new THREE.BoxGeometry(.17,.035,.05),c,x+dx,.12,.15);strap.rotation.y=dx>0?.55:-.55;}}
+          else if(st==='Sandals'){sole(.06);for(const z of [-.04,.17])add(group,new THREE.BoxGeometry(.33,.055,.08),c,x,.14,z);}
+          else if(st==='Slippers'){sole(.055);add(group,new THREE.SphereGeometry(.19,12,8),c,x,.14,.12);}
+        }
+      }
       const head=group.children.find(o=>o.isMesh&&Math.abs(o.position.y-2.04)<.01);
-      if(selected.heads&&head){const st=style('heads'),c=color('skin',app.skinColor||app.headColor||'#d9a679');head.geometry=st==='Blocky'?new THREE.BoxGeometry(.65,.65,.65):st==='Diamond'?new THREE.OctahedronGeometry(.45):st==='Oval'||st==='Humanoid'?new THREE.SphereGeometry(.37,20,16):st==='Alien'?new THREE.SphereGeometry(.42,20,16):st==='Heart'?new THREE.SphereGeometry(.39,20,16):st==='Cathead'?new THREE.SphereGeometry(.36,20,16):st==='Robot'?new THREE.BoxGeometry(.67,.62,.62):new THREE.SphereGeometry(.37,20,16);if(st==='Oval'||st==='Humanoid')head.scale.y=1.17;if(st==='Alien')head.scale.x=1.16;head.material=mat(c);if(st==='Cathead')for(const x of [-.23,.23]){const ear=add(group,new THREE.ConeGeometry(.16,.32,3),c,x,2.42,0);ear.rotation.z=x>0?-.22:.22;}}
+      if(selected.heads&&head){
+        const st=style('heads'),c=color('skin',app.skinColor||app.headColor||'#d9a679');
+        head.scale.set(1,1,1);
+        const polygon=(n,r=.39)=>new THREE.CylinderGeometry(r,r,.64,n,1);
+        if(st==='Blocky'||st==='Robot')head.geometry=new THREE.BoxGeometry(.67,.64,.64);
+        else if(st==='Diamond')head.geometry=new THREE.OctahedronGeometry(.46);
+        else if(st==='Oval')head.geometry=new THREE.SphereGeometry(.36,24,18);
+        else if(st==='Humanoid')head.geometry=new THREE.SphereGeometry(.36,24,18);
+        else if(st==='Alien')head.geometry=new THREE.SphereGeometry(.40,24,18);
+        else if(st==='Heart'){
+          const shape=new THREE.Shape();shape.moveTo(0,-.36);shape.bezierCurveTo(-.45,-.10,-.53,.23,-.23,.32);shape.bezierCurveTo(-.08,.36,0,.24,0,.18);shape.bezierCurveTo(0,.24,.08,.36,.23,.32);shape.bezierCurveTo(.53,.23,.45,-.10,0,-.36);
+          head.geometry=new THREE.ExtrudeGeometry(shape,{depth:.48,bevelEnabled:true,bevelSize:.055,bevelThickness:.055,bevelSegments:3,steps:1});head.geometry.translate(0,0,-.24);
+        }else if(st==='Cathead')head.geometry=new THREE.SphereGeometry(.36,24,18);
+        else if(st==='Hex'||st==='Hexagon')head.geometry=polygon(6);
+        else head.geometry=new THREE.SphereGeometry(.37,24,18);
+        if(st==='Oval'||st==='Humanoid')head.scale.y=1.20;
+        if(st==='Alien'){head.scale.x=1.19;head.scale.y=1.12;}
+        head.material=mat(c);
+        if(st==='Cathead')for(const x of [-.23,.23]){const ear=add(group,new THREE.ConeGeometry(.16,.32,3),c,x,2.43,0);ear.rotation.z=x>0?-.23:.23;}
+        if(st==='Robot'){for(const x of [-.35,.35])add(group,new THREE.CylinderGeometry(.09,.09,.12,10),'#7a8796',x,2.05,0).rotation.z=Math.PI/2;}
+      }
       // Sculpted, deliberately different silhouette families; one merged mesh per cosmetic.
       // The cap is a fitted spherical surface, not a stack of overlapping hemispheres.
       const sculpt=(parts,c)=>{
         const positions=[],normals=[],indices=[];let offset=0;
-        for(const part of parts){const g=part.geo.clone();g.translate(part.x||0,part.y||0,part.z||0);
-          if(part.rx||part.ry||part.rz)g.rotateX(part.rx||0),g.rotateY(part.ry||0),g.rotateZ(part.rz||0);
+        for(const part of parts){const g=part.geo.clone();if(part.rx||part.ry||part.rz)g.rotateX(part.rx||0),g.rotateY(part.ry||0),g.rotateZ(part.rz||0);
+          g.translate(part.x||0,part.y||0,part.z||0);
           const at=g.attributes.position,idx=g.index;
           for(let i=0;i<at.count;i++){positions.push(at.getX(i),at.getY(i),at.getZ(i));}
           if(idx)for(let i=0;i<idx.count;i++)indices.push(offset+idx.getX(i));
