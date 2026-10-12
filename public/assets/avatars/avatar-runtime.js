@@ -85,7 +85,7 @@ function acquire(slot,key,spec,look){
 function prune(){if(paints.size<=64)return;for(const [key,e] of paints){if(e.refs===0){e.material.dispose();e.open.dispose();e.closed?.dispose();paints.delete(key);if(paints.size<=64)break;}}}
 // Lower-body proportions (X axis only): preserve height and mesh detailing.
 // These are conservative starting values; adjust after viewing your GLBs.
-const LOWER_FIT={pantsWidth:0.88,waistWidth:0.83,shoeSpacing:0.86,shoeWidth:0.95,waistDrop:0.012};
+const LOWER_FIT={pantsWidth:0.88,waistWidth:0.83,shoeSpacing:0.86,shoeWidth:0.95,waistDrop:0.035};
 const fittedGeometries=new Map();
 function fittedGeometry(key,slot,original){
  if(slot!=='bottom'&&slot!=='leftshoe'&&slot!=='rightshoe')return original;
@@ -103,10 +103,10 @@ function fittedGeometry(key,slot,original){
   const waistBlend=Math.max(0,Math.min(1,(t-0.55)/0.45));
   const pantsScale=LOWER_FIT.pantsWidth+(LOWER_FIT.waistWidth-LOWER_FIT.pantsWidth)*waistBlend*waistBlend*(3-2*waistBlend);
   position.setX(i,shoe?center*LOWER_FIT.shoeSpacing+(x-center)*LOWER_FIT.shoeWidth:x*pantsScale);
-  // Ease only the top of the waistband down to reduce shirt/pants intersection.
+  // More visible, localized waistband lowering to reduce shirt/pants intersection.
   // Keep the lower legs and shoes at their existing height and alignment.
   if(!shoe){
-   const upper=Math.max(0,Math.min(1,(t-0.72)/0.28));
+   const upper=Math.max(0,Math.min(1,(t-0.78)/0.22));
    const smooth=upper*upper*(3-2*upper);
    position.setY(i,position.getY(i)-(maxY-minY)*LOWER_FIT.waistDrop*smooth);
   }
