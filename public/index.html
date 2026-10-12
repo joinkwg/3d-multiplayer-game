@@ -5679,12 +5679,50 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const rope=(x,y,z,fall,w=.07)=>parts.push(hairLock([[x,y,z],[x*1.08,y-fall*.30,z-.05],[x*1.12,y-fall*.68,z+.02],[x*1.07,y-fall,z+.04]],w,w));
         cap();
         switch(st){
-          case 'Buzz Cut':parts.push(ell(0,2.39,0,.363,.08,.352));break;
-          case 'Crew Cut':fringe(7,.095);break;
-          case 'Pixie':fringe(5,.24,1);for(let i=0;i<5;i++)parts.push(sweptHair(-.3+i*.15,2.42,-.09,.16,.12,-.17,.095));break;
-          case 'Side Part':fringe(7,.23,1);for(let i=0;i<6;i++)parts.push(sweptHair(-.27+i*.10,2.43,-.08,.22,.08,.15,.11));break;
-          case 'Pompadour':for(let i=0;i<7;i++)parts.push(hairLock([[-.29+i*.096,2.37,.25],[-.27+i*.096,2.62,.23],[-.20+i*.085,2.72,.04],[-.19+i*.085,2.51,-.22]],.10,.105));break;
-          case 'Spiky':for(let i=0;i<11;i++){const x=(i%4-1.5)*.18,z=(Math.floor(i/4)-1)*.21;parts.push(hairLock([[x,2.38,z],[x*1.1,2.48,z],[x*1.3,2.62+(i%3)*.06,z-.02],[x*1.4,2.72+(i%3)*.07,z-.05]],.115,.10));}break;
+          case 'Buzz Cut':{
+            // Close-cropped, fitted scalp with a shaped front hairline: no upright locks.
+            parts.length=0;cap();
+            parts.push(ell(0,2.402,-.01,.348,.105,.347));
+            break;
+          }
+          case 'Crew Cut':{
+            // Squared, softly bevelled crop: sculpted top surface, not a comb of cylinders.
+            parts.push(part(new THREE.BoxGeometry(.575,.115,.545,3,1,3),0,2.487,-.015));
+            parts.push(hairLock([[-.30,2.425,.22],[-.20,2.46,.34],[.07,2.46,.36],[.29,2.425,.23]],.055,.055));
+            break;
+          }
+          case 'Pixie':{
+            // Off-centre fringe, short tapered temple sections and swept crown.
+            for(let i=0;i<4;i++){
+              const x=-.26+i*.145;
+              parts.push(hairLock([[x,2.48,-.15],[x+.11,2.55,.04],[x+.16,2.44,.26],[x+.17,2.28,.32]],.11-i*.009,.075));
+            }
+            for(const side of [-1,1])parts.push(hairLock([[side*.30,2.36,.04],[side*.37,2.28,.12],[side*.34,2.17,.15],[side*.31,2.14,.12]],.075,.058));
+            break;
+          }
+          case 'Side Part':{
+            // Broad asymmetrical sweeping wave, with only three intentional major sections.
+            for(let i=0;i<3;i++){
+              const z=-.17+i*.15;
+              parts.push(hairLock([[-.27,2.46,z],[-.13,2.63,z+.07],[.17,2.55,z+.15],[.33,2.30,z+.17]],.155-i*.015,.115));
+            }
+            parts.push(hairLock([[-.33,2.40,.12],[-.36,2.32,.20],[-.31,2.22,.25],[-.27,2.20,.25]],.10,.075));
+            break;
+          }
+          case 'Pompadour':{
+            // Three interlocking large wave forms; front lifted then swept backwards.
+            for(let i=0;i<3;i++){
+              const x=-.20+i*.20;
+              parts.push(hairLock([[x,2.42,.29],[x,2.73,.30],[x+.03,2.77,.02],[x+.02,2.48,-.30]],.16,.14));
+            }
+            break;
+          }
+          case 'Spiky':{
+            // Uneven sculpted spikes, staggered across the scalp rather than a crown row.
+            const spikes=[[-.24,.18,-.10,.29],[-.02,.25,.09,.40],[.23,.14,.11,.31],[-.16,-.12,-.13,.22],[.12,-.18,.13,.27]];
+            for(const [x,z,lean,h] of spikes)parts.push(hairLock([[x,2.40,z],[x+lean*.25,2.52,z+.04],[x+lean*.75,2.45+h*.70,z-.04],[x+lean,2.40+h,z-.08]],.13,.115));
+            break;
+          }
           case 'Mohawk':for(let i=0;i<9;i++){const z=-.31+i*.078;parts.push(hairLock([[0,2.36,z],[0,2.51,z],[0,2.74,z+.06],[0,2.80,z+.09]],.13,.09));}break;
           case 'Wavy':fringe(5,.18);for(const side of [-1,1])for(let i=0;i<3;i++)parts.push(hairLock([[side*.27,2.38,-.21+i*.19],[side*.39,2.19,-.18+i*.19],[side*.31,2.01,-.17+i*.19],[side*.40,1.86,-.16+i*.19]],.11,.09));break;
           case 'Curly':for(let i=0;i<19;i++){const a=i*2.399,rad=.23+.09*(i%3)/2;parts.push(hairLock([[Math.sin(a)*rad,2.40,Math.cos(a)*rad],[Math.sin(a)*rad*1.2,2.58,Math.cos(a)*rad*1.2],[Math.sin(a+.7)*rad,2.64,Math.cos(a+.7)*rad],[Math.sin(a+1.2)*rad,2.47,Math.cos(a+1.2)*rad]],.12,.12));}break;
