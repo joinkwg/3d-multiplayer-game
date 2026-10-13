@@ -11675,9 +11675,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 <div id="kwg-creator" role="dialog" aria-modal="true" aria-label="Item Creator">
  <div class="kwg-creator-shell">
   <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hat">Hat</option><option value="head_shape">Head Shape</option><option value="hair">Hair</option><option value="hats">Hats</option><option value="heads">Heads</option><option value="tops">Shirts / Tops</option><option value="bottoms">Pants / Bottoms</option><option value="shoes">Shoes</option><option value="flightsuits">Flightsuit</option><option value="eyes">Eyes (3D)</option><option value="mouth">Mouth (3D)</option><option value="torso_decal">Torso Decal (2D)</option><option value="skin">Skin (2D)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
-  <div class="kwg-creator-main">
+  <style>
+#kwgc-modebar{display:flex;gap:5px;flex-wrap:wrap;padding:8px;background:#17273a;border-bottom:1px solid #3c5671}
+#kwgc-modebar button,#kwgc-views button{background:#21354b;color:#dceaff;border:1px solid #48617b;padding:7px;cursor:pointer}
+#kwgc-modebar button.active{background:#276b91;border-color:#8bd9ff}
+#kwgc-views{position:absolute;right:12px;top:12px;display:grid;grid-template-columns:repeat(3,36px);gap:3px;z-index:3}
+#kwgc-views button{padding:6px 2px;font-size:10px}
+#kwgc-mode-hint{position:absolute;bottom:10px;left:12px;color:#b5d8f7;font-size:11px;pointer-events:none}
+#kwg-creator-parts button.active{background:#276b91!important;border-color:#8bd9ff!important}
+</style>
+<div id="kwgc-modebar"><button data-mode="select" class="active">↖ Select</button><button data-mode="move">✥ Move</button><button data-mode="scale">⤢ Scale</button><button data-mode="rotate">⟳ Rotate</button><button data-mode="recolor">◉ Recolor</button><label style="margin-left:10px;color:#cdeaff"><input id="kwgc-mirror" type="checkbox" style="min-height:0"> Mirror X</label><button id="kwgc-zoom-in">＋ Zoom</button><button id="kwgc-zoom-out">－ Zoom</button></div><div class="kwg-creator-main">
    <div class="kwg-creator-side"><h3>BUILD & PAINT</h3><div id="kwgc-3dtools"><div class="kwg-tool-grid"><button data-shape="box">+ Box</button><button data-shape="sphere">+ Sphere</button><button data-shape="cylinder">+ Cylinder</button><button data-shape="cone">+ Cone</button></div><label>Parts <div id="kwg-creator-parts"></div></label><button id="kwgc-delete-part">Remove selected part</button><p>Drag the viewport to rotate. Change each selected primitive with the transforms at right. Overlap rounded shapes to sculpt a silhouette.</p></div><div id="kwgc-2dtools" style="display:none"><div class="kwg-tool-grid"><button data-paint="brush">Brush</button><button data-paint="eraser">Eraser</button><button data-paint="fill">Fill</button><button data-paint="checker">Checker</button><button data-paint="stripes">Stripes</button><button id="kwgc-clear-paint">Clear</button></div><label>Brush size<input id="kwgc-brush" type="range" min="1" max="32" value="8"></label><p>Paint directly on the 2D texture canvas. Patterns fill the canvas; use the 3D category editor for solid meshes.</p></div><h3>MY DRAFTS</h3><button id="kwgc-refresh-drafts">Refresh drafts</button><div id="kwg-creator-drafts"></div></div>
-   <div class="kwg-creator-stage"><canvas id="kwg-creator-viewport"></canvas><canvas id="kwg-creator-paint" width="512" height="512"></canvas></div>
+   <div class="kwg-creator-stage"><canvas id="kwg-creator-viewport"></canvas><div id="kwgc-views"><button data-view="top">TOP</button><button data-view="front">FRONT</button><button data-view="right">RIGHT</button><button data-view="left">LEFT</button><button data-view="back">BACK</button><button data-view="bottom">BOTTOM</button></div><div id="kwgc-mode-hint">Select a part · drag empty space to orbit · scroll to zoom</div><canvas id="kwg-creator-paint" width="512" height="512"></canvas></div>
    <div class="kwg-creator-side"><h3>ITEM PROPERTIES</h3><label>Name<input id="kwgc-name" maxlength="40" value="New Creation"></label><label>Price (coins)<input id="kwgc-price" type="number" value="50" min="0" max="1000000"></label><label>Destination<select id="kwgc-distribution"><option value="store">Store (for sale)</option><option value="starter">Starter inventory (free)</option></select></label><label>Color<input type="color" id="kwgc-color" value="#7954aa"></label><div id="kwgc-transforms"><h3>SELECTED PART</h3><label>X<input id="kwgc-x" type="number" step="0.05" value="0"></label><label>Y<input id="kwgc-y" type="number" step="0.05" value="2.35"></label><label>Z<input id="kwgc-z" type="number" step="0.05" value="0"></label><label>Rotate Y (degrees)<input id="kwgc-r" type="number" step="5" value="0"></label><label>Scale X<input id="kwgc-sx" type="number" min="0.02" max="5" step="0.05" value="1"></label><label>Scale Y<input id="kwgc-sy" type="number" min="0.02" max="5" step="0.05" value="1"></label><label>Scale Z<input id="kwgc-sz" type="number" min="0.02" max="5" step="0.05" value="1"></label></div><button id="kwgc-save" style="width:100%">Save editable draft</button><button id="kwgc-publish" class="kwg-creator-primary" style="width:100%;margin-top:7px">Publish item</button><p>Publishing uses your server's configured Supabase Storage. 3D meshes export to GLB; paintings export to PNG.</p><div id="kwg-creator-reset-area"><h3>CATALOG RESET</h3><p>Deletes ALL existing avatar shop items AND players' ownership records. Does not refund spent coins. This cannot be undone.</p><button class="kwg-creator-danger" id="kwgc-reset">FULL AVATAR STORE RESET</button></div></div>
   </div><div class="kwg-creator-status" id="kwgc-status">Create a shape or select a 2D category to begin.</div>
  </div>
@@ -11686,7 +11695,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 (()=>{
  const $=id=>document.getElementById(id),modal=$('kwg-creator');if(!modal)return;
  const get=()=>window.THREE, socket=()=>typeof io==='function'?null:null;
- let scene,camera,renderer,root,avatar,previewEyeGroup,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=0;
+ let scene,camera,renderer,root,avatar,previewEyeGroup,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=0;let mode='select',mirror=false,distance=5.6,elevation=.22,activeDrag=null;
  const coords=['x','y','z','r','sx','sy','sz'];const status=s=>{$('kwgc-status').textContent=s;};
  // Reconnected sockets lose server-side authentication. Restore the existing session
  // before retrying an Item Creator operation; never bypass server admin checks.
@@ -11723,9 +11732,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  }
  function category(){return $('kwgc-category').value;}function is2d(){return ['skin','torso_decal'].includes(category());}
  function partMesh(p){const T=get(),geo= p.type==='box'?new T.BoxGeometry(1,1,1):p.type==='sphere'?new T.SphereGeometry(.5,20,14):p.type==='cone'?new T.ConeGeometry(.5,1,20):new T.CylinderGeometry(.5,.5,1,20);const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color:['heads','head_shape'].includes(category())?'#fff5ba':p.color,roughness:.82}));mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=p.r*Math.PI/180;mesh.scale.set(p.sx,p.sy,p.sz);return mesh;}
- function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach(p=>root.add(partMesh(p)));const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);list.append(b);});}
+ function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach((p,i)=>{const mesh=partMesh(p);mesh.userData.partIndex=i;if(i===selected)mesh.material.emissive=new (get().Color)('#17304b');root.add(mesh);});const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);if(i===selected)b.classList.add('active');list.append(b);});}
  function select(n){selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]);$('kwgc-color').value=p.color;}redraw();}
- function addShape(type){const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const p={type,color:$('kwgc-color').value,x:0,y,z,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};parts.push(p);select(parts.length-1);}
+ function mirrorPartner(i){
+  const p=parts[i];if(!p)return -1;
+  return parts.findIndex((q,j)=>j!==i && (q.mirrorOf===p.uid || p.mirrorOf===q.uid));
+ }
+ function syncMirror(i,create=false){
+   if(!mirror||i<0||!parts[i])return;
+   const p=parts[i];if(!p.uid)p.uid='p'+Date.now()+Math.random();
+   let j=mirrorPartner(i);
+   if(j<0&&!create)return;
+   if(j<0){j=parts.length;parts.push({...p,uid:'p'+Date.now()+Math.random(),mirrorOf:p.uid});}
+   const q=parts[j];Object.assign(q,{type:p.type,color:p.color,x:-p.x,y:p.y,z:p.z,r:-p.r,sx:p.sx,sy:p.sy,sz:p.sz});
+ }
+ function addShape(type){const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const p={type,color:$('kwgc-color').value,x:0,y,z,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};p.uid='p'+Date.now()+Math.random();parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);}
  function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,1.6));const light=new T.DirectionalLight(0xffffff,1.5);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);
  // Use the same avatar builder as the rest of KWG, rather than a placeholder mannequin.
  const appearance={headShape:'sphere',hat:'none',skinColor:'#fff5ba',headColor:'#fff5ba',shirtColor:'#62edee',torsoColor:'#62edee',pantsColor:'#6389bd',leftLegColor:'#6389bd',rightLegColor:'#6389bd',shoesColor:'#273247',hairColor:'#6b4835'};
@@ -11743,7 +11764,30 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    const sparkle=new T.Mesh(new T.SphereGeometry(.019,12,10),shineMat);sparkle.position.set(x-.025,2.086,.516);previewEyeGroup.add(sparkle);
  }
 
- let frame=0;const tick=()=>{if(!renderer)return;frame=requestAnimationFrame(tick);const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=Math.max(1,Math.round(box.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}camera.position.set(Math.sin(angle)*5.6,2.7,Math.cos(angle)*5.6);camera.lookAt(0,1.55,0);renderer.render(scene,camera);};tick();canvas.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointermove',e=>{if(drag){angle+=(e.clientX-lastX)*.012;lastX=e.clientX}});canvas.addEventListener('pointerup',()=>drag=false);canvas.addEventListener('pointercancel',()=>drag=false);
+ let frame=0;const tick=()=>{if(!renderer)return;frame=requestAnimationFrame(tick);const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=Math.max(1,Math.round(box.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}camera.position.set(Math.sin(angle)*Math.cos(elevation)*distance,1.55+Math.sin(elevation)*distance,Math.cos(angle)*Math.cos(elevation)*distance);camera.lookAt(0,1.55,0);renderer.render(scene,camera);};tick();const ray=new T.Raycaster(),pointer=new T.Vector2();
+ function hit(e){const rect=canvas.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);return ray.intersectObjects(root.children,false)[0];}
+ canvas.addEventListener('pointerdown',e=>{
+   const h=hit(e);lastX=e.clientX;drag=true;canvas.setPointerCapture(e.pointerId);
+   if(h){const i=h.object.userData.partIndex;select(i);
+     if(mode==='recolor'){parts[i].color=$('kwgc-color').value;syncMirror(i);redraw();}
+     else if(mode!=='select')activeDrag={i,x:e.clientX,y:e.clientY,original:{...parts[i]}};
+   }
+ });
+ canvas.addEventListener('pointermove',e=>{
+   if(!drag)return;
+   if(activeDrag){
+     const d=activeDrag,p=parts[d.i],dx=e.clientX-d.x,dy=e.clientY-d.y;
+     if(mode==='move'){p.x=d.original.x+dx*.006*distance/5.6;p.y=d.original.y-dy*.006*distance/5.6;}
+     if(mode==='scale'){const factor=Math.max(.05,1+(dx-dy)*.008);p.sx=Math.max(.02,d.original.sx*factor);p.sy=Math.max(.02,d.original.sy*factor);p.sz=Math.max(.02,d.original.sz*factor);}
+     if(mode==='rotate')p.r=d.original.r+dx*.65;
+     syncMirror(d.i);coords.forEach(k=>$('kwgc-'+k).value=p[k]);redraw();
+   }else{angle+=(e.clientX-lastX)*.012;elevation=Math.max(-1.45,Math.min(1.45,elevation-(e.clientY-(canvas._lastY??e.clientY))*.01));}
+   lastX=e.clientX;canvas._lastY=e.clientY;
+ });
+ const end=()=>{drag=false;activeDrag=null;canvas._lastY=null;};
+ canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
+ canvas.addEventListener('wheel',e=>{e.preventDefault();distance=Math.max(1.2,Math.min(16,distance*Math.exp(e.deltaY*.001)));},{passive:false});
+
  }
  const paint=$('kwg-creator-paint'),ctx=paint.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);
  function paintAt(e){const b=paint.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*512,y=(e.clientY-b.top)/b.height*512,r=Number($('kwgc-brush').value);ctx.beginPath();ctx.fillStyle=paintMode==='eraser'?'#e6ba93':$('kwgc-color').value;ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
@@ -11804,7 +11848,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  });
  $('kwgc-delete-part').onclick=()=>{
    if(selected<0)return;
-   parts.splice(selected,1);
+   const partner=mirrorPartner(selected);if(partner>=0)parts.splice(partner,1);parts.splice(partner>=0&&partner<selected?selected-1:selected,1);
    selected=Math.min(selected,parts.length-1);
    redraw();
  };
@@ -11813,11 +11857,22 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    if(el)el.addEventListener('input',()=>{
      if(!parts[selected])return;
      const v=Number(el.value);
-     if(Number.isFinite(v)){parts[selected][k]=v;redraw();}
+     if(Number.isFinite(v)){parts[selected][k]=v;syncMirror(selected);redraw();}
    });
  });
  $('kwgc-color').addEventListener('input',e=>{
-   if(parts[selected]){parts[selected].color=e.target.value;redraw();}
+   if(parts[selected]){parts[selected].color=e.target.value;syncMirror(selected);redraw();}
+ });
+ document.querySelectorAll('#kwgc-modebar [data-mode]').forEach(b=>b.onclick=()=>{
+   mode=b.dataset.mode;document.querySelectorAll('#kwgc-modebar [data-mode]').forEach(x=>x.classList.toggle('active',x===b));
+   $('kwgc-mode-hint').textContent=mode==='select'?'Click a part to select · drag empty space to orbit':mode==='recolor'?'Click a part to apply the chosen color':'Drag a selected part to '+mode+' · drag empty space to orbit';
+ });
+ $('kwgc-mirror').onchange=e=>{mirror=e.target.checked;status(mirror?'Mirror X enabled. New shapes and edits are reflected.':'Mirror X disabled. Edit each side independently.');};
+ $('kwgc-zoom-in').onclick=()=>distance=Math.max(1.2,distance*.8);
+ $('kwgc-zoom-out').onclick=()=>distance=Math.min(16,distance*1.25);
+ document.querySelectorAll('#kwgc-views [data-view]').forEach(b=>b.onclick=()=>{
+   const v=b.dataset.view;angle=({front:0,back:Math.PI,left:-Math.PI/2,right:Math.PI/2,top:0,bottom:0})[v];
+   elevation=v==='top'?Math.PI/2-.01:v==='bottom'?-Math.PI/2+.01:0;
  });
  // Initialize only when the creator is opened, after Three.js is available.
  const openCreator=()=>{
