@@ -11692,137 +11692,165 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  </div>
 </div>
 
-<style id="kwgc-world-layout">
-#kwg-creator .kwg-creator-shell{width:min(1540px,99vw);height:min(940px,98vh)}
-#kwg-creator .kwg-creator-main{grid-template-columns:minmax(245px,285px) minmax(320px,1fr) minmax(190px,245px);gap:0}
-#kwg-creator .kwg-creator-side{padding:0;background:#101d2d}
-#kwg-creator .kwgc-left-stack{display:flex;flex-direction:column;gap:7px;padding:9px;overflow-y:auto;min-height:0}
-#kwg-creator .kwgc-panel{border:1px solid #47647d;background:#17273a;min-height:0;flex-shrink:0}
-#kwg-creator .kwgc-panel-title{background:#223d53;color:#e6f6ff;padding:9px 11px;font-weight:800;letter-spacing:1px;font-size:12px;border-bottom:1px solid #4d6d85}
-#kwg-creator .kwgc-panel-body{padding:10px}
-#kwg-creator .kwgc-panel-body label{font-size:12px}
-#kwg-creator .kwgc-toolbox #kwgc-modebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:0;background:none;border:0;margin-bottom:9px}
-#kwg-creator .kwgc-toolbox #kwgc-modebar button{min-width:0;padding:7px 3px}
-#kwg-creator .kwgc-toolbox #kwgc-modebar label{grid-column:1/-1;margin:4px 0;display:flex;align-items:center;gap:8px}
-#kwg-creator .kwgc-toolbox #kwgc-modebar label input{width:auto;margin:0}
-#kwg-creator .kwgc-toolbox .kwg-tool-grid{margin-bottom:9px}
-#kwg-creator .kwgc-settings .kwgc-action-row{display:grid;grid-template-columns:1fr 1fr;gap:5px}
-#kwg-creator .kwgc-settings .kwgc-action-row button{font-size:11px;padding:7px 2px}
-#kwg-creator .kwgc-properties #kwgc-transforms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 7px}
-#kwg-creator .kwgc-properties #kwgc-transforms h3{grid-column:1/-1;margin:5px 0}
-#kwg-creator .kwgc-properties #kwgc-transforms input{min-width:0}
-#kwg-creator .kwgc-explorer{border-left:2px solid #3e607a;overflow-y:auto;padding:9px}
-#kwg-creator .kwgc-explorer .kwgc-panel{height:100%;display:flex;flex-direction:column}
-#kwg-creator .kwgc-explorer .kwgc-panel-body{flex:1;overflow-y:auto}
-#kwg-creator .kwgc-explorer #kwg-creator-parts{max-height:none;overflow:visible}
-#kwg-creator .kwgc-explorer #kwg-creator-parts button{padding:9px 7px;text-align:left;overflow-wrap:anywhere}
-#kwg-creator .kwg-creator-stage{border-left:1px solid #38546b}
-#kwg-creator .kwgc-settings #kwg-creator-reset-area{margin-top:12px}
-@media(max-width:900px){
- #kwg-creator .kwg-creator-main{grid-template-columns:210px minmax(240px,1fr) 170px}
- #kwg-creator .kwgc-left-stack{padding:5px}
- #kwg-creator .kwgc-panel-body{padding:6px}
-}
+<style id="kwgc-v10-world-studio">
+/* KWG Item Creator: matching the WORLD EDITOR's pixel toolbar + three fixed panels. */
+#kwg-creator {font-family:'Pixelify Sans',system-ui,sans-serif!important;font-size:13px!important;color:#eaf3fa}
+#kwg-creator .kwg-creator-shell{width:min(1600px,99vw)!important;height:min(960px,98vh)!important;max-height:98vh!important;border:2px solid #66879e!important;border-radius:0!important;background:#202c3b!important;box-shadow:4px 5px 0 #08131d,0 25px 80px #000c!important;overflow:hidden}
+#kwg-creator .kwg-creator-bar{flex:none;min-height:49px!important;background:#2b4155!important;border-bottom:2px solid #6d8ba1!important;padding:7px 11px!important;gap:9px!important}
+#kwg-creator .kwg-creator-bar strong{font-family:'Press Start 2P','Pixelify Sans',monospace;font-size:9px;letter-spacing:0;color:#f3f6e9}
+#kwg-creator .kwg-creator-bar button,#kwg-creator .kwg-creator-bar select{font-size:12px!important;min-height:30px!important;border:2px solid #607f96!important;border-bottom:3px solid #34546b!important;background:#2c4257!important;border-radius:0!important;color:#f0f6fa!important;padding:5px 8px!important}
+#kwg-creator .kwg-creator-main{display:grid!important;grid-template-columns:260px minmax(0,1fr) 244px!important;flex:1!important;min-height:0!important;overflow:hidden!important}
+#kwg-creator .kwg-creator-side{padding:0!important;background:#202b3b!important;overflow:hidden!important;min-height:0!important}
+#kwg-creator .kwgc-left-stack{display:grid!important;grid-template-rows:minmax(155px,.91fr) minmax(150px,1fr) minmax(155px,.98fr)!important;height:100%!important;min-height:0!important;gap:0!important;padding:0!important;overflow:hidden!important}
+#kwg-creator .kwgc-panel{min-height:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;flex-shrink:1!important;border:0!important;border-bottom:2px solid #5f7d93!important;background:#202b3b!important;border-radius:0!important}
+#kwg-creator .kwgc-panel-title{display:flex!important;align-items:center!important;gap:9px!important;min-height:36px!important;flex:none!important;background:#30485e!important;border-bottom:2px solid #7391a4!important;padding:0 10px!important;color:#f5faef!important;font-family:'Press Start 2P','Pixelify Sans',monospace!important;font-size:9px!important;font-weight:800!important;letter-spacing:0!important;line-height:1.4!important}
+#kwg-creator .kwgc-panel-symbol{display:inline-grid;place-items:center;width:18px;height:18px;flex:none;background:#41657b;border:1px solid #7899ac;color:#a4e88c;font-family:system-ui,sans-serif;font-size:12px}
+#kwg-creator .kwgc-panel-body{flex:1!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;padding:10px!important;scrollbar-color:#59788e #1b2b3a!important;scrollbar-width:thin!important}
+#kwg-creator .kwgc-panel-body::-webkit-scrollbar{width:8px}#kwg-creator .kwgc-panel-body::-webkit-scrollbar-thumb{background:#59788e}
+#kwg-creator .kwgc-toolbox #kwgc-modebar{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important;margin:0 0 8px!important;padding:0!important;background:transparent!important;border:0!important}
+#kwg-creator .kwgc-toolbox #kwgc-modebar{position:sticky!important;top:-10px!important;z-index:5!important;background:#202b3b!important;padding:6px 0 9px!important;}
+#kwg-creator .kwgc-toolbox #kwgc-modebar [data-mode]{height:40px!important;min-height:40px!important;display:flex!important;align-items:center!important;justify-content:center!important;position:relative!important;margin:0!important;padding:6px!important;background:#2c4358!important;border:2px solid #708da3!important;border-bottom:4px solid #36546a!important;border-radius:0!important;box-shadow:1px 1px 0 #111b27!important;color:#d4e5f3!important}
+#kwg-creator .kwgc-toolbox #kwgc-modebar [data-mode] svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+#kwg-creator .kwgc-toolbox #kwgc-modebar [data-mode].active{background:#2d796b!important;border-color:#a4e88c!important;box-shadow:inset 0 0 0 1px #a4e88c!important;color:#faffec!important}
+#kwg-creator .kwgc-toolbox #kwgc-modebar [data-mode]:hover{background:#355872!important}
+#kwg-creator .kwgc-mirror-row{display:flex!important;align-items:center!important;gap:8px!important;font-family:'Pixelify Sans',sans-serif!important;font-size:13px!important;color:#d0e6ef!important;background:#26394c!important;border:1px solid #4f6c80!important;padding:6px 9px!important;cursor:pointer}
+#kwg-creator .kwg-creator-bar .kwgc-mirror-row{display:inline-flex!important;align-items:center!important;width:auto!important;gap:7px!important;margin:0 1px!important;padding:5px 9px!important;min-height:30px!important;font-size:12px!important;white-space:nowrap;}
+#kwg-creator .kwgc-panel-body label.kwgc-mirror-row{display:flex!important;align-items:center!important;}
+#kwg-creator .kwgc-mirror-row input{width:16px!important;height:16px!important;min-height:0!important;margin:0!important;accent-color:#a4e88c}
+#kwg-creator .kwgc-mode-options{margin:9px 0 0!important;padding:9px!important;background:#273c4f!important;border:2px solid #62829b!important;border-radius:0!important}
+#kwg-creator .kwgc-small-title{font-family:'Press Start 2P','Pixelify Sans',monospace;font-size:8px;letter-spacing:0;color:#e3f4ee;margin-bottom:10px}
+#kwg-creator .kwgc-place-row{display:grid;grid-template-columns:1fr;gap:7px}
+#kwg-creator .kwgc-mode-options select,#kwg-creator .kwgc-mode-options input,#kwg-creator .kwgc-mode-options button{width:100%!important;min-height:34px!important}
+#kwg-creator .kwgc-mode-options .kwgc-insert-button{background:#2d796b!important;border-color:#a4e88c!important;color:#fff!important;font-family:'Pixelify Sans',sans-serif!important;font-weight:bold!important}
+#kwg-creator .kwgc-mode-options .kwgc-insert-button:hover{filter:brightness(1.12)!important}
+#kwg-creator .kwgc-settings .kwgc-action-row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+#kwg-creator .kwgc-panel-body label{display:block!important;margin:6px 0!important;color:#d7e4ef!important;font-size:12px!important;line-height:1.15!important}
+#kwg-creator .kwgc-panel-body input:not([type=checkbox]),#kwg-creator .kwgc-panel-body select{display:block!important;max-width:100%!important;width:100%!important;background:#122236!important;border:2px solid #5a788f!important;border-radius:0!important;color:#f6f9ff!important;min-height:32px!important;margin-top:4px!important;padding:5px 7px!important;font-family:'Pixelify Sans',sans-serif!important;font-size:13px!important}
+#kwg-creator .kwgc-panel-body button{background:#2c4358!important;border:2px solid #6c8ba2!important;border-bottom:3px solid #3a576d!important;border-radius:0!important;color:#f1f7fc!important;min-height:30px!important;padding:6px 7px!important;font-family:'Pixelify Sans',sans-serif!important;font-size:12px!important}
+#kwg-creator .kwgc-panel-body button:hover{background:#355f75!important}
+#kwg-creator .kwgc-panel-body button.kwg-creator-primary{background:#2d796b!important;border-color:#a4e88c!important}
+#kwg-creator #kwgc-transforms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:5px 8px!important}
+#kwg-creator #kwgc-transforms h3{grid-column:1/-1;font:8px 'Press Start 2P','Pixelify Sans',monospace!important;color:#c4dfed!important;margin:3px 0 6px!important}
+#kwg-creator #kwgc-transforms label{min-width:0!important;margin:2px 0!important}
+#kwg-creator .kwgc-explorer{border-left:2px solid #68849a!important;background:#202b3b!important}
+#kwg-creator .kwgc-explorer .kwgc-panel{height:100%!important;border-bottom:0!important}
+#kwg-creator .kwgc-explorer .kwgc-panel-body{flex:1!important;overflow-y:auto!important}
+#kwg-creator .kwgc-explorer #kwg-creator-parts{max-height:none!important;overflow:visible!important}
+#kwg-creator #kwg-creator-parts button{display:block;width:100%;text-align:left;margin:4px 0;font-size:12px!important;padding:8px!important}
+#kwg-creator #kwg-creator-parts button.active{background:#2d796b!important;border-color:#a4e88c!important}
+#kwg-creator .kwgc-explorer-empty{padding:24px 9px;border:2px dashed #607e92;background:#1b2b3d;color:#9eb5c9;text-align:center;font-size:12px}
+#kwg-creator .kwgc-count{font-family:'Pixelify Sans',monospace;font-size:12px;font-weight:bold;color:#dbf5d6;border:1px solid #80aa90;background:#314d5c;padding:3px 6px;margin-left:auto}
+#kwg-creator .kwg-creator-stage{position:relative;border-left:1px solid #68849a!important;background:#101927!important;min-height:0!important;overflow:hidden}
+#kwg-creator .kwgc-scene-bar{position:absolute;z-index:2;top:0;left:0;right:0;height:37px;display:flex;align-items:center;gap:10px;padding:0 12px;background:#30465a;border-bottom:2px solid #7691a7;font:9px 'Press Start 2P','Pixelify Sans',monospace;color:#e9f2ee;pointer-events:none}
+#kwg-creator .kwgc-scene-dot{width:8px;height:8px;background:#a4e88c;display:inline-block}
+#kwg-creator .kwgc-scene-bar .kwgc-count{margin-left:auto}
+#kwg-creator .kwgc-scene-footer{height:27px;position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:7px;z-index:2;background:#283e51;border-top:2px solid #5f7d94;color:#aac7db;padding:0 9px;font-size:11px;pointer-events:auto}
+#kwg-creator #kwgc-views{top:46px!important;right:10px!important;display:grid;grid-template-columns:repeat(3,35px);gap:3px}
+#kwg-creator #kwgc-views button{font-family:'Pixelify Sans',sans-serif!important;font-size:9px!important;padding:6px 1px!important;border:2px solid #627f95!important;border-radius:0!important;background:#2d4357!important}
+#kwg-creator #kwgc-mode-hint{bottom:37px!important;left:12px!important;color:#a7c4da!important;font-size:12px!important}
+#kwg-creator .kwgc-scene-footer button{font-family:'Pixelify Sans',sans-serif;font-size:11px;min-height:22px!important;padding:0 8px!important;background:#344f65;border:1px solid #698aa0;border-radius:0}
+#kwg-creator .kwg-creator-status{flex:none!important;padding:6px 10px!important;background:#283c50!important;border-top:2px solid #627f95!important;font:12px 'Pixelify Sans',sans-serif!important;color:#bdd3e7!important}
+#kwg-creator .kwgc-tool-help{font-size:12px;line-height:1.3;color:#9bb6c9;margin:8px 0 0}
+#kwg-creator .kwgc-settings-note{font-size:11px;line-height:1.4;color:#a9bfd4;margin-top:8px}
+@media(max-width:1040px){#kwg-creator .kwg-creator-main{grid-template-columns:225px minmax(0,1fr) 185px!important}#kwg-creator .kwgc-panel-title{font-size:8px!important}#kwg-creator .kwgc-panel-body{padding:7px!important}}
 </style>
 <script>
-/* Arrange the existing working Item Creator controls into the World Editor layout.
-   Nodes are MOVED, not duplicated, preserving event handlers and IDs. */
+/* Structural layout runs before the Item Creator runtime and moves existing controls,
+   retaining stable IDs and the built-in saving/publishing actions. */
 (()=>{
- const creator=document.getElementById('kwg-creator');
- if(!creator)return;
+ const creator=document.getElementById('kwg-creator');if(!creator)return;
  const main=creator.querySelector('.kwg-creator-main');
  const left=main?.children[0],stage=main?.children[1],right=main?.children[2];
  const modebar=creator.querySelector('#kwgc-modebar');
  if(!left||!stage||!right||!modebar)return;
- const make=(cls,title)=>{
+ const make=(cls,icon,title)=>{
    const panel=document.createElement('section');panel.className='kwgc-panel '+cls;
-   const header=document.createElement('div');header.className='kwgc-panel-title';header.textContent=title;
-   const body=document.createElement('div');body.className='kwgc-panel-body';
-   panel.append(header,body);return {panel,body};
+   const heading=document.createElement('div');heading.className='kwgc-panel-title';
+   const symbol=document.createElement('span');symbol.className='kwgc-panel-symbol';symbol.textContent=icon;
+   const text=document.createElement('span');text.textContent=title;heading.append(symbol,text);
+   const body=document.createElement('div');body.className='kwgc-panel-body';panel.append(heading,body);
+   return {panel,heading,body};
  };
  const stack=document.createElement('div');stack.className='kwgc-left-stack';
- const toolbox=make('kwgc-toolbox','TOOLBOX');
- const settings=make('kwgc-settings','SETTINGS');
- const properties=make('kwgc-properties','PROPERTIES');
- const explorer=make('kwgc-explorer-panel','PARTS EXPLORER');
+ const toolbox=make('kwgc-toolbox','✦','TOOLBAR');
+ const settings=make('kwgc-settings','⚙','SETTINGS');
+ const properties=make('kwgc-properties','☷','PROPERTIES');
+ const explorer=make('kwgc-explorer-panel','▦','PARTS EXPLORER');
  const tool3d=creator.querySelector('#kwgc-3dtools'),tool2d=creator.querySelector('#kwgc-2dtools');
  const parts=creator.querySelector('#kwg-creator-parts');
- const partLabel=parts?.parentElement;
- if(partLabel)partLabel.remove();
- toolbox.body.append(modebar,tool3d,tool2d);
- const insertPanel=document.createElement('div');insertPanel.id='kwgc-insert-options';insertPanel.className='kwgc-mode-options';
- insertPanel.innerHTML='<div class="kwgc-small-title">INSERT SHAPE</div>';
- const shapes=tool3d.querySelector('.kwg-tool-grid');
- if(shapes)insertPanel.append(shapes);
- const recolorPanel=document.createElement('div');recolorPanel.id='kwgc-recolor-options';recolorPanel.className='kwgc-mode-options';
- recolorPanel.innerHTML='<div class="kwgc-small-title">PART COLOR</div>';
- const colorInput=creator.querySelector('#kwgc-color');
- if(colorInput)recolorPanel.append(colorInput.parentElement);
- toolbox.body.append(insertPanel,recolorPanel);
- const updateModePanels=()=>{
-   const active=creator.querySelector('#kwgc-modebar [data-mode].active')?.dataset.mode;
-   insertPanel.style.display=active==='insert'?'block':'none';
-   recolorPanel.style.display=active==='recolor'?'block':'none';
+ const oldList=parts?.closest('label');if(oldList)oldList.remove();
+ const old3dHelp=tool3d.querySelector('p');if(old3dHelp)old3dHelp.remove();
+ const shapes=tool3d.querySelector('.kwg-tool-grid');if(shapes)shapes.remove();
+ const actions={
+   select:'<path d="m5 3 14 9-7 1-3 7z"/>',
+   insert:'<path d="M12 4v16M4 12h16"/>',
+   move:'<path d="M12 2v20M2 12h20M8 6l4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4"/>',
+   scale:'<path d="M4 10V4h6M20 14v6h-6M4 4l7 7M20 20l-7-7"/>',
+   rotate:'<path d="M4 8a9 9 0 0 1 16 2M20 4v6h-6M20 16a9 9 0 0 1-16-2M4 20v-6h6"/>',
+   recolor:'<path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2a2 2 0 0 0 2.8 0L19 11Z"/><path d="m5 3 5 5M2 21h16"/>'
  };
- creator.addEventListener('click',e=>{if(e.target.closest('#kwgc-modebar [data-mode]'))queueMicrotask(updateModePanels);});
- updateModePanels();
-
- const help=tool3d.querySelector('p');
- if(help)help.textContent='Click a shape to select it. Drag empty space to orbit; scroll to zoom.';
- const remove=creator.querySelector('#kwgc-delete-part');
- if(remove)explorer.body.append(remove);
- if(parts)explorer.body.prepend(parts);
- const infoHeading=right.querySelector('h3');
- if(infoHeading)infoHeading.remove();
- for(const id of ['kwgc-name','kwgc-price','kwgc-distribution']){
-   const el=creator.querySelector('#'+id);if(el?.parentElement)settings.body.append(el.parentElement);
+ for(const btn of modebar.querySelectorAll('[data-mode]')){
+   const name=btn.dataset.mode;
+   btn.title=name.charAt(0).toUpperCase()+name.slice(1)+' mode';
+   btn.setAttribute('aria-label',btn.title);
+   btn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+actions[name]+'</svg>';
  }
- const actions=document.createElement('div');actions.className='kwgc-action-row';
- for(const id of ['kwgc-save','kwgc-publish']){const el=creator.querySelector('#'+id);if(el)actions.append(el);}
- settings.body.append(actions);
- const draftHeading=[...left.querySelectorAll('h3')].find(e=>e.textContent.trim()==='MY DRAFTS');
- if(draftHeading)settings.body.append(draftHeading);
- for(const id of ['kwgc-refresh-drafts','kwg-creator-drafts','kwg-creator-reset-area']){
-   const el=creator.querySelector('#'+id);if(el)settings.body.append(el);
- }
- for(const id of ['kwgc-transforms']){
-   const el=creator.querySelector('#'+id);
-   if(el)properties.body.append(el);
- }
+ // Match the World Editor's familiar 3×2 button arrangement.
+ const buttonOrder=['select','insert','move','scale','rotate','recolor'];
+ buttonOrder.forEach(name=>{const b=modebar.querySelector('[data-mode="'+name+'"]');if(b)modebar.append(b);});
+ const mirror=creator.querySelector('#kwgc-mirror');
+ const mirrorLabel=mirror?.closest('label');if(mirrorLabel){mirrorLabel.className='kwgc-mirror-row';mirrorLabel.style='';mirrorLabel.textContent='';mirrorLabel.append(mirror,document.createTextNode(' MIRROR X (SYMMETRY)'));}
+ const zoomIn=creator.querySelector('#kwgc-zoom-in'),zoomOut=creator.querySelector('#kwgc-zoom-out');
+ if(zoomIn)zoomIn.remove();if(zoomOut)zoomOut.remove();
+ toolbox.body.append(modebar,tool3d,tool2d);
+ // Keep symmetry visible in the titlebar even when toolbox options scroll.
+ if(mirrorLabel)creator.querySelector('.kwg-creator-bar')?.insertBefore(mirrorLabel,creator.querySelector('#kwgc-new'));
+ const insertPanel=document.createElement('section');insertPanel.id='kwgc-insert-options';insertPanel.className='kwgc-mode-options';
+ insertPanel.innerHTML='<div class="kwgc-small-title">＋ INSERT PART</div><div class="kwgc-place-row"><label>SHAPE <select id="kwgc-insert-shape"><option value="box">Cube / Box</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option><option value="cone">Cone</option></select></label><button type="button" class="kwgc-insert-button" id="kwgc-insert-add">＋ ADD PART</button></div>';
+ toolbox.body.append(insertPanel);
+ const recolorPanel=document.createElement('section');recolorPanel.id='kwgc-recolor-options';recolorPanel.className='kwgc-mode-options';
+ recolorPanel.innerHTML='<div class="kwgc-small-title">◉ RECOLOR BRUSH</div><p class="kwgc-tool-help">Choose a color, then click a part to paint it.</p>';
+ const color=creator.querySelector('#kwgc-color');if(color)recolorPanel.append(color.parentElement);
+ toolbox.body.append(recolorPanel);
+ const hint=document.createElement('p');hint.className='kwgc-tool-help';hint.textContent='Drag blank space to orbit · Scroll to zoom';toolbox.body.append(hint);
+ const sceneBar=document.createElement('div');sceneBar.className='kwgc-scene-bar';sceneBar.innerHTML='<span class="kwgc-scene-dot"></span> SCENE VIEW <span class="kwgc-count" id="kwgc-part-count">0 PARTS</span>';
+ stage.prepend(sceneBar);
+ const sceneFooter=document.createElement('div');sceneFooter.className='kwgc-scene-footer';sceneFooter.innerHTML='<strong>ITEM EDITOR</strong><span style="flex:1"></span><span>ZOOM</span>';
+ if(zoomOut){zoomOut.textContent='−';zoomOut.title='Zoom out';sceneFooter.append(zoomOut);}
+ if(zoomIn){zoomIn.textContent='+';zoomIn.title='Zoom in';sceneFooter.append(zoomIn);}
+ stage.append(sceneFooter);
+ const reset=creator.querySelector('#kwg-creator-reset-area');
+ for(const id of ['kwgc-name','kwgc-price','kwgc-distribution']){const el=creator.querySelector('#'+id);if(el?.parentElement)settings.body.append(el.parentElement);}
+ const actionRow=document.createElement('div');actionRow.className='kwgc-action-row';
+ for(const id of ['kwgc-save','kwgc-publish']){const b=creator.querySelector('#'+id);if(b){b.style='';actionRow.append(b);}}
+ settings.body.append(actionRow);
+ const draftsHeading=[...left.querySelectorAll('h3')].find(el=>el.textContent.trim()==='MY DRAFTS');
+ if(draftsHeading)settings.body.append(draftsHeading);
+ for(const id of ['kwgc-refresh-drafts','kwg-creator-drafts']){const el=creator.querySelector('#'+id);if(el)settings.body.append(el);}
+ if(reset)settings.body.append(reset);
+ const transforms=creator.querySelector('#kwgc-transforms');
+ const selectedHint=document.createElement('div');selectedHint.id='kwgc-selection-empty';selectedHint.className='kwgc-explorer-empty';selectedHint.textContent='No part selected';properties.body.append(selectedHint);
+ if(transforms){transforms.style.display='none';properties.body.append(transforms);}
+ const noSelect=document.createElement('div');noSelect.id='kwgc-no-selection';noSelect.className='kwgc-explorer-empty';noSelect.textContent='No parts yet. Use Insert mode to create one.';
+ explorer.body.append(noSelect);
+ if(parts)explorer.body.append(parts);
+ const remove=creator.querySelector('#kwgc-delete-part');if(remove){remove.textContent='▤ Delete selected part';explorer.body.append(remove);}
  stack.append(toolbox.panel,settings.panel,properties.panel);
- left.replaceChildren(stack);
- right.className='kwg-creator-side kwgc-explorer';
- right.replaceChildren(explorer.panel);
+ left.replaceChildren(stack);right.className='kwg-creator-side kwgc-explorer';right.replaceChildren(explorer.panel);
+ function updateToolPanels(){
+   const selected=modebar.querySelector('[data-mode].active')?.dataset.mode||'select';
+   const isPainting=['skin','torso_decal'].includes(creator.querySelector('#kwgc-category')?.value);
+   insertPanel.style.display=selected==='insert'&&!isPainting?'block':'none';
+   recolorPanel.style.display=selected==='recolor'?'block':'none';
+   const hint=creator.querySelector('#kwgc-mode-hint');
+   if(hint&&selected==='insert')hint.textContent='INSERT · choose shape and click ADD PART';
+ }
+ window.kwgCreatorSyncToolPanels=updateToolPanels;
+ creator.addEventListener('click',e=>{if(e.target.closest('#kwgc-modebar [data-mode]'))queueMicrotask(updateToolPanels);});
+ updateToolPanels();
 })();
 </script>
 
-<style id="kwgc-v9-polish">
-#kwg-creator{font-family:system-ui,sans-serif;font-size:12px}
-#kwg-creator .kwg-creator-shell{height:96vh;max-height:1100px;border:1px solid #6589a4;border-radius:7px;overflow:hidden}
-#kwg-creator .kwg-creator-bar{padding:7px 12px;background:#14263a;flex-shrink:0}
-#kwg-creator .kwg-creator-main{grid-template-columns:minmax(250px,285px) minmax(280px,1fr) minmax(205px,245px);min-height:0;overflow:hidden}
-#kwg-creator .kwg-creator-side{min-height:0;overflow:hidden}
-#kwg-creator .kwgc-left-stack{height:100%;overflow:hidden;display:grid;grid-template-rows:minmax(165px,1.05fr) minmax(145px,.95fr) minmax(160px,1fr);gap:7px;padding:7px}
-#kwg-creator .kwgc-panel{min-height:0;overflow:hidden;display:flex;flex-direction:column;border:1px solid #3b5771;border-radius:4px;background:#142336}
-#kwg-creator .kwgc-panel-title{flex:none;background:#1c334a;padding:7px 10px;font-size:11px}
-#kwg-creator .kwgc-panel-body{min-height:0;overflow-y:auto;overflow-x:hidden;flex:1;padding:8px;scrollbar-width:thin;scrollbar-color:#496b83 #142336}
-#kwg-creator .kwgc-toolbox #kwgc-modebar{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
-#kwg-creator .kwgc-toolbox #kwgc-modebar button{font-size:10px;padding:8px 2px;border-radius:3px}
-#kwg-creator .kwgc-toolbox #kwgc-modebar label{font-size:11px;grid-column:1/-1}
-#kwg-creator .kwgc-mode-options{margin-top:7px;border-top:1px solid #314e67;padding-top:7px}
-#kwg-creator .kwgc-small-title{color:#9cb9d0;font-size:10px;letter-spacing:.7px;font-weight:800;margin-bottom:6px}
-#kwg-creator .kwgc-settings .kwgc-action-row{margin-top:6px}
-#kwg-creator .kwgc-properties #kwgc-transforms{grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 8px}
-#kwg-creator .kwgc-panel-body label{margin:4px 0;font-size:11px}
-#kwg-creator .kwgc-panel-body input,#kwg-creator .kwgc-panel-body select{padding:6px;margin-top:3px;font-size:12px}
-#kwg-creator .kwgc-explorer{padding:7px}
-#kwg-creator .kwgc-explorer .kwgc-panel{height:100%}
-#kwg-creator #kwgc-views{top:10px;right:10px}
-#kwg-creator .kwg-creator-stage{min-height:0}
-#kwg-creator .kwg-creator-status{padding:6px 10px;font-size:11px;flex-shrink:0}
-#kwg-creator .kwgc-panel-body::-webkit-scrollbar{width:7px}
-#kwg-creator .kwgc-panel-body::-webkit-scrollbar-thumb{background:#47657c;border-radius:6px}
-</style>
 <script>
 (()=>{
  const $=id=>document.getElementById(id),modal=$('kwg-creator');if(!modal)return;
@@ -11884,8 +11912,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
      }
    }
  }
- function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach((p,i)=>{const mesh=partMesh(p);mesh.userData.partIndex=i;if(i===selected)mesh.material.emissive=new (get().Color)('#17304b');root.add(mesh);});const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);if(i===selected)b.classList.add('active');list.append(b);});updateGizmo();}
- function select(n){selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]);$('kwgc-color').value=p.color;}redraw();}
+ function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach((p,i)=>{const mesh=partMesh(p);mesh.userData.partIndex=i;if(i===selected)mesh.material.emissive=new (get().Color)('#17304b');root.add(mesh);});const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);if(i===selected)b.classList.add('active');list.append(b);});const count=$('kwgc-part-count');if(count)count.textContent=parts.length+' PART'+(parts.length===1?'':'S');const empty=$('kwgc-no-selection');if(empty)empty.style.display=parts.length?'none':'block';updateGizmo();}
+ function select(n){selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]);$('kwgc-color').value=p.color;}
+ const transforms=$('kwgc-transforms'),hint=$('kwgc-selection-empty');if(transforms)transforms.style.display=p?'grid':'none';if(hint)hint.style.display=p?'none':'block';redraw();}
  function mirrorPartner(i){
   const p=parts[i];if(!p)return -1;
   return parts.findIndex((q,j)=>j!==i && (q.mirrorOf===p.uid || p.mirrorOf===q.uid));
@@ -11978,6 +12007,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  }
  function resetCreator(){
    parts=[];selected=-1;draftId=null;
+   if($('kwgc-selection-empty'))$('kwgc-selection-empty').style.display='block';
+   if($('kwgc-transforms'))$('kwgc-transforms').style.display='none';
    $('kwgc-name').value='New Creation';
    redraw();
    updateFittingPreview();
@@ -11998,10 +12029,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    $('kwg-creator-viewport').style.display=is2d()?'none':'block';
    updateFittingPreview();
    redraw();
+   window.kwgCreatorSyncToolPanels?.();
  };
- document.querySelectorAll('#kwgc-3dtools [data-shape]').forEach(b=>{
-   b.onclick=()=>addShape(b.dataset.shape);
- });
+ // The Insert panel is a dropdown, so its event handler remains attached even
+ // when panels are rearranged. Earlier versions bound to buttons we moved away.
+ $('kwgc-insert-add').onclick=()=>{
+   if(is2d())return status('Select a 3D category to insert geometry.');
+   addShape($('kwgc-insert-shape').value);
+   status('Inserted '+$('kwgc-insert-shape').selectedOptions[0].text+'.');
+ };
  $('kwgc-delete-part').onclick=()=>{
    if(selected<0)return;
    const partner=mirrorPartner(selected);if(partner>=0)parts.splice(partner,1);parts.splice(partner>=0&&partner<selected?selected-1:selected,1);
@@ -12021,7 +12057,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  });
  document.querySelectorAll('#kwgc-modebar [data-mode]').forEach(b=>b.onclick=()=>{
    mode=b.dataset.mode;document.querySelectorAll('#kwgc-modebar [data-mode]').forEach(x=>x.classList.toggle('active',x===b));
-   updateGizmo();$('kwgc-mode-hint').textContent=mode==='select'?'Click a part to select · drag empty space to orbit':mode==='recolor'?'Click a part to apply the chosen color':'Drag a selected part to '+mode+' · drag empty space to orbit';
+   updateGizmo();window.kwgCreatorSyncToolPanels?.();$('kwgc-mode-hint').textContent=mode==='select'?'Click a part to select · drag empty space to orbit':mode==='recolor'?'Click a part to apply the chosen color':mode==='insert'?'Choose a shape and click ADD PART': 'Drag a selected part to '+mode+' · drag empty space to orbit';
  });
  $('kwgc-mirror').onchange=e=>{mirror=e.target.checked;status(mirror?'Mirror X enabled. New shapes and edits are reflected.':'Mirror X disabled. Edit each side independently.');};
  $('kwgc-zoom-in').onclick=()=>distance=Math.max(1.2,distance*.8);
