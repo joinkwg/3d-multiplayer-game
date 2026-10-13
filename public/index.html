@@ -5994,26 +5994,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const shoeGeo=new THREE.BoxGeometry(0.34,0.18,0.48);
       const shoeStyle=app.shoeStyle||'shoes';
       function makeLeg(pivot){
-        const upper=new THREE.Mesh(upperLegGeo,bottomStyle==='shorts'?pantsMat:pantsMat); upper.position.set(0,-0.22,0); pivot.add(upper);
-        const lower=new THREE.Mesh(lowerLegGeo,bottomStyle==='shorts'?skinMat:pantsMat); lower.position.set(0,-0.62,0); pivot.add(lower);
+        const upper=new THREE.Mesh(upperLegGeo,bottomStyle==='shorts'?pantsMat:pantsMat); upper.userData.kwgBodyPart='bottoms'; upper.position.set(0,-0.22,0); pivot.add(upper);
+        const lower=new THREE.Mesh(lowerLegGeo,bottomStyle==='shorts'?skinMat:pantsMat); lower.userData.kwgBodyPart='bottoms'; lower.position.set(0,-0.62,0); pivot.add(lower);
         if(shoeStyle==='sandals'){
-          const sole=new THREE.Mesh(new THREE.BoxGeometry(.35,.075,.49),shoeMat);sole.position.set(0,-.89,.055);pivot.add(sole);
+          const sole=new THREE.Mesh(new THREE.BoxGeometry(.35,.075,.49),shoeMat);sole.position.set(0,-.89,.055);sole.userData.kwgBodyPart='shoes';pivot.add(sole);
           const foot=new THREE.Mesh(new THREE.BoxGeometry(.29,.105,.38),skinMat);foot.position.set(0,-.81,.065);pivot.add(foot);
-          const strap=new THREE.Mesh(new THREE.BoxGeometry(.35,.065,.105),shoeMat);strap.position.set(0,-.76,.13);pivot.add(strap);
-        }else{const shoe=new THREE.Mesh(shoeGeo,shoeMat);shoe.position.set(0,-.84,.055);pivot.add(shoe);}
+          const strap=new THREE.Mesh(new THREE.BoxGeometry(.35,.065,.105),shoeMat);strap.position.set(0,-.76,.13);strap.userData.kwgBodyPart='shoes';pivot.add(strap);
+        }else{const shoe=new THREE.Mesh(shoeGeo,shoeMat);shoe.userData.kwgBodyPart='shoes';shoe.position.set(0,-.84,.055);pivot.add(shoe);}
       }
       makeLeg(leftLegPivot); makeLeg(rightLegPivot); group.add(leftLegPivot,rightLegPivot);
 
       // Layered torso gives the body a cleaner shoulder-to-waist silhouette.
       const torso=new THREE.Mesh(new THREE.BoxGeometry(0.78,0.78,0.43),shirtMat);
-      torso.position.set(0,1.30,0); group.add(torso);
+      torso.position.set(0,1.30,0); torso.userData.kwgBodyPart='tops'; group.add(torso);
       const shoulders=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.20,0.45),shirtMat);
-      shoulders.position.set(0,1.60,0); group.add(shoulders);
+      shoulders.position.set(0,1.60,0); shoulders.userData.kwgBodyPart='tops'; group.add(shoulders);
       const waist=new THREE.Mesh(new THREE.BoxGeometry(0.67,0.18,0.39),pantsMat);
-      waist.position.set(0,0.86,0); group.add(waist);
+      waist.position.set(0,0.86,0); waist.userData.kwgBodyPart='bottoms'; group.add(waist);
       if(bottomStyle==='skirt'){
         const skirt=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.53,0.62,4,1,false,Math.PI/4),pantsMat);
-        skirt.position.set(0,0.62,0); skirt.rotation.y=Math.PI/4; group.add(skirt);
+        skirt.position.set(0,0.62,0); skirt.userData.kwgBodyPart='bottoms'; skirt.rotation.y=Math.PI/4; group.add(skirt);
       }
       addImageCosmetic(group,cosmetics.torso_decal,0.72,0.72,0,1.30,0.255);
 
@@ -6021,9 +6021,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const leftArmPivot=new THREE.Group(); leftArmPivot.position.set(-0.60,1.58,0);
       const rightArmPivot=new THREE.Group(); rightArmPivot.position.set(0.60,1.58,0);
       function makeArm(pivot){
-        const sleeve=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.34,0.34),shirtMat); sleeve.position.set(0,-0.14,0); pivot.add(sleeve);
-        const forearm=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.38,0.28),shirtStyle==='long'?shirtMat:skinMat); forearm.position.set(0,-0.48,0); pivot.add(forearm);
-        const hand=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.20,0.30),skinMat); hand.position.set(0,-0.76,0); pivot.add(hand);
+        const sleeve=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.34,0.34),shirtMat); sleeve.userData.kwgBodyPart='tops'; sleeve.position.set(0,-0.14,0); pivot.add(sleeve);
+        const forearm=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.38,0.28),shirtStyle==='long'?shirtMat:skinMat); forearm.userData.kwgBodyPart=shirtStyle==='long'?'tops':'skin'; forearm.position.set(0,-0.48,0); pivot.add(forearm);
+        const hand=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.20,0.30),skinMat); hand.userData.kwgBodyPart='skin'; hand.position.set(0,-0.76,0); pivot.add(hand);
       }
       makeArm(leftArmPivot); makeArm(rightArmPivot); group.add(leftArmPivot,rightArmPivot);
 
@@ -6032,13 +6032,23 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const headShape=app.headShape||'sphere';
       const hasHead=!!customHead||headShape!=='headless';
       if(customHead){
-        const anchor=new THREE.Group(); anchor.position.set(0,2.04,0); group.add(anchor); attachNormalizedGLB(anchor,customHead,0.72);
-      } else if(headShape!=='headless'){
+        if(customHead.assetKind==='glb' && customHead.metadata?.creatorVersion){
+          const holder=new THREE.Group();holder.name='creator-head_shape';group.add(holder);
+          loadGLBClone(customHead.assetUrl).then(mesh=>{
+            if(!holder.parent)return;
+            const skin=new THREE.Color(skinColor);
+            mesh.traverse(o=>{if(o.isMesh){o.material=new THREE.MeshLambertMaterial({color:skin,side:THREE.DoubleSide});}});
+            holder.add(mesh);
+          }).catch(err=>console.warn('Could not load creator head shape',err));
+        }else{
+          const anchor=new THREE.Group(); anchor.position.set(0,2.04,0); group.add(anchor); attachNormalizedGLB(anchor,customHead,0.72);
+        }
+      } else if(headShape!=='headless' && cosmetics.heads?.assetKind!=='glb'){
         let headGeo;
         if(headShape==='sphere') headGeo=new THREE.SphereGeometry(0.37,20,16);
         else if(headShape==='cylinder') headGeo=new THREE.CylinderGeometry(0.34,0.35,0.64,20);
         else headGeo=new THREE.BoxGeometry(0.63,0.63,0.63);
-        const head=new THREE.Mesh(headGeo,skinMat); head.position.set(0,2.04,0); group.add(head);
+        const head=new THREE.Mesh(headGeo,skinMat); head.userData.kwgBodyPart='head'; head.position.set(0,2.04,0); group.add(head);
 
         // Hair removed from avatar rendering.
       }
@@ -6053,6 +6063,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
 
       kwgProceduralApply(group,app,cosmetics,{leftArmPivot,rightArmPivot,leftLegPivot,rightLegPivot,torso});
+      // Creator V5: a published replacement must replace the base body part,
+      // not stack on top of it. Tagging avoids fragile color/geometry guesses.
+      const creatorReplaces = new Set();
+      if(cosmetics.heads?.assetKind==='glb'||cosmetics.head_shape?.assetKind==='glb')creatorReplaces.add('head');
+      if(cosmetics.tops?.assetKind==='glb'||cosmetics.flightsuits?.assetKind==='glb')creatorReplaces.add('tops');
+      if(cosmetics.bottoms?.assetKind==='glb'||cosmetics.flightsuits?.assetKind==='glb')creatorReplaces.add('bottoms');
+      if(cosmetics.shoes?.assetKind==='glb'||cosmetics.flightsuits?.assetKind==='glb')creatorReplaces.add('shoes');
+      if(creatorReplaces.size)group.traverse(obj=>{
+        if(obj.isMesh && creatorReplaces.has(obj.userData.kwgBodyPart))obj.visible=false;
+      });
       // Creator meshes use avatar/world-space coordinates (the same coordinates
       // used by the mannequin editor). Do NOT normalize or re-anchor them.
       // In particular, GLB hair must not enter the procedural hairstyle switch.
@@ -6064,6 +6084,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         loadGLBClone(item.assetUrl).then(mesh=>{
           if(!parent.parent)return;
           mesh.name='uploaded-'+category;
+          if(category==='heads'){
+            const tone=new THREE.Color(skinColor);
+            mesh.traverse(o=>{if(o.isMesh){o.material=new THREE.MeshLambertMaterial({color:tone,side:THREE.DoubleSide});}});
+          }
           // The creator exports primitive positions as absolute avatar coordinates.
           // Preserve these positions so a hairpiece sits where it was designed.
           parent.add(mesh);
@@ -11697,7 +11721,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    return result;
  }
  function category(){return $('kwgc-category').value;}function is2d(){return ['skin','torso_decal'].includes(category());}
- function partMesh(p){const T=get(),geo= p.type==='box'?new T.BoxGeometry(1,1,1):p.type==='sphere'?new T.SphereGeometry(.5,20,14):p.type==='cone'?new T.ConeGeometry(.5,1,20):new T.CylinderGeometry(.5,.5,1,20);const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color:p.color,roughness:.82}));mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=p.r*Math.PI/180;mesh.scale.set(p.sx,p.sy,p.sz);return mesh;}
+ function partMesh(p){const T=get(),geo= p.type==='box'?new T.BoxGeometry(1,1,1):p.type==='sphere'?new T.SphereGeometry(.5,20,14):p.type==='cone'?new T.ConeGeometry(.5,1,20):new T.CylinderGeometry(.5,.5,1,20);const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color:['heads','head_shape'].includes(category())?'#fff5ba':p.color,roughness:.82}));mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=p.r*Math.PI/180;mesh.scale.set(p.sx,p.sy,p.sz);return mesh;}
  function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach(p=>root.add(partMesh(p)));const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);list.append(b);});}
  function select(n){selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]);$('kwgc-color').value=p.color;}redraw();}
  function addShape(type){const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const p={type,color:$('kwgc-color').value,x:0,y,z,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};parts.push(p);select(parts.length-1);}
@@ -11727,37 +11751,23 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  // Mesh visibility is local to the editor; exported GLBs contain ONLY root parts.
  function updateFittingPreview(){
    if(!avatar)return;
-   const c=category(),headReplacement=c==='heads'||c==='head_shape';
-   const skinC='#fff5ba',shirtC='#62edee',pantsC='#6389bd',shoeC='#273247';
-   const hex=v=>new get().Color(v).getHexString();
-   const colors={skin:hex(skinC),shirt:hex(shirtC),pants:hex(pantsC),shoes:hex(shoeC)};
-   const hideShirt=c==='tops'||c==='flightsuits';
-   const hidePants=c==='bottoms'||c==='flightsuits';
-   const hideShoes=c==='shoes'||c==='flightsuits';
-   // Character retains uncovered skin (arms/hands) unless replacing the head.
-   avatar.traverse(obj=>{
-     if(!obj.isMesh||!obj.material?.color)return;
-     const col=obj.material.color.getHexString();
-     const isHead=obj.parent===avatar && obj.position.y>1.8 && obj.geometry?.type!=='BufferGeometry';
-     obj.visible= !(isHead&&headReplacement) &&
-       !(hideShirt&&col===colors.shirt) &&
-       !(hidePants&&col===colors.pants) &&
-       !(hideShoes&&col===colors.shoes);
-   });
-   if(previewEyeGroup)previewEyeGroup.visible=!headReplacement&&c!=='eyes';
+   const c=category();
+   const hidden=new Set();
+   if(c==='heads'||c==='head_shape')hidden.add('head');
+   if(c==='tops'||c==='flightsuits')hidden.add('tops');
+   if(c==='bottoms'||c==='flightsuits')hidden.add('bottoms');
+   if(c==='shoes'||c==='flightsuits')hidden.add('shoes');
+   avatar.traverse(obj=>{if(obj.isMesh&&obj.userData.kwgBodyPart)obj.visible=!hidden.has(obj.userData.kwgBodyPart);});
+   if(previewEyeGroup)previewEyeGroup.visible=!hidden.has('head')&&c!=='eyes';
    avatar.visible=showMannequin;
+   // Head geometry is skin-toned automatically, without a per-item color.
+   const skinOnly=c==='heads'||c==='head_shape';
+   const colorLabel=$('kwgc-color')?.closest('label');
+   if(colorLabel)colorLabel.style.display=skinOnly?'none':'';
  }
- function mode(){const two=is2d();$('kwg-creator-viewport').style.display=two?'none':'block';paint.style.display=two?'block':'none';$('kwgc-2dtools').style.display=two?'block':'none';$('kwgc-3dtools').style.display=two?'none':'block';$('kwgc-transforms').style.display=two?'none':'block';$('kwgc-mannequin').disabled=two;updateFittingPreview();}
- $('kwgc-launch').onclick=()=>{const s=typeof window.kwgItemCreatorSocket==='object'?window.kwgItemCreatorSocket:null;if(!s)return status('Admin connection not available.');modal.style.display='flex';init();mode();refresh();};$('kwgc-close').onclick=()=>modal.style.display='none';$('kwgc-category').onchange=mode;
- document.querySelectorAll('#kwg-creator [data-shape]').forEach(b=>b.onclick=()=>addShape(b.dataset.shape));$('kwgc-delete-part').onclick=()=>{if(selected<0)return;parts.splice(selected,1);selected=Math.min(selected,parts.length-1);redraw();};coords.forEach(k=>$('kwgc-'+k).addEventListener('input',()=>{if(selected<0)return;const v=Number($('kwgc-'+k).value);if(!Number.isFinite(v))return;parts[selected][k]=k.startsWith('s')?Math.max(.02,Math.min(5,v)):v;redraw();}));$('kwgc-color').oninput=()=>{if(!is2d()&&selected>=0){parts[selected].color=$('kwgc-color').value;redraw();}};
- $('kwgc-mannequin').onclick=()=>{showMannequin=!showMannequin;if(avatar)updateFittingPreview();$('kwgc-mannequin').textContent='Mannequin: '+(showMannequin?'ON':'OFF');};$('kwgc-new').onclick=()=>{draftId=null;parts=[];selected=-1;redraw();ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);$('kwgc-name').value='New Creation';status('New project created.');};
- document.querySelectorAll('#kwg-creator [data-paint]').forEach(b=>b.onclick=()=>{paintMode=b.dataset.paint;if(paintMode==='checker'||paintMode==='stripes'){ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);ctx.fillStyle=$('kwgc-color').value;for(let y=0;y<512;y+=32)for(let x=0;x<512;x+=32)if(paintMode==='stripes'||(x+y)/32%2===0)ctx.fillRect(x,y,32,32);}status('Tool: '+paintMode);});$('kwgc-clear-paint').onclick=()=>{ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);};
- function doc(){return is2d()?{version:1,type:'paint',png:paint.toDataURL('image/png')}:{version:1,type:'mesh',parts};}
- $('kwgc-save').onclick=async()=>{status('Saving draft...');const r=await sock('item_creator_save_draft',{id:draftId,category:category(),name:$('kwgc-name').value,document:doc()});if(r.success){draftId=r.id;status('Draft saved to server (ID '+r.id+').');refresh();}else status(r.message||'Save failed.');};
- async function refresh(){const r=await sock('item_creator_list_drafts');const el=$('kwg-creator-drafts');el.replaceChildren();if(!r.success)return;for(const d of r.drafts){const b=document.createElement('button');b.textContent=d.name+' · '+d.category;b.onclick=()=>{draftId=Number(d.id);$('kwgc-category').value=d.category;$('kwgc-name').value=d.name;mode();if(d.document.type==='mesh'){parts=d.document.parts||[];selected=-1;redraw();}else if(d.document.png){const im=new Image();im.onload=()=>{ctx.clearRect(0,0,512,512);ctx.drawImage(im,0,0,512,512)};im.src=d.document.png;}status('Draft loaded.');};el.append(b);}}
  $('kwgc-refresh-drafts').onclick=refresh;
  async function exportGlb(){return new Promise((resolve,reject)=>{const T=get(),exp=new T.GLTFExporter(),g=new T.Group();parts.forEach(p=>g.add(partMesh(p)));try{exp.parse(g,data=>{if(!(data instanceof ArrayBuffer))return reject(new Error('Binary GLB export failed'));resolve(new Uint8Array(data));},{binary:true,onlyVisible:true});}catch(e){reject(e);}});}
- $('kwgc-publish').onclick=async()=>{const name=$('kwgc-name').value.trim(),price=Number($('kwgc-price').value),cat=category(),dist=$('kwgc-distribution').value;if(!name||!Number.isSafeInteger(price)||price<0||price>1000000)return status('Enter a valid name and price.');if(!is2d()&&!parts.length)return status('Add a shape before publishing.');status('Exporting item...');try{let bytes,fileName,mimeType;if(is2d()){const bin=atob(paint.toDataURL('image/png').split(',')[1]);bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);fileName='item.png';mimeType='image/png';}else{bytes=await exportGlb();fileName='item.glb';mimeType='model/gltf-binary';}status('Uploading to store...');const r=await sock('admin_store_create',{category:cat,name,price,distribution:dist,fileName,mimeType,fileData:bytes,metadata:{size:1,offsetX:0,offsetY:0,offsetZ:0},isVisible:dist==='store'});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.success?'Item published! ID '+r.item.id+(dist==='starter'?' · granted to current players':' · live in store'):(r.message||'Publish failed'));}catch(e){console.error(e);status(e.message||'Export failed.');}};
+ $('kwgc-publish').onclick=async()=>{const name=$('kwgc-name').value.trim(),price=Number($('kwgc-price').value),cat=category(),dist=$('kwgc-distribution').value;if(!name||!Number.isSafeInteger(price)||price<0||price>1000000)return status('Enter a valid name and price.');if(!is2d()&&!parts.length)return status('Add a shape before publishing.');status('Exporting item...');try{let bytes,fileName,mimeType;if(is2d()){const bin=atob(paint.toDataURL('image/png').split(',')[1]);bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);fileName='item.png';mimeType='image/png';}else{bytes=await exportGlb();fileName='item.glb';mimeType='model/gltf-binary';}status('Uploading to store...');const r=await sock('admin_store_create',{category:cat,name,price,distribution:dist,fileName,mimeType,fileData:bytes,metadata:{size:1,offsetX:0,offsetY:0,offsetZ:0},isVisible:dist==='store'});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.success?'Published '+name+' (#'+r.item.id+') to '+(dist==='starter'?'STARTER INVENTORY (not listed for sale)':'STORE → '+cat.toUpperCase())+'. Note: purchased items move into My Stuff and are hidden from the for-sale list.':(r.message||'Publish failed'));}catch(e){console.error(e);status(e.message||'Export failed.');}};
  $('kwgc-reset').onclick=async()=>{const first=prompt('DANGER: This permanently deletes ALL avatar catalog items AND player ownership records. No coin refunds. Type RESET ALL AVATAR ITEMS to continue:');if(first!=='RESET ALL AVATAR ITEMS'){status('Reset cancelled.');return;}if(!confirm('Final confirmation: permanently delete every avatar store item and purchase?'))return;status('Resetting catalog...');const r=await sock('item_creator_full_reset',{confirm:first});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.message||(r.success?'Catalog reset.':'Reset failed.'));};
  // Existing application-scoped socket is assigned to this bridge from its own scope below.
 })();
