@@ -2122,29 +2122,6 @@ io.on('connection', (socket) => {
     try{const r=await pool.query('SELECT id,name,category,document,updated_at FROM item_creator_drafts WHERE owner_id=$1 ORDER BY updated_at DESC LIMIT 100',[socket.user.id]);cb({success:true,drafts:r.rows});}
     catch(e){console.error(e);cb({success:false,message:'Could not load drafts.'});}
   });
-  // Explicitly destructive action. Never run during migration or server start.
-  socket.on('item_creator_full_reset',async(payload={},cb)=>{
-    if(!requireAdmin(socket,cb))return;
-    if(payload.confirm!=='RESET ALL AVATAR ITEMS')return cb({success:false,message:'Type RESET ALL AVATAR ITEMS to confirm.'});
-    let client;
-    try{
-      client=await Promise.race([pool.connect(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Database connection busy. Try again shortly.')),10000))]);
-      await client.query('BEGIN');
-      await client.query("SET LOCAL lock_timeout = '8s'");
-      await client.query("SET LOCAL statement_timeout = '20s'");
-      await client.query('DELETE FROM user_store_items');
-      await client.query('DELETE FROM store_items');
-      await client.query(`UPDATE users SET appearance = COALESCE(appearance,'{}'::jsonb) - ARRAY['hairItemId','hatsItemId','headsItemId','eyesItemId','mouthItemId','skinItemId','topsItemId','bottomsItemId','shoesItemId','flightsuitsItemId','hatItemId','headShapeItemId','torsoDecalItemId']::text[]`);
-      await client.query('COMMIT');
-      for(const peer of io.sockets.sockets.values()){
-        if(peer.user?.appearance){for(const key of ['hairItemId','hatsItemId','headsItemId','eyesItemId','mouthItemId','skinItemId','topsItemId','bottomsItemId','shoesItemId','flightsuitsItemId','hatItemId','headShapeItemId','torsoDecalItemId'])peer.user.appearance[key]=null;}
-        const player=playersBySocket.get(peer.id);if(player){player.cosmetics={};if(player.appearance){for(const key of ['hairItemId','hatsItemId','headsItemId','eyesItemId','mouthItemId','skinItemId','topsItemId','bottomsItemId','shoesItemId','flightsuitsItemId','hatItemId','headShapeItemId','torsoDecalItemId'])player.appearance[key]=null;}}
-      }
-      cb({success:true,message:'All avatar catalog rows and player ownership records deleted.'});
-    }catch(e){if(client)await client.query('ROLLBACK').catch(()=>{});console.error('Item Creator reset:',e);cb({success:false,message:'Reset failed: '+(e.message||'database error')+'. No changes committed.'});}
-    finally{if(client)client.release();}
-  });
-
   socket.on('admin_store_list', async (cb) => {
     if (!requireAdmin(socket, cb)) return;
     try {
@@ -2197,26 +2174,23 @@ io.on('connection', (socket) => {
       }
       deleted=item.rows[0];
       // Clear equipped cosmetics for all owners before their purchase records cascade.
-      const slotByCategory={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'};
-      const slot=slotByCategory[deleted.category];
-      if (slot) await client.query(`
+      const slotByCategory={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId',hair:'hairItemId',hats:'hatsItemId',heads:'headsItemId',skin:'skinItemId',tops:'topsItemId',bottoms:'bottomsItemId',shoes:'shoesItemId',flightsuits:'flightsuitsItemId'};
+      const slots=new Set([slotByCategory[deleted.category]].filter(Boolean));
+      if(deleted.category==='heads')slots.add('headShapeItemId');
+      if(deleted.category==='hats')slots.add('hatItemId');
+      for(const slot of slots)await client.query(`
         UPDATE users SET appearance=appearance-$2::text
         WHERE (appearance->>$2::text)=$1::text
       `,[itemId,slot]);
       await client.query('DELETE FROM store_items WHERE id=$1',[itemId]);
       await client.query('COMMIT');
       // Update cached online appearances too; deleted items cannot be equipped again.
-      if(slot){
-        for(const peer of io.sockets.sockets.values()){
-          if(peer.user?.appearance && Number(peer.user.appearance[slot])===itemId){
-            peer.user.appearance={...peer.user.appearance,[slot]:null};
-            const player=playersBySocket.get(peer.id);
-            if(player){
-              player.appearance={...player.appearance,[slot]:null};
-              if(player.cosmetics)delete player.cosmetics[deleted.category];
-            }
-          }
-        }
+      for(const peer of io.sockets.sockets.values()){
+        let changed=false;
+        if(peer.user?.appearance)for(const slot of slots){if(Number(peer.user.appearance[slot])===itemId){peer.user.appearance[slot]=null;changed=true;}}
+        const player=playersBySocket.get(peer.id);
+        if(player){if(player.appearance)for(const slot of slots)if(Number(player.appearance[slot])===itemId){player.appearance[slot]=null;changed=true;}
+          if(changed&&player.cosmetics)delete player.cosmetics[deleted.category];}
       }
     }catch(err){
       await client.query('ROLLBACK').catch(()=>{});
@@ -2232,7 +2206,7 @@ io.on('connection', (socket) => {
       const assetUrl=String(deleted.asset_url||'');
       if(assetUrl.startsWith(prefix)){
         const key=assetUrl.slice(prefix.length);
-        if(/^(eyes|mouth|torso_decal|hat|head_shape)\/\d+-[a-f0-9]{16}\.(png|jpg|webp|glb)$/.test(key)){
+        if(/^(eyes|mouth|torso_decal|hat|head_shape|hair|hats|heads|skin|tops|bottoms|shoes|flightsuits)\/\d+-[a-f0-9]{16}\.(png|jpg|webp|glb)$/.test(key)){
           try{
             const bucket=encodeURIComponent(SUPABASE_STORE_BUCKET);
             const path=key.split('/').map(encodeURIComponent).join('/');
