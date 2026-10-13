@@ -6056,7 +6056,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       // Creator meshes use avatar/world-space coordinates (the same coordinates
       // used by the mannequin editor). Do NOT normalize or re-anchor them.
       // In particular, GLB hair must not enter the procedural hairstyle switch.
-      for(const category of ['hair','hats','heads','tops','bottoms','shoes','flightsuits']){
+      for(const category of ['hair','hats','heads','eyes','mouth','tops','bottoms','shoes','flightsuits']){
         const item=cosmetics[category];
         if(item?.assetKind!=='glb'||!item.assetUrl)continue;
         const parent=new THREE.Group();parent.name='creator-'+category;
@@ -11649,7 +11649,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 </style>
 <div id="kwg-creator" role="dialog" aria-modal="true" aria-label="Item Creator">
  <div class="kwg-creator-shell">
-  <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hat">Hat</option><option value="head_shape">Head Shape</option><option value="hair">Hair</option><option value="hats">Hats</option><option value="heads">Heads</option><option value="tops">Shirts / Tops</option><option value="bottoms">Pants / Bottoms</option><option value="shoes">Shoes</option><option value="flightsuits">Flightsuit</option><option value="eyes">Eyes (2D)</option><option value="mouth">Mouth (2D)</option><option value="torso_decal">Torso Decal (2D)</option><option value="skin">Skin (2D)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
+  <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hat">Hat</option><option value="head_shape">Head Shape</option><option value="hair">Hair</option><option value="hats">Hats</option><option value="heads">Heads</option><option value="tops">Shirts / Tops</option><option value="bottoms">Pants / Bottoms</option><option value="shoes">Shoes</option><option value="flightsuits">Flightsuit</option><option value="eyes">Eyes (3D)</option><option value="mouth">Mouth (3D)</option><option value="torso_decal">Torso Decal (2D)</option><option value="skin">Skin (2D)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
   <div class="kwg-creator-main">
    <div class="kwg-creator-side"><h3>BUILD & PAINT</h3><div id="kwgc-3dtools"><div class="kwg-tool-grid"><button data-shape="box">+ Box</button><button data-shape="sphere">+ Sphere</button><button data-shape="cylinder">+ Cylinder</button><button data-shape="cone">+ Cone</button></div><label>Parts <div id="kwg-creator-parts"></div></label><button id="kwgc-delete-part">Remove selected part</button><p>Drag the viewport to rotate. Change each selected primitive with the transforms at right. Overlap rounded shapes to sculpt a silhouette.</p></div><div id="kwgc-2dtools" style="display:none"><div class="kwg-tool-grid"><button data-paint="brush">Brush</button><button data-paint="eraser">Eraser</button><button data-paint="fill">Fill</button><button data-paint="checker">Checker</button><button data-paint="stripes">Stripes</button><button id="kwgc-clear-paint">Clear</button></div><label>Brush size<input id="kwgc-brush" type="range" min="1" max="32" value="8"></label><p>Paint directly on the 2D texture canvas. Patterns fill the canvas; use the 3D category editor for solid meshes.</p></div><h3>MY DRAFTS</h3><button id="kwgc-refresh-drafts">Refresh drafts</button><div id="kwg-creator-drafts"></div></div>
    <div class="kwg-creator-stage"><canvas id="kwg-creator-viewport"></canvas><canvas id="kwg-creator-paint" width="512" height="512"></canvas></div>
@@ -11661,7 +11661,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 (()=>{
  const $=id=>document.getElementById(id),modal=$('kwg-creator');if(!modal)return;
  const get=()=>window.THREE, socket=()=>typeof io==='function'?null:null;
- let scene,camera,renderer,root,avatar,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=0;
+ let scene,camera,renderer,root,avatar,previewEyeGroup,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=0;
  const coords=['x','y','z','r','sx','sy','sz'];const status=s=>{$('kwgc-status').textContent=s;};
  // Reconnected sockets lose server-side authentication. Restore the existing session
  // before retrying an Item Creator operation; never bypass server admin checks.
@@ -11696,25 +11696,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    }
    return result;
  }
- function category(){return $('kwgc-category').value;}function is2d(){return ['skin','eyes','mouth','torso_decal'].includes(category());}
+ function category(){return $('kwgc-category').value;}function is2d(){return ['skin','torso_decal'].includes(category());}
  function partMesh(p){const T=get(),geo= p.type==='box'?new T.BoxGeometry(1,1,1):p.type==='sphere'?new T.SphereGeometry(.5,20,14):p.type==='cone'?new T.ConeGeometry(.5,1,20):new T.CylinderGeometry(.5,.5,1,20);const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color:p.color,roughness:.82}));mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=p.r*Math.PI/180;mesh.scale.set(p.sx,p.sy,p.sz);return mesh;}
  function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach(p=>root.add(partMesh(p)));const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);list.append(b);});}
  function select(n){selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]);$('kwgc-color').value=p.color;}redraw();}
- function addShape(type){const p={type,color:$('kwgc-color').value,x:0,y:2.45,z:0,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};parts.push(p);select(parts.length-1);}
+ function addShape(type){const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const p={type,color:$('kwgc-color').value,x:0,y,z,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};parts.push(p);select(parts.length-1);}
  function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,1.6));const light=new T.DirectionalLight(0xffffff,1.5);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);
  // Use the same avatar builder as the rest of KWG, rather than a placeholder mannequin.
  const appearance={headShape:'sphere',hat:'none',skinColor:'#fff5ba',headColor:'#fff5ba',shirtColor:'#62edee',torsoColor:'#62edee',pantsColor:'#6389bd',leftLegColor:'#6389bd',rightLegColor:'#6389bd',shoesColor:'#273247',hairColor:'#6b4835'};
  avatar=window.kwgCreatorBuildAvatar?window.kwgCreatorBuildAvatar(appearance):new T.Group();scene.add(avatar);
  // Friendly default eyes on the editor's fitting model (not exported with items).
+ previewEyeGroup=new T.Group();previewEyeGroup.name='kwgc-default-eyes';avatar.add(previewEyeGroup);
  const eyeWhite=new T.MeshStandardMaterial({color:'#ffffff',roughness:.44});
  const irisMat=new T.MeshStandardMaterial({color:'#40bbf7',roughness:.3});
  const pupilMat=new T.MeshStandardMaterial({color:'#0b1d35',roughness:.2});
  const shineMat=new T.MeshBasicMaterial({color:'#ffffff'});
  for(const x of [-.165,.165]){
-   const white=new T.Mesh(new T.SphereGeometry(.112,24,16),eyeWhite);white.position.set(x,2.065,.327);avatar.add(white);
-   const iris=new T.Mesh(new T.SphereGeometry(.072,22,16),irisMat);iris.position.set(x,2.061,.425);avatar.add(iris);
-   const pupil=new T.Mesh(new T.SphereGeometry(.043,20,16),pupilMat);pupil.position.set(x-.008,2.06,.485);avatar.add(pupil);
-   const sparkle=new T.Mesh(new T.SphereGeometry(.019,12,10),shineMat);sparkle.position.set(x-.025,2.086,.516);avatar.add(sparkle);
+   const white=new T.Mesh(new T.SphereGeometry(.112,24,16),eyeWhite);white.position.set(x,2.065,.327);previewEyeGroup.add(white);
+   const iris=new T.Mesh(new T.SphereGeometry(.072,22,16),irisMat);iris.position.set(x,2.061,.425);previewEyeGroup.add(iris);
+   const pupil=new T.Mesh(new T.SphereGeometry(.043,20,16),pupilMat);pupil.position.set(x-.008,2.06,.485);previewEyeGroup.add(pupil);
+   const sparkle=new T.Mesh(new T.SphereGeometry(.019,12,10),shineMat);sparkle.position.set(x-.025,2.086,.516);previewEyeGroup.add(sparkle);
  }
 
  let frame=0;const tick=()=>{if(!renderer)return;frame=requestAnimationFrame(tick);const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=Math.max(1,Math.round(box.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}camera.position.set(Math.sin(angle)*5.6,2.7,Math.cos(angle)*5.6);camera.lookAt(0,1.55,0);renderer.render(scene,camera);};tick();canvas.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointermove',e=>{if(drag){angle+=(e.clientX-lastX)*.012;lastX=e.clientX}});canvas.addEventListener('pointerup',()=>drag=false);canvas.addEventListener('pointercancel',()=>drag=false);
@@ -11722,10 +11723,34 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  const paint=$('kwg-creator-paint'),ctx=paint.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);
  function paintAt(e){const b=paint.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*512,y=(e.clientY-b.top)/b.height*512,r=Number($('kwgc-brush').value);ctx.beginPath();ctx.fillStyle=paintMode==='eraser'?'#e6ba93':$('kwgc-color').value;ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
  paint.addEventListener('pointerdown',e=>{painting=true;paint.setPointerCapture(e.pointerId);if(paintMode==='fill'){ctx.fillStyle=$('kwgc-color').value;ctx.fillRect(0,0,512,512);}else paintAt(e)});paint.addEventListener('pointermove',e=>{if(painting&&paintMode!=='fill')paintAt(e)});paint.addEventListener('pointerup',()=>painting=false);paint.addEventListener('pointercancel',()=>painting=false);
- function mode(){const two=is2d();$('kwg-creator-viewport').style.display=two?'none':'block';paint.style.display=two?'block':'none';$('kwgc-2dtools').style.display=two?'block':'none';$('kwgc-3dtools').style.display=two?'none':'block';$('kwgc-transforms').style.display=two?'none':'block';$('kwgc-mannequin').disabled=two;}
+ // Only expose the base body pieces relevant to fitting the chosen item.
+ // Mesh visibility is local to the editor; exported GLBs contain ONLY root parts.
+ function updateFittingPreview(){
+   if(!avatar)return;
+   const c=category(),headReplacement=c==='heads'||c==='head_shape';
+   const skinC='#fff5ba',shirtC='#62edee',pantsC='#6389bd',shoeC='#273247';
+   const hex=v=>new get().Color(v).getHexString();
+   const colors={skin:hex(skinC),shirt:hex(shirtC),pants:hex(pantsC),shoes:hex(shoeC)};
+   const hideShirt=c==='tops'||c==='flightsuits';
+   const hidePants=c==='bottoms'||c==='flightsuits';
+   const hideShoes=c==='shoes'||c==='flightsuits';
+   // Character retains uncovered skin (arms/hands) unless replacing the head.
+   avatar.traverse(obj=>{
+     if(!obj.isMesh||!obj.material?.color)return;
+     const col=obj.material.color.getHexString();
+     const isHead=obj.parent===avatar && obj.position.y>1.8 && obj.geometry?.type!=='BufferGeometry';
+     obj.visible= !(isHead&&headReplacement) &&
+       !(hideShirt&&col===colors.shirt) &&
+       !(hidePants&&col===colors.pants) &&
+       !(hideShoes&&col===colors.shoes);
+   });
+   if(previewEyeGroup)previewEyeGroup.visible=!headReplacement&&c!=='eyes';
+   avatar.visible=showMannequin;
+ }
+ function mode(){const two=is2d();$('kwg-creator-viewport').style.display=two?'none':'block';paint.style.display=two?'block':'none';$('kwgc-2dtools').style.display=two?'block':'none';$('kwgc-3dtools').style.display=two?'none':'block';$('kwgc-transforms').style.display=two?'none':'block';$('kwgc-mannequin').disabled=two;updateFittingPreview();}
  $('kwgc-launch').onclick=()=>{const s=typeof window.kwgItemCreatorSocket==='object'?window.kwgItemCreatorSocket:null;if(!s)return status('Admin connection not available.');modal.style.display='flex';init();mode();refresh();};$('kwgc-close').onclick=()=>modal.style.display='none';$('kwgc-category').onchange=mode;
  document.querySelectorAll('#kwg-creator [data-shape]').forEach(b=>b.onclick=()=>addShape(b.dataset.shape));$('kwgc-delete-part').onclick=()=>{if(selected<0)return;parts.splice(selected,1);selected=Math.min(selected,parts.length-1);redraw();};coords.forEach(k=>$('kwgc-'+k).addEventListener('input',()=>{if(selected<0)return;const v=Number($('kwgc-'+k).value);if(!Number.isFinite(v))return;parts[selected][k]=k.startsWith('s')?Math.max(.02,Math.min(5,v)):v;redraw();}));$('kwgc-color').oninput=()=>{if(!is2d()&&selected>=0){parts[selected].color=$('kwgc-color').value;redraw();}};
- $('kwgc-mannequin').onclick=()=>{showMannequin=!showMannequin;if(avatar)avatar.visible=showMannequin;$('kwgc-mannequin').textContent='Mannequin: '+(showMannequin?'ON':'OFF');};$('kwgc-new').onclick=()=>{draftId=null;parts=[];selected=-1;redraw();ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);$('kwgc-name').value='New Creation';status('New project created.');};
+ $('kwgc-mannequin').onclick=()=>{showMannequin=!showMannequin;if(avatar)updateFittingPreview();$('kwgc-mannequin').textContent='Mannequin: '+(showMannequin?'ON':'OFF');};$('kwgc-new').onclick=()=>{draftId=null;parts=[];selected=-1;redraw();ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);$('kwgc-name').value='New Creation';status('New project created.');};
  document.querySelectorAll('#kwg-creator [data-paint]').forEach(b=>b.onclick=()=>{paintMode=b.dataset.paint;if(paintMode==='checker'||paintMode==='stripes'){ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);ctx.fillStyle=$('kwgc-color').value;for(let y=0;y<512;y+=32)for(let x=0;x<512;x+=32)if(paintMode==='stripes'||(x+y)/32%2===0)ctx.fillRect(x,y,32,32);}status('Tool: '+paintMode);});$('kwgc-clear-paint').onclick=()=>{ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);};
  function doc(){return is2d()?{version:1,type:'paint',png:paint.toDataURL('image/png')}:{version:1,type:'mesh',parts};}
  $('kwgc-save').onclick=async()=>{status('Saving draft...');const r=await sock('item_creator_save_draft',{id:draftId,category:category(),name:$('kwgc-name').value,document:doc()});if(r.success){draftId=r.id;status('Draft saved to server (ID '+r.id+').');refresh();}else status(r.message||'Save failed.');};
