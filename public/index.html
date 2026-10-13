@@ -3011,32 +3011,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         <div id="admin-worlds-list"><div class="admin-search-note">Type a world name or owner to search.</div></div>
       </div>
       <div class="admin-section">
-        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">ITEM CREATOR</div><button id="kwgc-launch" class="submit-btn" type="button" style="margin:8px 0 18px">✦ OPEN ITEM CREATOR 3D / 2D STUDIO</button><div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">STORE ITEMS (LEGACY UPLOADER)</div>
-        <div class="admin-store-form">
-          <label>Category
-            <select id="admin-store-category">
-              <option value="eyes">Eyes (image)</option>
-              <option value="mouth">Mouth (image)</option>
-              <option value="torso_decal">Shirt / Torso Decal (image)</option>
-              <option value="hat">Hat (GLB mesh)</option>
-              <option value="head_shape">Head Shape (GLB mesh)</option>
-            </select>
-          </label>
-          <label>Item Name<input id="admin-store-name" maxlength="40" placeholder="Cool Sunglasses"></label>
-          <label>Price (coins)<input id="admin-store-price" type="number" min="0" step="1" value="25"></label>
-          <label>Asset File<input id="admin-store-file" type="file" accept=".png,.jpg,.jpeg,.webp"></label>
-          <label style="flex-direction:row;align-items:center;gap:8px;">Available Now<input id="admin-store-visible" type="checkbox" checked style="width:18px;height:18px;"></label>
-          <div id="admin-store-config-note">Uploads use Supabase Storage. The service-role key stays on the server and is never sent to players.</div>
-          <div id="admin-mesh-fit-fields" style="display:none;">
-            <label>Size<input id="admin-store-size" type="number" step="0.05" value="1"></label>
-            <label>Offset X<input id="admin-store-offset-x" type="number" step="0.05" value="0"></label>
-            <label>Offset Y<input id="admin-store-offset-y" type="number" step="0.05" value="0"></label>
-            <label>Offset Z<input id="admin-store-offset-z" type="number" step="0.05" value="0"></label>
-          </div>
-          <div id="admin-fit-preview" class="admin-fit-preview"><div class="admin-fit-preview-note">LIVE FIT PREVIEW • drag to rotate</div></div>
-          <button id="admin-store-upload-btn" class="submit-btn" type="button">UPLOAD STORE ITEM</button>
-        </div>
-        <div id="admin-store-items-list"></div>
+        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">ITEM CREATOR</div><button id="kwgc-launch" class="submit-btn" type="button" style="margin:8px 0 18px">✦ OPEN ITEM CREATOR 3D / 2D STUDIO</button><div id="admin-store-items-list"></div>
       </div>
       <div id="admin-error" class="error-msg"></div>
     </div>
@@ -4101,6 +4076,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       });
     }
 
+    window.addEventListener('kwg-item-catalog-updated',()=>{refreshStoreData();refreshAdminStoreItems();});
+
     let playerAppearance = JSON.parse(localStorage.getItem('sp_player_appearance')) || {
       hat: 'none',
       headShape: 'sphere',
@@ -5095,68 +5072,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         });
       });
     }
-
-    function updateAdminStoreUploadFields() {
-      const category = document.getElementById('admin-store-category').value;
-      const isMesh = category === 'hat' || category === 'head_shape';
-      document.getElementById('admin-mesh-fit-fields').style.display = isMesh ? 'grid' : 'none';
-      document.getElementById('admin-store-file').accept = isMesh ? '.glb,model/gltf-binary' : '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp';
-      const fit=document.getElementById('admin-fit-preview'); if(fit) fit.style.display=isMesh?'block':'none';
-    }
-
-    document.getElementById('admin-store-category').addEventListener('change', updateAdminStoreUploadFields);
-    updateAdminStoreUploadFields();
-
-    document.getElementById('admin-store-upload-btn').addEventListener('click', async () => {
-      const button = document.getElementById('admin-store-upload-btn');
-      const category = document.getElementById('admin-store-category').value;
-      const name = document.getElementById('admin-store-name').value.trim();
-      const price = Number(document.getElementById('admin-store-price').value);
-      const file = document.getElementById('admin-store-file').files[0];
-      const isVisible = document.getElementById('admin-store-visible').checked;
-      if (!name) return setAdminMessage('Enter an item name.', true);
-      if (!Number.isInteger(price) || price < 0) return setAdminMessage('Price must be a whole number of coins.', true);
-      if (!file) return setAdminMessage('Choose an asset file.', true);
-      const isImage = ['eyes','mouth','torso_decal'].includes(category);
-      if (file.size > (isImage ? 3 : 8) * 1024 * 1024) return setAdminMessage(`${isImage ? 'Images' : 'Meshes'} are too large.`, true);
-
-      const metadata = {
-        size: Number(document.getElementById('admin-store-size').value),
-        offsetX: Number(document.getElementById('admin-store-offset-x').value),
-        offsetY: Number(document.getElementById('admin-store-offset-y').value),
-        offsetZ: Number(document.getElementById('admin-store-offset-z').value)
-      };
-      if (category === 'hat' && !['size','offsetX','offsetY','offsetZ'].every(k => Number.isFinite(metadata[k]))) {
-        return setAdminMessage('Hat size and all three offsets are required.', true);
-      }
-
-      button.disabled = true;
-      button.textContent = 'UPLOADING...';
-      setAdminMessage('Uploading store asset...');
-      try {
-        const fileData = await file.arrayBuffer();
-        socket.emit('admin_store_create', {
-          category,name,price,isVisible,metadata,
-          fileName:file.name,mimeType:file.type,fileData
-        }, (res) => {
-          button.disabled = false;
-          button.textContent = 'UPLOAD STORE ITEM';
-          if (!res || !res.success) {
-            setAdminMessage((res && res.message) || 'Upload failed.', true);
-            return;
-          }
-          document.getElementById('admin-store-name').value = '';
-          document.getElementById('admin-store-file').value = '';
-          setAdminMessage(`${res.item.name} was added to the store.`);
-          refreshAdminStoreItems();
-          refreshStoreData();
-        });
-      } catch (err) {
-        button.disabled = false;
-        button.textContent = 'UPLOAD STORE ITEM';
-        setAdminMessage('Could not read that file.', true);
-      }
-    });
 
     document.getElementById('open-admin-btn').addEventListener('click', () => {
       if (!isAdmin) return;
@@ -10565,13 +10480,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }).catch(err=>{console.warn('GLB thumbnail failed:',err);container.textContent='NO PREVIEW';});
     }
 
-    // Admin GLB live fitting preview before upload.
-    let fitScene,fitCamera,fitRenderer,fitAvatar,fitObjectUrl=null,fitDragging=false,fitLastX=0,fitRot=0;
-    function initAdminFitPreview(){const c=document.getElementById('admin-fit-preview');if(fitRenderer||!c)return;fitScene=new THREE.Scene();fitScene.background=new THREE.Color(0x0b0d10);fitCamera=new THREE.PerspectiveCamera(42,c.clientWidth/c.clientHeight,.1,100);fitCamera.position.set(0,1.2,4);fitCamera.lookAt(0,1.15,0);fitRenderer=new THREE.WebGLRenderer({antialias:true});fitRenderer.setSize(c.clientWidth,c.clientHeight);c.insertBefore(fitRenderer.domElement,c.firstChild);fitScene.add(new THREE.AmbientLight(0xffffff,.85));const l=new THREE.DirectionalLight(0xffffff,1.1);l.position.set(4,8,6);fitScene.add(l);c.addEventListener('pointerdown',e=>{fitDragging=true;fitLastX=e.clientX});window.addEventListener('pointermove',e=>{if(fitDragging){fitRot+=(e.clientX-fitLastX)*.015;fitLastX=e.clientX;if(fitAvatar)fitAvatar.rotation.y=fitRot;}});window.addEventListener('pointerup',()=>fitDragging=false);(function loop(){requestAnimationFrame(loop);fitRenderer.render(fitScene,fitCamera)})();}
-    function updateAdminFitPreview(){const cat=document.getElementById('admin-store-category').value,file=document.getElementById('admin-store-file').files[0],box=document.getElementById('admin-fit-preview');const mesh=cat==='hat'||cat==='head_shape';box.style.display=mesh?'block':'none';if(!mesh)return;initAdminFitPreview();if(fitAvatar)fitScene.remove(fitAvatar);const base={...playerAppearance,hat:'none',hatItemId:null,headShape:'sphere',headShapeItemId:null};fitAvatar=buildBlockyAvatar(base,{});fitAvatar.rotation.y=fitRot;fitScene.add(fitAvatar);if(!file)return;if(fitObjectUrl)URL.revokeObjectURL(fitObjectUrl);fitObjectUrl=URL.createObjectURL(file);const item={assetKind:'glb',assetUrl:fitObjectUrl,category:cat,metadata:{size:Number(document.getElementById('admin-store-size').value)||1,offsetX:Number(document.getElementById('admin-store-offset-x').value)||0,offsetY:Number(document.getElementById('admin-store-offset-y').value)||0,offsetZ:Number(document.getElementById('admin-store-offset-z').value)||0}};fitScene.remove(fitAvatar);fitAvatar=buildBlockyAvatar(base,{[cat]:item});fitAvatar.rotation.y=fitRot;fitScene.add(fitAvatar);}
-    document.getElementById('admin-store-file').addEventListener('change',updateAdminFitPreview);
-    ['admin-store-size','admin-store-offset-x','admin-store-offset-y','admin-store-offset-z'].forEach(id=>document.getElementById(id).addEventListener('input',updateAdminFitPreview));
-
     function duplicateSelectedBlock() {
       if (!isEditMode || !selectedBlockId || !currentWorldData?.blocks?.[selectedBlockId]) {
         showToast('Select a part first.');
@@ -11727,7 +11635,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  // Reconnected sockets lose server-side authentication. Restore the existing session
  // before retrying an Item Creator operation; never bypass server admin checks.
  let creatorAuthRestore=null;
- function creatorEmit(s,event,payload){return new Promise(resolve=>s.emit(event,payload,r=>resolve(r||{success:false,message:'No response from server.'})));}
+ function creatorEmit(s,event,payload){return new Promise(resolve=>{let settled=false;const finish=r=>{if(settled)return;settled=true;clearTimeout(timer);resolve(r||{success:false,message:'Empty server response.'});};const timer=setTimeout(()=>finish({success:false,message:'Server did not respond in time. Check the server logs and ensure BOTH updated files are deployed.'}),event==='item_creator_full_reset'?45000:25000);try{if(payload===undefined)s.emit(event,finish);else s.emit(event,payload,finish);}catch(e){finish({success:false,message:e.message||'Socket request failed.'});}});}
  async function creatorRestoreSession(s){
    if(creatorAuthRestore)return creatorAuthRestore;
    creatorAuthRestore=(async()=>{
@@ -11793,8 +11701,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  async function refresh(){const r=await sock('item_creator_list_drafts');const el=$('kwg-creator-drafts');el.replaceChildren();if(!r.success)return;for(const d of r.drafts){const b=document.createElement('button');b.textContent=d.name+' · '+d.category;b.onclick=()=>{draftId=Number(d.id);$('kwgc-category').value=d.category;$('kwgc-name').value=d.name;mode();if(d.document.type==='mesh'){parts=d.document.parts||[];selected=-1;redraw();}else if(d.document.png){const im=new Image();im.onload=()=>{ctx.clearRect(0,0,512,512);ctx.drawImage(im,0,0,512,512)};im.src=d.document.png;}status('Draft loaded.');};el.append(b);}}
  $('kwgc-refresh-drafts').onclick=refresh;
  async function exportGlb(){return new Promise((resolve,reject)=>{const T=get(),exp=new T.GLTFExporter(),g=new T.Group();parts.forEach(p=>g.add(partMesh(p)));try{exp.parse(g,data=>{if(!(data instanceof ArrayBuffer))return reject(new Error('Binary GLB export failed'));resolve(new Uint8Array(data));},{binary:true,onlyVisible:true});}catch(e){reject(e);}});}
- $('kwgc-publish').onclick=async()=>{const name=$('kwgc-name').value.trim(),price=Number($('kwgc-price').value),cat=category(),dist=$('kwgc-distribution').value;if(!name||!Number.isSafeInteger(price)||price<0||price>1000000)return status('Enter a valid name and price.');if(!is2d()&&!parts.length)return status('Add a shape before publishing.');status('Exporting item...');try{let bytes,fileName,mimeType;if(is2d()){const bin=atob(paint.toDataURL('image/png').split(',')[1]);bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);fileName='item.png';mimeType='image/png';}else{bytes=await exportGlb();fileName='item.glb';mimeType='model/gltf-binary';}status('Uploading to store...');const r=await sock('admin_store_create',{category:cat,name,price,distribution:dist,fileName,mimeType,fileData:bytes,metadata:{size:1,offsetX:0,offsetY:0,offsetZ:0},isVisible:dist==='store'});status(r.success?'Item published! ID '+r.item.id+(dist==='starter'?' · granted to current players':' · live in store'):(r.message||'Publish failed'));}catch(e){console.error(e);status(e.message||'Export failed.');}};
- $('kwgc-reset').onclick=async()=>{const first=prompt('DANGER: This permanently deletes ALL avatar catalog items AND player ownership records. No coin refunds. Type RESET ALL AVATAR ITEMS to continue:');if(first!=='RESET ALL AVATAR ITEMS'){status('Reset cancelled.');return;}if(!confirm('Final confirmation: permanently delete every avatar store item and purchase?'))return;status('Resetting catalog...');const r=await sock('item_creator_full_reset',{confirm:first});status(r.message||(r.success?'Catalog reset.':'Reset failed.'));};
+ $('kwgc-publish').onclick=async()=>{const name=$('kwgc-name').value.trim(),price=Number($('kwgc-price').value),cat=category(),dist=$('kwgc-distribution').value;if(!name||!Number.isSafeInteger(price)||price<0||price>1000000)return status('Enter a valid name and price.');if(!is2d()&&!parts.length)return status('Add a shape before publishing.');status('Exporting item...');try{let bytes,fileName,mimeType;if(is2d()){const bin=atob(paint.toDataURL('image/png').split(',')[1]);bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);fileName='item.png';mimeType='image/png';}else{bytes=await exportGlb();fileName='item.glb';mimeType='model/gltf-binary';}status('Uploading to store...');const r=await sock('admin_store_create',{category:cat,name,price,distribution:dist,fileName,mimeType,fileData:bytes,metadata:{size:1,offsetX:0,offsetY:0,offsetZ:0},isVisible:dist==='store'});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.success?'Item published! ID '+r.item.id+(dist==='starter'?' · granted to current players':' · live in store'):(r.message||'Publish failed'));}catch(e){console.error(e);status(e.message||'Export failed.');}};
+ $('kwgc-reset').onclick=async()=>{const first=prompt('DANGER: This permanently deletes ALL avatar catalog items AND player ownership records. No coin refunds. Type RESET ALL AVATAR ITEMS to continue:');if(first!=='RESET ALL AVATAR ITEMS'){status('Reset cancelled.');return;}if(!confirm('Final confirmation: permanently delete every avatar store item and purchase?'))return;status('Resetting catalog...');const r=await sock('item_creator_full_reset',{confirm:first});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.message||(r.success?'Catalog reset.':'Reset failed.'));};
  // Existing application-scoped socket is assigned to this bridge from its own scope below.
 })();
 </script>
