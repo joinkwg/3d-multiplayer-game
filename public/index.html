@@ -11674,7 +11674,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 </style>
 <div id="kwg-creator" role="dialog" aria-modal="true" aria-label="Item Creator">
  <div class="kwg-creator-shell">
-  <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hat">Hat</option><option value="head_shape">Head Shape</option><option value="hair">Hair</option><option value="hats">Hats</option><option value="heads">Heads</option><option value="tops">Shirts / Tops</option><option value="bottoms">Pants / Bottoms</option><option value="shoes">Shoes</option><option value="flightsuits">Flightsuit</option><option value="eyes">Eyes (3D)</option><option value="mouth">Mouth (3D)</option><option value="torso_decal">Torso Decal (2D)</option><option value="skin">Skin (2D)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
+  <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hat">Hat</option><option value="head_shape">Head Shape</option><option value="hair">Hair</option><option value="hats">Hats</option><option value="heads">Heads</option><option value="tops">Shirts / Tops</option><option value="bottoms">Pants / Bottoms</option><option value="shoes">Shoes</option><option value="flightsuits">Flightsuit</option><option value="eyes">Eyes (3D)</option><option value="mouth">Mouth (3D)</option><option value="skin">Skin (2D)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
   <style>
 #kwgc-modebar{display:flex;gap:5px;flex-wrap:wrap;padding:8px;background:#17273a;border-bottom:1px solid #3c5671}
 #kwgc-modebar button,#kwgc-views button{background:#21354b;color:#dceaff;border:1px solid #48617b;padding:7px;cursor:pointer}
@@ -11776,6 +11776,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  const settings=make('kwgc-settings','⚙','SETTINGS');
  const properties=make('kwgc-properties','☷','PROPERTIES');
  const explorer=make('kwgc-explorer-panel','▦','PARTS EXPLORER');
+ const meshPanel=make('kwgc-mesh-edit','◈','MESH EDITING');
  const tool3d=creator.querySelector('#kwgc-3dtools'),tool2d=creator.querySelector('#kwgc-2dtools');
  const parts=creator.querySelector('#kwg-creator-parts');
  const oldList=parts?.closest('label');if(oldList)oldList.remove();
@@ -11813,7 +11814,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  const color=creator.querySelector('#kwgc-color');if(color)recolorPanel.append(color.parentElement);
  toolbox.body.append(recolorPanel);
  const hint=document.createElement('p');hint.className='kwgc-tool-help';hint.textContent='Drag blank space to orbit · Scroll to zoom';toolbox.body.append(hint);
- const sceneBar=document.createElement('div');sceneBar.className='kwgc-scene-bar';sceneBar.innerHTML='<span class="kwgc-scene-dot"></span> SCENE VIEW <span class="kwgc-count" id="kwgc-part-count">0 PARTS</span>';
+ const sceneBar=document.createElement('div');sceneBar.className='kwgc-scene-bar';sceneBar.innerHTML='<span class="kwgc-scene-dot"></span> <span id="kwgc-scene-label">SCENE VIEW</span> <span class="kwgc-count" id="kwgc-part-count">0 PARTS</span>';
  stage.prepend(sceneBar);
  const sceneFooter=document.createElement('div');sceneFooter.className='kwgc-scene-footer';sceneFooter.innerHTML='<strong>ITEM EDITOR</strong><span style="flex:1"></span><span>ZOOM</span>';
  if(zoomOut){zoomOut.textContent='−';zoomOut.title='Zoom out';sceneFooter.append(zoomOut);}
@@ -11836,12 +11837,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  if(parts)explorer.body.append(parts);
  const remove=creator.querySelector('#kwgc-delete-part');if(remove){remove.textContent='▤ Delete selected part';explorer.body.append(remove);}
  stack.append(toolbox.panel,settings.panel,properties.panel);
- left.replaceChildren(stack);right.className='kwg-creator-side kwgc-explorer';right.replaceChildren(explorer.panel);
+ left.replaceChildren(stack); right.className='kwg-creator-side kwgc-explorer';
+ const rightStack=document.createElement('div');rightStack.className='kwgc-right-stack';
+ meshPanel.body.innerHTML=`<div id="kwgc-mesh-modes" role="group" aria-label="Mesh selection mode"><button type="button" class="active" data-mesh-mode="polygon" title="Select the entire mesh">POLYGON</button><button type="button" data-mesh-mode="face" title="Select a triangle face">FACE</button><button type="button" data-mesh-mode="vertex" title="Select a single vertex">VERTEX</button><button type="button" data-mesh-mode="edge" title="Select an edge">EDGE</button></div><div id="kwgc-mesh-details">Select a part to edit its mesh.</div><button id="kwgc-extrude-face" type="button" disabled>EXTRUDE FACE · E</button><div class="kwgc-shortcuts"><strong>SHORTCUTS</strong><span>G Move · S Scale · R Rotate</span><span>Shift+D Duplicate · Delete Remove</span><span>E Extrude Face · [ ] Rotate ±15°</span><span>1–4 Mesh modes · Esc Deselect</span></div>`;
+ rightStack.append(explorer.panel,meshPanel.panel);right.replaceChildren(rightStack);
  function updateToolPanels(){
    const selected=modebar.querySelector('[data-mode].active')?.dataset.mode||'select';
-   const isPainting=['skin','torso_decal'].includes(creator.querySelector('#kwgc-category')?.value);
+   const isPainting=creator.querySelector('#kwgc-category')?.value==='skin';
+   creator.classList.toggle('kwgc-2d',isPainting);
    insertPanel.style.display=selected==='insert'&&!isPainting?'block':'none';
-   recolorPanel.style.display=selected==='recolor'?'block':'none';
+   recolorPanel.style.display=isPainting||selected==='recolor'?'block':'none';
+   const caption=recolorPanel.querySelector('.kwgc-small-title');if(caption)caption.textContent=isPainting?'BRUSH COLOR':'RECOLOR BRUSH';
    const hint=creator.querySelector('#kwgc-mode-hint');
    if(hint&&selected==='insert')hint.textContent='INSERT · choose shape and click ADD PART';
  }
@@ -11851,11 +11857,41 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 })();
 </script>
 
+
+<style id="kwgc-v11-mesh-ui">
+/* World Editor panels: Explorer above, mesh tools below. Each pane scrolls independently. */
+#kwg-creator .kwgc-right-stack{height:100%;min-height:0;display:grid;grid-template-rows:minmax(165px,1.07fr) minmax(195px,.93fr)}
+#kwg-creator .kwgc-right-stack > .kwgc-panel{height:auto!important;min-height:0!important;border-bottom:2px solid #68849a!important}
+#kwg-creator #kwgc-mesh-modes{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}
+#kwg-creator #kwgc-mesh-modes button{min-height:32px!important;padding:5px 2px!important;font-size:11px!important}
+#kwg-creator #kwgc-mesh-modes button.active{background:#2d796b!important;border-color:#a4e88c!important;color:#faffec!important}
+#kwg-creator #kwgc-mesh-details{background:#1a2b3d;color:#c6e0ef;border:1px dashed #638197;padding:8px;font-size:12px;margin-bottom:7px;min-height:41px}
+#kwg-creator #kwgc-extrude-face{width:100%;font-size:11px!important;background:#2c5463!important}
+#kwg-creator #kwgc-extrude-face:disabled{opacity:.4!important;cursor:default}
+#kwg-creator .kwgc-shortcuts{display:grid;gap:4px;border-top:1px solid #507089;padding-top:8px;margin-top:10px;font-size:10px;color:#a4c1d3;line-height:1.35}
+#kwg-creator .kwgc-shortcuts strong{font:8px 'Press Start 2P','Pixelify Sans',monospace;color:#e3f3df}
+#kwg-creator.kwgc-2d .kwgc-toolbox #kwgc-modebar,
+#kwg-creator.kwgc-2d #kwgc-insert-options,
+#kwg-creator.kwgc-2d .kwgc-explorer-panel,
+#kwg-creator.kwgc-2d .kwgc-mesh-edit{display:none!important}
+#kwg-creator.kwgc-2d .kwgc-right-stack{display:none!important}
+#kwg-creator.kwgc-2d .kwgc-explorer{background:#14283a!important}
+#kwg-creator.kwgc-2d .kwgc-mirror-row,#kwg-creator.kwgc-2d #kwgc-mannequin{display:none!important}
+#kwg-creator.kwgc-2d .kwgc-explorer::before{content:'2D TEXTURE CANVAS\A Mesh and Explorer tools are hidden in Skin mode.';display:block;white-space:pre-line;margin:14px;padding:15px 10px;color:#bdd4e7;border:2px dashed #547990;font-size:12px}
+#kwg-creator.kwgc-2d #kwgc-mode-hint{display:none!important}
+#kwg-creator.kwgc-2d #kwgc-views{display:none!important}
+#kwg-creator.kwgc-2d .kwgc-toolbox #kwgc-2dtools{display:block!important}
+#kwg-creator.kwgc-2d #kwgc-recolor-options{display:block!important}
+#kwg-creator.kwgc-2d #kwgc-recolor-options .kwgc-tool-help{display:none}
+#kwg-creator #kwg-creator-paint{top:45px!important;bottom:35px!important;max-height:calc(100% - 110px)!important}
+</style>
 <script>
 (()=>{
  const $=id=>document.getElementById(id),modal=$('kwg-creator');if(!modal)return;
  const get=()=>window.THREE, socket=()=>typeof io==='function'?null:null;
  let scene,camera,renderer,root,avatar,previewEyeGroup,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=0;let mode='select',mirror=false,distance=5.6,elevation=.22,activeDrag=null,gizmo=null,gizmoHit=[];
+ let meshMode='polygon',meshSelection=null,elementOverlay=null,paintDirty=false,activeCategory=null;
+ let idCounter=0;const uniqueId=()=>`kwgc-${Date.now()}-${++idCounter}`;
  const coords=['x','y','z','r','sx','sy','sz'];const status=s=>{$('kwgc-status').textContent=s;};
  // Reconnected sockets lose server-side authentication. Restore the existing session
  // before retrying an Item Creator operation; never bypass server admin checks.
@@ -11890,13 +11926,85 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    }
    return result;
  }
- function category(){return $('kwgc-category').value;}function is2d(){return ['skin','torso_decal'].includes(category());}
- function partMesh(p){const T=get(),geo= p.type==='box'?new T.BoxGeometry(1,1,1):p.type==='sphere'?new T.SphereGeometry(.5,20,14):p.type==='cone'?new T.ConeGeometry(.5,1,20):new T.CylinderGeometry(.5,.5,1,20);const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color:['heads','head_shape'].includes(category())?'#fff5ba':p.color,roughness:.82}));mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=p.r*Math.PI/180;mesh.scale.set(p.sx,p.sy,p.sz);return mesh;}
+ function category(){return $('kwgc-category').value;}function is2d(){return category()==='skin';}
+ // Mesh edits are stored as explicit vertices / triangle faces on the item,
+ // so exported GLBs contain the actual changed geometry, not only the source primitive.
+ function primitiveGeo(type){const T=get();return type==='box'?new T.BoxGeometry(1,1,1):type==='sphere'?new T.SphereGeometry(.5,20,14):type==='cone'?new T.ConeGeometry(.5,1,20):new T.CylinderGeometry(.5,.5,1,20);}
+ function meshDataFromPrimitive(type){
+   const geo=primitiveGeo(type),attr=geo.getAttribute('position'),idx=geo.getIndex();
+   const vertices=[],faces=[],lookup=new Map();
+   const find=(i)=>{const x=attr.getX(i),y=attr.getY(i),z=attr.getZ(i),key=[x,y,z].map(n=>Math.round(n*100000)).join(',');let id=lookup.get(key);if(id===undefined){id=vertices.length;lookup.set(key,id);vertices.push([x,y,z]);}return id;};
+   for(let i=0;i<(idx?idx.count:attr.count);i+=3){const a=find(idx?idx.getX(i):i),b=find(idx?idx.getX(i+1):i+1),c=find(idx?idx.getX(i+2):i+2);if(a!==b&&a!==c&&b!==c)faces.push([a,b,c]);}
+   geo.dispose();return {vertices,faces};
+ }
+ function ensureMeshData(p){if(!p.meshData)p.meshData=meshDataFromPrimitive(p.type);return p.meshData;}
+ function geoFromData(data){const T=get(),geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(data.vertices.flat(),3));geo.setIndex(data.faces.flat());geo.computeVertexNormals();return geo;}
+ function partMesh(p){const T=get(),geo=p.meshData?geoFromData(p.meshData):primitiveGeo(p.type);const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color:['heads','head_shape'].includes(category())?'#fff5ba':p.color,roughness:.82,side:T.DoubleSide}));mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=p.r*Math.PI/180;mesh.scale.set(p.sx,p.sy,p.sz);return mesh;}
+ function clearMeshSelection(){meshSelection=null;updateMeshPanel();}
+ function updateMeshPanel(){const details=$('kwgc-mesh-details'),btn=$('kwgc-extrude-face');if(!details||!btn)return;
+   const p=parts[selected];const modeName=({polygon:'Whole part',face:'Triangle face',vertex:'Vertex',edge:'Edge'})[meshMode];
+   details.textContent=is2d()?'2D texture · no mesh elements':!p?'Select a part in the viewport or Explorer.':!meshSelection||meshMode==='polygon'?'Selected '+p.type+' · '+modeName:modeName+' '+(meshSelection.faceIndex!==undefined?'#'+(meshSelection.faceIndex+1):'')+' · '+meshSelection.ids.length+' vertex'+(meshSelection.ids.length===1?'':'es');
+   btn.disabled=is2d()||meshMode!=='face'||!p||!meshSelection||meshSelection.faceIndex===undefined;
+ }
+ function setMeshMode(next){meshMode=next;meshSelection=null;if(next!=='polygon'&&get())parts.forEach(ensureMeshData);document.querySelectorAll('#kwgc-mesh-modes [data-mesh-mode]').forEach(b=>{const active=b.dataset.meshMode===next;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');});redraw();updateMeshPanel();}
+ function selectMeshElement(h){
+   if(meshMode==='polygon'||!h)return clearMeshSelection();
+   const p=parts[selected],data=ensureMeshData(p),fi=Math.max(0,Math.min(data.faces.length-1,h.faceIndex??0)),tri=data.faces[fi];if(!tri)return;
+   const T=get(),mesh=h.object,pt=h.point;
+   const world=i=>mesh.localToWorld(new T.Vector3(...data.vertices[i]));
+   const dist=i=>world(i).distanceToSquared(pt);
+   let ids=[];
+   if(meshMode==='face')ids=[...tri];
+   if(meshMode==='vertex')ids=[tri.reduce((a,b)=>dist(a)<dist(b)?a:b)];
+   if(meshMode==='edge'){
+     const pairs=[[tri[0],tri[1]],[tri[1],tri[2]],[tri[2],tri[0]]];
+     const distance=([a,b])=>{const A=world(a),B=world(b),v=B.clone().sub(A),t=Math.max(0,Math.min(1,pt.clone().sub(A).dot(v)/Math.max(1e-9,v.lengthSq())));return A.addScaledVector(v,t).distanceToSquared(pt);};
+     ids=[...pairs.sort((a,b)=>distance(a)-distance(b))[0]];
+   }
+   meshSelection={faceIndex:fi,ids};redraw();
+ }
+ function updateElementOverlay(){
+   if(!elementOverlay)return;releaseChildren(elementOverlay);const p=parts[selected];if(!p||!meshSelection||meshMode==='polygon')return;
+   const T=get(),obj=root.children[selected],data=ensureMeshData(p);if(!obj)return;
+   obj.updateMatrixWorld(true);
+   const pts=meshSelection.ids.map(i=>new T.Vector3(...data.vertices[i]).applyMatrix4(obj.matrixWorld));
+   if(meshMode==='face'){const closed=[...pts,pts[0]],line=new T.Line(new T.BufferGeometry().setFromPoints(closed),new T.LineBasicMaterial({color:0xf8cf65,depthTest:false}));elementOverlay.add(line);}
+   if(meshMode==='edge'){const line=new T.Line(new T.BufferGeometry().setFromPoints(pts),new T.LineBasicMaterial({color:0xf8cf65,depthTest:false}));elementOverlay.add(line);}
+   for(const pt of pts){const marker=new T.Mesh(new T.SphereGeometry(.048,8,6),new T.MeshBasicMaterial({color:0xffe07b,depthTest:false}));marker.position.copy(pt);elementOverlay.add(marker);}
+ }
+ function meshElementCentroid(p){if(!meshSelection||!meshSelection.ids.length||!p)return null;const T=get(),obj=root.children[selected];if(!obj)return null;obj.updateMatrixWorld(true);const data=ensureMeshData(p),center=new T.Vector3();for(const i of meshSelection.ids)center.add(new T.Vector3(...data.vertices[i]).applyMatrix4(obj.matrixWorld));return center.multiplyScalar(1/meshSelection.ids.length);}
+ function modifySelectedMesh(p,original,dx,dy,axis){
+   if(!meshSelection||meshMode==='polygon')return false;
+   const data=ensureMeshData(p),ids=meshSelection.ids;if(!ids.length)return false;
+   const base=original.meshData?.vertices||data.vertices.map(a=>a.slice());
+   const center=[0,0,0];for(const i of ids)for(let a=0;a<3;a++)center[a]+=base[i][a]/ids.length;
+   const theta=p.r*Math.PI/180,world=[0,0,0],amount=.006*distance/5.6;
+   if(mode==='move'){if(axis)world['xyz'.indexOf(axis)]=(axis==='y'?-dy:dx)*amount;else{world[0]=dx*amount;world[1]=-dy*amount;}}
+   const local=[(Math.cos(theta)*world[0]-Math.sin(theta)*world[2])/Math.max(.02,p.sx),world[1]/Math.max(.02,p.sy),(Math.sin(theta)*world[0]+Math.cos(theta)*world[2])/Math.max(.02,p.sz)];
+   for(const i of ids){const xyz=[...base[i]];
+     if(mode==='move'){for(let a=0;a<3;a++)xyz[a]+=local[a];}
+     if(mode==='scale'){const factor=Math.max(.05,1+(dx-dy)*.008);for(let a=0;a<3;a++)if(!axis||axis==='xyz'[a])xyz[a]=center[a]+(xyz[a]-center[a])*factor;}
+     if(mode==='rotate'){const rad=dx*.01,ax=axis||'y',a=xyz.map((v,j)=>v-center[j]),c=Math.cos(rad),ss=Math.sin(rad);if(ax==='x'){xyz[1]=center[1]+a[1]*c-a[2]*ss;xyz[2]=center[2]+a[1]*ss+a[2]*c;}else if(ax==='z'){xyz[0]=center[0]+a[0]*c-a[1]*ss;xyz[1]=center[1]+a[0]*ss+a[1]*c;}else{xyz[0]=center[0]+a[0]*c+a[2]*ss;xyz[2]=center[2]-a[0]*ss+a[2]*c;}}
+     data.vertices[i]=xyz;
+   }return true;
+ }
+ function extrudeFace(){
+   if(is2d()||meshMode!=='face'||selected<0||meshSelection?.faceIndex===undefined)return status('Choose Face mode, then click a face to extrude.');
+   const p=parts[selected],data=ensureMeshData(p),fi=meshSelection.faceIndex,tri=data.faces[fi];if(!tri)return;
+   const T=get(),a=new T.Vector3(...data.vertices[tri[0]]),b=new T.Vector3(...data.vertices[tri[1]]),c=new T.Vector3(...data.vertices[tri[2]]);const normal=b.clone().sub(a).cross(c.clone().sub(a)).normalize();if(normal.lengthSq()<.01)return status('Cannot extrude a zero-area face.');
+   const cap=tri.map(i=>{const v=new T.Vector3(...data.vertices[i]).addScaledVector(normal,.18);const id=data.vertices.length;data.vertices.push(v.toArray());return id;});
+   data.faces[fi]=cap;
+   for(let j=0;j<3;j++){const k=(j+1)%3,u=tri[j],v=tri[k],U=cap[j],V=cap[k];data.faces.push([u,v,V],[u,V,U]);}
+   meshSelection={faceIndex:fi,ids:cap};syncMirror(selected);redraw();status('Extruded one triangle face. Drag its handles to shape it.');
+ }
+ function duplicatePart(){if(is2d()||selected<0||!parts[selected])return;const p=JSON.parse(JSON.stringify(parts[selected]));p.uid=uniqueId();delete p.mirrorOf;p.x+=.22;parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);status('Duplicated part.');}
+ function deleteSelectedPart(){if(is2d()||selected<0)return;const j=mirror&&mirrorPartner(selected)>=0?mirrorPartner(selected):-1;const ids=[selected,...(j>=0?[j]:[])].sort((a,b)=>b-a);for(const id of ids)parts.splice(id,1);selected=-1;meshSelection=null;select(-1);status('Removed '+ids.length+' part'+(ids.length===1?'':'s')+'.');}
+
  function updateGizmo(){
    if(!scene||!gizmo)return;
    gizmo.clear();gizmoHit=[];
    if(selected<0||!parts[selected]||!['move','scale','rotate'].includes(mode))return;
-   const T=get(),p=parts[selected];gizmo.position.set(p.x,p.y,p.z);
+   const T=get(),p=parts[selected];const centroid=meshMode!=='polygon'?meshElementCentroid(p):null;if(centroid)gizmo.position.copy(centroid);else gizmo.position.set(p.x,p.y,p.z);
    const axes=[{v:new T.Vector3(1,0,0),color:0xf15e65,axis:'x'},{v:new T.Vector3(0,1,0),color:0x75d990,axis:'y'},{v:new T.Vector3(0,0,1),color:0x5aafff,axis:'z'}];
    for(const a of axes){
      if(mode==='rotate'){
@@ -11912,8 +12020,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
      }
    }
  }
- function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach((p,i)=>{const mesh=partMesh(p);mesh.userData.partIndex=i;if(i===selected)mesh.material.emissive=new (get().Color)('#17304b');root.add(mesh);});const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);if(i===selected)b.classList.add('active');list.append(b);});const count=$('kwgc-part-count');if(count)count.textContent=parts.length+' PART'+(parts.length===1?'':'S');const empty=$('kwgc-no-selection');if(empty)empty.style.display=parts.length?'none':'block';updateGizmo();}
- function select(n){selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]);$('kwgc-color').value=p.color;}
+ function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach((p,i)=>{const mesh=partMesh(p);mesh.userData.partIndex=i;if(i===selected)mesh.material.emissive=new (get().Color)('#17304b');root.add(mesh);});const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);if(i===selected)b.classList.add('active');list.append(b);});const count=$('kwgc-part-count');if(count)count.textContent=parts.length+' PART'+(parts.length===1?'':'S');const empty=$('kwgc-no-selection');if(empty)empty.style.display=parts.length?'none':'block';updateElementOverlay();updateGizmo();updateMeshPanel();}
+ function select(n){if(selected!==n)meshSelection=null;selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]);$('kwgc-color').value=p.color;}
  const transforms=$('kwgc-transforms'),hint=$('kwgc-selection-empty');if(transforms)transforms.style.display=p?'grid':'none';if(hint)hint.style.display=p?'none':'block';redraw();}
  function mirrorPartner(i){
   const p=parts[i];if(!p)return -1;
@@ -11926,9 +12034,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    if(j<0&&!create)return;
    if(j<0){j=parts.length;parts.push({...p,uid:'p'+Date.now()+Math.random(),mirrorOf:p.uid});}
    const q=parts[j];Object.assign(q,{type:p.type,color:p.color,x:-p.x,y:p.y,z:p.z,r:-p.r,sx:p.sx,sy:p.sy,sz:p.sz});
+   if(p.meshData){const copy=JSON.parse(JSON.stringify(p.meshData));copy.vertices.forEach(v=>v[0]=-v[0]);copy.faces.forEach(f=>{const t=f[1];f[1]=f[2];f[2]=t;});q.meshData=copy;}else delete q.meshData;
  }
- function addShape(type){const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const p={type,color:$('kwgc-color').value,x:0,y,z,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};p.uid='p'+Date.now()+Math.random();parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);}
- function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,1.6));const light=new T.DirectionalLight(0xffffff,1.5);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);gizmo=new T.Group();scene.add(gizmo);
+ function addShape(type){const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const p={type,color:$('kwgc-color').value,x:0,y,z,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};p.uid=uniqueId();parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);}
+ function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,1.6));const light=new T.DirectionalLight(0xffffff,1.5);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);gizmo=new T.Group();scene.add(gizmo);elementOverlay=new T.Group();scene.add(elementOverlay);
  // Use the same avatar builder as the rest of KWG, rather than a placeholder mannequin.
  const appearance={headShape:'sphere',hat:'none',skinColor:'#fff5ba',headColor:'#fff5ba',shirtColor:'#62edee',torsoColor:'#62edee',pantsColor:'#6389bd',leftLegColor:'#6389bd',rightLegColor:'#6389bd',shoesColor:'#273247',hairColor:'#6b4835'};
  avatar=window.kwgCreatorBuildAvatar?window.kwgCreatorBuildAvatar(appearance):new T.Group();scene.add(avatar);
@@ -11951,20 +12060,23 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    const rect=canvas.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);
    const gh=gizmoHit.length?ray.intersectObjects(gizmoHit,false)[0]:null;
    lastX=e.clientX;drag=true;canvas.setPointerCapture(e.pointerId);
-   if(gh&&selected>=0){activeDrag={i:selected,x:e.clientX,y:e.clientY,axis:gh.object.userData.gizmoAxis,original:{...parts[selected]}};return;}
+   if(gh&&selected>=0){activeDrag={i:selected,x:e.clientX,y:e.clientY,axis:gh.object.userData.gizmoAxis,original:JSON.parse(JSON.stringify(parts[selected]))};return;}
    const h=hit(e);
    if(h){const i=h.object.userData.partIndex;select(i);
+     if(meshMode!=='polygon')selectMeshElement(h);
      if(mode==='recolor'){parts[i].color=$('kwgc-color').value;syncMirror(i);redraw();}
-     else if(mode!=='select'&&mode!=='insert')activeDrag={i,x:e.clientX,y:e.clientY,original:{...parts[i]}};
+     else if(mode!=='select'&&mode!=='insert')activeDrag={i,x:e.clientX,y:e.clientY,original:JSON.parse(JSON.stringify(parts[i]))};
    }
  });
  canvas.addEventListener('pointermove',e=>{
    if(!drag)return;
    if(activeDrag){
      const d=activeDrag,p=parts[d.i],dx=e.clientX-d.x,dy=e.clientY-d.y;
-     if(mode==='move'){if(d.axis){const delta=(d.axis==='y'?-dy:dx)*.006*distance/5.6;p[d.axis]=d.original[d.axis]+delta;}else{p.x=d.original.x+dx*.006*distance/5.6;p.y=d.original.y-dy*.006*distance/5.6;}}
-     if(mode==='scale'){const factor=Math.max(.05,1+(dx-dy)*.008);for(const a of ['x','y','z'])if(!d.axis||d.axis===a)p['s'+a]=Math.max(.02,d.original['s'+a]*factor);}
-     if(mode==='rotate')p.r=d.original.r+dx*.65;
+     if(!modifySelectedMesh(p,d.original,dx,dy,d.axis)){
+       if(mode==='move'){if(d.axis){const delta=(d.axis==='y'?-dy:dx)*.006*distance/5.6;p[d.axis]=d.original[d.axis]+delta;}else{p.x=d.original.x+dx*.006*distance/5.6;p.y=d.original.y-dy*.006*distance/5.6;}}
+       if(mode==='scale'){const factor=Math.max(.05,1+(dx-dy)*.008);for(const a of ['x','y','z'])if(!d.axis||d.axis===a)p['s'+a]=Math.max(.02,d.original['s'+a]*factor);}
+       if(mode==='rotate')p.r=d.original.r+dx*.65;
+     }
      syncMirror(d.i);coords.forEach(k=>$('kwgc-'+k).value=p[k]);redraw();
    }else{angle+=(e.clientX-lastX)*.012;elevation=Math.max(-1.45,Math.min(1.45,elevation-(e.clientY-(canvas._lastY??e.clientY))*.01));}
    lastX=e.clientX;canvas._lastY=e.clientY;
@@ -11974,9 +12086,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  canvas.addEventListener('wheel',e=>{e.preventDefault();distance=Math.max(1.2,Math.min(16,distance*Math.exp(e.deltaY*.001)));},{passive:false});
 
  }
- const paint=$('kwg-creator-paint'),ctx=paint.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);
- function paintAt(e){const b=paint.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*512,y=(e.clientY-b.top)/b.height*512,r=Number($('kwgc-brush').value);ctx.beginPath();ctx.fillStyle=paintMode==='eraser'?'#e6ba93':$('kwgc-color').value;ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
- paint.addEventListener('pointerdown',e=>{painting=true;paint.setPointerCapture(e.pointerId);if(paintMode==='fill'){ctx.fillStyle=$('kwgc-color').value;ctx.fillRect(0,0,512,512);}else paintAt(e)});paint.addEventListener('pointermove',e=>{if(painting&&paintMode!=='fill')paintAt(e)});paint.addEventListener('pointerup',()=>painting=false);paint.addEventListener('pointercancel',()=>painting=false);
+ const paint=$('kwg-creator-paint'),ctx=paint.getContext('2d',{willReadFrequently:true});function clearPainting(){ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);paintDirty=false;}clearPainting();
+ document.querySelectorAll('#kwgc-2dtools [data-paint]').forEach(b=>b.onclick=()=>{paintMode=b.dataset.paint;status('Paint tool: '+paintMode);if(paintMode==='checker'||paintMode==='stripes'){const size=32;ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);ctx.fillStyle=$('kwgc-color').value;for(let y=0;y<512;y+=size)for(let x=0;x<512;x+=size)if(paintMode==='stripes'||((x+y)/size)%2===0)ctx.fillRect(x,y,size,size);paintDirty=true;}});
+ $('kwgc-clear-paint').onclick=()=>{clearPainting();status('Texture cleared.');};
+ function paintAt(e){const b=paint.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*512,y=(e.clientY-b.top)/b.height*512,r=Number($('kwgc-brush').value);ctx.beginPath();ctx.fillStyle=paintMode==='eraser'?'#e6ba93':$('kwgc-color').value;ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();paintDirty=true;}
+ paint.addEventListener('pointerdown',e=>{painting=true;paint.setPointerCapture(e.pointerId);if(paintMode==='fill'){ctx.fillStyle=$('kwgc-color').value;ctx.fillRect(0,0,512,512);paintDirty=true;}else paintAt(e)});paint.addEventListener('pointermove',e=>{if(painting&&paintMode!=='fill')paintAt(e)});paint.addEventListener('pointerup',()=>painting=false);paint.addEventListener('pointercancel',()=>painting=false);
  // Only expose the base body pieces relevant to fitting the chosen item.
  // Mesh visibility is local to the editor; exported GLBs contain ONLY root parts.
  function updateFittingPreview(){
@@ -12001,18 +12115,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    const host=$('kwg-creator-drafts');
    if(!host)return;host.replaceChildren();
    const drafts=JSON.parse(localStorage.getItem('kwg_creator_local_drafts')||'[]');
-   drafts.forEach((d,i)=>{const b=document.createElement('button');b.textContent=d.name+' ('+d.category+')';b.onclick=()=>{$('kwgc-category').value=d.category;$('kwgc-name').value=d.name;parts=JSON.parse(JSON.stringify(d.parts));selected=-1;$('kwgc-category').onchange();redraw();status('Loaded local draft.');};host.appendChild(b);});
+   drafts.forEach((d,i)=>{if(d.category==='torso_decal')return;const b=document.createElement('button');b.textContent=d.name+' ('+d.category+')';b.onclick=()=>{$('kwgc-category').value=d.category;switchCategory(true);$('kwgc-name').value=d.name;parts=JSON.parse(JSON.stringify(d.parts||[]));if(d.paint){const image=new Image();image.onload=()=>{clearPainting();ctx.drawImage(image,0,0,512,512);paintDirty=true;};image.src=d.paint;}select(-1);status('Loaded local draft.');};host.appendChild(b);});
    if(!drafts.length)host.textContent='No local drafts yet.';
    status('Loaded '+drafts.length+' local draft(s).');
  }
  function resetCreator(){
-   parts=[];selected=-1;draftId=null;
+   parts=[];selected=-1;meshSelection=null;draftId=null;clearPainting();
    if($('kwgc-selection-empty'))$('kwgc-selection-empty').style.display='block';
    if($('kwgc-transforms'))$('kwgc-transforms').style.display='none';
    $('kwgc-name').value='New Creation';
    redraw();
    updateFittingPreview();
-   status('New item ready. Add a shape to begin.');
+   status(is2d()?'New texture ready. Choose a brush to begin.':'New item ready. Choose Insert to add a shape.');
  }
  $('kwgc-refresh-drafts').onclick=refresh;
  $('kwgc-new').onclick=resetCreator;
@@ -12022,15 +12136,22 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    $('kwgc-mannequin').textContent='Mannequin: '+(showMannequin?'ON':'OFF');
    updateFittingPreview();
  };
- $('kwgc-category').onchange=()=>{
-   $('kwgc-3dtools').style.display=is2d()?'none':'';
-   $('kwgc-2dtools').style.display=is2d()?'':'none';
-   paint.style.display=is2d()?'block':'none';
-   $('kwg-creator-viewport').style.display=is2d()?'none':'block';
-   updateFittingPreview();
-   redraw();
-   window.kwgCreatorSyncToolPanels?.();
- };
+ function switchCategory(force=false){
+   const c=category();if(c!==activeCategory||force){parts=[];selected=-1;meshSelection=null;draftId=null;activeCategory=c;clearPainting();$('kwgc-name').value='New Creation';$('kwgc-price').value=50;setMeshMode('polygon');}
+   const texture=is2d();
+   $('kwgc-3dtools').style.display=texture?'none':'';
+   $('kwgc-2dtools').style.display=texture?'':'none';
+   paint.style.display=texture?'block':'none';
+   $('kwg-creator-viewport').style.display=texture?'none':'block';
+   if(texture){mode='select';activeDrag=null;drag=false;document.querySelectorAll('#kwgc-modebar [data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode==='select'));}
+   if($('kwgc-selection-empty'))$('kwgc-selection-empty').style.display='block';
+   if($('kwgc-transforms'))$('kwgc-transforms').style.display='none';
+   updateFittingPreview();redraw();window.kwgCreatorSyncToolPanels?.();
+   const sceneName=$('kwgc-scene-label');if(sceneName)sceneName.textContent=texture?'TEXTURE VIEW':'SCENE VIEW';
+   const itemCount=$('kwgc-part-count');if(itemCount)itemCount.textContent=texture?'2D SKIN':'0 PARTS';
+   status(texture?'Skin texture session — 2D brushes only.':'New '+$('kwgc-category').selectedOptions[0].text+' session.');
+ }
+ $('kwgc-category').onchange=()=>switchCategory();
  // The Insert panel is a dropdown, so its event handler remains attached even
  // when panels are rearranged. Earlier versions bound to buttons we moved away.
  $('kwgc-insert-add').onclick=()=>{
@@ -12038,12 +12159,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    addShape($('kwgc-insert-shape').value);
    status('Inserted '+$('kwgc-insert-shape').selectedOptions[0].text+'.');
  };
- $('kwgc-delete-part').onclick=()=>{
-   if(selected<0)return;
-   const partner=mirrorPartner(selected);if(partner>=0)parts.splice(partner,1);parts.splice(partner>=0&&partner<selected?selected-1:selected,1);
-   selected=Math.min(selected,parts.length-1);
-   redraw();
- };
+ $('kwgc-delete-part').onclick=deleteSelectedPart;
+ $('kwgc-extrude-face').onclick=extrudeFace;
+ document.querySelectorAll('#kwgc-mesh-modes [data-mesh-mode]').forEach(b=>b.onclick=()=>{if(is2d())return;setMeshMode(b.dataset.meshMode);status('Mesh mode: '+b.dataset.meshMode+'. Click a part to select.');});
  coords.forEach(k=>{
    const el=$('kwgc-'+k);
    if(el)el.addEventListener('input',()=>{
@@ -12066,17 +12184,37 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    const v=b.dataset.view;angle=({front:0,back:Math.PI,left:-Math.PI/2,right:Math.PI/2,top:0,bottom:0})[v];
    elevation=v==='top'?Math.PI/2-.01:v==='bottom'?-Math.PI/2+.01:0;
  });
+
+ function activateTool(next){const b=document.querySelector('#kwgc-modebar [data-mode="'+next+'"]');if(b)b.click();}
+ document.addEventListener('keydown',e=>{
+   if(modal.style.display==='none'||!modal.getClientRects().length||is2d())return;
+   const el=e.target;if(el&&(el.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(el.tagName)))return;
+   const key=e.key.toLowerCase(),mod=e.ctrlKey||e.metaKey;
+   if((e.shiftKey||mod)&&key==='d'){e.preventDefault();duplicatePart();return;}
+   if(mod||e.altKey&&key!=='arrowleft'&&key!=='arrowright')return;
+   if(key==='delete'||key==='backspace'){e.preventDefault();deleteSelectedPart();return;}
+   if(key==='e'){e.preventDefault();extrudeFace();return;}
+   if(key==='g'||key==='s'||key==='r'){e.preventDefault();activateTool({g:'move',s:'scale',r:'rotate'}[key]);return;}
+   if(key==='i'){e.preventDefault();activateTool('insert');return;}
+   if(['1','2','3','4'].includes(key)){e.preventDefault();setMeshMode(['polygon','face','vertex','edge'][Number(key)-1]);return;}
+   if(key==='escape'){e.preventDefault();select(-1);return;}
+   if((key==='['||key===']'||(e.altKey&&(key==='arrowleft'||key==='arrowright')))&&parts[selected]){
+     e.preventDefault();const sign=(key==='['||key==='arrowleft')?-1:1;
+     parts[selected].r+=15*sign;$('kwgc-r').value=parts[selected].r;
+     syncMirror(selected);redraw();status('Rotated selection '+15*sign+'°.');
+   }
+ });
  // Initialize only when the creator is opened, after Three.js is available.
  const openCreator=()=>{
    modal.style.display='flex';
-   try{init();$('kwgc-category').onchange();}catch(e){
+   try{init();switchCategory(activeCategory===null);}catch(e){
      console.error('Item Creator initialization failed:',e);
      status('Editor initialization failed: '+e.message);
    }
  };
  window.kwgOpenItemCreator=openCreator;
  const launch=$('kwgc-launch');if(launch)launch.onclick=openCreator;
- $('kwgc-save').onclick=()=>{try{const drafts=JSON.parse(localStorage.getItem('kwg_creator_local_drafts')||'[]');drafts.push({name:$('kwgc-name').value,category:category(),parts:JSON.parse(JSON.stringify(parts)),savedAt:Date.now()});localStorage.setItem('kwg_creator_local_drafts',JSON.stringify(drafts));status('Draft saved in this browser.');}catch(e){status('Could not save draft: '+e.message);}};
+ $('kwgc-save').onclick=()=>{try{const drafts=JSON.parse(localStorage.getItem('kwg_creator_local_drafts')||'[]');drafts.push({name:$('kwgc-name').value,category:category(),parts:JSON.parse(JSON.stringify(parts)),paint:is2d()?paint.toDataURL('image/png'):null,savedAt:Date.now()});localStorage.setItem('kwg_creator_local_drafts',JSON.stringify(drafts));status('Draft saved in this browser.');}catch(e){status('Could not save draft: '+e.message);}};
  document.querySelectorAll('[onclick*="kwgOpenItemCreator"]').forEach(b=>{
    b.addEventListener('click',()=>setTimeout(openCreator,0));
  });
