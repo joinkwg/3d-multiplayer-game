@@ -321,7 +321,7 @@ function cleanUploadMeta(category, raw = {}) {
 
 async function uploadStoreAsset({ category, fileName, mimeType, buffer }) {
   await ensureStoreBucket();
-  const isImage = ['eyes','mouth','torso_decal','skin'].includes(category);
+  const isImage = ['torso_decal','skin'].includes(category) || (['eyes','mouth'].includes(category) && !String(fileName||'').toLowerCase().endsWith('.glb'));
   const lowerName = String(fileName || '').toLowerCase();
   let ext;
   let contentType;
@@ -2279,7 +2279,7 @@ io.on('connection', (socket) => {
         mimeType: payload.mimeType,
         buffer
       });
-      const assetKind = ['eyes','mouth','torso_decal','skin'].includes(category) ? 'image' : 'glb';
+      const assetKind = String(payload.fileName||'').toLowerCase().endsWith('.glb') ? 'glb' : 'image';
       const r = await pool.query(`
         INSERT INTO store_items(category,name,price,asset_url,asset_kind,metadata,is_visible,created_by)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8)
