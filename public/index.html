@@ -6142,6 +6142,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return group;
     }
 
+    // Item Creator reuses the game's actual avatar geometry.
+    window.kwgCreatorBuildAvatar = (appearance) => buildBlockyAvatar(appearance, {});
+
     // V3.35 — Pixel-style nametags and camera-facing chat bubbles.
     // Name tags sit above even the taller hats; bubbles stack above the tags.
     function kwgSpriteFromCanvas(canvas,width,height){
@@ -11719,7 +11722,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 (()=>{
  const $=id=>document.getElementById(id),modal=$('kwg-creator');if(!modal)return;
  const get=()=>window.THREE, socket=()=>typeof io==='function'?null:null;
- let scene,camera,renderer,root,avatar,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=.3;
+ let scene,camera,renderer,root,avatar,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=0;
  const coords=['x','y','z','r','sx','sy','sz'];const status=s=>{$('kwgc-status').textContent=s;};
  function sock(event,payload){return new Promise(resolve=>{const s=window.kwgItemCreatorSocket;if(!s){status('Not connected. Log in as admin first.');return resolve({success:false});}s.emit(event,payload,resolve);});}
  function category(){return $('kwgc-category').value;}function is2d(){return ['skin','eyes','mouth','torso_decal'].includes(category());}
@@ -11728,7 +11731,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  function select(n){selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]);$('kwgc-color').value=p.color;}redraw();}
  function addShape(type){const p={type,color:$('kwgc-color').value,x:0,y:2.45,z:0,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};parts.push(p);select(parts.length-1);}
  function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,1.6));const light=new T.DirectionalLight(0xffffff,1.5);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);
- const body=new T.Group(),skin=new T.MeshStandardMaterial({color:0xeac097}),shirt=new T.MeshStandardMaterial({color:0x3f89c9}),pants=new T.MeshStandardMaterial({color:0x34445d});function block(w,h,d,x,y,z,m){const o=new T.Mesh(new T.BoxGeometry(w,h,d),m);o.position.set(x,y,z);body.add(o);}const head=new T.Mesh(new T.SphereGeometry(.51,24,16),skin);head.position.y=2.3;body.add(head);block(.78,.9,.42,0,1.35,0,shirt);for(const s of [-1,1]){block(.27,.72,.3,s*.58,1.32,0,skin);block(.32,.85,.35,s*.22,.45,0,pants);}avatar=body;scene.add(body);
+ // Use the same avatar builder as the rest of KWG, rather than a placeholder mannequin.
+ const appearance={headShape:'sphere',hat:'none',skinColor:'#fff5ba',headColor:'#fff5ba',shirtColor:'#62edee',torsoColor:'#62edee',pantsColor:'#6389bd',leftLegColor:'#6389bd',rightLegColor:'#6389bd',shoesColor:'#273247',hairColor:'#6b4835'};
+ avatar=window.kwgCreatorBuildAvatar?window.kwgCreatorBuildAvatar(appearance):new T.Group();scene.add(avatar);
+ // Friendly default eyes on the editor's fitting model (not exported with items).
+ const eyeWhite=new T.MeshStandardMaterial({color:'#ffffff',roughness:.44});
+ const irisMat=new T.MeshStandardMaterial({color:'#40bbf7',roughness:.3});
+ const pupilMat=new T.MeshStandardMaterial({color:'#0b1d35',roughness:.2});
+ const shineMat=new T.MeshBasicMaterial({color:'#ffffff'});
+ for(const x of [-.165,.165]){
+   const white=new T.Mesh(new T.SphereGeometry(.112,24,16),eyeWhite);white.position.set(x,2.065,.327);avatar.add(white);
+   const iris=new T.Mesh(new T.SphereGeometry(.072,22,16),irisMat);iris.position.set(x,2.061,.425);avatar.add(iris);
+   const pupil=new T.Mesh(new T.SphereGeometry(.043,20,16),pupilMat);pupil.position.set(x-.008,2.06,.485);avatar.add(pupil);
+   const sparkle=new T.Mesh(new T.SphereGeometry(.019,12,10),shineMat);sparkle.position.set(x-.025,2.086,.516);avatar.add(sparkle);
+ }
+
  let frame=0;const tick=()=>{if(!renderer)return;frame=requestAnimationFrame(tick);const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=Math.max(1,Math.round(box.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}camera.position.set(Math.sin(angle)*5.6,2.7,Math.cos(angle)*5.6);camera.lookAt(0,1.55,0);renderer.render(scene,camera);};tick();canvas.addEventListener('pointerdown',e=>{drag=true;lastX=e.clientX;canvas.setPointerCapture(e.pointerId)});canvas.addEventListener('pointermove',e=>{if(drag){angle+=(e.clientX-lastX)*.012;lastX=e.clientX}});canvas.addEventListener('pointerup',()=>drag=false);canvas.addEventListener('pointercancel',()=>drag=false);
  }
  const paint=$('kwg-creator-paint'),ctx=paint.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);
