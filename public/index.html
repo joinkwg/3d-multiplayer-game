@@ -5034,12 +5034,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const list = document.getElementById('admin-store-items-list');
         const note = document.getElementById('admin-store-config-note');
         if (!res || !res.success) {
-          list.innerHTML = '<div style="color:#e74c3c;">Could not load store items.</div>';
+          if (list) list.innerHTML = '<div style="color:#e74c3c;">Could not load store items.</div>';
           return;
         }
-        note.textContent = res.uploadConfigured
+        if (note) note.textContent = res.uploadConfigured
           ? 'Supabase Storage uploads are configured.'
           : 'Uploads are not configured yet. We will add SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY on Render when we test uploads.';
+        if (!list) return;
         list.innerHTML = '';
         if (!(res.items || []).length) {
           list.innerHTML = '<div style="color:#888;padding:8px;">No uploaded store items yet.</div>';
@@ -11765,7 +11766,74 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    const colorLabel=$('kwgc-color')?.closest('label');
    if(colorLabel)colorLabel.style.display=skinOnly?'none':'';
  }
+ // Restore the missing creator controls. Drafts are not loaded automatically
+ // because this version has no defined draft-list handler.
+ function refresh(){
+   const host=$('kwg-creator-drafts');
+   if(!host)return;host.replaceChildren();
+   const drafts=JSON.parse(localStorage.getItem('kwg_creator_local_drafts')||'[]');
+   drafts.forEach((d,i)=>{const b=document.createElement('button');b.textContent=d.name+' ('+d.category+')';b.onclick=()=>{$('kwgc-category').value=d.category;$('kwgc-name').value=d.name;parts=JSON.parse(JSON.stringify(d.parts));selected=-1;$('kwgc-category').onchange();redraw();status('Loaded local draft.');};host.appendChild(b);});
+   if(!drafts.length)host.textContent='No local drafts yet.';
+   status('Loaded '+drafts.length+' local draft(s).');
+ }
+ function resetCreator(){
+   parts=[];selected=-1;draftId=null;
+   $('kwgc-name').value='New Creation';
+   redraw();
+   updateFittingPreview();
+   status('New item ready. Add a shape to begin.');
+ }
  $('kwgc-refresh-drafts').onclick=refresh;
+ $('kwgc-new').onclick=resetCreator;
+ $('kwgc-close').onclick=()=>{modal.style.display='none';};
+ $('kwgc-mannequin').onclick=()=>{
+   showMannequin=!showMannequin;
+   $('kwgc-mannequin').textContent='Mannequin: '+(showMannequin?'ON':'OFF');
+   updateFittingPreview();
+ };
+ $('kwgc-category').onchange=()=>{
+   $('kwgc-3dtools').style.display=is2d()?'none':'';
+   $('kwgc-2dtools').style.display=is2d()?'':'none';
+   paint.style.display=is2d()?'block':'none';
+   $('kwg-creator-viewport').style.display=is2d()?'none':'block';
+   updateFittingPreview();
+   redraw();
+ };
+ document.querySelectorAll('#kwgc-3dtools [data-shape]').forEach(b=>{
+   b.onclick=()=>addShape(b.dataset.shape);
+ });
+ $('kwgc-delete-part').onclick=()=>{
+   if(selected<0)return;
+   parts.splice(selected,1);
+   selected=Math.min(selected,parts.length-1);
+   redraw();
+ };
+ coords.forEach(k=>{
+   const el=$('kwgc-'+k);
+   if(el)el.addEventListener('input',()=>{
+     if(!parts[selected])return;
+     const v=Number(el.value);
+     if(Number.isFinite(v)){parts[selected][k]=v;redraw();}
+   });
+ });
+ $('kwgc-color').addEventListener('input',e=>{
+   if(parts[selected]){parts[selected].color=e.target.value;redraw();}
+ });
+ // Initialize only when the creator is opened, after Three.js is available.
+ const openCreator=()=>{
+   modal.style.display='flex';
+   try{init();$('kwgc-category').onchange();}catch(e){
+     console.error('Item Creator initialization failed:',e);
+     status('Editor initialization failed: '+e.message);
+   }
+ };
+ window.kwgOpenItemCreator=openCreator;
+ const launch=$('kwgc-launch');if(launch)launch.onclick=openCreator;
+ $('kwgc-save').onclick=()=>{try{const drafts=JSON.parse(localStorage.getItem('kwg_creator_local_drafts')||'[]');drafts.push({name:$('kwgc-name').value,category:category(),parts:JSON.parse(JSON.stringify(parts)),savedAt:Date.now()});localStorage.setItem('kwg_creator_local_drafts',JSON.stringify(drafts));status('Draft saved in this browser.');}catch(e){status('Could not save draft: '+e.message);}};
+ document.querySelectorAll('[onclick*="kwgOpenItemCreator"]').forEach(b=>{
+   b.addEventListener('click',()=>setTimeout(openCreator,0));
+ });
+
  async function exportGlb(){return new Promise((resolve,reject)=>{const T=get(),exp=new T.GLTFExporter(),g=new T.Group();parts.forEach(p=>g.add(partMesh(p)));try{exp.parse(g,data=>{if(!(data instanceof ArrayBuffer))return reject(new Error('Binary GLB export failed'));resolve(new Uint8Array(data));},{binary:true,onlyVisible:true});}catch(e){reject(e);}});}
  $('kwgc-publish').onclick=async()=>{const name=$('kwgc-name').value.trim(),price=Number($('kwgc-price').value),cat=category(),dist=$('kwgc-distribution').value;if(!name||!Number.isSafeInteger(price)||price<0||price>1000000)return status('Enter a valid name and price.');if(!is2d()&&!parts.length)return status('Add a shape before publishing.');status('Exporting item...');try{let bytes,fileName,mimeType;if(is2d()){const bin=atob(paint.toDataURL('image/png').split(',')[1]);bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);fileName='item.png';mimeType='image/png';}else{bytes=await exportGlb();fileName='item.glb';mimeType='model/gltf-binary';}status('Uploading to store...');const r=await sock('admin_store_create',{category:cat,name,price,distribution:dist,fileName,mimeType,fileData:bytes,metadata:{size:1,offsetX:0,offsetY:0,offsetZ:0},isVisible:dist==='store'});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.success?'Published '+name+' (#'+r.item.id+') to '+(dist==='starter'?'STARTER INVENTORY (not listed for sale)':'STORE → '+cat.toUpperCase())+'. Note: purchased items move into My Stuff and are hidden from the for-sale list.':(r.message||'Publish failed'));}catch(e){console.error(e);status(e.message||'Export failed.');}};
  $('kwgc-reset').onclick=async()=>{const first=prompt('DANGER: This permanently deletes ALL avatar catalog items AND player ownership records. No coin refunds. Type RESET ALL AVATAR ITEMS to continue:');if(first!=='RESET ALL AVATAR ITEMS'){status('Reset cancelled.');return;}if(!confirm('Final confirmation: permanently delete every avatar store item and purchase?'))return;status('Resetting catalog...');const r=await sock('item_creator_full_reset',{confirm:first});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.message||(r.success?'Catalog reset.':'Reset failed.'));};
