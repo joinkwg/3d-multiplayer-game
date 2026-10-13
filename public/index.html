@@ -11890,9 +11890,24 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  const $=id=>document.getElementById(id),modal=$('kwg-creator');if(!modal)return;
  const get=()=>window.THREE, socket=()=>typeof io==='function'?null:null;
  let scene,camera,renderer,root,avatar,previewEyeGroup,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=0;let mode='select',mirror=false,distance=5.6,elevation=.22,activeDrag=null,gizmo=null,gizmoHit=[];
- let meshMode='polygon',meshSelection=null,elementOverlay=null,paintDirty=false,activeCategory=null;
+ let meshMode='polygon',meshSelection=null,elementOverlay=null,paintDirty=false,activeCategory=null,hoveredPart=-1,hoveredElement=null,hoverOverlay=null,mannequinHeadless=false;
+ const defaultAvatarAppearance={headShape:'sphere',hat:'none',skinColor:'#fff5ba',headColor:'#fff5ba',shirtColor:'#62edee',torsoColor:'#62edee',pantsColor:'#6389bd',leftLegColor:'#6389bd',rightLegColor:'#6389bd',shoesColor:'#273247',hairColor:'#6b4835'};
  let idCounter=0;const uniqueId=()=>`kwgc-${Date.now()}-${++idCounter}`;
  const coords=['x','y','z','r','sx','sy','sz'];const status=s=>{$('kwgc-status').textContent=s;};
+ // Dispose only the editor's transient meshes/overlays. Each redraw creates
+ // fresh geometries, so not disposing was also leaking GPU resources.
+ function disposeCreatorTree(obj){
+   obj.traverse(node=>{
+     if(node.geometry&&!node.userData.creatorOutline&&!node.parent?.isArrowHelper)node.geometry.dispose();
+     if(node.material){const materials=Array.isArray(node.material)?node.material:[node.material];materials.forEach(m=>m?.dispose());}
+   });
+ }
+ function releaseChildren(group){
+   if(!group)return;
+   for(const child of [...group.children]){group.remove(child);disposeCreatorTree(child);}
+ }
+ function clearEditorHover(){hoveredPart=-1;hoveredElement=null;if(hoverOverlay)releaseChildren(hoverOverlay);}
+
  // Reconnected sockets lose server-side authentication. Restore the existing session
  // before retrying an Item Creator operation; never bypass server admin checks.
  let creatorAuthRestore=null;
@@ -11946,10 +11961,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    details.textContent=is2d()?'2D texture · no mesh elements':!p?'Select a part in the viewport or Explorer.':!meshSelection||meshMode==='polygon'?'Selected '+p.type+' · '+modeName:modeName+' '+(meshSelection.faceIndex!==undefined?'#'+(meshSelection.faceIndex+1):'')+' · '+meshSelection.ids.length+' vertex'+(meshSelection.ids.length===1?'':'es');
    btn.disabled=is2d()||meshMode!=='face'||!p||!meshSelection||meshSelection.faceIndex===undefined;
  }
- function setMeshMode(next){meshMode=next;meshSelection=null;if(next!=='polygon'&&get())parts.forEach(ensureMeshData);document.querySelectorAll('#kwgc-mesh-modes [data-mesh-mode]').forEach(b=>{const active=b.dataset.meshMode===next;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');});redraw();updateMeshPanel();}
- function selectMeshElement(h){
-   if(meshMode==='polygon'||!h)return clearMeshSelection();
-   const p=parts[selected],data=ensureMeshData(p),fi=Math.max(0,Math.min(data.faces.length-1,h.faceIndex??0)),tri=data.faces[fi];if(!tri)return;
+ function setMeshMode(next){meshMode=next;meshSelection=null;clearEditorHover();if(next!=='polygon'&&get())parts.forEach(ensureMeshData);document.querySelectorAll('#kwgc-mesh-modes [data-mesh-mode]').forEach(b=>{const active=b.dataset.meshMode===next;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');});redraw();updateMeshPanel();}
+ function elementFromHit(h){
+   if(meshMode==='polygon'||!h)return null;
+   const index=h.object?.userData?.partIndex,p=parts[index];if(!p)return null;
+   const data=ensureMeshData(p),fi=Math.max(0,Math.min(data.faces.length-1,h.faceIndex??0)),tri=data.faces[fi];
+   if(!tri)return null;
    const T=get(),mesh=h.object,pt=h.point;
    const world=i=>mesh.localToWorld(new T.Vector3(...data.vertices[i]));
    const dist=i=>world(i).distanceToSquared(pt);
@@ -11961,16 +11978,44 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
      const distance=([a,b])=>{const A=world(a),B=world(b),v=B.clone().sub(A),t=Math.max(0,Math.min(1,pt.clone().sub(A).dot(v)/Math.max(1e-9,v.lengthSq())));return A.addScaledVector(v,t).distanceToSquared(pt);};
      ids=[...pairs.sort((a,b)=>distance(a)-distance(b))[0]];
    }
-   meshSelection={faceIndex:fi,ids};redraw();
+   return {partIndex:index,faceIndex:fi,ids};
+ }
+ function selectMeshElement(h){
+   if(meshMode==='polygon'||!h){clearMeshSelection();return;}
+   meshSelection=elementFromHit(h);redraw();
+ }
+ function drawElementHighlight(group,sel,partIndex,isHover){
+   if(!group||!sel||meshMode==='polygon')return;
+   const T=get(),p=parts[partIndex],obj=root?.children[partIndex];if(!p||!obj)return;
+   const data=ensureMeshData(p);obj.updateMatrixWorld(true);
+   const pts=sel.ids.map(i=>data.vertices[i]&&new T.Vector3(...data.vertices[i]).applyMatrix4(obj.matrixWorld)).filter(Boolean);
+   if(!pts.length)return;
+   const color=isHover?0x87caff:0x249fff;
+   const material=()=>new T.LineBasicMaterial({color,depthTest:!isHover,transparent:true,opacity:isHover?.66:1});
+   if(meshMode==='face'&&pts.length>=3){const line=new T.Line(new T.BufferGeometry().setFromPoints([...pts,pts[0]]),material());line.renderOrder=5;group.add(line);}
+   if(meshMode==='edge'&&pts.length>=2){const line=new T.Line(new T.BufferGeometry().setFromPoints(pts),material());line.renderOrder=5;group.add(line);}
+   for(const pt of pts){const marker=new T.Mesh(new T.SphereGeometry(isHover?.034:.047,10,8),new T.MeshBasicMaterial({color,depthTest:false,transparent:isHover,opacity:isHover?.62:1}));marker.position.copy(pt);marker.renderOrder=7;group.add(marker);}
  }
  function updateElementOverlay(){
-   if(!elementOverlay)return;releaseChildren(elementOverlay);const p=parts[selected];if(!p||!meshSelection||meshMode==='polygon')return;
-   const T=get(),obj=root.children[selected],data=ensureMeshData(p);if(!obj)return;
-   obj.updateMatrixWorld(true);
-   const pts=meshSelection.ids.map(i=>new T.Vector3(...data.vertices[i]).applyMatrix4(obj.matrixWorld));
-   if(meshMode==='face'){const closed=[...pts,pts[0]],line=new T.Line(new T.BufferGeometry().setFromPoints(closed),new T.LineBasicMaterial({color:0xf8cf65,depthTest:false}));elementOverlay.add(line);}
-   if(meshMode==='edge'){const line=new T.Line(new T.BufferGeometry().setFromPoints(pts),new T.LineBasicMaterial({color:0xf8cf65,depthTest:false}));elementOverlay.add(line);}
-   for(const pt of pts){const marker=new T.Mesh(new T.SphereGeometry(.048,8,6),new T.MeshBasicMaterial({color:0xffe07b,depthTest:false}));marker.position.copy(pt);elementOverlay.add(marker);}
+   if(elementOverlay){releaseChildren(elementOverlay);if(selected>=0&&meshSelection&&meshMode!=='polygon')drawElementHighlight(elementOverlay,meshSelection,selected,false);}
+   if(hoverOverlay){releaseChildren(hoverOverlay);if(hoveredPart>=0&&hoveredElement&&meshMode!=='polygon')drawElementHighlight(hoverOverlay,hoveredElement,hoveredPart,true);}
+ }
+ function addPartHighlight(mesh,strong){
+   const T=get();
+   // Backface inflation produces an outline without turning the whole part blue.
+   // A child mesh isn't raycast because we intersect root.children non-recursively.
+   const edge=new T.Mesh(mesh.geometry,new T.MeshBasicMaterial({color:strong?0x269dff:0x85c7ff,side:T.BackSide,depthWrite:false,transparent:true,opacity:strong?1:.58}));
+   edge.scale.setScalar(strong?1.065:1.04);edge.renderOrder=3;edge.userData.creatorOutline=true;
+   mesh.add(edge);
+ }
+ function updatePartHighlights(){
+   if(!root)return;
+   for(let i=0;i<root.children.length;i++){
+     const mesh=root.children[i];
+     const child=mesh.children.find(o=>o.userData.creatorOutline);
+     if(child){mesh.remove(child);child.material.dispose();} // mesh and child share geometry
+     if(i===selected||i===hoveredPart)addPartHighlight(mesh,i===selected);
+   }
  }
  function meshElementCentroid(p){if(!meshSelection||!meshSelection.ids.length||!p)return null;const T=get(),obj=root.children[selected];if(!obj)return null;obj.updateMatrixWorld(true);const data=ensureMeshData(p),center=new T.Vector3();for(const i of meshSelection.ids)center.add(new T.Vector3(...data.vertices[i]).applyMatrix4(obj.matrixWorld));return center.multiplyScalar(1/meshSelection.ids.length);}
  function modifySelectedMesh(p,original,dx,dy,axis){
@@ -11998,12 +12043,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    meshSelection={faceIndex:fi,ids:cap};syncMirror(selected);redraw();status('Extruded one triangle face. Drag its handles to shape it.');
  }
  function duplicatePart(){if(is2d()||selected<0||!parts[selected])return;const p=JSON.parse(JSON.stringify(parts[selected]));p.uid=uniqueId();delete p.mirrorOf;p.x+=.22;parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);status('Duplicated part.');}
- function deleteSelectedPart(){if(is2d()||selected<0)return;const j=mirror&&mirrorPartner(selected)>=0?mirrorPartner(selected):-1;const ids=[selected,...(j>=0?[j]:[])].sort((a,b)=>b-a);for(const id of ids)parts.splice(id,1);selected=-1;meshSelection=null;select(-1);status('Removed '+ids.length+' part'+(ids.length===1?'':'s')+'.');}
+ function deleteSelectedPart(){if(is2d()||selected<0)return;activeDrag=null;clearEditorHover();const j=mirror&&mirrorPartner(selected)>=0?mirrorPartner(selected):-1;const ids=[selected,...(j>=0?[j]:[])].sort((a,b)=>b-a);for(const id of ids)parts.splice(id,1);selected=-1;meshSelection=null;select(-1);status('Removed '+ids.length+' part'+(ids.length===1?'':'s')+'.');}
 
  function updateGizmo(){
    if(!scene||!gizmo)return;
-   gizmo.clear();gizmoHit=[];
-   if(selected<0||!parts[selected]||!['move','scale','rotate'].includes(mode))return;
+   releaseChildren(gizmo);gizmoHit=[];gizmo.position.set(0,0,0);
+   if(is2d()||selected<0||!parts[selected]||!['move','scale','rotate'].includes(mode))return;
    const T=get(),p=parts[selected];const centroid=meshMode!=='polygon'?meshElementCentroid(p):null;if(centroid)gizmo.position.copy(centroid);else gizmo.position.set(p.x,p.y,p.z);
    const axes=[{v:new T.Vector3(1,0,0),color:0xf15e65,axis:'x'},{v:new T.Vector3(0,1,0),color:0x75d990,axis:'y'},{v:new T.Vector3(0,0,1),color:0x5aafff,axis:'z'}];
    for(const a of axes){
@@ -12020,7 +12065,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
      }
    }
  }
- function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach((p,i)=>{const mesh=partMesh(p);mesh.userData.partIndex=i;if(i===selected)mesh.material.emissive=new (get().Color)('#17304b');root.add(mesh);});const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);if(i===selected)b.classList.add('active');list.append(b);});const count=$('kwgc-part-count');if(count)count.textContent=parts.length+' PART'+(parts.length===1?'':'S');const empty=$('kwgc-no-selection');if(empty)empty.style.display=parts.length?'none':'block';updateElementOverlay();updateGizmo();updateMeshPanel();}
+ function redraw(){if(!root)return;releaseChildren(root);parts.forEach((p,i)=>{const mesh=partMesh(p);mesh.userData.partIndex=i;root.add(mesh);});updatePartHighlights();const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);if(i===selected)b.classList.add('active');list.append(b);});const count=$('kwgc-part-count');if(count)count.textContent=parts.length+' PART'+(parts.length===1?'':'S');const empty=$('kwgc-no-selection');if(empty)empty.style.display=parts.length?'none':'block';updateElementOverlay();updateGizmo();updateMeshPanel();}
  function select(n){if(selected!==n)meshSelection=null;selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]);$('kwgc-color').value=p.color;}
  const transforms=$('kwgc-transforms'),hint=$('kwgc-selection-empty');if(transforms)transforms.style.display=p?'grid':'none';if(hint)hint.style.display=p?'none':'block';redraw();}
  function mirrorPartner(i){
@@ -12036,11 +12081,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    const q=parts[j];Object.assign(q,{type:p.type,color:p.color,x:-p.x,y:p.y,z:p.z,r:-p.r,sx:p.sx,sy:p.sy,sz:p.sz});
    if(p.meshData){const copy=JSON.parse(JSON.stringify(p.meshData));copy.vertices.forEach(v=>v[0]=-v[0]);copy.faces.forEach(f=>{const t=f[1];f[1]=f[2];f[2]=t;});q.meshData=copy;}else delete q.meshData;
  }
- function addShape(type){const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const p={type,color:$('kwgc-color').value,x:0,y,z,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};p.uid=uniqueId();parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);}
- function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,1.6));const light=new T.DirectionalLight(0xffffff,1.5);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);gizmo=new T.Group();scene.add(gizmo);elementOverlay=new T.Group();scene.add(elementOverlay);
+ function addShape(type){const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const p={type,color:$('kwgc-color').value,x:0,y,z,r:0,sx:type==='box'?.8:1,sy:.5,sz:.8};p.uid=uniqueId();if(meshMode!=='polygon')ensureMeshData(p);parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);}
+ function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,1.6));const light=new T.DirectionalLight(0xffffff,1.5);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);gizmo=new T.Group();scene.add(gizmo);elementOverlay=new T.Group();scene.add(elementOverlay);hoverOverlay=new T.Group();scene.add(hoverOverlay);
  // Use the same avatar builder as the rest of KWG, rather than a placeholder mannequin.
- const appearance={headShape:'sphere',hat:'none',skinColor:'#fff5ba',headColor:'#fff5ba',shirtColor:'#62edee',torsoColor:'#62edee',pantsColor:'#6389bd',leftLegColor:'#6389bd',rightLegColor:'#6389bd',shoesColor:'#273247',hairColor:'#6b4835'};
- avatar=window.kwgCreatorBuildAvatar?window.kwgCreatorBuildAvatar(appearance):new T.Group();scene.add(avatar);
+ avatar=window.kwgCreatorBuildAvatar?window.kwgCreatorBuildAvatar(defaultAvatarAppearance):new T.Group();scene.add(avatar);
  // Friendly default eyes on the editor's fitting model (not exported with items).
  previewEyeGroup=new T.Group();previewEyeGroup.name='kwgc-default-eyes';avatar.add(previewEyeGroup);
  const eyeWhite=new T.MeshStandardMaterial({color:'#ffffff',roughness:.44});
@@ -12056,33 +12100,69 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
  let frame=0;const tick=()=>{if(!renderer)return;frame=requestAnimationFrame(tick);const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=Math.max(1,Math.round(box.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}camera.position.set(Math.sin(angle)*Math.cos(elevation)*distance,1.55+Math.sin(elevation)*distance,Math.cos(angle)*Math.cos(elevation)*distance);camera.lookAt(0,1.55,0);renderer.render(scene,camera);};tick();const ray=new T.Raycaster(),pointer=new T.Vector2();
  function hit(e){const rect=canvas.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);return ray.intersectObjects(root.children,false)[0];}
+ function setPointer(e){
+   const rect=canvas.getBoundingClientRect();
+   pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);
+   ray.setFromCamera(pointer,camera);
+ }
+ function updatePointerHover(e){
+   if(is2d()||drag)return;
+   setPointer(e);
+   const h=hit(e),i=h?.object?.userData?.partIndex??-1;
+   const nextElement=i>=0&&meshMode!=='polygon'?elementFromHit(h):null;
+   const sameElement=JSON.stringify(nextElement)===JSON.stringify(hoveredElement);
+   if(i!==hoveredPart){hoveredPart=i;updatePartHighlights();}
+   if(!sameElement){hoveredElement=nextElement;updateElementOverlay();}
+   canvas.style.cursor=i>=0?'pointer':'grab';
+ }
  canvas.addEventListener('pointerdown',e=>{
-   const rect=canvas.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);
-   const gh=gizmoHit.length?ray.intersectObjects(gizmoHit,false)[0]:null;
-   lastX=e.clientX;drag=true;canvas.setPointerCapture(e.pointerId);
+   setPointer(e);const gh=selected>=0&&gizmoHit.length?ray.intersectObjects(gizmoHit,false)[0]:null;
+   lastX=e.clientX;canvas._lastY=e.clientY;drag=true;canvas.setPointerCapture(e.pointerId);
    if(gh&&selected>=0){activeDrag={i:selected,x:e.clientX,y:e.clientY,axis:gh.object.userData.gizmoAxis,original:JSON.parse(JSON.stringify(parts[selected]))};return;}
    const h=hit(e);
-   if(h){const i=h.object.userData.partIndex;select(i);
-     if(meshMode!=='polygon')selectMeshElement(h);
+   if(h){
+     const i=h.object.userData.partIndex;
+     if(i!==selected)select(i);
+     if(meshMode!=='polygon'){
+       // select() may rebuild the mesh, so pick against current geometry.
+       const fresh=hit(e);
+       selectMeshElement(fresh?.object?.userData?.partIndex===i?fresh:h);
+     }
      if(mode==='recolor'){parts[i].color=$('kwgc-color').value;syncMirror(i);redraw();}
-     else if(mode!=='select'&&mode!=='insert')activeDrag={i,x:e.clientX,y:e.clientY,original:JSON.parse(JSON.stringify(parts[i]))};
-   }
+     else if(['move','scale','rotate'].includes(mode)){
+       activeDrag={i,x:e.clientX,y:e.clientY,original:JSON.parse(JSON.stringify(parts[i]))};
+     }
+   }else if(mode==='select'){select(-1);}
  });
  canvas.addEventListener('pointermove',e=>{
-   if(!drag)return;
+   if(!drag){updatePointerHover(e);return;}
    if(activeDrag){
-     const d=activeDrag,p=parts[d.i],dx=e.clientX-d.x,dy=e.clientY-d.y;
-     if(!modifySelectedMesh(p,d.original,dx,dy,d.axis)){
-       if(mode==='move'){if(d.axis){const delta=(d.axis==='y'?-dy:dx)*.006*distance/5.6;p[d.axis]=d.original[d.axis]+delta;}else{p.x=d.original.x+dx*.006*distance/5.6;p.y=d.original.y-dy*.006*distance/5.6;}}
+     const d=activeDrag,p=parts[d.i];if(!p){activeDrag=null;return;}
+     const dx=e.clientX-d.x,dy=e.clientY-d.y;
+     const elementIsActive=meshMode!=='polygon'&&meshSelection?.ids?.length&&selected===d.i;
+     if(elementIsActive){
+       // Face, vertex and edge mode edits mesh vertices, NEVER the part transform.
+       modifySelectedMesh(p,d.original,dx,dy,d.axis);
+     }else if(meshMode==='polygon'){
+       if(mode==='move'){
+         if(d.axis){const delta=(d.axis==='y'?-dy:dx)*.006*distance/5.6;p[d.axis]=d.original[d.axis]+delta;}
+         else {p.x=d.original.x+dx*.006*distance/5.6;p.y=d.original.y-dy*.006*distance/5.6;}
+       }
        if(mode==='scale'){const factor=Math.max(.05,1+(dx-dy)*.008);for(const a of ['x','y','z'])if(!d.axis||d.axis===a)p['s'+a]=Math.max(.02,d.original['s'+a]*factor);}
        if(mode==='rotate')p.r=d.original.r+dx*.65;
      }
-     syncMirror(d.i);coords.forEach(k=>$('kwgc-'+k).value=p[k]);redraw();
-   }else{angle+=(e.clientX-lastX)*.012;elevation=Math.max(-1.45,Math.min(1.45,elevation-(e.clientY-(canvas._lastY??e.clientY))*.01));}
+     syncMirror(d.i);
+     coords.forEach(k=>$('kwgc-'+k).value=p[k]);
+     redraw(); // also puts the gizmo on the new part/element centroid
+   }else{
+     angle+=(e.clientX-lastX)*.012;
+     elevation=Math.max(-1.45,Math.min(1.45,elevation-(e.clientY-(canvas._lastY??e.clientY))*.01));
+   }
    lastX=e.clientX;canvas._lastY=e.clientY;
  });
  const end=()=>{drag=false;activeDrag=null;canvas._lastY=null;};
  canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
+ canvas.addEventListener('pointerleave',()=>{if(!drag){clearEditorHover();updatePartHighlights();updateElementOverlay();}});
  canvas.addEventListener('wheel',e=>{e.preventDefault();distance=Math.max(1.2,Math.min(16,distance*Math.exp(e.deltaY*.001)));},{passive:false});
 
  }
@@ -12094,20 +12174,32 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  // Only expose the base body pieces relevant to fitting the chosen item.
  // Mesh visibility is local to the editor; exported GLBs contain ONLY root parts.
  function updateFittingPreview(){
-   if(!avatar)return;
-   const c=category();
+   if(!avatar||!scene)return;
+   const c=category(),removeHead=c==='heads'||c==='head_shape';
+   // Head replacements are built on a HEADLESS mannequin. This removes the
+   // default head at the source, even if old geometry is missing a body-part tag.
+   if(removeHead!==mannequinHeadless && window.kwgCreatorBuildAvatar){
+     const old=avatar,newAvatar=window.kwgCreatorBuildAvatar({...defaultAvatarAppearance,headShape:removeHead?'headless':'sphere'});
+     if(previewEyeGroup)newAvatar.add(previewEyeGroup); // migrate without recreating eye geometry
+     scene.remove(old);avatar=newAvatar;scene.add(avatar);mannequinHeadless=removeHead;
+     disposeCreatorTree(old);
+   }
    const hidden=new Set();
-   if(c==='heads'||c==='head_shape')hidden.add('head');
+   if(removeHead)hidden.add('head');
    if(c==='tops'||c==='flightsuits')hidden.add('tops');
    if(c==='bottoms'||c==='flightsuits')hidden.add('bottoms');
    if(c==='shoes'||c==='flightsuits')hidden.add('shoes');
-   avatar.traverse(obj=>{if(obj.isMesh&&obj.userData.kwgBodyPart)obj.visible=!hidden.has(obj.userData.kwgBodyPart);});
-   if(previewEyeGroup)previewEyeGroup.visible=!hidden.has('head')&&c!=='eyes';
+   if(c==='eyes')hidden.add('eyes');
+   if(c==='mouth')hidden.add('mouth');
+   avatar.traverse(obj=>{
+     if(!obj.isMesh)return;
+     const part=obj.userData.kwgBodyPart;
+     if(part)obj.visible=!hidden.has(part);
+   });
+   if(previewEyeGroup)previewEyeGroup.visible=!removeHead&&c!=='eyes';
    avatar.visible=showMannequin;
-   // Head geometry is skin-toned automatically, without a per-item color.
-   const skinOnly=c==='heads'||c==='head_shape';
    const colorLabel=$('kwgc-color')?.closest('label');
-   if(colorLabel)colorLabel.style.display=skinOnly?'none':'';
+   if(colorLabel)colorLabel.style.display=removeHead?'none':'';
  }
  // Restore the missing creator controls. Drafts are not loaded automatically
  // because this version has no defined draft-list handler.
@@ -12120,7 +12212,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    status('Loaded '+drafts.length+' local draft(s).');
  }
  function resetCreator(){
-   parts=[];selected=-1;meshSelection=null;draftId=null;clearPainting();
+   parts=[];selected=-1;meshSelection=null;draftId=null;activeDrag=null;clearEditorHover();clearPainting();
    if($('kwgc-selection-empty'))$('kwgc-selection-empty').style.display='block';
    if($('kwgc-transforms'))$('kwgc-transforms').style.display='none';
    $('kwgc-name').value='New Creation';
@@ -12137,7 +12229,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    updateFittingPreview();
  };
  function switchCategory(force=false){
-   const c=category();if(c!==activeCategory||force){parts=[];selected=-1;meshSelection=null;draftId=null;activeCategory=c;clearPainting();$('kwgc-name').value='New Creation';$('kwgc-price').value=50;setMeshMode('polygon');}
+   const c=category();if(c!==activeCategory||force){parts=[];selected=-1;meshSelection=null;activeDrag=null;clearEditorHover();draftId=null;activeCategory=c;clearPainting();$('kwgc-name').value='New Creation';$('kwgc-price').value=50;setMeshMode('polygon');}
    const texture=is2d();
    $('kwgc-3dtools').style.display=texture?'none':'';
    $('kwgc-2dtools').style.display=texture?'':'none';
