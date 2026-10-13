@@ -11724,7 +11724,39 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  const get=()=>window.THREE, socket=()=>typeof io==='function'?null:null;
  let scene,camera,renderer,root,avatar,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=0;
  const coords=['x','y','z','r','sx','sy','sz'];const status=s=>{$('kwgc-status').textContent=s;};
- function sock(event,payload){return new Promise(resolve=>{const s=window.kwgItemCreatorSocket;if(!s){status('Not connected. Log in as admin first.');return resolve({success:false});}s.emit(event,payload,resolve);});}
+ // Reconnected sockets lose server-side authentication. Restore the existing session
+ // before retrying an Item Creator operation; never bypass server admin checks.
+ let creatorAuthRestore=null;
+ function creatorEmit(s,event,payload){return new Promise(resolve=>s.emit(event,payload,r=>resolve(r||{success:false,message:'No response from server.'})));}
+ async function creatorRestoreSession(s){
+   if(creatorAuthRestore)return creatorAuthRestore;
+   creatorAuthRestore=(async()=>{
+     const token=localStorage.getItem('kwg_session_token');
+     if(!token)return {success:false,message:'Please sign in as an admin again.'};
+     if(!s.connected){
+       try{await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{cleanup();reject(new Error('Connection timed out.'));},8000);function cleanup(){clearTimeout(timer);s.off('connect',connected);s.off('connect_error',failed);}function connected(){cleanup();resolve();}function failed(e){cleanup();reject(e);}s.once('connect',connected);s.once('connect_error',failed);s.connect();});}
+       catch(e){return {success:false,message:'Server connection failed. Please check your internet connection.'};}
+     }
+     const result=await creatorEmit(s,'resume_session',{token});
+     if(!result.success)return {success:false,message:'Your login session expired. Please sign in again.'};
+     if(!result.isAdmin)return {success:false,message:'An admin account is required to publish items.'};
+     return result;
+   })();
+   try{return await creatorAuthRestore;}finally{creatorAuthRestore=null;}
+ }
+ async function sock(event,payload){
+   const s=window.kwgItemCreatorSocket;
+   if(!s)return {success:false,message:'Game connection unavailable. Reload and sign in as admin.'};
+   if(!s.connected){const restored=await creatorRestoreSession(s);if(!restored.success)return restored;}
+   let result=await creatorEmit(s,event,payload);
+   if(result.message==='You must be logged in.'){
+     status('Restoring admin login...');
+     const restored=await creatorRestoreSession(s);
+     if(!restored.success)return restored;
+     result=await creatorEmit(s,event,payload);
+   }
+   return result;
+ }
  function category(){return $('kwgc-category').value;}function is2d(){return ['skin','eyes','mouth','torso_decal'].includes(category());}
  function partMesh(p){const T=get(),geo= p.type==='box'?new T.BoxGeometry(1,1,1):p.type==='sphere'?new T.SphereGeometry(.5,20,14):p.type==='cone'?new T.ConeGeometry(.5,1,20):new T.CylinderGeometry(.5,.5,1,20);const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color:p.color,roughness:.82}));mesh.position.set(p.x,p.y,p.z);mesh.rotation.y=p.r*Math.PI/180;mesh.scale.set(p.sx,p.sy,p.sz);return mesh;}
  function redraw(){if(!root)return;while(root.children.length)root.remove(root.children[0]);parts.forEach(p=>root.add(partMesh(p)));const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);list.append(b);});}
