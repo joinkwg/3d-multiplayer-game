@@ -2126,9 +2126,12 @@ io.on('connection', (socket) => {
   socket.on('item_creator_full_reset',async(payload={},cb)=>{
     if(!requireAdmin(socket,cb))return;
     if(payload.confirm!=='RESET ALL AVATAR ITEMS')return cb({success:false,message:'Type RESET ALL AVATAR ITEMS to confirm.'});
-    const client=await pool.connect();
+    let client;
     try{
+      client=await Promise.race([pool.connect(),new Promise((_,reject)=>setTimeout(()=>reject(new Error('Database connection busy. Try again shortly.')),10000))]);
       await client.query('BEGIN');
+      await client.query("SET LOCAL lock_timeout = '8s'");
+      await client.query("SET LOCAL statement_timeout = '20s'");
       await client.query('DELETE FROM user_store_items');
       await client.query('DELETE FROM store_items');
       await client.query(`UPDATE users SET appearance = COALESCE(appearance,'{}'::jsonb) - ARRAY['hairItemId','hatsItemId','headsItemId','eyesItemId','mouthItemId','skinItemId','topsItemId','bottomsItemId','shoesItemId','flightsuitsItemId','hatItemId','headShapeItemId','torsoDecalItemId']::text[]`);
@@ -2138,8 +2141,8 @@ io.on('connection', (socket) => {
         const player=playersBySocket.get(peer.id);if(player){player.cosmetics={};if(player.appearance){for(const key of ['hairItemId','hatsItemId','headsItemId','eyesItemId','mouthItemId','skinItemId','topsItemId','bottomsItemId','shoesItemId','flightsuitsItemId','hatItemId','headShapeItemId','torsoDecalItemId'])player.appearance[key]=null;}}
       }
       cb({success:true,message:'All avatar catalog rows and player ownership records deleted.'});
-    }catch(e){await client.query('ROLLBACK').catch(()=>{});console.error(e);cb({success:false,message:'Reset failed. No changes committed.'});}
-    finally{client.release();}
+    }catch(e){if(client)await client.query('ROLLBACK').catch(()=>{});console.error('Item Creator reset:',e);cb({success:false,message:'Reset failed: '+(e.message||'database error')+'. No changes committed.'});}
+    finally{if(client)client.release();}
   });
 
   socket.on('admin_store_list', async (cb) => {
