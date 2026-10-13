@@ -3979,7 +3979,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgStorePreviewCamera.position.set(1.15,1.2,3.15);
         kwgStorePreviewCamera.lookAt(0,.55,0);
       }else{
-        const model=item.assetKind==='procedural'?kwgBuildItemOnlyPreview(item):buildBlockyAvatar(kwgProceduralPreviewAppearance(playerAppearance,item),{...cosmeticsForAppearance(playerAppearance),[item.category]:item});
+        const model=item.assetKind==='procedural'?kwgBuildItemOnlyPreview(item):buildBlockyAvatar({...playerAppearance,[kwgProceduralSlot(item.category)]:item.id},{...cosmeticsForAppearance(playerAppearance),[item.category]:item});
         kwgStorePreviewModel=model;kwgStorePreviewScene.add(model);
         const bounds=new THREE.Box3().setFromObject(model);
         const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
@@ -5539,7 +5539,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const item=cosmetics?.[cat];
       if(item?.assetKind==='procedural')return item;
       const id=Number(app?.[kwgProceduralSlot(cat)]);
-      return id ? (typeof itemById==='function'?itemById(id):null):null;
+      return id && typeof itemById==='function' && itemById(id)?.assetKind==='procedural' ? itemById(id) : null;
     }
     function kwgProceduralPreviewAppearance(app,item){
       const copy={...app};if(item?.assetKind==='procedural')copy[kwgProceduralSlot(item.category)]=item.id;return copy;
@@ -6053,6 +6053,22 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
 
       kwgProceduralApply(group,app,cosmetics,{leftArmPivot,rightArmPivot,leftLegPivot,rightLegPivot,torso});
+      // Creator meshes use avatar/world-space coordinates (the same coordinates
+      // used by the mannequin editor). Do NOT normalize or re-anchor them.
+      // In particular, GLB hair must not enter the procedural hairstyle switch.
+      for(const category of ['hair','hats','heads','tops','bottoms','shoes','flightsuits']){
+        const item=cosmetics[category];
+        if(item?.assetKind!=='glb'||!item.assetUrl)continue;
+        const parent=new THREE.Group();parent.name='creator-'+category;
+        group.add(parent);
+        loadGLBClone(item.assetUrl).then(mesh=>{
+          if(!parent.parent)return;
+          mesh.name='uploaded-'+category;
+          // The creator exports primitive positions as absolute avatar coordinates.
+          // Preserve these positions so a hairpiece sits where it was designed.
+          parent.add(mesh);
+        }).catch(err=>console.warn('Could not display uploaded '+category,err));
+      }
       group.userData.limbs={leftArm:leftArmPivot,rightArm:rightArmPivot,leftLeg:leftLegPivot,rightLeg:rightLegPivot,torso};
       return group;
     }
@@ -10469,15 +10485,30 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(!obj){container.textContent='NO PREVIEW';return;}
       try{thumbImageFromObject(container,obj)}catch(e){container.textContent='NO PREVIEW';}
     }
-    // Close-up static thumbnails: GLB cosmetic only, never the full avatar.
+    // Uploaded hair thumbnails show the actual creator mesh fitted to a head.
+    // Creator meshes already contain avatar-space coordinates; don't normalize them.
     function renderMeshThumbnail(container,item){
-      if (!container || !item || !item.assetUrl) { if(container) container.textContent='NO PREVIEW'; return; }
+      if(!container||!item?.assetUrl){if(container)container.textContent='NO PREVIEW';return;}
       container.textContent='LOADING...';
-      loadGLBClone(item.assetUrl).then(obj=>{
-        const box=new THREE.Box3().setFromObject(obj);const size=box.getSize(new THREE.Vector3());
-        const maxDim=Math.max(size.x,size.y,size.z,.001);obj.scale.setScalar(1/maxDim);
-        thumbImageFromObject(container,obj);
-      }).catch(err=>{console.warn('GLB thumbnail failed:',err);container.textContent='NO PREVIEW';});
+      const identity=item.assetUrl;
+      container.dataset.creatorThumbnail=identity;
+      loadGLBClone(identity).then(obj=>{
+        if(!container.isConnected||container.dataset.creatorThumbnail!==identity)return;
+        if(item.category==='hair'||item.category==='hats'){
+          const root=new THREE.Group();
+          const head=new THREE.Mesh(new THREE.SphereGeometry(.37,28,20),new THREE.MeshLambertMaterial({color:'#f5d9a1'}));
+          head.position.set(0,2.04,0);root.add(head);
+          root.add(obj);
+          // Thumbnail framing centers on the head, not the entire character.
+          root.position.y=-2.04;
+          thumbImageFromObject(container,root);
+        }else{
+          const bounds=new THREE.Box3().setFromObject(obj);
+          const dims=bounds.getSize(new THREE.Vector3());
+          obj.scale.setScalar(1/Math.max(dims.x,dims.y,dims.z,.001));
+          thumbImageFromObject(container,obj);
+        }
+      }).catch(err=>{console.warn('GLB thumbnail failed:',err);if(container.isConnected)container.textContent='NO PREVIEW';});
     }
 
     function duplicateSelectedBlock() {
