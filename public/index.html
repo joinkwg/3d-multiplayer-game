@@ -6100,6 +6100,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         loadGLBClone(item.assetUrl).then(mesh=>{
           if(!parent.parent)return;
           mesh.name='uploaded-'+category;
+          if(category==='eyes'&&!app.kwgCreatorPreview){parent.position.y=2.065;mesh.position.y-=2.065;group.userData.kwgEyeRoot=parent;}
           if(category==='heads'){
             const tone=new THREE.Color(skinColor);
             mesh.traverse(o=>{if(o.isMesh){o.material=new THREE.MeshLambertMaterial({color:tone,side:THREE.DoubleSide});}});
@@ -6108,6 +6109,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           // Preserve these positions so a hairpiece sits where it was designed.
           parent.add(mesh);
         }).catch(err=>console.warn('Could not display uploaded '+category,err));
+      }
+      // Gameplay-only eyes: restores the original friendly blink. The Item Creator
+      // uses its own non-blinking preview eyes and opts out via kwgCreatorPreview.
+      if(!app.kwgCreatorPreview&&headShape!=='headless'&&!group.userData.kwgEyeRoot&&!cosmetics.eyes){
+        const eyeRoot=new THREE.Group();eyeRoot.name='kwg-gameplay-blinking-eyes';eyeRoot.position.set(0,2.065,0);group.add(eyeRoot);
+        const white=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.40});
+        const iris=new THREE.MeshStandardMaterial({color:'#40bbf7',roughness:.28});
+        const pupil=new THREE.MeshStandardMaterial({color:'#14223c',roughness:.20});
+        const shine=new THREE.MeshBasicMaterial({color:'#ffffff'});
+        for(const x of [-.16,.16]){
+          const shapes=[[.108,.33,0,white],[.069,.425,0,iris],[.04,.488,-.008,pupil],[.018,.517,-.026,shine]];
+          shapes.forEach(([r,z,dx,mat])=>{const o=new THREE.Mesh(new THREE.SphereGeometry(r,20,14),mat);o.position.set(x+dx,z>.50?.026:0,z);eyeRoot.add(o);});
+        }
+        group.userData.kwgEyeRoot=eyeRoot;
       }
       group.userData.limbs={leftArm:leftArmPivot,rightArm:rightArmPivot,leftLeg:leftLegPivot,rightLeg:rightLegPivot,torso};
       return group;
@@ -11822,7 +11837,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  // Keep symmetry visible in the titlebar even when toolbox options scroll.
  if(mirrorLabel)creator.querySelector('.kwg-creator-bar')?.insertBefore(mirrorLabel,creator.querySelector('#kwgc-new'));
  const insertPanel=document.createElement('section');insertPanel.id='kwgc-insert-options';insertPanel.className='kwgc-mode-options';
- insertPanel.innerHTML='<div class="kwgc-small-title">＋ INSERT PART</div><div class="kwgc-place-row"><label>SHAPE <select id="kwgc-insert-shape"><option value="box">Cube / Box</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option><option value="cone">Cone</option></select></label><button type="button" class="kwgc-insert-button" id="kwgc-insert-add">＋ ADD PART</button></div>';
+ insertPanel.innerHTML='<div class="kwgc-small-title">＋ INSERT PART</div><div class="kwgc-place-row"><label>SHAPE <select id="kwgc-insert-shape"><option value="box">Cube / Box</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option><option value="cone">Cone</option><option value="default">Default avatar item</option></select></label><button type="button" class="kwgc-insert-button" id="kwgc-insert-add">＋ ADD PART</button></div>';
  toolbox.body.append(insertPanel);
  const recolorPanel=document.createElement('section');recolorPanel.id='kwgc-recolor-options';recolorPanel.className='kwgc-mode-options';
  recolorPanel.innerHTML='<div class="kwgc-small-title">◉ RECOLOR BRUSH</div><p class="kwgc-tool-help">Choose a color, then click a part to paint it.</p>';
@@ -11845,9 +11860,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  for(const id of ['kwgc-refresh-drafts','kwg-creator-drafts']){const el=creator.querySelector('#'+id);if(el)settings.body.append(el);}
  if(reset)settings.body.append(reset);
  const transforms=creator.querySelector('#kwgc-transforms');
+ const polygonBox=document.createElement('div');polygonBox.className='kwgc-poly-box';
+ polygonBox.innerHTML='<label>POLYGON DETAIL <select id="kwgc-poly-detail"><option value="8">Low (8 segments)</option><option value="16">Medium (16 segments)</option><option value="24" selected>Standard (24 segments)</option><option value="40">High (40 segments)</option><option value="64">Ultra (64 segments)</option></select></label><small id="kwgc-triangle-count">Select a primitive to see its triangle count.</small><small>Changes primitive topology. Existing sculpted geometry stays unchanged.</small>';
  const partColorBox=document.createElement('div');partColorBox.className='kwgc-part-color-box';
  partColorBox.innerHTML='<label>SELECTED PART COLOR<input type="color" id="kwgc-part-color" value="#7954aa"></label><small>Edits only the selected part. The Recolor brush preset is separate.</small>';
- properties.body.append(partColorBox);
+ properties.body.append(partColorBox,polygonBox);
  
  const selectedHint=document.createElement('div');selectedHint.id='kwgc-selection-empty';selectedHint.className='kwgc-explorer-empty';selectedHint.textContent='No part selected';properties.body.append(selectedHint);
  if(transforms){transforms.style.display='none';properties.body.append(transforms);}
@@ -11855,10 +11872,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  explorer.body.append(noSelect);
  if(parts)explorer.body.append(parts);
  const remove=creator.querySelector('#kwgc-delete-part');if(remove){remove.textContent='▤ Delete selected part';explorer.body.append(remove);}
+ const booleanActions=document.createElement('div');booleanActions.className='kwgc-boolean-actions';
+ booleanActions.innerHTML='<button type="button" id="kwgc-union">UNION · U</button><button type="button" id="kwgc-negate">NEGATE · N</button><small>Ctrl+click to select several parts. Negated shapes subtract from positive shapes when unioned.</small>';
+ explorer.body.append(booleanActions);
  stack.append(toolbox.panel,settings.panel,properties.panel);
  left.replaceChildren(stack); right.className='kwg-creator-side kwgc-explorer';
  const rightStack=document.createElement('div');rightStack.className='kwgc-right-stack';
- meshPanel.body.innerHTML=`<div id="kwgc-mesh-modes" role="group" aria-label="Mesh selection mode"><button type="button" class="active" data-mesh-mode="polygon" title="Select the entire mesh">POLYGON</button><button type="button" data-mesh-mode="face" title="Select a triangle face">FACE</button><button type="button" data-mesh-mode="vertex" title="Select a single vertex">VERTEX</button><button type="button" data-mesh-mode="edge" title="Select an edge">EDGE</button></div><div id="kwgc-mesh-details">Select a part to edit its mesh.</div><button id="kwgc-extrude-face" type="button" disabled>EXTRUDE FACE · E</button><div class="kwgc-shortcuts"><strong>SHORTCUTS</strong><span>G Move · S Scale · R Rotate · F Focus</span><span>Ctrl+Z Undo · Ctrl+Y Redo · Shift+D Duplicate</span><span>E Extrude Face · [ ] Rotate ±15°</span><span>1–4 Mesh modes · Esc Deselect</span></div>`;
+ meshPanel.body.innerHTML=`<div id="kwgc-mesh-modes" role="group" aria-label="Mesh selection mode"><button type="button" class="active" data-mesh-mode="polygon" title="Select the entire mesh">POLYGON</button><button type="button" data-mesh-mode="face" title="Select a triangle face">FACE</button><button type="button" data-mesh-mode="vertex" title="Select a single vertex">VERTEX</button><button type="button" data-mesh-mode="edge" title="Select an edge">EDGE</button></div><div id="kwgc-mesh-details">Select a part to edit its mesh.</div><button id="kwgc-extrude-face" type="button" disabled>EXTRUDE FACE · E</button><div class="kwgc-shortcuts"><strong>SHORTCUTS</strong><span>G Move · S Scale · R Rotate · F Focus</span><span>Ctrl+Click Multi-select · U Union · N Negate</span><span>Ctrl+Z Undo · Ctrl+Y Redo · Ctrl+D Duplicate</span><span>E Extrude Face · [ ] Rotate ±15°</span><span>1–4 Mesh modes · Esc Deselect</span></div>`;
  rightStack.append(explorer.panel,meshPanel.panel);right.replaceChildren(rightStack);
  function updateToolPanels(){
    const selected=modebar.querySelector('[data-mode].active')?.dataset.mode||'select';
@@ -11924,6 +11944,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 #kwg-creator .kwgc-part-color-box{background:#293c50;border:1px solid #59788b;padding:7px;margin-bottom:8px}
 #kwg-creator .kwgc-part-color-box input{width:100%;height:34px;cursor:pointer}
 #kwg-creator #kwgc-scene-footer-hint{font-size:11px;color:#c1d2e0}
+#kwg-creator #kwg-creator-parts button.kwg-multi-selected{border-color:#6ab9ff!important;background:#214565!important;color:white!important}
+#kwg-creator .kwgc-boolean-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px;border-top:1px solid #46647e;padding-top:9px}
+#kwg-creator .kwgc-boolean-actions button{font-size:10px!important;padding:8px 3px!important}
+#kwg-creator .kwgc-boolean-actions small{grid-column:1/-1;color:#91b5ca;font-size:10px;line-height:1.4}
+#kwg-creator .kwgc-poly-box{background:#21354a;border:1px solid #4f6a83;padding:8px;margin-top:7px}
+#kwg-creator .kwgc-poly-box small{display:block;font-size:10px;color:#9ec0d5;margin-top:5px}
 </style>
 <script>
 (()=>{
@@ -11931,10 +11957,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  const get=()=>window.THREE, socket=()=>typeof io==='function'?null:null;
  let scene,camera,renderer,root,avatar,previewEyeGroup,selected=-1,parts=[],showMannequin=true,drag=false,lastX=0,draftId=null,paintMode='brush',painting=false,angle=0;let mode='select',mirror=false,distance=5.6,elevation=.22,activeDrag=null,gizmo=null,gizmoHit=[];
  let meshMode='polygon',meshSelection=null,elementOverlay=null,paintDirty=false,activeCategory=null,hoveredPart=-1,hoveredElement=null,hoverOverlay=null,mannequinHeadless=false;
- let history=[],future=[],lastHistoryKey='',cameraTarget=null;const maxHistory=70;
- function snapshot(){return {parts:JSON.parse(JSON.stringify(parts)),selected,meshMode,meshSelection:meshSelection?JSON.parse(JSON.stringify(meshSelection)):null,paint:is2d()?paint.toDataURL('image/png'):null};}
+ let history=[],future=[],lastHistoryKey='',cameraTarget=null;let selection=new Set(),cameraKeys=new Set(),canvasHovered=false;let maxBooleanFaces=9000;const maxHistory=70;
+ function snapshot(){return {parts:JSON.parse(JSON.stringify(parts)),selected,selection:[...selection],meshMode,meshSelection:meshSelection?JSON.parse(JSON.stringify(meshSelection)):null,paint:is2d()?paint.toDataURL('image/png'):null};}
  function remember(){if(!get())return;const snap=snapshot(),key=JSON.stringify(snap);if(key===lastHistoryKey)return;history.push(snap);if(history.length>maxHistory)history.shift();lastHistoryKey=key;future.length=0;}
- function restoreSnapshot(snap){parts=JSON.parse(JSON.stringify(snap.parts));selected=snap.selected;meshMode=snap.meshMode;meshSelection=snap.meshSelection;activeDrag=null;clearEditorHover();document.querySelectorAll('#kwgc-mesh-modes [data-mesh-mode]').forEach(b=>b.classList.toggle('active',b.dataset.meshMode===meshMode));
+ function restoreSnapshot(snap){parts=JSON.parse(JSON.stringify(snap.parts));selected=snap.selected;selection=new Set(snap.selection|| (selected>=0?[selected]:[]));meshMode=snap.meshMode;meshSelection=snap.meshSelection;activeDrag=null;clearEditorHover();document.querySelectorAll('#kwgc-mesh-modes [data-mesh-mode]').forEach(b=>b.classList.toggle('active',b.dataset.meshMode===meshMode));
    if(snap.paint){const image=new Image();image.onload=()=>{ctx.clearRect(0,0,512,512);ctx.drawImage(image,0,0,512,512);paintDirty=true;};image.src=snap.paint;}
    const p=parts[selected];if(p){coords.forEach(k=>{const el=$('kwgc-'+k);if(el)el.value=p[k]??0;});const color=$('kwgc-part-color');if(color)color.value=p.color;}redraw();setPropertyVisibility();}
  function undo(){if(!history.length)return status('Nothing to undo.');future.push(snapshot());restoreSnapshot(history.pop());lastHistoryKey='';status('Undo.');}
@@ -11942,7 +11968,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  function resetHistory(){history=[];future=[];lastHistoryKey='';}
  function setPropertyVisibility(){const box=$('kwgc-part-color')?.closest('.kwgc-part-color-box');if(box)box.style.display=parts[selected]&&!is2d()&&!['heads','head_shape'].includes(category())?'block':'none';}
  
- const defaultAvatarAppearance={headShape:'sphere',hat:'none',skinColor:'#fff5ba',headColor:'#fff5ba',shirtColor:'#62edee',torsoColor:'#62edee',pantsColor:'#6389bd',leftLegColor:'#6389bd',rightLegColor:'#6389bd',shoesColor:'#273247',hairColor:'#6b4835'};
+ const defaultAvatarAppearance={kwgCreatorPreview:true,headShape:'sphere',hat:'none',skinColor:'#fff5ba',headColor:'#fff5ba',shirtColor:'#62edee',torsoColor:'#62edee',pantsColor:'#6389bd',leftLegColor:'#6389bd',rightLegColor:'#6389bd',shoesColor:'#273247',hairColor:'#6b4835'};
  let idCounter=0;const uniqueId=()=>`kwgc-${Date.now()}-${++idCounter}`;
  const coords=['x','y','z','rx','r','rz','sx','sy','sz'];const status=s=>{$('kwgc-status').textContent=s;};
  // Dispose only the editor's transient meshes/overlays. Each redraw creates
@@ -11995,17 +12021,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  function category(){return $('kwgc-category').value;}function is2d(){return category()==='skin';}
  // Mesh edits are stored as explicit vertices / triangle faces on the item,
  // so exported GLBs contain the actual changed geometry, not only the source primitive.
- function primitiveGeo(type){const T=get();return type==='box'?new T.BoxGeometry(1,1,1):type==='sphere'?new T.SphereGeometry(.5,20,14):type==='cone'?new T.ConeGeometry(.5,1,20):new T.CylinderGeometry(.5,.5,1,20);}
- function meshDataFromPrimitive(type){
-   const geo=primitiveGeo(type),attr=geo.getAttribute('position'),idx=geo.getIndex();
+ function primitiveGeo(type,detail=24){const T=get(),d=Math.max(6,Math.min(64,Number(detail)||24));return type==='box'?new T.BoxGeometry(1,1,1,Math.max(1,Math.round(d/12)),Math.max(1,Math.round(d/12)),Math.max(1,Math.round(d/12))):type==='sphere'?new T.SphereGeometry(.5,d,Math.max(6,Math.floor(d*.7))):type==='cone'?new T.ConeGeometry(.5,1,d):new T.CylinderGeometry(.5,.5,1,d);}
+ function meshDataFromPrimitive(type,detail=24){
+   const geo=primitiveGeo(type,detail),attr=geo.getAttribute('position'),idx=geo.getIndex();
    const vertices=[],faces=[],lookup=new Map();
    const find=(i)=>{const x=attr.getX(i),y=attr.getY(i),z=attr.getZ(i),key=[x,y,z].map(n=>Math.round(n*100000)).join(',');let id=lookup.get(key);if(id===undefined){id=vertices.length;lookup.set(key,id);vertices.push([x,y,z]);}return id;};
    for(let i=0;i<(idx?idx.count:attr.count);i+=3){const a=find(idx?idx.getX(i):i),b=find(idx?idx.getX(i+1):i+1),c=find(idx?idx.getX(i+2):i+2);if(a!==b&&a!==c&&b!==c)faces.push([a,b,c]);}
    geo.dispose();return {vertices,faces};
  }
- function ensureMeshData(p){if(!p.meshData)p.meshData=meshDataFromPrimitive(p.type);return p.meshData;}
- function geoFromData(data){const T=get(),geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(data.vertices.flat(),3));geo.setIndex(data.faces.flat());geo.computeVertexNormals();return geo;}
- function partMesh(p){const T=get(),geo=p.meshData?geoFromData(p.meshData):primitiveGeo(p.type);const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color:['heads','head_shape'].includes(category())?'#fff5ba':p.color,roughness:.82,side:T.DoubleSide}));mesh.position.set(p.x,p.y,p.z);mesh.rotation.set((p.rx||0)*Math.PI/180,(p.r||0)*Math.PI/180,(p.rz||0)*Math.PI/180,'XYZ');mesh.scale.set(p.sx,p.sy,p.sz);return mesh;}
+ function ensureMeshData(p){if(!p.meshData)p.meshData=meshDataFromPrimitive(p.type,p.polyDetail);return p.meshData;}
+ function geoFromData(data){const T=get(),geo=new T.BufferGeometry();const points=[],cols=[],hasColors=Array.isArray(data.faceColors);
+   const tmp=new T.Color();for(let j=0;j<data.faces.length;j++){const face=data.faces[j],color=hasColors?data.faceColors[j]:null;if(color)tmp.set(color);for(const id of face){points.push(...data.vertices[id]);if(hasColors){const c=color?tmp:new T.Color('#ffffff');cols.push(c.r,c.g,c.b);}}}
+   geo.setAttribute('position',new T.Float32BufferAttribute(points,3));if(hasColors)geo.setAttribute('color',new T.Float32BufferAttribute(cols,3));geo.computeVertexNormals();return geo;}
+ function partMesh(p){const T=get(),geo=p.meshData?geoFromData(p.meshData):primitiveGeo(p.type,p.polyDetail);const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color:p.negative?'#ff637b':p.meshData?.faceColors?'#ffffff':['heads','head_shape'].includes(category())?'#fff5ba':p.color,roughness:.82,side:T.DoubleSide,vertexColors:!!p.meshData?.faceColors,transparent:!!p.negative,opacity:p.negative?.34:1,depthWrite:!p.negative}));mesh.position.set(p.x,p.y,p.z);mesh.rotation.set((p.rx||0)*Math.PI/180,(p.r||0)*Math.PI/180,(p.rz||0)*Math.PI/180,'XYZ');mesh.scale.set(p.sx,p.sy,p.sz);return mesh;}
  function clearMeshSelection(){meshSelection=null;updateMeshPanel();}
  function updateMeshPanel(){const details=$('kwgc-mesh-details'),btn=$('kwgc-extrude-face');if(!details||!btn)return;
    const p=parts[selected];const modeName=({polygon:'Whole part',face:'Triangle face',vertex:'Vertex',edge:'Edge'})[meshMode];
@@ -12065,7 +12093,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
      const mesh=root.children[i];
      const child=mesh.children.find(o=>o.userData.creatorOutline);
      if(child){mesh.remove(child);child.material.dispose();} // mesh and child share geometry
-     if(i===selected||i===hoveredPart)addPartHighlight(mesh,i===selected);
+     if(selection.has(i)||i===hoveredPart)addPartHighlight(mesh,selection.has(i));
    }
  }
  function meshElementCentroid(p){if(!meshSelection||!meshSelection.ids.length||!p)return null;const T=get(),obj=root.children[selected];if(!obj)return null;obj.updateMatrixWorld(true);const data=ensureMeshData(p),center=new T.Vector3();for(const i of meshSelection.ids)center.add(new T.Vector3(...data.vertices[i]).applyMatrix4(obj.matrixWorld));return center.multiplyScalar(1/meshSelection.ids.length);}
@@ -12117,9 +12145,97 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    if(mirroredFace>=0)extrudeAt(mirroredFace);
    meshSelection={faceIndex:fi,ids:cap};syncMirror(selected,true);redraw();status(mirroredFace>=0?'Extruded both mirrored faces.':'Extruded one triangle face. Drag its handles to shape it.');
  }
- function duplicatePart(){if(is2d()||selected<0||!parts[selected])return;remember();const p=JSON.parse(JSON.stringify(parts[selected]));p.uid=uniqueId();delete p.mirrorOf;p.x+=.22;parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);status('Duplicated part.');}
- function deleteSelectedPart(){if(is2d()||selected<0)return;remember();activeDrag=null;clearEditorHover();const j=mirror&&mirrorPartner(selected)>=0?mirrorPartner(selected):-1;const ids=[selected,...(j>=0?[j]:[])].sort((a,b)=>b-a);for(const id of ids)parts.splice(id,1);selected=-1;meshSelection=null;select(-1);status('Removed '+ids.length+' part'+(ids.length===1?'':'s')+'.');}
+ function duplicatePart(){if(is2d()||!selection.size)return;remember();const originals=[...selection].sort((a,b)=>a-b).map(i=>JSON.parse(JSON.stringify(parts[i])));const ids=[];
+   for(const p of originals){p.uid=uniqueId();delete p.mirrorOf;parts.push(p);ids.push(parts.length-1);}selection=new Set(ids);selected=ids.at(-1);redraw();status('Duplicated '+ids.length+' part(s) at the exact same position.');}
+ function deleteSelectedPart(){if(is2d()||!selection.size)return;remember();activeDrag=null;clearEditorHover();const indexes=new Set(selection);if(mirror)for(const i of selection){const j=mirrorPartner(i);if(j>=0)indexes.add(j);}const ids=[...indexes].sort((a,b)=>b-a);for(const id of ids)parts.splice(id,1);selection.clear();selected=-1;meshSelection=null;select(-1);status('Removed '+ids.length+' part(s).');}
 
+ // Solid Boolean geometry for KWG Item Creator. Operates on actual triangles
+ // and returns a saved meshData mesh so GLB export contains the cut geometry.
+ function solidCSG(){
+   const T=get(),EPS=1e-5;
+   class Poly{
+     constructor(vertices,color){this.vertices=vertices;this.color=color;this.plane=this.getPlane();}
+     getPlane(){for(let j=2;j<this.vertices.length;j++){
+       const a=this.vertices[0],b=this.vertices[j-1],c=this.vertices[j];
+       const n=b.clone().sub(a).cross(c.clone().sub(a));if(n.lengthSq()>EPS*EPS){n.normalize();return {normal:n,w:n.dot(a)};}
+     }return null;}
+     clone(){return new Poly(this.vertices.map(v=>v.clone()),this.color);}
+     flip(){this.vertices.reverse();if(this.plane){this.plane.normal.negate();this.plane.w=-this.plane.w;}}
+   }
+   function split(plane,poly,cfront,cback,front,back){
+     if(!plane||!poly.plane)return;
+     const COPLANAR=0,FRONT=1,BACK=2,SPANNING=3;
+     let polygonType=0;const types=[];
+     for(const v of poly.vertices){const t=plane.normal.dot(v)-plane.w,code=t<-EPS?BACK:t>EPS?FRONT:COPLANAR;polygonType|=code;types.push(code);}
+     switch(polygonType){
+       case COPLANAR:(plane.normal.dot(poly.plane.normal)>0?cfront:cback).push(poly);break;
+       case FRONT:front.push(poly);break;
+       case BACK:back.push(poly);break;
+       case SPANNING:{const f=[],b=[];for(let i=0;i<poly.vertices.length;i++){
+         const j=(i+1)%poly.vertices.length,ti=types[i],tj=types[j],vi=poly.vertices[i],vj=poly.vertices[j];
+         if(ti!==BACK)f.push(vi);if(ti!==FRONT)b.push(vi);
+         if((ti|tj)===SPANNING){const delta=vj.clone().sub(vi),denom=plane.normal.dot(delta);
+           if(Math.abs(denom)>1e-12){const t=(plane.w-plane.normal.dot(vi))/denom;const v=vi.clone().addScaledVector(delta,t);f.push(v);b.push(v.clone());}}
+       }
+       if(f.length>=3){const q=new Poly(f,poly.color);if(q.plane)front.push(q);}
+       if(b.length>=3){const q=new Poly(b,poly.color);if(q.plane)back.push(q);}
+       break;}
+     }
+   }
+   class Node{
+     constructor(polygons=[]){this.plane=null;this.front=null;this.back=null;this.polygons=[];if(polygons.length)this.build(polygons);}
+     clone(){const n=new Node();n.plane=this.plane?{normal:this.plane.normal.clone(),w:this.plane.w}:null;n.polygons=this.polygons.map(p=>p.clone());n.front=this.front?.clone()||null;n.back=this.back?.clone()||null;return n;}
+     allPolygons(){return [...this.polygons,...(this.front?.allPolygons()||[]),...(this.back?.allPolygons()||[])];}
+     invert(){for(const p of this.polygons)p.flip();if(this.plane){this.plane.normal.negate();this.plane.w=-this.plane.w;}this.front?.invert();this.back?.invert();const t=this.front;this.front=this.back;this.back=t;}
+     clipPolygons(polys){if(!this.plane)return polys.slice();let front=[],back=[];
+       for(const p of polys)split(this.plane,p,front,back,front,back);
+       if(this.front)front=this.front.clipPolygons(front);
+       if(this.back)back=this.back.clipPolygons(back);else back=[];
+       return front.concat(back);
+     }
+     clipTo(other){this.polygons=other.clipPolygons(this.polygons);this.front?.clipTo(other);this.back?.clipTo(other);}
+     build(polys){if(!polys.length)return;if(!this.plane)this.plane={normal:polys[0].plane.normal.clone(),w:polys[0].plane.w};const front=[],back=[];
+       for(const p of polys)split(this.plane,p,this.polygons,this.polygons,front,back);
+       if(front.length){if(!this.front)this.front=new Node();this.front.build(front);}
+       if(back.length){if(!this.back)this.back=new Node();this.back.build(back);}
+     }
+   }
+   const merge=(ap,bp)=>{const a=new Node(ap),b=new Node(bp);a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.allPolygons());return a.allPolygons();};
+   const minus=(ap,bp)=>{const a=new Node(ap),b=new Node(bp);a.invert();a.clipTo(b);b.clipTo(a);b.invert();b.clipTo(a);b.invert();a.build(b.allPolygons());a.invert();return a.allPolygons();};
+   const triangles=p=>{const obj=partMesh({...p,negative:false}),g=obj.geometry,attr=g.getAttribute('position'),idx=g.getIndex(),count=idx?idx.count:attr.count;obj.updateMatrixWorld(true);const color=p.color||'#ffffff',polys=[];
+     for(let i=0;i<count;i+=3){const verts=[];for(let j=0;j<3;j++){const id=idx?idx.getX(i+j):i+j;verts.push(new T.Vector3(attr.getX(id),attr.getY(id),attr.getZ(id)).applyMatrix4(obj.matrixWorld));}
+       const a=new Poly(verts,p.meshData?.faceColors?.[Math.floor(i/3)]||color);if(a.plane)polys.push(a);
+     }
+     g.dispose();obj.material.dispose();return polys;};
+   return {merge,minus,triangles};
+ }
+ function toggleNegative(){if(is2d()||!selection.size)return status('Select a 3D part to negate.');remember();const toggle=new Set(selection);if(mirror)for(const i of selection){const j=mirrorPartner(i);if(j>=0)toggle.add(j);}for(const i of toggle)if(parts[i])parts[i].negative=!parts[i].negative;
+   redraw();status('Toggled negative part(s). Select positives + negatives and press U to subtract.');}
+ function unionSelected(){
+   if(is2d()||selection.size<2)return status('Ctrl+select two or more 3D parts, then press U.');
+   const ids=[...selection].filter(i=>parts[i]).sort((a,b)=>a-b),positives=ids.filter(i=>!parts[i].negative),negatives=ids.filter(i=>parts[i].negative);
+   if(!positives.length)return status('A union needs at least one positive part.');
+   const inputTriangles=ids.reduce((sum,i)=>{const p=parts[i];if(p.meshData)return sum+p.meshData.faces.length;const g=primitiveGeo(p.type,p.polyDetail),n=(g.index?g.index.count:g.getAttribute('position').count)/3;g.dispose();return sum+n;},0);
+   if(inputTriangles>3500)return status('Union would process '+Math.round(inputTriangles)+' triangles. Lower polygon detail below 3,500 triangles before combining shapes.');
+   try{
+     const C=solidCSG();let merged=C.triangles(parts[positives[0]]);
+     if(!merged.length)throw new Error('First part has no usable triangles.');
+     const baseColor=parts[positives[0]].color||'#dddddd';
+     for(const i of positives.slice(1)){const polys=C.triangles(parts[i]);if(polys.length)merged=C.merge(merged,polys);if(merged.length>15000)throw new Error('Boolean output too complex. Use fewer polygons.');}
+     for(const i of negatives){const polys=C.triangles(parts[i]);polys.forEach(p=>p.color=baseColor);if(polys.length)merged=C.minus(merged,polys);if(merged.length>15000)throw new Error('Boolean output too complex. Use fewer polygons.');}
+     const vertices=[],faces=[],faceColors=[];
+     for(const poly of merged){const arr=poly.vertices;if(arr.length<3)continue;for(let k=2;k<arr.length;k++){
+       const a=arr[0],b=arr[k-1],c=arr[k];if(b.clone().sub(a).cross(c.clone().sub(a)).lengthSq()<1e-12)continue;
+       const base=vertices.length;vertices.push(a.toArray(),b.toArray(),c.toArray());faces.push([base,base+1,base+2]);faceColors.push(poly.color);
+     }}
+     if(!faces.length)throw new Error('Union produced no visible geometry. Are negative parts covering it completely?');
+     remember();const base=parts[positives[0]],result={uid:uniqueId(),type:'union',name:'Union ('+ids.length+' parts)',color:baseColor,
+       x:0,y:0,z:0,rx:0,r:0,rz:0,sx:1,sy:1,sz:1,negative:false,polyDetail:base.polyDetail||24,meshData:{vertices,faces,faceColors}};
+     for(const i of [...ids].sort((a,b)=>b-a))parts.splice(i,1);
+     parts.push(result);selection=new Set([parts.length-1]);selected=parts.length-1;meshSelection=null;redraw();focusSelected();
+     status('Union successful: '+ids.length+' parts → '+faces.length+' triangles'+(negatives.length?' (with '+negatives.length+' subtraction(s))':'')+'. Undo with Ctrl+Z.');
+   }catch(e){console.error('KWG Boolean operation:',e);status('Union failed: '+e.message+'. Original parts were kept.');}
+ }
  function updateGizmo(){
    if(!scene||!gizmo)return;
    releaseChildren(gizmo);gizmoHit=[];gizmo.position.set(0,0,0);gizmo.rotation.set(0,0,0);
@@ -12140,9 +12256,28 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
      }
    }
  }
- function redraw(){if(!root)return;releaseChildren(root);parts.forEach((p,i)=>{const mesh=partMesh(p);mesh.userData.partIndex=i;root.add(mesh);});updatePartHighlights();const list=$('kwg-creator-parts');list.replaceChildren();parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(i===selected?'▸ ':'')+(i+1)+' '+p.type;b.onclick=()=>select(i);if(i===selected)b.classList.add('active');list.append(b);});const count=$('kwgc-part-count');if(count)count.textContent=parts.length+' PART'+(parts.length===1?'':'S');const empty=$('kwgc-no-selection');if(empty)empty.style.display=parts.length?'none':'block';updateElementOverlay();updateGizmo();updateMeshPanel();}
- function select(n){if(selected!==n)meshSelection=null;selected=n;const p=parts[n];if(p){coords.forEach(k=>$('kwgc-'+k).value=p[k]??0);if($('kwgc-part-color'))$('kwgc-part-color').value=p.color;}
- const transforms=$('kwgc-transforms'),hint=$('kwgc-selection-empty');if(transforms)transforms.style.display=p?'grid':'none';if(hint)hint.style.display=p?'none':'block';setPropertyVisibility();redraw();}
+ function redraw(){
+   if(!root)return;releaseChildren(root);parts.forEach((p,i)=>{const m=partMesh(p);m.userData.partIndex=i;root.add(m);});
+   updatePartHighlights();const list=$('kwg-creator-parts');list.replaceChildren();
+   parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(selection.has(i)?'▸ ':'')+(i+1)+' '+(p.name||p.type)+(p.negative?' [NEG]':'');
+     b.onclick=e=>select(i,e.ctrlKey||e.metaKey);b.classList.toggle('active',i===selected);b.classList.toggle('kwg-multi-selected',selection.has(i));
+     b.title='Ctrl+click to toggle multiselection';list.append(b);});
+   const count=$('kwgc-part-count');if(count)count.textContent=parts.length+' PART'+(parts.length===1?'':'S')+' · '+selection.size+' SELECTED';
+   const empty=$('kwgc-no-selection');if(empty)empty.style.display=parts.length?'none':'block';
+   updateElementOverlay();updateGizmo();updateMeshPanel();
+   if($('kwgc-poly-detail')&&parts[selected])$('kwgc-poly-detail').value=String(parts[selected].polyDetail||24);
+   const polyHint=$('kwgc-triangle-count');if(polyHint){const p=parts[selected];if(!p)polyHint.textContent='Select a primitive to see its triangle count.';
+     else if(p.meshData)polyHint.textContent=p.meshData.faces.length+' triangles (sculpted / union mesh)';
+     else {const g=primitiveGeo(p.type,p.polyDetail),n=g.index?g.index.count/3:g.getAttribute('position').count/3;polyHint.textContent=Math.round(n)+' triangles · '+(p.polyDetail||24)+' segments';g.dispose();}}
+
+ }
+ function select(n,additive=false){
+   if(!additive){if(selected!==n)meshSelection=null;selection.clear();if(n>=0)selection.add(n);selected=n;}
+   else if(n>=0){meshSelection=null;if(selection.has(n)){selection.delete(n);if(selected===n)selected=selection.size?[...selection].at(-1):-1;}else{selection.add(n);selected=n;}}
+   const p=parts[selected];if(p){coords.forEach(k=>{const el=$('kwgc-'+k);if(el)el.value=p[k]??0;});if($('kwgc-part-color'))$('kwgc-part-color').value=p.color;}
+   const transforms=$('kwgc-transforms'),hint=$('kwgc-selection-empty');if(transforms)transforms.style.display=p?'grid':'none';if(hint)hint.style.display=p?'none':'block';
+   setPropertyVisibility();redraw();
+ }
  function mirrorPartner(i){
   const p=parts[i];if(!p)return -1;
   return parts.findIndex((q,j)=>j!==i && (q.mirrorOf===p.uid || p.mirrorOf===q.uid));
@@ -12155,7 +12290,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    // Centered parts use same-mesh symmetry; do not create two overlapping shells.
    if(j<0&&Math.abs(p.x)<.001)return;
    if(j<0){j=parts.length;parts.push({...p,uid:uniqueId(),mirrorOf:p.uid});}
-   const q=parts[j];Object.assign(q,{type:p.type,color:p.color,x:-p.x,y:p.y,z:p.z,rx:p.rx||0,r:-(p.r||0),rz:-(p.rz||0),sx:p.sx,sy:p.sy,sz:p.sz});
+   const q=parts[j];Object.assign(q,{type:p.type,polyDetail:p.polyDetail,negative:p.negative||false,color:p.color,x:-p.x,y:p.y,z:p.z,rx:p.rx||0,r:-(p.r||0),rz:-(p.rz||0),sx:p.sx,sy:p.sy,sz:p.sz});
    if(p.meshData){const copy=JSON.parse(JSON.stringify(p.meshData));copy.vertices.forEach(v=>v[0]=-v[0]);copy.faces.forEach(f=>{const t=f[1];f[1]=f[2];f[2]=t;});q.meshData=copy;}else delete q.meshData;
  }
  function targetCreatedItem(){if(!cameraTarget||!root)return;root.updateMatrixWorld(true);const box=new T.Box3().setFromObject(root);if(!box.isEmpty())cameraTarget.copy(box.getCenter(new T.Vector3()));else cameraTarget.set(0,2.35,0);}
@@ -12164,9 +12299,25 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
      cameraTarget.copy(box.getCenter(new T.Vector3()));const size=box.getSize(new T.Vector3());distance=Math.max(1.2,Math.min(16,Math.max(size.length()*2.4,2)));status('Focused selected part.');
    }
  }else{targetCreatedItem();status('Focused item.');}}
- function addShape(type){remember();const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const spread=mirror&&['eyes','shoes'].includes(c)?(c==='eyes'?.17:.23):0;
-   const p={type,color:$('kwgc-color').value,x:spread,y,z,rx:0,r:0,rz:0,sx:type==='box'?.8:1,sy:.5,sz:.8};p.uid=uniqueId();if(meshMode!=='polygon')ensureMeshData(p);parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);focusSelected();}
- function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,.85));const light=new T.DirectionalLight(0xffffff,.9);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);gizmo=new T.Group();scene.add(gizmo);elementOverlay=new T.Group();scene.add(elementOverlay);hoverOverlay=new T.Group();scene.add(hoverOverlay);
+ function insertDefault(){
+   if(is2d())return;
+   const T=get(),c=category(),group=[];
+   if(avatar){avatar.updateMatrixWorld(true);avatar.traverse(m=>{if(!m.isMesh||!m.userData.kwgBodyPart)return;let tag=m.userData.kwgBodyPart;
+     const matched=(['head_shape','heads'].includes(c)&&tag==='head')||(['tops','flightsuits'].includes(c)&&tag==='tops')||(['bottoms','flightsuits'].includes(c)&&tag==='bottoms')||(c==='shoes'&&tag==='shoes');
+     if(matched)group.push(m);
+   });}
+   const imported=[];for(const mesh of group){const geo=mesh.geometry.clone();geo.applyMatrix4(mesh.matrixWorld);const a=geo.getAttribute('position'),idx=geo.getIndex(),vertices=[],faces=[];
+     for(let i=0;i<(idx?idx.count:a.count);i+=3){const f=[];for(let j=0;j<3;j++){const k=idx?idx.getX(i+j):i+j;f.push(vertices.length);vertices.push([a.getX(k),a.getY(k),a.getZ(k)]);}faces.push(f);}geo.dispose();
+     const color='#'+(mesh.material?.color?.getHexString()||'ffffff');imported.push({uid:uniqueId(),type:'default',name:'Default '+(mesh.userData.kwgBodyPart||c),color,x:0,y:0,z:0,rx:0,r:0,rz:0,sx:1,sy:1,sz:1,polyDetail:24,meshData:{vertices,faces}});
+   }
+   if(!imported.length){const basic=c==='eyes'?[[ -.16,2.07,.41,.11,.11,.07],[.16,2.07,.41,.11,.11,.07]]:c==='mouth'?[[0,1.88,.38,.18,.04,.05]]:c==='hair'?[[0,2.36,0,.40,.17,.38]]:c==='hat'||c==='hats'?[[0,2.50,0,.42,.18,.42]]:[[0,2.04,0,.37,.37,.37]];
+     for(const [x,y,z,sx,sy,sz] of basic)imported.push({uid:uniqueId(),type:c==='mouth'?'box':'sphere',name:'Default '+c,color:c==='eyes'?'#ffffff':'#fff5ba',x,y,z,rx:0,r:0,rz:0,sx:sx*2,sy:sy*2,sz:sz*2,polyDetail:24});
+   }
+   remember();const start=parts.length;parts.push(...imported);selection=new Set(imported.map((_,i)=>start+i));selected=start;meshSelection=null;select(selected,false);selection=new Set(imported.map((_,i)=>start+i));redraw();focusSelected();status('Inserted '+imported.length+' default '+c+' part(s). Edit or sculpt as a starting point.');
+ }
+ function addShape(type){if(type==='default')return insertDefault();remember();const c=category(),y= c==='eyes'?2.06:c==='mouth'?1.88:['tops','flightsuits'].includes(c)?1.36:c==='bottoms'?.60:c==='shoes'?.12:c==='heads'||c==='head_shape'?2.04:2.45;const z=c==='eyes'||c==='mouth'?.39:0;const spread=mirror&&['eyes','shoes'].includes(c)?(c==='eyes'?.17:.23):0;
+   const p={type,polyDetail:24,color:$('kwgc-color').value,x:spread,y,z,rx:0,r:0,rz:0,sx:type==='box'?.8:1,sy:.5,sz:.8};p.uid=uniqueId();if(meshMode!=='polygon')ensureMeshData(p);parts.push(p);const i=parts.length-1;syncMirror(i,true);select(i);focusSelected();}
+ function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');canvas.tabIndex=0;if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,.85));const light=new T.DirectionalLight(0xffffff,.9);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);gizmo=new T.Group();scene.add(gizmo);elementOverlay=new T.Group();scene.add(elementOverlay);hoverOverlay=new T.Group();scene.add(hoverOverlay);
  // Use the same avatar builder as the rest of KWG, rather than a placeholder mannequin.
  avatar=window.kwgCreatorBuildAvatar?window.kwgCreatorBuildAvatar(defaultAvatarAppearance):new T.Group();scene.add(avatar);
  // Friendly default eyes on the editor's fitting model (not exported with items).
@@ -12183,7 +12334,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  }
 
  cameraTarget=new T.Vector3(0,2.35,0);
- let frame=0;const tick=()=>{ if(!renderer)return;frame=requestAnimationFrame(tick);const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=Math.max(1,Math.round(box.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}camera.position.set(cameraTarget.x+Math.sin(angle)*Math.cos(elevation)*distance,cameraTarget.y+Math.sin(elevation)*distance,cameraTarget.z+Math.cos(angle)*Math.cos(elevation)*distance);camera.lookAt(cameraTarget);renderer.render(scene,camera);};tick();const ray=new T.Raycaster(),pointer=new T.Vector2();
+ let frame=0;let lastFrame=performance.now();const tick=()=>{ if(!renderer)return;frame=requestAnimationFrame(tick);const now=performance.now(),dt=Math.min(.05,(now-lastFrame)/1000);lastFrame=now;
+   if(modal.style.display!=='none'&&cameraKeys.size&&!is2d()){
+     const T=get(),forward=new T.Vector3(-Math.sin(angle),0,-Math.cos(angle)),right=new T.Vector3(Math.cos(angle),0,-Math.sin(angle));
+     const move=new T.Vector3(),fast=cameraKeys.has('shift')?3:1;
+     if(cameraKeys.has('w'))move.add(forward);if(cameraKeys.has('s'))move.sub(forward);
+     if(cameraKeys.has('a'))move.sub(right);if(cameraKeys.has('d'))move.add(right);
+     if(cameraKeys.has('q'))move.y-=1;if(cameraKeys.has(' '))move.y+=1;
+     if(move.lengthSq()>0)cameraTarget.addScaledVector(move.normalize(),dt*2.4*fast);
+   }
+const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=Math.max(1,Math.round(box.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}camera.position.set(cameraTarget.x+Math.sin(angle)*Math.cos(elevation)*distance,cameraTarget.y+Math.sin(elevation)*distance,cameraTarget.z+Math.cos(angle)*Math.cos(elevation)*distance);camera.lookAt(cameraTarget);renderer.render(scene,camera);};tick();const ray=new T.Raycaster(),pointer=new T.Vector2();
  function hit(e){const rect=canvas.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);return ray.intersectObjects(root.children,false)[0];}
  function setPointer(e){
    const rect=canvas.getBoundingClientRect();
@@ -12200,14 +12360,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    if(!sameElement){hoveredElement=nextElement;updateElementOverlay();}
    canvas.style.cursor=i>=0?'pointer':'grab';
  }
- canvas.addEventListener('pointerdown',e=>{
+ canvas.addEventListener('pointerenter',()=>canvasHovered=true);
+ canvas.addEventListener('pointerleave',()=>{canvasHovered=false;cameraKeys.clear();});
+ canvas.addEventListener('contextmenu',e=>e.preventDefault());
+ canvas.addEventListener('pointerdown',e=>{canvas.focus({preventScroll:true});if(e.button===2||e.button===1){drag=true;lastX=e.clientX;canvas._lastY=e.clientY;canvas.setPointerCapture(e.pointerId);return;}
    setPointer(e);const gh=selected>=0&&gizmoHit.length?ray.intersectObjects(gizmoHit,false)[0]:null;
    lastX=e.clientX;canvas._lastY=e.clientY;drag=true;canvas.setPointerCapture(e.pointerId);
-   if(gh&&selected>=0){remember();activeDrag={i:selected,x:e.clientX,y:e.clientY,axis:gh.object.userData.gizmoAxis,original:JSON.parse(JSON.stringify(parts[selected]))};return;}
+   if(gh&&selected>=0){remember();activeDrag={i:selected,x:e.clientX,y:e.clientY,axis:gh.object.userData.gizmoAxis,original:JSON.parse(JSON.stringify(parts[selected])),other:Object.fromEntries([...selection].map(i=>[i,JSON.parse(JSON.stringify(parts[i]))]))};return;}
    const h=hit(e);
    if(h){
      const i=h.object.userData.partIndex;
-     if(i!==selected)select(i);
+     if(e.ctrlKey||e.metaKey){select(i,true);drag=false;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);return;}if(i!==selected||selection.size!==1)select(i);
      if(meshMode!=='polygon'){
        // select() may rebuild the mesh, so pick against current geometry.
        const fresh=hit(e);
@@ -12215,9 +12378,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
      }
      if(mode==='recolor'){remember();parts[i].color=$('kwgc-color').value;syncMirror(i,true);redraw();}
      else if(['move','scale','rotate'].includes(mode)){
-       remember();activeDrag={i,x:e.clientX,y:e.clientY,original:JSON.parse(JSON.stringify(parts[i]))};
+       remember();activeDrag={i,x:e.clientX,y:e.clientY,original:JSON.parse(JSON.stringify(parts[i])),other:Object.fromEntries([...selection].map(j=>[j,JSON.parse(JSON.stringify(parts[j]))]))};
      }
-   }else if(mode==='select'){select(-1);}
+   }else if(mode==='select'&&!e.ctrlKey&&!e.metaKey){select(-1);}
  });
  canvas.addEventListener('pointermove',e=>{
    if(!drag){updatePointerHover(e);return;}
@@ -12240,12 +12403,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
          p[field]=(d.original[field]||0)+increment;
        }
      }
-     syncMirror(d.i,true);
+     if(meshMode==='polygon'&&selection.size>1){for(const idx of selection){if(idx===d.i||!parts[idx])continue;const o=d.other?.[idx];if(!o)continue;for(const a of ['x','y','z','rx','r','rz','sx','sy','sz']){
+       if(['x','y','z','rx','r','rz'].includes(a))parts[idx][a]=(o[a]||0)+((p[a]||0)-(d.original[a]||0));
+       else parts[idx][a]=(o[a]||1)*((p[a]||1)/Math.max(.0001,d.original[a]||1));
+     }syncMirror(idx,true);}}syncMirror(d.i,true);
      coords.forEach(k=>$('kwgc-'+k).value=p[k]??0);
      redraw(); // also puts the gizmo on the new part/element centroid
    }else{
-     angle+=(e.clientX-lastX)*.012;
-     elevation=Math.max(-1.45,Math.min(1.45,elevation-(e.clientY-(canvas._lastY??e.clientY))*.01));
+     angle-=(e.clientX-lastX)*.009;
+     elevation=Math.max(-1.45,Math.min(1.45,elevation+(e.clientY-(canvas._lastY??e.clientY))*.009));
    }
    lastX=e.clientX;canvas._lastY=e.clientY;
  });
@@ -12296,12 +12462,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    const host=$('kwg-creator-drafts');
    if(!host)return;host.replaceChildren();
    const drafts=JSON.parse(localStorage.getItem('kwg_creator_local_drafts')||'[]');
-   drafts.forEach((d,i)=>{if(d.category==='torso_decal')return;const b=document.createElement('button');b.textContent=d.name+' ('+d.category+')';b.onclick=()=>{$('kwgc-category').value=d.category;switchCategory(true);$('kwgc-name').value=d.name;parts=JSON.parse(JSON.stringify(d.parts||[]));resetHistory();if(d.paint){const image=new Image();image.onload=()=>{clearPainting();ctx.drawImage(image,0,0,512,512);paintDirty=true;};image.src=d.paint;}select(-1);status('Loaded local draft.');};host.appendChild(b);});
+   drafts.forEach((d,i)=>{if(d.category==='torso_decal')return;const b=document.createElement('button');b.textContent=d.name+' ('+d.category+')';b.onclick=()=>{$('kwgc-category').value=d.category;switchCategory(true);$('kwgc-name').value=d.name;parts=JSON.parse(JSON.stringify(d.parts||[]));selection.clear();resetHistory();if(d.paint){const image=new Image();image.onload=()=>{clearPainting();ctx.drawImage(image,0,0,512,512);paintDirty=true;};image.src=d.paint;}select(-1);status('Loaded local draft.');};host.appendChild(b);});
    if(!drafts.length)host.textContent='No local drafts yet.';
    status('Loaded '+drafts.length+' local draft(s).');
  }
  function resetCreator(){
-   resetHistory();parts=[];selected=-1;meshSelection=null;draftId=null;cameraTarget?.set(0,2.35,0);activeDrag=null;clearEditorHover();clearPainting();
+   resetHistory();parts=[];selected=-1;selection.clear();meshSelection=null;draftId=null;cameraTarget?.set(0,2.35,0);activeDrag=null;clearEditorHover();clearPainting();
    if($('kwgc-selection-empty'))$('kwgc-selection-empty').style.display='block';
    if($('kwgc-transforms'))$('kwgc-transforms').style.display='none';
    $('kwgc-name').value='New Creation';
@@ -12311,14 +12477,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  }
  $('kwgc-refresh-drafts').onclick=refresh;
  $('kwgc-new').onclick=resetCreator;
- $('kwgc-close').onclick=()=>{resetCreator();modal.style.display='none';status('Session ended.');};
+ $('kwgc-close').onclick=()=>{resetCreator();cameraKeys.clear();canvasHovered=false;modal.style.display='none';status('Session ended.');};
  $('kwgc-mannequin').onclick=()=>{
    showMannequin=!showMannequin;
    $('kwgc-mannequin').textContent='Mannequin: '+(showMannequin?'ON':'OFF');
    updateFittingPreview();
  };
  function switchCategory(force=false){
-   const c=category();if(c!==activeCategory||force){resetHistory();parts=[];selected=-1;meshSelection=null;activeDrag=null;clearEditorHover();draftId=null;activeCategory=c;clearPainting();$('kwgc-name').value='New Creation';$('kwgc-price').value=50;setMeshMode('polygon');}
+   const c=category();if(c!==activeCategory||force){resetHistory();parts=[];selected=-1;selection.clear();meshSelection=null;activeDrag=null;clearEditorHover();draftId=null;activeCategory=c;clearPainting();$('kwgc-name').value='New Creation';$('kwgc-price').value=50;setMeshMode('polygon');}
    const texture=is2d();
    $('kwgc-3dtools').style.display=texture?'none':'';
    $('kwgc-2dtools').style.display=texture?'':'none';
@@ -12341,6 +12507,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    status('Inserted '+$('kwgc-insert-shape').selectedOptions[0].text+'.');
  };
  $('kwgc-delete-part').onclick=deleteSelectedPart;
+ $('kwgc-union').onclick=unionSelected;$('kwgc-negate').onclick=toggleNegative;
+ $('kwgc-poly-detail').onchange=e=>{const val=Number(e.target.value);if(selected<0||!parts[selected])return;remember();
+   for(const i of selection){const p=parts[i];if(!p)continue;if(p.meshData){status('Custom sculpted mesh kept intact. Detail cannot be changed without rebuilding the sculpt.');continue;}p.polyDetail=val;syncMirror(i,true);}
+   redraw();};
  $('kwgc-extrude-face').onclick=extrudeFace;
  document.querySelectorAll('#kwgc-mesh-modes [data-mesh-mode]').forEach(b=>b.onclick=()=>{if(is2d())return;setMeshMode(b.dataset.meshMode);status('Mesh mode: '+b.dataset.meshMode+'. Click a part to select.');});
  coords.forEach(k=>{
@@ -12375,12 +12545,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    if(modal.style.display==='none'||!modal.getClientRects().length)return;
    const el=e.target;if(el&&(el.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(el.tagName)))return;
    const key=e.key.toLowerCase(),mod=e.ctrlKey||e.metaKey;
+   if(!mod&&!e.altKey&&!is2d()&&(canvasHovered||document.activeElement===$('kwg-creator-viewport'))&&['w','a','s','d','q',' ','shift'].includes(key)){
+      e.preventDefault();cameraKeys.add(key);if(e.shiftKey)cameraKeys.add('shift');return;
+   }
    if(mod&&!e.altKey&&key==='z'){e.preventDefault();if(e.shiftKey)redo();else undo();return;}
    if(mod&&!e.altKey&&key==='y'){e.preventDefault();redo();return;}
    if(key==='f'&&!mod&&!e.altKey){e.preventDefault();focusSelected();return;}
-   if((e.shiftKey||mod)&&key==='d'){e.preventDefault();duplicatePart();return;}
+   if(mod&&key==='d'){e.preventDefault();duplicatePart();return;}
    if(is2d()||mod||e.altKey&&key!=='arrowleft'&&key!=='arrowright')return;
-   if(key==='delete'||key==='backspace'){e.preventDefault();deleteSelectedPart();return;}
+   if(key==='u'){e.preventDefault();unionSelected();return;}if(key==='n'){e.preventDefault();toggleNegative();return;}if(key==='delete'||key==='backspace'){e.preventDefault();deleteSelectedPart();return;}
    if(key==='e'){e.preventDefault();extrudeFace();return;}
    if(key==='g'||key==='s'||key==='r'){e.preventDefault();activateTool({g:'move',s:'scale',r:'rotate'}[key]);return;}
    if(key==='i'){e.preventDefault();activateTool('insert');return;}
@@ -12392,6 +12565,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
      syncMirror(selected,true);redraw();status('Rotated selection '+15*sign+'°.');
    }
  });
+ document.addEventListener('keyup',e=>cameraKeys.delete(e.key.toLowerCase()));
+ window.addEventListener('blur',()=>cameraKeys.clear());
  // Initialize only when the creator is opened, after Three.js is available.
  const openCreator=()=>{
    resetCreator();modal.style.display='flex';
@@ -12407,7 +12582,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    b.addEventListener('click',()=>setTimeout(openCreator,0));
  });
 
- async function exportGlb(){return new Promise((resolve,reject)=>{const T=get(),exp=new T.GLTFExporter(),g=new T.Group();parts.forEach(p=>g.add(partMesh(p)));try{exp.parse(g,data=>{if(!(data instanceof ArrayBuffer))return reject(new Error('Binary GLB export failed'));resolve(new Uint8Array(data));},{binary:true,onlyVisible:true});}catch(e){reject(e);}});}
+ async function exportGlb(){return new Promise((resolve,reject)=>{const T=get(),exp=new T.GLTFExporter(),g=new T.Group();parts.filter(p=>!p.negative).forEach(p=>g.add(partMesh(p)));try{exp.parse(g,data=>{if(!(data instanceof ArrayBuffer))return reject(new Error('Binary GLB export failed'));resolve(new Uint8Array(data));},{binary:true,onlyVisible:true});}catch(e){reject(e);}});}
  $('kwgc-publish').onclick=async()=>{const name=$('kwgc-name').value.trim(),price=Number($('kwgc-price').value),cat=category(),dist=$('kwgc-distribution').value;if(!name||!Number.isSafeInteger(price)||price<0||price>1000000)return status('Enter a valid name and price.');if(!is2d()&&!parts.length)return status('Add a shape before publishing.');status('Exporting item...');try{let bytes,fileName,mimeType;if(is2d()){const bin=atob(paint.toDataURL('image/png').split(',')[1]);bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);fileName='item.png';mimeType='image/png';}else{bytes=await exportGlb();fileName='item.glb';mimeType='model/gltf-binary';}status('Uploading to store...');const r=await sock('admin_store_create',{category:cat,name,price,distribution:dist,fileName,mimeType,fileData:bytes,metadata:{size:1,offsetX:0,offsetY:0,offsetZ:0},isVisible:dist==='store'});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.success?'Published '+name+' (#'+r.item.id+') to '+(dist==='starter'?'STARTER INVENTORY (not listed for sale)':'STORE → '+cat.toUpperCase())+'. Note: purchased items move into My Stuff and are hidden from the for-sale list.':(r.message||'Publish failed'));}catch(e){console.error(e);status(e.message||'Export failed.');}};
  // Existing application-scoped socket is assigned to this bridge from its own scope below.
 })();
