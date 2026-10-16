@@ -2892,7 +2892,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           <button type="button" class="kwg-shop-switch-btn" data-shop="pets" role="tab" aria-selected="false">PETS STORE</button>
         </div>
         <div id="kwg-avatar-shop" class="kwg-shop-categories">
-          <div class="store-tabs" role="tablist" aria-label="Avatar item categories"><button class="store-tab active" data-store-category="hair">HAIR</button><button class="store-tab " data-store-category="hats">HATS</button><button class="store-tab " data-store-category="heads">HEADS</button><button class="store-tab " data-store-category="eyes">EYES</button><button class="store-tab " data-store-category="mouth">MOUTH</button><button class="store-tab " data-store-category="skin">SKIN</button><button class="store-tab " data-store-category="tops">TOPS</button><button class="store-tab " data-store-category="bottoms">BOTTOMS</button><button class="store-tab " data-store-category="shoes">SHOES</button><button class="store-tab " data-store-category="flightsuits">FLIGHTSUITS</button></div>
+          <div class="store-tabs" role="tablist" aria-label="Avatar item categories"><button class="store-tab active" data-store-category="hair">HAIR</button><button class="store-tab " data-store-category="hats">HATS</button><button class="store-tab " data-store-category="heads">HEADS</button><button class="store-tab " data-store-category="eyes">EYES</button><button class="store-tab " data-store-category="mouth">MOUTH</button><button class="store-tab " data-store-category="skin">SKIN</button><button class="store-tab " data-store-category="tops">TOPS</button><button class="store-tab " data-store-category="bottoms">BOTTOMS</button><button class="store-tab " data-store-category="shoes">SHOES</button></div>
         </div>
         <div id="kwg-pets-shop" class="kwg-shop-categories" style="display:none">
           <div id="kwg-pet-categories" class="kwg-store-species-tabs" role="tablist" aria-label="Pet categories"></div>
@@ -2930,7 +2930,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             <div class="kwg-style-group"><div class="kwg-style-title">SHIRT TYPE</div><div class="kwg-style-buttons"><button type="button" class="kwg-style-btn" data-shirt-style="short">SHORT SLEEVE</button><button type="button" class="kwg-style-btn" data-shirt-style="long">LONG SLEEVE</button></div></div>
             <div class="kwg-style-group"><div class="kwg-style-title">BOTTOM TYPE</div><div class="kwg-style-buttons"><button type="button" class="kwg-style-btn" data-bottom-style="pants">PANTS</button><button type="button" class="kwg-style-btn" data-bottom-style="shorts">SHORTS</button><button type="button" class="kwg-style-btn" data-bottom-style="skirt">SKIRT</button></div></div>
           </div>
-          <div class="inventory-tabs kwg-avatar-tabs"><button class="inventory-tab active" data-inv-category="hair">HAIR</button><button class="inventory-tab " data-inv-category="hats">HATS</button><button class="inventory-tab " data-inv-category="heads">HEADS</button><button class="inventory-tab " data-inv-category="eyes">EYES</button><button class="inventory-tab " data-inv-category="mouth">MOUTH</button><button class="inventory-tab " data-inv-category="skin">SKIN</button><button class="inventory-tab " data-inv-category="tops">TOPS</button><button class="inventory-tab " data-inv-category="bottoms">BOTTOMS</button><button class="inventory-tab " data-inv-category="shoes">SHOES</button><button class="inventory-tab " data-inv-category="flightsuits">FLIGHTSUITS</button></div><div id="avatar-native-options" class="avatar-native-options" style="display:none"></div><div id="avatar-inventory-grid"></div>
+          <div class="inventory-tabs kwg-avatar-tabs"><button class="inventory-tab active" data-inv-category="hair">HAIR</button><button class="inventory-tab " data-inv-category="hats">HATS</button><button class="inventory-tab " data-inv-category="heads">HEADS</button><button class="inventory-tab " data-inv-category="eyes">EYES</button><button class="inventory-tab " data-inv-category="mouth">MOUTH</button><button class="inventory-tab " data-inv-category="skin">SKIN</button><button class="inventory-tab " data-inv-category="tops">TOPS</button><button class="inventory-tab " data-inv-category="bottoms">BOTTOMS</button><button class="inventory-tab " data-inv-category="shoes">SHOES</button></div><div id="avatar-native-options" class="avatar-native-options" style="display:none"></div><div id="avatar-inventory-grid"></div>
           <div class="color-grid kwg-avatar-colors" style="display:none">
 <label><span>SKIN</span><input type="color" id="av-skin-color"></label>
 <label><span>SHIRT</span><input type="color" id="av-shirt-color"></label>
@@ -5549,7 +5549,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     }
 
-    const KWG_NEW_CATEGORIES=['hair','hats','heads','eyes','mouth','skin','tops','bottoms','shoes','flightsuits'];
+    const KWG_NEW_CATEGORIES=['hair','hats','heads','eyes','mouth','skin','tops','bottoms','shoes'];
     const kwgProceduralSlot=cat=>cat+'ItemId';
     function kwgProceduralItem(app,cosmetics,cat){
       const item=cosmetics?.[cat];
@@ -10366,7 +10366,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
     function isInventoryItemSelected(item){
       if(!avatarDraft)return false;
+      if(item.assetKind==='none'){const slot=kwgProceduralSlot(item.category);return !avatarDraft[slot] && ({hair:(avatarDraft.hairStyle||'none')==='none',hats:(avatarDraft.hat||'none')==='none',heads:(avatarDraft.headShape||'sphere')==='headless',eyes:(avatarDraft.builtinEyes||'none')==='none',mouth:(avatarDraft.builtinMouth||'none')==='none'})[item.category];}
       if(item.assetKind==='builtin'){
+        if(item.category==='hair')return !avatarDraft.hairItemId && (avatarDraft.hairStyle||'none')===item.builtinValue;
+        if(item.category==='hats')return !avatarDraft.hatsItemId && (avatarDraft.hat||'none')===item.builtinValue;
+        if(item.category==='heads')return !avatarDraft.headsItemId && (avatarDraft.headShape||'sphere')===item.builtinValue;
         if(item.category==='hat') return !avatarDraft.hatItemId && (avatarDraft.hat||'none')===item.builtinValue;
         if(item.category==='head_shape') return !avatarDraft.headShapeItemId && (avatarDraft.headShape||'sphere')===item.builtinValue;
         if(item.category==='eyes') return !avatarDraft.eyesItemId && (avatarDraft.builtinEyes||'none')===item.builtinValue;
@@ -10377,11 +10381,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function setDraftInventoryItem(item) {
       const cat=item.category;
       const slot={eyes:'eyesItemId',mouth:'mouthItemId',torso_decal:'torsoDecalItemId',hat:'hatItemId',head_shape:'headShapeItemId'}[cat]||kwgProceduralSlot(cat);
+      if(item.assetKind==='none'){
+        avatarDraft[slot]=null;
+        if(cat==='hair')avatarDraft.hairStyle='none';
+        if(cat==='hats'||cat==='hat')avatarDraft.hat='none';
+        if(cat==='heads'||cat==='head_shape')avatarDraft.headShape='headless';
+        if(cat==='eyes')avatarDraft.builtinEyes='none';
+        if(cat==='mouth')avatarDraft.builtinMouth='none';
+        renderAvatarInventory();updateEditorAvatar();return;
+      }
       if(item.assetKind==='builtin'){
         avatarDraft[slot]=null;
-        if(cat==='hat') avatarDraft.hat=item.builtinValue;
-        if(cat==='head_shape') avatarDraft.headShape=item.builtinValue;
+        if(cat==='hat'||cat==='hats') avatarDraft.hat=item.builtinValue;
+        if(cat==='head_shape'||cat==='heads') avatarDraft.headShape=item.builtinValue;
         if(cat==='eyes') avatarDraft.builtinEyes=item.builtinValue;
+        if(cat==='hair')avatarDraft.hairStyle=item.builtinValue;
         if(cat==='mouth') avatarDraft.builtinMouth=item.builtinValue;
       } else {
         avatarDraft[slot]=item.id?Number(item.id):null;
@@ -10441,7 +10455,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function renderAvatarInventory() {
       const grid=document.getElementById('avatar-inventory-grid'); if(!grid)return; grid.innerHTML=''; document.getElementById('avatar-native-options').style.display='none';grid.style.display='grid';
       let items=[];
-      if(KWG_NEW_CATEGORIES.includes(avatarEditorCategory))items=ownedStoreItems.filter(i=>i.category===avatarEditorCategory);
+      if(KWG_NEW_CATEGORIES.includes(avatarEditorCategory)){
+        items=ownedStoreItems.filter(i=>i.category===avatarEditorCategory);
+        if(!['skin','tops','bottoms','shoes'].includes(avatarEditorCategory)){
+          const builtinDefaults={
+            hair:[{id:'builtin-hair-classic',category:'hair',name:'Default Hair',assetKind:'builtin',builtinValue:'classic'}],
+            hats:[{id:'builtin-hats-default',category:'hats',name:'Default Hat',assetKind:'builtin',builtinValue:'none'}],
+            heads:[{id:'builtin-heads-default',category:'heads',name:'Default Head',assetKind:'builtin',builtinValue:'sphere'}],
+            eyes:BUILTIN_EYES.filter(i=>i.builtinValue!=='none'),
+            mouth:BUILTIN_MOUTHS.filter(i=>i.builtinValue!=='none')
+          };
+          items=[makeNoneInventoryItem(avatarEditorCategory),...(builtinDefaults[avatarEditorCategory]||[]),...items];
+        }
+      }
       else if(avatarEditorCategory==='hat') items=[...BUILTIN_HATS,...ownedStoreItems.filter(i=>i.category==='hat')];
       else if(avatarEditorCategory==='head_shape') items=[...BUILTIN_HEADS,...ownedStoreItems.filter(i=>i.category==='head_shape')];
       else if(avatarEditorCategory==='eyes') items=[...BUILTIN_EYES,...ownedStoreItems.filter(i=>i.category==='eyes')];
@@ -11704,7 +11730,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 </style>
 <div id="kwg-creator" role="dialog" aria-modal="true" aria-label="Item Creator">
  <div class="kwg-creator-shell">
-  <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hat">Hat</option><option value="head_shape">Head Shape</option><option value="hair">Hair</option><option value="hats">Hats</option><option value="heads">Heads</option><option value="tops">Shirts / Tops</option><option value="bottoms">Pants / Bottoms</option><option value="shoes">Shoes</option><option value="flightsuits">Flightsuit</option><option value="eyes">Eyes (3D)</option><option value="mouth">Mouth (3D)</option><option value="skin">Skin (2D)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
+  <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hat">Hat</option><option value="head_shape">Head Shape</option><option value="hair">Hair</option><option value="hats">Hats</option><option value="heads">Heads</option><option value="tops">Shirts / Tops</option><option value="bottoms">Pants / Bottoms</option><option value="shoes">Shoes</option><option value="eyes">Eyes (2D Decal)</option><option value="mouth">Mouth (2D Decal)</option><option value="skin">Skin (2D)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
   <style>
 #kwgc-modebar{display:flex;gap:5px;flex-wrap:wrap;padding:8px;background:#17273a;border-bottom:1px solid #3c5671}
 #kwgc-modebar button,#kwgc-views button{background:#21354b;color:#dceaff;border:1px solid #48617b;padding:7px;cursor:pointer}
@@ -11882,7 +11908,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  rightStack.append(explorer.panel,meshPanel.panel);right.replaceChildren(rightStack);
  function updateToolPanels(){
    const selected=modebar.querySelector('[data-mode].active')?.dataset.mode||'select';
-   const isPainting=creator.querySelector('#kwgc-category')?.value==='skin';
+   const isPainting=['skin','eyes','mouth'].includes(creator.querySelector('#kwgc-category')?.value);
    creator.classList.toggle('kwgc-2d',isPainting);
    insertPanel.style.display=selected==='insert'&&!isPainting?'block':'none';
    recolorPanel.style.display=isPainting||selected==='recolor'?'block':'none';
@@ -12018,7 +12044,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
    }
    return result;
  }
- function category(){return $('kwgc-category').value;}function is2d(){return category()==='skin';}
+ function category(){return $('kwgc-category').value;}function is2d(){return ['skin','eyes','mouth'].includes(category());}
  // Mesh edits are stored as explicit vertices / triangle faces on the item,
  // so exported GLBs contain the actual changed geometry, not only the source primitive.
  function primitiveGeo(type,detail=24){const T=get(),d=Math.max(6,Math.min(64,Number(detail)||24));return type==='box'?new T.BoxGeometry(1,1,1,Math.max(1,Math.round(d/12)),Math.max(1,Math.round(d/12)),Math.max(1,Math.round(d/12))):type==='sphere'?new T.SphereGeometry(.5,d,Math.max(6,Math.floor(d*.7))):type==='cone'?new T.ConeGeometry(.5,1,d):new T.CylinderGeometry(.5,.5,1,d);}
@@ -12496,7 +12522,7 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
    updateFittingPreview();redraw();window.kwgCreatorSyncToolPanels?.();
    const sceneName=$('kwgc-scene-label');if(sceneName)sceneName.textContent=texture?'TEXTURE VIEW':'SCENE VIEW';
    const itemCount=$('kwgc-part-count');if(itemCount)itemCount.textContent=texture?'2D SKIN':'0 PARTS';
-   status(texture?'Skin texture session — 2D brushes only.':'New '+$('kwgc-category').selectedOptions[0].text+' session.');
+   status(texture?'2D texture/decal session — paint directly on the canvas.':'New '+$('kwgc-category').selectedOptions[0].text+' session.');
  }
  $('kwgc-category').onchange=()=>switchCategory();
  // The Insert panel is a dropdown, so its event handler remains attached even
