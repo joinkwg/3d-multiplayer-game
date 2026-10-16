@@ -6110,19 +6110,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           parent.add(mesh);
         }).catch(err=>console.warn('Could not display uploaded '+category,err));
       }
-      // Gameplay-only eyes: restores the original friendly blink. The Item Creator
-      // uses its own non-blinking preview eyes and opts out via kwgCreatorPreview.
-      if(!app.kwgCreatorPreview&&headShape!=='headless'&&!group.userData.kwgEyeRoot&&!cosmetics.eyes){
-        const eyeRoot=new THREE.Group();eyeRoot.name='kwg-gameplay-blinking-eyes';eyeRoot.position.set(0,2.065,0);group.add(eyeRoot);
-        const white=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.40});
-        const iris=new THREE.MeshStandardMaterial({color:'#40bbf7',roughness:.28});
-        const pupil=new THREE.MeshStandardMaterial({color:'#14223c',roughness:.20});
-        const shine=new THREE.MeshBasicMaterial({color:'#ffffff'});
-        for(const x of [-.16,.16]){
-          const shapes=[[.108,.33,0,white],[.069,.425,0,iris],[.04,.488,-.008,pupil],[.018,.517,-.026,shine]];
-          shapes.forEach(([r,z,dx,mat])=>{const o=new THREE.Mesh(new THREE.SphereGeometry(r,20,14),mat);o.position.set(x+dx,z>.50?.026:0,z);eyeRoot.add(o);});
-        }
-        group.userData.kwgEyeRoot=eyeRoot;
+      // Facial details are decals, not protruding eyeball meshes.
+      // The decal root can be animated during gameplay; creator previews remain still.
+      if(headShape!=='headless'&&!cosmetics.eyes){
+        const decalRoot=new THREE.Group();
+        decalRoot.name='kwg-face-decal-eyes';
+        group.add(decalRoot);
+        const faceStyle=app.builtinEyes==='none'?'none':(app.builtinEyes||'friendly');
+        if(faceStyle!=='none')addBuiltinFace(decalRoot,{...app,builtinEyes:faceStyle,builtinMouth:'none'},true,false,false);
+        if(!app.kwgCreatorPreview)group.userData.kwgEyeRoot=decalRoot;
       }
       group.userData.limbs={leftArm:leftArmPivot,rightArm:rightArmPivot,leftLeg:leftLegPivot,rightLeg:rightLegPivot,torso};
       return group;
@@ -10426,6 +10422,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         input.oninput=()=>{avatarDraft[key]=input.value;if(mirror)mirrorSemanticColors(avatarDraft);updateEditorAvatar();};
         w.append(title,input);host.appendChild(w);
       };
+      // Every mandatory clothing/skin category has an explicit default item.
+      const defaultConfig={
+        skin:['Default Skin',a=>{a.skinColor='#ffe4ad';a.headColor='#ffe4ad';a.armColor='#ffe4ad';a.legColor='#ffe4ad';}],
+        shirts:['Default Shirt',a=>{a.shirtStyle='short';a.shirtColor='#3b82d0';a.torsoColor='#3b82d0';}],
+        pants:['Default Bottoms',a=>{a.bottomStyle='pants';a.pantsColor='#263447';}],
+        shoes:['Default Shoes',a=>{a.shoeStyle='shoes';a.shoesColor='#15191f';}]
+      };
+      if(defaultConfig[cat]){
+        const [label,apply]=defaultConfig[cat];
+        option(label,false,apply);
+      }
       if(cat==='skin')picker('SKIN COLOR','skinColor',avatarDraft.headColor||'#d9a679',true);
       if(cat==='shirts'){
         for(const [style,label] of [['short','Short Sleeve'],['long','Long Sleeve']])option(label,(avatarDraft.shirtStyle||'short')===style,a=>a.shirtStyle=style);
@@ -10460,7 +10467,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(!['skin','tops','bottoms','shoes'].includes(avatarEditorCategory)){
           const builtinDefaults={
             hair:[{id:'builtin-hair-classic',category:'hair',name:'Default Hair',assetKind:'builtin',builtinValue:'classic'}],
-            hats:[{id:'builtin-hats-default',category:'hats',name:'Default Hat',assetKind:'builtin',builtinValue:'none'}],
+            hats:[],
             heads:[{id:'builtin-heads-default',category:'heads',name:'Default Head',assetKind:'builtin',builtinValue:'sphere'}],
             eyes:BUILTIN_EYES.filter(i=>i.builtinValue!=='none'),
             mouth:BUILTIN_MOUTHS.filter(i=>i.builtinValue!=='none')
