@@ -27,7 +27,7 @@ function normalizeEnemySpawner(block){
   block.enemyRespawn=bounded(block.enemyRespawn,0,300,5);
   block.enemyDamage=Math.round(bounded(block.enemyDamage,1,100,25));
   block.enemyKillable=block.enemyKillable!==false;
-  block.enemyCharacter=block.enemyCharacter==='sniper'?'sniper':'devil';
+  block.enemyCharacter=['devil','sniper','hops'].includes(block.enemyCharacter)?block.enemyCharacter:'devil';
 }
 const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
 const STORE_CATEGORIES = new Set(['eyes','mouth','torso_decal','hat','head_shape','hair','hats','heads','eyes','mouth','skin','tops','bottoms','shoes','flightsuits']);
