@@ -2577,6 +2577,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       box-shadow:3px 3px 0 #08121e}
     #kwg-ui-dialog-actions button.kwg-primary{background:#266e55;border-color:#9de6bd}
     #kwg-ui-dialog-actions button.kwg-danger{background:#8c3c49;border-color:#f2a0a7}
+    .kwg-image-review-box{margin:10px 0;padding:9px;border:1px solid #476077;border-radius:8px;background:#152335;display:flex;flex-direction:column;gap:7px;font-size:11px}
+    .kwg-image-review-box input[type=file],.kwg-image-review-box select{max-width:100%;font-size:11px}
+    .kwg-image-review-box button{cursor:pointer;padding:6px;border-radius:5px;background:#30435a;color:#f3f8ff;border:1px solid #627d98}
+    #kwg-sky-image-status,#kwg-decal-status{color:#ffdf9b}
     #kwg-ui-dialog-actions button:hover{filter:brightness(1.15)}
     #kwg-ui-dialog-actions button:focus-visible,#kwg-ui-dialog-input:focus-visible{
       outline:2px solid #fff;outline-offset:3px}
@@ -3270,8 +3274,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             <input type="color" id="block-color-input" value="#888888">
           </div>
 
-          <div class="tool-row">
-            <label>Transparency:</label>
+           <div class="kwg-image-review-box" id="kwg-part-decal-panel">
+             <label for="kwg-decal-side">Decal — choose part side</label>
+             <select id="kwg-decal-side"><option value="front">Front</option><option value="back">Back</option><option value="left">Left</option><option value="right">Right</option><option value="top">Top</option><option value="bottom">Bottom</option></select>
+             <input type="file" id="kwg-decal-upload" accept="image/png,image/jpeg,image/webp">
+             <div id="kwg-decal-status" role="status">No decal on this side.</div>
+             <button type="button" id="kwg-decal-clear">Remove this side's decal</button>
+             <p class="kwg-recolor-help">Approved images appear on the chosen side. Pending images show Under Review instead. Best on box-shaped parts.</p>
+           </div>
+           <div class="tool-row">
+             <label>Transparency:</label>
             <input type="number" id="block-transparency-input" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Part transparency, 0 to 1">
           </div>
 
@@ -3319,11 +3331,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         <input type="color" id="sky-color-input" value="#1e1e7b">
       </div>
 
-      <div class="tool-row"><label for="kwg-env-brightness">Brightness:</label><input type="range" id="kwg-env-brightness" min="0.4" max="2" step="0.05" value="1"></div>
-      <div class="tool-row"><label for="kwg-env-saturation">Saturation:</label><input type="range" id="kwg-env-saturation" min="0" max="2" step="0.05" value="1"></div>
+      <div class="kwg-image-review-box"><label for="kwg-sky-image-upload">Sky Image (panorama)</label><input type="file" id="kwg-sky-image-upload" accept="image/png,image/jpeg,image/webp"><div id="kwg-sky-image-status" role="status">No sky image. Sky color is in use.</div><button type="button" id="kwg-sky-image-clear">Remove sky image</button><p class="kwg-recolor-help">Images stay Under Review and are not shown publicly until AI moderation approves them. Requires image moderation and storage configured on the server.</p></div>
+      <div class="tool-row"><label for="kwg-env-brightness">Brightness:</label><input type="number" id="kwg-env-brightness" min="0.4" max="2" step="0.05" value="1" inputmode="decimal"></div>
+      <div class="tool-row"><label for="kwg-env-saturation">Saturation:</label><input type="number" id="kwg-env-saturation" min="0" max="2" step="0.05" value="1" inputmode="decimal"></div>
       <div class="tool-row"><label for="kwg-env-resolution">Resolution:</label><select id="kwg-env-resolution"><option value="120p">120p</option><option value="240p">240p</option><option value="480p">480p</option><option value="720p">720p</option><option value="1080p" selected>1080p</option></select></div>
       <div class="tool-row"><label for="kwg-env-light-color">Light Color:</label><input type="color" id="kwg-env-light-color" value="#ffffff"></div>
-      <div class="tool-row"><label for="kwg-env-light-direction">Light Direction:</label><select id="kwg-env-light-direction"><option value="morning">Morning (East)</option><option value="noon" selected>Noon (Overhead)</option><option value="evening">Evening (West)</option><option value="north">North</option><option value="south">South</option></select></div>
+      <div class="tool-row"><label for="kwg-env-light-direction">Light Direction:</label><select id="kwg-env-light-direction"><option value="east">East</option><option value="overhead" selected>Overhead</option><option value="west">West</option><option value="north">North</option><option value="south">South</option></select></div>
     </div>
   </div>
 
@@ -5589,10 +5602,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const saturation=Math.max(0,Math.min(2,settings.saturation!==undefined&&Number.isFinite(Number(settings.saturation))?Number(settings.saturation):1));
       const resolution=['120p','240p','480p','720p','1080p'].includes(settings.resolution)?settings.resolution:'1080p';
       const color=/^#[0-9a-f]{6}$/i.test(settings.lightColor||'')?settings.lightColor:'#ffffff';
-      const direction=['morning','noon','evening','north','south'].includes(settings.lightDirection)?settings.lightDirection:'noon';
+      const oldDirection={morning:'east',noon:'overhead',evening:'west'};
+      const requestedDirection=oldDirection[settings.lightDirection]||settings.lightDirection;
+      const direction=['east','overhead','west','north','south'].includes(requestedDirection)?requestedDirection:'overhead';
       renderer.domElement.style.filter=`saturate(${saturation}) brightness(${brightness})`;
       light.color.set(color);light.intensity=1.1;
-      const dirs={morning:[30,18,0],noon:[15,30,20],evening:[-30,18,0],north:[0,25,-30],south:[0,25,30]};
+      const dirs={east:[30,18,0],overhead:[15,30,20],west:[-30,18,0],north:[0,25,-30],south:[0,25,30]};
       light.position.set(...dirs[direction]);
       for(const [id,value] of [['kwg-env-brightness',brightness],['kwg-env-saturation',saturation],['kwg-env-resolution',resolution],['kwg-env-light-color',color],['kwg-env-light-direction',direction]]){
         const input=document.getElementById(id);if(input&&String(input.value)!==String(value))input.value=value;
@@ -5601,6 +5616,23 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       resizeWorldViewport();
     }
 
+    // V34: Moderated sky images. A pending/rejected upload never becomes a texture.
+    let kwgSkyLoadToken=0;
+    function kwgApplySkyImage(world){
+      const token=++kwgSkyLoadToken;
+      const review=world?.skyImageReview;
+      const url=kwgApprovedImageURL(review);
+      scene.background=new THREE.Color(world?.skyColor||'#1e1e7b');
+      const status=document.getElementById('kwg-sky-image-status');
+      if(status)status.textContent=review?.status==='pending'?'Under Review — sky image is hidden until approved.':review?.status==='error'?'Review unavailable — upload again.':review?.status==='rejected'?'Rejected — please choose a different image.':url?'Approved — sky image is active.':'No sky image. Sky color is in use.';
+      if(!url)return;
+      new THREE.TextureLoader().load(url,texture=>{
+        if(token!==kwgSkyLoadToken||currentWorldData?.skyImageReview?.url!==url)return;
+        texture.mapping=THREE.EquirectangularReflectionMapping;
+        texture.colorSpace=THREE.SRGBColorSpace;
+        scene.background=texture;
+      },undefined,()=>{if(status)status.textContent='Approved image could not be loaded.';});
+    }
     const spawnMarkerGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 16);
     const spawnMarkerMat = new THREE.MeshBasicMaterial({ color: 0x8e44ad, wireframe: true });
     const spawnMarker = new THREE.Mesh(spawnMarkerGeo, spawnMarkerMat);
@@ -8662,6 +8694,24 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return materials;
     }
 
+    // V34: Moderated, per-face decals. Only approved server-issued URLs are rendered.
+    const kwgDecalTextureCache=new Map();
+    function kwgApprovedImageURL(review){
+      return review?.status==='approved' && typeof review.url==='string' && /^https:\/\//.test(review.url) ? review.url : null;
+    }
+    function kwgAddPartDecals(mesh,block){
+      if(!block.decals||typeof block.decals!=='object')return;
+      const faces={front:{p:[0,0,.502],r:[0,0,0]},back:{p:[0,0,-.502],r:[0,Math.PI,0]},left:{p:[-.502,0,0],r:[0,-Math.PI/2,0]},right:{p:[.502,0,0],r:[0,Math.PI/2,0]},top:{p:[0,.502,0],r:[-Math.PI/2,0,0]},bottom:{p:[0,-.502,0],r:[Math.PI/2,0,0]}};
+      for(const [side,face] of Object.entries(faces)){
+        const url=kwgApprovedImageURL(block.decals[side]);if(!url)continue;
+        const overlay=new THREE.Mesh(new THREE.PlaneGeometry(.96,.96),new THREE.MeshBasicMaterial({transparent:true,opacity:1,depthWrite:false,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2}));
+        overlay.position.set(...face.p);overlay.rotation.set(...face.r);
+        overlay.name='kwg-approved-decal';overlay.raycast=()=>{};mesh.add(overlay);
+        const apply=tex=>{if(!overlay.parent)return;overlay.material.map=tex;overlay.material.needsUpdate=true;};
+        if(kwgDecalTextureCache.has(url))apply(kwgDecalTextureCache.get(url));
+        else new THREE.TextureLoader().load(url,tex=>{tex.colorSpace=THREE.SRGBColorSpace;kwgDecalTextureCache.set(url,tex);apply(tex);},undefined,()=>{});
+      }
+    }
     function buildBlockMesh(blockData, isPreview = false) {
       if (blockData.actionType === 'finish') {
         return createFlagMesh(blockData, isPreview);
@@ -8716,6 +8766,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         transparency: transparency
       };
 
+      if(!isPreview)kwgAddPartDecals(mesh,blockData);
+
       if (isPreview) {
         const previewOpacity=Math.max(0.2,transparency);
         if(Array.isArray(mesh.material)){
@@ -8754,8 +8806,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       document.getElementById('kwg-world-friendly-fire').checked=world.friendlyFire===true;
       const skyHex = world.skyColor || '#1e1e7b';
-      scene.background.set(skyHex);
-      document.getElementById('sky-color-input').value = skyHex; kwgSyncRGBField('sky-color-input');
+      scene.background=new THREE.Color(skyHex);
+       kwgApplySkyImage(world);
+       document.getElementById('sky-color-input').value = skyHex; kwgSyncRGBField('sky-color-input');
 
       kwgApplyEnvironment(world);
 
@@ -8829,13 +8882,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       if(settings.friendlyFire!==undefined)document.getElementById('kwg-world-friendly-fire').checked=!!settings.friendlyFire;
       if (settings.skyColor) {
-        scene.background.set(settings.skyColor);
-        document.getElementById('sky-color-input').value = settings.skyColor; kwgSyncRGBField('sky-color-input');
+        scene.background=new THREE.Color(settings.skyColor);
+         document.getElementById('sky-color-input').value = settings.skyColor; kwgSyncRGBField('sky-color-input');
       }
       if (settings.spawnPoint) {
         spawnMarker.position.set(settings.spawnPoint.x, settings.spawnPoint.y, settings.spawnPoint.z);
       }
       kwgApplyEnvironment(currentWorldData);
+      kwgApplySkyImage(currentWorldData);
     });
 
     // --- EDIT MODE CONTROLS & GIZMOS & SELECTION OUTLINES ---
@@ -9416,6 +9470,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgSyncHopsStompCheckbox('kwg-enemy-');
         document.getElementById('kwg-heal-amount').value=kwgEnemyNumber(block.healAmount,1,100,25,true);
         document.getElementById('kwg-tool-kind').value=kwgToolKind(block.toolKind);
+         kwgRefreshDecalStatus();
         document.getElementById('kwg-enemy-character').value=enemy.enemyCharacter;
       } else {
         noSelMsg.style.display = 'block';
@@ -9478,6 +9533,57 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const elem = document.getElementById(id);
       elem.addEventListener('change', applySelectedPartPropertyChange);
       elem.addEventListener('input', applySelectedPartPropertyChange);
+    });
+
+    function kwgReviewLabel(review){
+      return review?.status==='pending'?'Under Review — not visible until approved.':review?.status==='error'?'Review unavailable — upload again.':review?.status==='rejected'?'Rejected by image moderation.':review?.status==='approved'?'Approved — visible in the world.':'No image uploaded.';
+    }
+    function kwgRefreshDecalStatus(){
+      const block=currentWorldData?.blocks?.[selectedBlockId];
+      const side=document.getElementById('kwg-decal-side').value;
+      document.getElementById('kwg-decal-status').textContent=kwgReviewLabel(block?.decals?.[side]);
+    }
+    document.getElementById('kwg-decal-side').addEventListener('change',kwgRefreshDecalStatus);
+    async function kwgSubmitWorldImage(file,kind,side){
+      if(!canEditCurrentWorld||!currentWorldName){showToast('Open your world in edit mode first.');return;}
+      if(!file||!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>1500000){showToast('Use PNG, JPG, or WebP, up to 1.5 MB.');return;}
+      const blockId=kind==='decal'?selectedBlockId:null;
+      if(kind==='decal'&&!currentWorldData?.blocks?.[blockId])return;
+      const status=document.getElementById(kind==='sky'?'kwg-sky-image-status':'kwg-decal-status');
+      status.textContent='Uploading for AI review…';
+      const bytes=await file.arrayBuffer();
+      socket.emit('kwg_image_submit',{worldName:currentWorldName,kind,blockId,side,mimeType:file.type,bytes},response=>{
+        if(!response?.success){status.textContent=response?.message||'Upload failed.';showToast(status.textContent);return;}
+        status.textContent='Under Review — hidden until approved.';
+      });
+    }
+    document.getElementById('kwg-sky-image-upload').addEventListener('change',e=>{const f=e.target.files?.[0];if(f)kwgSubmitWorldImage(f,'sky');e.target.value='';});
+    document.getElementById('kwg-decal-upload').addEventListener('change',e=>{const f=e.target.files?.[0];if(f)kwgSubmitWorldImage(f,'decal',document.getElementById('kwg-decal-side').value);e.target.value='';});
+    function kwgClearWorldImage(kind){
+      if(!canEditCurrentWorld||!currentWorldName)return;
+      const side=kind==='decal'?document.getElementById('kwg-decal-side').value:null;
+      socket.emit('kwg_image_clear',{worldName:currentWorldName,kind,blockId:kind==='decal'?selectedBlockId:null,side},r=>{
+        if(!r?.success)showToast(r?.message||'Could not remove image.');
+      });
+    }
+    document.getElementById('kwg-sky-image-clear').addEventListener('click',()=>kwgClearWorldImage('sky'));
+    document.getElementById('kwg-decal-clear').addEventListener('click',()=>kwgClearWorldImage('decal'));
+    socket.on('kwg_image_review_updated',({kind,blockId,side,review}={})=>{
+      if(!currentWorldData)return;
+      if(kind==='sky'){
+        if(review)currentWorldData.skyImageReview=review;else delete currentWorldData.skyImageReview;
+        kwgApplySkyImage(currentWorldData);
+      }else if(kind==='decal'){
+        const block=currentWorldData.blocks?.[blockId];if(!block)return;
+        block.decals=block.decals||{};
+        if(review)block.decals[side]=review;else delete block.decals[side];
+        if(worldBlocks[blockId]){
+          const old=worldBlocks[blockId];scene.remove(old);
+          const fresh=buildBlockMesh(block);scene.add(fresh);worldBlocks[blockId]=fresh;
+          if(selectedBlockId===blockId)updateSelectionOutline(fresh);
+        }
+        if(selectedBlockId===blockId)kwgRefreshDecalStatus();
+      }
     });
 
     ['block-transparency-input','kwg-place-transparency'].forEach(id=>{
@@ -9821,16 +9927,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     });
     document.getElementById('sky-color-input').addEventListener('input', (e) => {
       const color = e.target.value;
-      scene.background.set(color);
-      if (currentWorldName) {
+      if(!currentWorldData?.skyImageReview?.url||currentWorldData.skyImageReview.status!=='approved')scene.background=new THREE.Color(color);
+       if (currentWorldName) {
         stageWorldSettings({ skyColor: color });
       }
     });
 
     for(const [id,key] of [['kwg-env-brightness','brightness'],['kwg-env-saturation','saturation'],
       ['kwg-env-resolution','resolution'],['kwg-env-light-color','lightColor'],['kwg-env-light-direction','lightDirection']]){
-      document.getElementById(id).addEventListener('input',e=>{
+      document.getElementById(id).addEventListener(key==='brightness'||key==='saturation'?'change':'input',e=>{
         if(!currentWorldData||!canEditCurrentWorld)return;
+        if((key==='brightness'||key==='saturation')&&!Number.isFinite(Number(e.target.value)))return;
         currentWorldData[key]=e.target.value;
         kwgApplyEnvironment(currentWorldData);
         stageWorldSettings({[key]:key==='brightness'||key==='saturation'?Number(e.target.value):e.target.value});
@@ -11197,7 +11304,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       // Modifier keys and Studio rotation shortcuts never enter movement state.
       if (isEditMode && (key === 'r' || key === 't')) return;
-      if (key !== 'control' && key !== 'meta' && key !== 'alt' && key !== 'shift') keys[key] = true;
+      if (key !== 'control' && key !== 'meta' && key !== 'alt') keys[key] = true;
 
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (isEditMode && selectedBlockId) {
@@ -11615,6 +11722,44 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         for(const [id,p] of Object.entries(otherPlayers)){
           const hits=ray.intersectObject(p.mesh,true);
           if(hits.length&&hits[0].distance<maxDistance){maxDistance=hits[0].distance;best={kind:'player',id};}
+        }
+      }
+      if(kind==='ufo'){
+        // A UFO blast is a vertical column, not a single pixel-wide bullet.
+        // Keep roof/terrain occlusion and allow targets within the beam width.
+        const origin=ray.ray.origin;
+        const beamReach=obstruction?obstruction.distance:115;
+        const radius=2.35;
+        best=null;maxDistance=beamReach;
+        const consider=(candidate,x,y,z,top)=>{
+          const horizontal=Math.hypot(x-origin.x,z-origin.z);
+          const downward=origin.y-(y+Math.min(.8,top*.4));
+          if(horizontal>radius||downward<-.1||downward>beamReach+.1)return;
+          // Check the actual diagonal from the saucer to the target, so a roof
+          // beside the beam center cannot be shot through.
+          const targetPoint=new THREE.Vector3(x,y+Math.min(.8,top*.4),z);
+          const toward=targetPoint.clone().sub(origin);
+          const rayLength=toward.length();
+          if(rayLength>.05){
+            const coverRay=new THREE.Raycaster(origin,toward.normalize(),0,rayLength-.05);
+            if(coverRay.intersectObjects(solids,true).length)return;
+          }
+          const distance=Math.max(0,downward);
+          if(distance<=maxDistance){maxDistance=distance;best=candidate;}
+        };
+        for(const [id,entry] of kwgEnemySpawners){
+          for(let index=0;index<entry.slots.length;index++){
+            const slot=entry.slots[index];if(!slot.mesh||slot.deadUntil>now||slot.squishUntil>now)continue;
+            const p=slot.mesh.position;
+            consider({kind:'enemy',id,index,slot,entry},p.x,p.y,p.z,entry.block.enemyCharacter==='alien'?2.8:2.1);
+            if(entry.block.enemyCharacter==='bot_bus')for(const robot of slot.robots||[]){
+              if(robot.dead||!robot.mesh)continue;
+              const r=robot.mesh.position;consider({kind:'robot',id,index,slot,entry,robot},r.x,r.y,r.z,2);
+            }
+          }
+        }
+        if(currentWorldData?.friendlyFire===true)for(const [id,p] of Object.entries(otherPlayers)){
+          consider({kind:'player',id},p.mesh.position.x,p.mesh.position.y,p.mesh.position.z,2.2);
         }
       }
       const tracerEnd=ray.ray.origin.clone().addScaledVector(ray.ray.direction,maxDistance);
