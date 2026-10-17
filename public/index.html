@@ -2839,7 +2839,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <div class="kwg-dashboard-header">
         <div class="kwg-brand-block"><h2>KWG 3D Online</h2><div class="kwg-userline">Logged in as <span id="logged-user-display">User</span></div></div>
         <div class="kwg-account-tools">
-          <div class="coin-badge kwg-coin-pill" title="Your coins" aria-label="Coins"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="home-coin-count">100</span></div>
+          <button type="button" id="kwg-coin-store-shortcut" class="coin-badge kwg-coin-pill" title="Open Store" aria-label="Open Store — 100 coins"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="home-coin-count">100</span></button>
           <button id="logout-btn" class="logout-btn kwg-icon-tool" title="Log out" aria-label="Log out" type="button"><span class="kwg-logout-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M10 4H5v16h5M13 7l5 5-5 5M8 12h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"/></svg></span><span class="kwg-logout-text">LOG OUT</span></button>
         </div>
       </div>
@@ -3689,6 +3689,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const home = document.getElementById('home-coin-count');
       const store = document.getElementById('store-coin-count');
       if (home) home.textContent = String(coinBalance);
+      const coinShortcut=document.getElementById('kwg-coin-store-shortcut');
+      if(coinShortcut)coinShortcut.setAttribute('aria-label',`Open Store — ${coinBalance} coins`);
       if (store) store.textContent = String(coinBalance);
     }
 
@@ -10130,6 +10132,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if (name === 'admin' && isAdmin) { const pane=document.getElementById('admin-pane'); const card=document.getElementById('admin-card'); if(card && card.parentElement!==pane) pane.appendChild(card); refreshAdminPanel(); }
     }
     document.querySelectorAll('.home-tab').forEach(b => b.addEventListener('click', () => switchHomeTab(b.dataset.homeTab)));
+    document.getElementById('kwg-coin-store-shortcut')?.addEventListener('click',()=>switchHomeTab('store'));
 
 
     let viewedProfile = null;
@@ -12286,6 +12289,82 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 @media(max-width:600px){
  #home-pane .kwg-top-worlds-list .room-card{grid-template-columns:64px minmax(0,1fr)!important;gap:7px!important;padding:6px!important;}
  #home-pane .kwg-top-worlds-list .kwg-world-card-actions > button{flex-basis:58px!important;min-width:56px!important;}
+}
+</style>
+
+<style id="kwg-v17-2-friends-world-actions">
+/* Friends: two equal-height panels, with their own scrolling content. */
+#home-main-card > #friends-pane.home-pane.active{
+  display:flex!important;flex-direction:column!important;overflow:hidden!important;
+}
+#friends-pane .friends-shell{
+  display:flex!important;flex-direction:column!important;flex:1 1 auto!important;
+  height:100%!important;min-height:0!important;overflow:hidden!important;gap:12px!important;
+}
+#friends-pane .friends-header{flex:0 0 auto!important;min-height:0!important;}
+#friends-pane #incoming-friends-section{
+  flex:0 0 auto!important;max-height:min(155px,25%)!important;
+  min-height:0!important;overflow:hidden!important;
+}
+#friends-pane #incoming-friends-section[style*="display: block"]{display:flex!important;flex-direction:column!important;}
+#friends-pane .friends-shell > .profile-panel:not(#incoming-friends-section){
+  display:flex!important;flex-direction:column!important;flex:1 1 0!important;
+  min-height:0!important;overflow:hidden!important;box-sizing:border-box!important;
+}
+#friends-pane .friends-shell > .profile-panel .profile-panel-title{flex:0 0 auto!important;}
+#friends-pane .friends-shell > .profile-panel .friends-list{
+  display:block!important;flex:1 1 auto!important;min-height:0!important;
+  overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:thin!important;
+  padding:1px 5px 5px 0!important;
+}
+#friends-pane .friends-list > * + *{margin-top:7px!important;}
+/* Coin balance remains live, and now works as a Store shortcut. */
+#home-main-card #kwg-coin-store-shortcut{
+  cursor:pointer!important;font-family:inherit!important;display:inline-flex!important;
+  align-items:center!important;justify-content:center!important;gap:9px!important;
+  white-space:nowrap!important;appearance:none!important;
+}
+#home-main-card #kwg-coin-store-shortcut:hover{background:#3b442e!important;border-color:#edca70!important;}
+#home-main-card #kwg-coin-store-shortcut:focus-visible{outline:3px solid #89d7ff!important;outline-offset:3px!important;}
+/* One action layout on Home and Worlds, regardless of ownership.
+   Every action is exactly the same width and height: no stretching or 2-row Enter. */
+#worlds-pane .kwg-world-card-actions,
+#home-pane .kwg-top-worlds-list .kwg-world-card-actions{
+  display:flex!important;flex-flow:row wrap!important;align-items:center!important;
+  justify-content:flex-start!important;align-content:center!important;
+  gap:6px!important;flex:0 0 auto!important;min-width:0!important;
+  width:auto!important;max-width:100%!important;
+}
+#worlds-pane .kwg-world-card-actions > button,
+#home-pane .kwg-top-worlds-list .kwg-world-card-actions > button{
+  display:inline-flex!important;flex:0 0 78px!important;
+  width:78px!important;min-width:78px!important;max-width:78px!important;
+  height:35px!important;min-height:35px!important;max-height:35px!important;
+  box-sizing:border-box!important;align-items:center!important;justify-content:center!important;
+  margin:0!important;padding:5px 3px!important;line-height:1!important;
+  font-size:10px!important;white-space:nowrap!important;
+}
+/* World cards keep consistent content alignment without forcing buttons to grow. */
+#worlds-pane .room-card{min-height:124px!important;box-sizing:border-box!important;}
+#worlds-pane .kwg-world-card-thumb{flex:0 0 150px!important;width:150px!important;min-width:150px!important;}
+#home-pane .kwg-top-worlds-list .room-card{align-items:center!important;}
+#home-pane .kwg-top-worlds-list .kwg-world-card-actions{align-self:start!important;}
+@media(max-width:1250px){
+  #home-pane .kwg-top-worlds-list .kwg-world-card-actions{grid-column:1/-1!important;}
+  #home-pane .kwg-top-worlds-list .kwg-world-card-thumb{grid-row:1!important;}
+}
+@media(max-width:840px){
+  #worlds-pane .room-card{display:grid!important;grid-template-columns:105px minmax(0,1fr)!important;gap:8px!important;}
+  #worlds-pane .kwg-world-card-thumb{width:100%!important;min-width:0!important;flex-basis:auto!important;grid-row:1!important;}
+  #worlds-pane .room-info{grid-column:2!important;}
+  #worlds-pane .kwg-world-card-actions{grid-column:1/-1!important;}
+}
+@media(max-width:480px){
+  #worlds-pane .kwg-world-card-actions > button,
+  #home-pane .kwg-top-worlds-list .kwg-world-card-actions > button{
+    flex-basis:65px!important;width:65px!important;min-width:65px!important;max-width:65px!important;
+  }
+  #friends-pane .friends-shell{gap:7px!important;}
 }
 </style>
 <script>
