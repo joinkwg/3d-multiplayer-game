@@ -3594,6 +3594,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         capture:[[210,.025,'square',.14,145],[860,.045,'triangle',.13,990]],
         toggle:[[450,.04,'square',.09,560]],
         devil_notice:[[330,.07,'sawtooth',.08,480],[420,.09,'square',.08,290]],
+        devil_chase:[[220,.10,'square',.10,310],[280,.11,'sawtooth',.13,190],[185,.12,'triangle',.10,260]],
         devil_step:[[150,.042,'triangle',.075,110]],
         devil_bounce:[[360,.08,'sine',.18,690],[660,.07,'triangle',.12,870]],
         devil_stomp:[[190,.11,'sawtooth',.2,90],[115,.14,'square',.12,65],[560,.08,'triangle',.08,270]],
@@ -11272,7 +11273,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       part(.16,.17,.06,.19,1.49,.36,eye);
       part(.07,.11,.07,-.19,1.48,.402,pupil);
       part(.07,.11,.07,.19,1.48,.402,pupil);
-      part(.35,.09,.065,0,1.18,.36,dark);
+      // Animated eyebrows and a frown turn the friendly idle face into
+      // an angry cartoon villain when a player enters chase range.
+      const leftBrow=part(.24,.075,.075,-.20,1.68,.41,dark);
+      const rightBrow=part(.24,.075,.075,.20,1.68,.41,dark);
+      const smile=part(.35,.09,.065,0,1.18,.36,dark);
+      const frown=part(.35,.075,.067,0,1.21,.369,dark);
+      frown.visible=false;
+      root.userData.devilBrows=[leftBrow,rightBrow];
+      root.userData.devilMouth=[smile,frown];
       const leftArm=new THREE.Group(),rightArm=new THREE.Group();
       leftArm.position.set(-.52,1.04,0);rightArm.position.set(.52,1.04,0);
       rig.add(leftArm,rightArm);
@@ -11297,7 +11306,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const noticeSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:noticeTexture,transparent:true,depthWrite:false,depthTest:false}));
       noticeSprite.position.set(0,2.65,0);noticeSprite.scale.set(1.12,.84,1);
       noticeSprite.visible=false;root.add(noticeSprite);
+      // A second billboard reuses the same speech-bubble shape, but with
+      // a pixel-art tired face and blue sweat drops (no emoji font needed).
+      const tiredCanvas=document.createElement('canvas');tiredCanvas.width=128;tiredCanvas.height=96;
+      const tc=tiredCanvas.getContext('2d');
+      tc.fillStyle='#fff';tc.fillRect(12,7,104,68);tc.fillRect(47,75,19,11);
+      tc.strokeStyle='#343a43';tc.lineWidth=7;tc.strokeRect(12,7,104,68);
+      tc.fillStyle='#343a43';tc.fillRect(28,36,20,5);tc.fillRect(60,36,20,5);
+      tc.fillRect(39,56,33,5);
+      tc.fillStyle='#44b7ee';tc.beginPath();tc.moveTo(98,26);tc.lineTo(88,46);tc.lineTo(108,46);tc.closePath();tc.fill();
+      tc.fillRect(91,44,14,8);
+      const tiredSprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(tiredCanvas),transparent:true,depthWrite:false,depthTest:false}));
+      tiredSprite.position.copy(noticeSprite.position);tiredSprite.scale.copy(noticeSprite.scale);
+      tiredSprite.visible=false;root.add(tiredSprite);
       root.userData.devilNotice=noticeSprite;
+      root.userData.devilTired=tiredSprite;
       root.userData.devilTail=tail;
       root.userData.devilRig=rig;
       root.userData.devilLimbs=[leftArm,rightArm,leftLeg,rightLeg];
@@ -11368,14 +11391,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(!entry){entry={block,slots:[]};kwgEnemySpawners.set(id,entry);}
         entry.block=block;
         while(entry.slots.length>props.enemyCount)kwgDestroyEnemySlot(entry.slots.pop());
-        while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,squishUntil:0,walkTime:0,fallSpeed:0,jumpSpeed:0,isJumping:false,grounded:false,path:[],pathAt:0,noticeAt:0,stepAt:0});
+        while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,squishUntil:0,walkTime:0,fallSpeed:0,jumpSpeed:0,isJumping:false,grounded:false,path:[],pathAt:0,noticeAt:0,stepAt:0,chaseStartedAt:0,exhaustedUntil:0,chaseCooldownUntil:0,chaseSoundAt:0});
       }
     }
     // V21: Navigation has *vertical* transitions. A path can hop onto a low
     // platform or step off an elevated spawner, instead of treating any height
     // difference as an impassable wall. All movement still checks solid parts.
     const kwgEnemyBodyRadius=.38,kwgEnemyBodyHeight=1.84;
-    const kwgEnemyJumpRise=1.55,kwgEnemyMaxDrop=4.25;
+    const kwgEnemyJumpRise=1.75,kwgEnemyMaxDrop=4.25;
     function kwgEnemyGroundY(x,y,z,blocks,drop=7){
       let top=-Infinity;
       for(const block of blocks){
@@ -11419,7 +11442,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       for(let i=1;i<=steps;i++){
         const t=i/steps;
         // A jump has an arcing clearance; a drop begins at the old height.
-        const feet=rise>.48?y+rise*t+Math.sin(Math.PI*t)*.62:
+        // During a jump, gain height early, then cross the lip of the
+        // platform. A linear interpolation drove the body THROUGH the ledge
+        // and made A* incorrectly reject otherwise reachable platforms.
+        const feet=rise>.48?y+rise*Math.min(1,t*2.25)+Math.sin(Math.PI*t)*.52:
           rise<-.65?y+rise*Math.pow(t,8):y+rise*t;
         if(!kwgEnemyBodyClear(x+(tx-x)*t,z+(tz-z)*t,feet,blocks))return false;
       }
@@ -11510,11 +11536,33 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         }
       }
     }
+    // Use the DEVIL's collision capsule rather than the taller player capsule.
+    // Sample the whole movement to prevent tunneling through thin obstacles,
+    // and slide along walls when only one movement axis is blocked.
+    function kwgEnemyMoveSolid(slot,toX,toZ,blocks){
+      const npc=slot.mesh;
+      const fromX=npc.position.x,fromZ=npc.position.z,feet=npc.position.y;
+      const dx=toX-fromX,dz=toZ-fromZ;
+      const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.13));
+      let x=fromX,z=fromZ;
+      for(let i=1;i<=steps;i++){
+        const targetX=fromX+dx*i/steps,targetZ=fromZ+dz*i/steps;
+        if(kwgEnemyBodyClear(targetX,targetZ,feet,blocks)&&!kwgEnemyCrowded(targetX,targetZ,slot)){
+          x=targetX;z=targetZ;continue;
+        }
+        if(kwgEnemyBodyClear(targetX,z,feet,blocks)&&!kwgEnemyCrowded(targetX,z,slot))x=targetX;
+        else if(kwgEnemyBodyClear(x,targetZ,feet,blocks)&&!kwgEnemyCrowded(x,targetZ,slot))z=targetZ;
+        else break;
+      }
+      npc.position.x=x;npc.position.z=z;
+      return Math.hypot(x-fromX,z-fromZ);
+    }
     function kwgEnemyAnimate(slot,now,walking,speed,index){
       const npc=slot.mesh;if(!npc)return;
       const rig=npc.userData.devilRig;
       const [la,ra,ll,rl]=npc.userData.devilLimbs;
       const phase=slot.walkTime+index*.3;
+      const chasing=slot.aiState==='chase',exhausted=slot.aiState==='exhausted';
       const idle=Math.sin(now*.004+index*1.7);
       const stride=Math.sin(phase),bounce=walking?Math.abs(Math.sin(phase)):.5+.5*idle;
       rig.position.y=walking?.075+.14*bounce:.035+.075*bounce;
@@ -11529,6 +11577,25 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       ra.rotation.z=walking?.15:.18-idle*.09;
       npc.userData.devilTail.rotation.x=Math.sin(now*.007+index)*.35;
       npc.userData.devilBody.rotation.z=Math.sin(now*.005+index)*.04;
+      const brows=npc.userData.devilBrows,mouth=npc.userData.devilMouth;
+      if(brows){
+        // Brows pinch inward when angry and droop when winded.
+        brows[0].rotation.z=chasing?-.33:exhausted?.24:0;
+        brows[1].rotation.z=chasing?.33:exhausted?-.24:0;
+        brows[0].position.y=brows[1].position.y=exhausted?1.62:1.68;
+      }
+      if(mouth){mouth[0].visible=!chasing&&!exhausted;mouth[1].visible=chasing||exhausted;}
+      if(chasing){
+        rig.rotation.x-=.16;la.rotation.x-=.18;ra.rotation.x-=.18;
+      }
+      if(exhausted){
+        // Hunched shoulders, drooping arms and tired breathing.
+        rig.rotation.x=.26+Math.sin(now*.009+index)*.055;
+        rig.position.y-=.09+Math.sin(now*.008+index)*.035;
+        la.rotation.x=.32;ra.rotation.x=.32;
+        la.rotation.z=-.25;ra.rotation.z=.25;
+        ll.rotation.x=rl.rotation.x=0;
+      }
       // Attacks: a sharp body lunge, both arms reaching toward the player,
       // then a springy recoil. This plays on actual damaging contact.
       if(now<(slot.attackUntil||0)){
@@ -11541,8 +11608,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       const bubble=npc.userData.devilNotice;
       if(bubble){
-        bubble.visible=now<(slot.noticeBubbleUntil||0);
+        bubble.visible=!exhausted&&now<(slot.noticeBubbleUntil||0);
         if(bubble.visible){bubble.position.y=2.63+Math.sin(now*.016)*.10;}
+      }
+      const tiredBubble=npc.userData.devilTired;
+      if(tiredBubble){
+        tiredBubble.visible=exhausted;
+        if(exhausted)tiredBubble.position.y=2.65+Math.sin(now*.009+index)*.08;
       }
       // Cartoon hop: knees tuck on the way up; arms flare as the devil falls.
       if(!slot.grounded){
@@ -11611,6 +11683,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const blocks=Object.values(currentWorldData.blocks||{});
       const dt=Math.min(delta,.05);
       let visibleDevils=0,pathBudget=1;
+      const playerAlive=!kwgDeadUntil&&kwgHealth>0;
       for(const [id,entry] of kwgEnemySpawners){
         const props=kwgEnemyPropsOf(entry.block);
         for(let index=0;index<entry.slots.length;index++){
@@ -11640,6 +11713,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.fallSpeed=0;slot.jumpSpeed=0;slot.isJumping=false;slot.grounded=false;
             slot.spawnIndex=index;slot.walkTime=0;slot.path=[];slot.pathAt=0;
             slot.roamTarget=null;slot.roamUntil=0;slot.attackUntil=0;slot.noticeBubbleUntil=0;
+            slot.chaseStartedAt=0;slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;
+            slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
             if(slot.spawnedOnce&&spawnDistance<15)kwgAudio.play('devil_respawn');
             slot.spawnedOnce=true;
           }
@@ -11649,11 +11724,36 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const distance=Math.hypot(dx,dz);
           const centerX=Number(entry.block.x)||0,centerZ=Number(entry.block.z)||0;
           const withinRange=Math.hypot(player.position.x-centerX,player.position.z-centerZ)<=props.noticeRange&&Math.abs(player.position.y-origin.y)<props.noticeRange;
-          const chasing=!isEditMode&&withinRange;
+          // Chase is a timed state. Exhausted devils catch their breath, then
+          // patrol again; a cooldown prevents instantly reacquiring the same
+          // player. A dead player is never a valid chase target.
+          const canNotice=!isEditMode&&playerAlive&&withinRange;
+          if(!playerAlive||!withinRange||isEditMode){
+            slot.chaseStartedAt=0;
+            slot.exhaustedUntil=0;
+          }
+          if(slot.exhaustedUntil&&now>=slot.exhaustedUntil){
+            slot.exhaustedUntil=0;
+            slot.chaseCooldownUntil=now+4300;
+            slot.chaseStartedAt=0;
+            slot.pathAt=0;slot.path=[];
+          }
+          if(canNotice&&now>=slot.chaseCooldownUntil&&!slot.exhaustedUntil){
+            if(!slot.chaseStartedAt)slot.chaseStartedAt=now;
+            // Give up after ~9 seconds of sustained pursuit.
+            if(now-slot.chaseStartedAt>=9000){
+              slot.exhaustedUntil=now+3400;
+              slot.chaseStartedAt=0;slot.pathAt=0;slot.path=[];
+              slot.roamTarget=null;slot.roamUntil=0;
+            }
+          }
+          const exhausted=!!slot.exhaustedUntil&&now<slot.exhaustedUntil;
+          const chasing=canNotice&&!exhausted&&now>=slot.chaseCooldownUntil;
+          slot.aiState=exhausted?'exhausted':chasing?'chase':'roam';
           const homeDist=Math.hypot(npc.position.x-origin.x,npc.position.z-origin.z);
           // Idle devils choose a new nearby patrol point every few seconds.
           // The random point is always inside their own spawner's notice range.
-          if(!chasing&&(!slot.roamTarget||now>slot.roamUntil||
+          if(!chasing&&!exhausted&&(!slot.roamTarget||now>slot.roamUntil||
              Math.hypot(npc.position.x-slot.roamTarget.x,npc.position.z-slot.roamTarget.z)<.65)){
             const radius=Math.max(.7,props.noticeRange-1.25);
             const angle=Math.random()*Math.PI*2;
@@ -11663,15 +11763,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.pathAt=0;
           }
           if(chasing){slot.roamTarget=null;slot.roamUntil=0;}
-          const targetX=chasing?player.position.x:(slot.roamTarget?.x??origin.x);
-          const targetZ=chasing?player.position.z:(slot.roamTarget?.z??origin.z);
+          const targetX=chasing?player.position.x:exhausted?npc.position.x:(slot.roamTarget?.x??origin.x);
+          const targetZ=chasing?player.position.z:exhausted?npc.position.z:(slot.roamTarget?.z??origin.z);
           if(chasing&&!slot.wasChasing){
             slot.noticeBubbleUntil=now+1050;
             if(distance<16&&now-slot.noticeAt>3000){kwgAudio.play('devil_notice');slot.noticeAt=now;}
           }
           slot.wasChasing=chasing;
+          if(chasing&&distance<19&&now-(slot.chaseSoundAt||0)>1650){
+            // Repeating 8-bit growls only while actively pursuing a living
+            // player; per-enemy throttling prevents continuous audio spam.
+            kwgAudio.play('devil_chase');slot.chaseSoundAt=now;
+          }
           let tx=targetX,tz=targetZ;
-          if(now>=slot.pathAt&&pathBudget>0){
+          if(!exhausted&&now>=slot.pathAt&&pathBudget>0){
             pathBudget--;
             // Pre-filter distant parts once per route; full-world A* checks
             // would become expensive in a 1400-block level.
@@ -11687,7 +11792,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.path=straight?[]:kwgEnemyFindPath(npc.position.x,npc.position.y,npc.position.z,targetX,targetZ,pathBlocks);
             slot.pathAt=now+900+index*53;
           }
-          if(slot.path?.length){
+          if(!exhausted&&slot.path?.length){
             // Do not consume a jump waypoint until we have landed on its level.
             while(slot.path.length){
               const point=slot.path[0];
@@ -11702,15 +11807,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const currentGround=kwgEnemyGroundY(npc.position.x,npc.position.y+.28,npc.position.z,blocks);
           slot.grounded=Number.isFinite(currentGround)&&Math.abs(currentGround-npc.position.y)<.18&&slot.fallSpeed<=0;
           const waypoint=slot.path?.length?slot.path[0]:null;
-          if(waypoint&&d<1.9&&waypoint.y>npc.position.y+.52&&slot.grounded){
-            // Low ledges are reachable with a short cartoon hop. A jump is
-            // only triggered if there is clearance above the devil's head.
-            if(kwgEnemyBodyClear(npc.position.x,npc.position.z,npc.position.y+.3,blocks)){
-              slot.fallSpeed=7.9;slot.isJumping=true;slot.grounded=false;
-            }
+          // Jump toward a higher A* waypoint. If direct movement is blocked
+          // by a climbable ledge, detect that ledge too; this covers the case
+          // where the pathfinder hasn't finished a new route yet.
+          const probeD=Math.min(1.0,Math.max(.65,d));
+          const ledgeX=npc.position.x+(d>.01?vx/d:0)*probeD;
+          const ledgeZ=npc.position.z+(d>.01?vz/d:0)*probeD;
+          const ledgeY=d>.01?kwgEnemyWalkable(ledgeX,ledgeZ,npc.position.y,blocks):null;
+          const waypointRise=waypoint&&d<2.2?waypoint.y-npc.position.y:0;
+          const ledgeRise=ledgeY===null?0:ledgeY-npc.position.y;
+          const needsJump=!exhausted&&d>.18&&slot.grounded&&
+            ((waypointRise>.46&&waypointRise<=kwgEnemyJumpRise+.03)||
+             (ledgeRise>.46&&ledgeRise<=kwgEnemyJumpRise+.03));
+          if(needsJump&&kwgEnemyBodyClear(npc.position.x,npc.position.z,npc.position.y+.35,blocks)){
+            // ~1.95 studs of lift with gravity 19: enough for the
+            // configured 1.75-stud navigation jump, with head clearance.
+            slot.fallSpeed=8.65;slot.isJumping=true;slot.grounded=false;
+            slot.pathAt=now+450;
           }
           let walking=false;
-          if(d>.13&&(chasing||!!slot.roamTarget||homeDist>.15)){
+          if(!exhausted&&d>.13&&(chasing||!!slot.roamTarget||homeDist>.15)){
             const speed=props.enemySpeed*(chasing?1:.65);
             const travel=Math.min(d,speed*dt);
             const oldX=npc.position.x,oldZ=npc.position.z;
@@ -11728,13 +11844,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             if(!outsideTerritory&&(airborne||canStep||nextGround===null)&&
                kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)&&
                !kwgEnemyCrowded(nx,nz,slot)){
-              const proposed={x:nx,y:npc.position.y,z:nz};
-              resolveHorizontalCollisionsMP(proposed,blocks,oldX,oldZ);
-              const moved=Math.hypot(proposed.x-oldX,proposed.z-oldZ);
-              if(moved>.0001&&moved<=travel+.07&&
-                 kwgEnemyBodyClear(proposed.x,proposed.z,npc.position.y,blocks)&&
-                 !kwgEnemyCrowded(proposed.x,proposed.z,slot)){
-                npc.position.x=proposed.x;npc.position.z=proposed.z;
+              const moved=kwgEnemyMoveSolid(slot,nx,nz,blocks);
+              if(moved>.0001&&moved<=travel+.07){
                 npc.rotation.y=Math.atan2(vx,vz);
                 slot.walkTime+=dt*speed*6;
                 walking=true;
