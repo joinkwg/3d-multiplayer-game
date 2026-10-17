@@ -2193,6 +2193,15 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
   #store-pane .kwg-store-showcase{grid-template-columns:90px minmax(0,1fr)}
   #store-pane .kwg-store-owned-thumb{height:auto;aspect-ratio:1 / 1;align-self:start}
 }
+
+/* KWG V18 — safe, screenshot-only world creation */
+#create-world-modal .card{width:min(470px,calc(100vw - 32px));max-height:90dvh;overflow-y:auto}
+#create-world-modal .kwg-create-world-label{display:block;margin:13px 0 5px;font-size:11px;font-weight:900;color:#b8d9f4;letter-spacing:.07em}
+#create-world-modal #new-world-description,#create-world-modal #new-world-thumbnail-mode{width:100%;box-sizing:border-box;background:#101c2a;color:#e9f4ff;border:1px solid #526d88;border-radius:2px;padding:9px;font:inherit}
+#create-world-modal #new-world-description{resize:vertical;min-height:72px}
+.kwg-create-world-hint{font-size:11px;color:#a4b9cf;line-height:1.5;margin:4px 0 8px}
+#kwg-world-edit-camera{align-self:flex-start;min-height:34px;padding:8px 12px}
+#kwg-info-auto-btn{margin-top:5px;background:#244c68;color:#e6f5ff;border:1px solid #6796b9;padding:8px;cursor:pointer}
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -3061,12 +3070,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     <div class="card" style="position: relative;">
       <span class="close-btn" id="close-create-world">X</span>
       <h3 style="margin: 0 0 10px 0; text-transform: uppercase;">Create World</h3>
-      <input type="text" id="new-world-name" placeholder="World Name (e.g. MyCastle)" maxlength="20" />
-      <label style="display:block;margin-top:10px;font-size:12px;font-weight:bold;color:#aaa;">STARTING TEMPLATE</label>
-      <select id="new-world-template" style="width:100%;margin-top:5px;padding:10px;background:#1f1f1f;color:white;border:1px solid #555;border-radius:4px;">
-        <option value="blank">Blank Baseplate</option>
+      <label class="kwg-create-world-label" for="new-world-name">WORLD NAME (OPTIONAL)</label>
+      <input type="text" id="new-world-name" placeholder="Leave blank for a surprise name!" maxlength="20" autocomplete="off" />
+      <div class="kwg-create-world-hint">Blank names get a unique randomly generated name.</div>
+      <label class="kwg-create-world-label" for="new-world-description">DESCRIPTION</label>
+      <textarea id="new-world-description" maxlength="300" rows="3" placeholder="What's your world about?"></textarea>
+      <label class="kwg-create-world-label" for="new-world-thumbnail-mode">THUMBNAIL</label>
+      <select id="new-world-thumbnail-mode">
+        <option value="auto">Automatic screenshot from spawn</option>
+        <option value="camera">Take a custom screenshot after launch</option>
       </select>
-      <div style="font-size:11px;color:#888;margin-top:5px;">Templates are starting copies. Editing your new world will not change the template.</div>
+      <div class="kwg-create-world-hint">Thumbnails use screenshots of your actual world. No pictures can be uploaded from your computer.</div>
       <button id="confirm-create-world-btn" class="submit-btn">Build & Launch</button>
       <div id="create-world-error" class="error-msg"></div>
     </div>
@@ -3275,7 +3289,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     <div class="kwg-world-edit-header"><div class="profile-kicker">WORLD MANAGEMENT</div><h2 id="kwg-world-edit-heading">EDIT WORLD</h2></div>
     <label for="kwg-world-edit-name">DISPLAY NAME</label><input id="kwg-world-edit-name" maxlength="40" required>
     <label for="kwg-world-edit-description">DESCRIPTION</label><textarea id="kwg-world-edit-description" maxlength="300" rows="4"></textarea>
-    <label for="kwg-world-edit-thumbnail">THUMBNAIL (JPEG / PNG IMAGE)</label><input id="kwg-world-edit-thumbnail" type="file" accept="image/png,image/jpeg,image/webp">
+    <label>THUMBNAIL — IN-GAME SCREENSHOT</label>
+    <div class="kwg-create-world-hint">Use the World Editor camera to choose your shot. You cannot upload pictures from your computer.</div>
+    <button id="kwg-world-edit-camera" class="kwg-world-edit-button" type="button">SAVE & OPEN THUMBNAIL CAMERA</button>
     <img id="kwg-world-edit-preview" alt="World thumbnail preview" hidden>
     <div id="kwg-world-edit-status" role="status" aria-live="polite"></div>
     <div class="kwg-world-edit-actions"><button id="kwg-world-edit-cancel" type="button">CANCEL</button><button id="kwg-world-edit-save" class="submit-btn" type="submit">SAVE CHANGES</button></div>
@@ -3374,9 +3390,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // numeric percentages; other requests use an indeterminate animated bar.
     const kwgLoadingEvents=new Set([
       'login','register','resume_session','get_worlds','join_world','create_world',
-      'get_world_templates','get_store','buy_store_item','get_pets','buy_pet','equip_pet','save_appearance',
+      'get_store','buy_store_item','get_pets','buy_pet','equip_pet','save_appearance',
       'update_appearance','toggle_world_like','delete_own_world',
-      'admin_search_users','admin_search_worlds','admin_make_world_template',
+      'admin_search_users','admin_search_worlds',
       'admin_delete_world','admin_delete_user','admin_clear_world_chat','admin_kick_user',
       'get_profile','update_profile','get_friends','send_friend_request',
       'respond_friend_request','cancel_friend_request','remove_friend',
@@ -3385,7 +3401,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const kwgLoadingLabels={
       login:'SIGNING IN',register:'CREATING ACCOUNT',resume_session:'RESTORING SESSION',
       get_worlds:'LOADING WORLDS',join_world:'LOADING WORLD',create_world:'CREATING WORLD',
-      get_world_templates:'LOADING TEMPLATES',get_store:'LOADING STORE',
+      get_store:'LOADING STORE',
       buy_store_item:'PURCHASING ITEM',get_pets:'LOADING PETS',buy_pet:'ADOPTING PET',equip_pet:'EQUIPPING PET',save_appearance:'SAVING AVATAR',
       update_appearance:'SAVING AVATAR',toggle_world_like:'UPDATING WORLD',
       delete_own_world:'DELETING WORLD',get_profile:'LOADING PROFILE',
@@ -4429,10 +4445,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgEditingWorld=world;
       document.getElementById('kwg-world-edit-name').value=world.displayName||world.name;
       document.getElementById('kwg-world-edit-description').value=world.description||'';
-      document.getElementById('kwg-world-edit-thumbnail').value='';
       const img=document.getElementById('kwg-world-edit-preview');
       img.hidden=!world.thumbnailUrl;img.src=world.thumbnailUrl||'';
-      document.getElementById('kwg-world-edit-status').textContent='Changes are saved to this world without joining it.';
+      document.getElementById('kwg-world-edit-status').textContent='Save details here, or open the World Editor camera to capture a thumbnail.';
       document.getElementById('kwg-world-edit-overlay').hidden=false;
       document.getElementById('kwg-world-edit-name').focus();
     }
@@ -4440,41 +4455,27 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.getElementById('kwg-world-edit-cancel').onclick=kwgCloseWorldEdit;
     document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.getElementById('kwg-world-edit-overlay').hidden)kwgCloseWorldEdit();});
     document.getElementById('kwg-world-edit-overlay').addEventListener('click',e=>{if(e.target.id==='kwg-world-edit-overlay')kwgCloseWorldEdit();});
-    document.getElementById('kwg-world-edit-thumbnail').addEventListener('change',e=>{
-      const file=e.target.files?.[0];if(!file)return;
-      if(!file.type.startsWith('image/')){showToast('Choose an image file.');e.target.value='';return;}
-      const url=URL.createObjectURL(file),img=document.getElementById('kwg-world-edit-preview');
-      img.onload=()=>URL.revokeObjectURL(url);img.src=url;img.hidden=false;
+    let kwgOpenCameraAfterWorldInfoSave=false;
+    document.getElementById('kwg-world-edit-camera').addEventListener('click',()=>{
+      kwgOpenCameraAfterWorldInfoSave=true;
+      document.getElementById('kwg-world-edit-form').requestSubmit();
     });
-    function kwgThumbnailJPEG(file){return new Promise((resolve,reject)=>{
-      const image=new Image(),url=URL.createObjectURL(file);
-      image.onload=()=>{
-        URL.revokeObjectURL(url);
-        const c=document.createElement('canvas');c.width=640;c.height=360;
-        const ctx=c.getContext('2d');ctx.fillStyle='#152233';ctx.fillRect(0,0,c.width,c.height);
-        const ratio=Math.min(c.width/image.width,c.height/image.height),w=image.width*ratio,h=image.height*ratio;
-        ctx.drawImage(image,(c.width-w)/2,(c.height-h)/2,w,h);
-        const data=c.toDataURL('image/jpeg',.8);
-        if(data.length>2400000)reject(new Error('Thumbnail is too large.'));else resolve(data);
-      };
-      image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('Could not read the image.'));};image.src=url;
-    });}
     document.getElementById('kwg-world-edit-form').addEventListener('submit',async e=>{
       e.preventDefault();if(!kwgEditingWorld)return;
       const button=document.getElementById('kwg-world-edit-save'),status=document.getElementById('kwg-world-edit-status');
       const title=document.getElementById('kwg-world-edit-name').value.trim(),description=document.getElementById('kwg-world-edit-description').value.trim();
-      if(!title||title.length>40||description.length>300){status.textContent='Name must be 1–40 characters; description up to 300.';return;}
+      if(!title||title.length>40||description.length>300){status.textContent='Name must be 1–40 characters; description up to 300.';kwgOpenCameraAfterWorldInfoSave=false;return;}
       button.disabled=true;status.textContent='Saving world...';
-      try{
-        const payload={worldName:kwgEditingWorld.name,displayName:title,description};
-        const file=document.getElementById('kwg-world-edit-thumbnail').files?.[0];
-        if(file)payload.thumbnailData=await kwgThumbnailJPEG(file);
-        socket.timeout(20000).emit('update_owned_world_info',payload,(err,res)=>{
-          button.disabled=false;
-          if(err||!res?.success){status.textContent=res?.message||'Save timed out. Please retry.';return;}
-          kwgCloseWorldEdit();showToast('World updated!');renderRoomList();renderHomeOverview();
-        });
-      }catch(err){button.disabled=false;status.textContent=err.message||'Could not prepare thumbnail.';}
+      const key=kwgEditingWorld.name;
+      const openCamera=kwgOpenCameraAfterWorldInfoSave;
+      kwgOpenCameraAfterWorldInfoSave=false;
+      socket.timeout(20000).emit('update_owned_world_info',{worldName:key,displayName:title,description},(err,res)=>{
+        button.disabled=false;
+        if(err||!res?.success){status.textContent=res?.message||'Save timed out. Please retry.';return;}
+        kwgCloseWorldEdit();
+        if(openCamera)joinSelectedWorld(key,null,false,'camera');
+        else{showToast('World updated!');renderRoomList();renderHomeOverview();}
+      });
     });
     function makeWorldCard(w) {
       const card = document.createElement('div');
@@ -4685,7 +4686,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         yes.onclick=()=>finish(true);no.onclick=()=>finish(false);
       });
     }
-    function joinSelectedWorld(roomName, visitUsername = null, confirmBlocked = false) {
+    function joinSelectedWorld(roomName, visitUsername = null, confirmBlocked = false, thumbnailAction = null) {
       isEditMode = false;
       buildSubTool = null;
       document.body.classList.remove('kwg-editing');
@@ -4696,7 +4697,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       socket.emit('join_world', { worldName: roomName, appearance: playerAppearance, visitUsername, confirmBlocked }, async (res) => {
         if(res?.requiresBlockConfirmation){
           if(await kwgConfirmBlockedWorld(res.blockedCount||1))
-            joinSelectedWorld(roomName,visitUsername,true);
+            joinSelectedWorld(roomName,visitUsername,true,thumbnailAction);
           return;
         }
         if (!res?.success) {
@@ -4723,8 +4724,24 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgEquippedPet=res.selfPetKey||null;
         kwgSetWorldPet(socket.id,kwgEquippedPet);
         resetWorldInfoEditor(res.worldData,roomName);
-        if(canEditCurrentWorld&&!res.worldData?.thumbnailUrl){
-          setTimeout(()=>{if(currentWorldName===roomName)kwgEnsureSpawnThumbnail(false);},1300);
+        if(canEditCurrentWorld && thumbnailAction==='camera'){
+          // The world must exist and be rendered before its screenshot camera can start.
+          setTimeout(()=>{
+            if(currentWorldName!==roomName)return;
+            if(!isEditMode)document.getElementById('toggle-edit-btn').click();
+            document.querySelector('#kwg-settings-window [data-kwg-setting="info"]')?.click();
+            startWorldThumbnailCamera();
+            showToast('Frame your world, capture, then use Save & Exit to save your thumbnail.',6500);
+          },650);
+        }else if(canEditCurrentWorld && (!res.worldData?.thumbnailUrl||res.worldData?.thumbnailAuto)){
+          // Wait for two frames and a settled scene before reading the WebGL target.
+          setTimeout(()=>{
+            if(currentWorldName!==roomName)return;
+            requestAnimationFrame(()=>requestAnimationFrame(async()=>{
+              if(await kwgEnsureSpawnThumbnail(false,true))return;
+              setTimeout(()=>{if(currentWorldName===roomName)kwgEnsureSpawnThumbnail(false);},4200);
+            }));
+          },2400);
         }
         document.getElementById('world-chat').style.display = 'block';
         startWorldIdleWatch();
@@ -4735,37 +4752,32 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const createModal = document.getElementById('create-world-modal');
     document.getElementById('open-create-world-btn').addEventListener('click', () => {
       document.getElementById('new-world-name').value = '';
+      document.getElementById('new-world-description').value = '';
+      document.getElementById('new-world-thumbnail-mode').value = 'auto';
       document.getElementById('create-world-error').textContent = '';
       document.getElementById('home-screen').style.display = 'none';
-      const templateSelect = document.getElementById('new-world-template');
-      templateSelect.innerHTML = '<option value="blank">Blank Baseplate</option>';
-      socket.emit('get_world_templates', (res) => {
-        if (res?.success) (res.templates || []).forEach(t => {
-          const opt=document.createElement('option'); opt.value=t.id; opt.textContent=filterKWGUserText(t.name); templateSelect.appendChild(opt);
-        });
-      });
       createModal.style.display = 'flex';
     });
-
     document.getElementById('close-create-world').addEventListener('click', () => {
       createModal.style.display = 'none';
       document.getElementById('home-screen').style.display = 'flex';
     });
-
     document.getElementById('confirm-create-world-btn').addEventListener('click', () => {
-      const name = document.getElementById('new-world-name').value.trim();
-      if (!name) {
-        document.getElementById('create-world-error').textContent = 'Please enter a world name.';
-        return;
+      const name=document.getElementById('new-world-name').value.trim();
+      const description=document.getElementById('new-world-description').value.trim();
+      const thumbnailMode=document.getElementById('new-world-thumbnail-mode').value;
+      const error=document.getElementById('create-world-error');
+      const button=document.getElementById('confirm-create-world-btn');
+      if(name&&!/^[A-Za-z0-9 _-]{1,20}$/.test(name)){
+        error.textContent='Use letters, numbers, spaces, _ or - for the world name.';return;
       }
-      const templateId = document.getElementById('new-world-template').value || 'blank';
-      socket.emit('create_world', { name, templateId }, (res) => {
-        if (res.success) {
-          createModal.style.display = 'none';
-          joinSelectedWorld(name);
-        } else {
-          document.getElementById('create-world-error').textContent = res.message;
-        }
+      if(description.length>300){error.textContent='Description must be 300 characters or fewer.';return;}
+      button.disabled=true;error.textContent='Creating your world...';
+      socket.timeout(20000).emit('create_world',{name,description},(err,res)=>{
+        button.disabled=false;
+        if(err||!res?.success){error.textContent=res?.message||'Could not create world. Please retry.';return;}
+        createModal.style.display='none';
+        joinSelectedWorld(res.worldName||name,null,false,thumbnailMode==='camera'?'camera':null);
       });
     });
 
@@ -5224,7 +5236,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const meta=document.createElement('small'); meta.style.cssText='color:#aaa;margin-left:7px;'; meta.textContent=`owner: ${w.ownerUsername || 'unknown'} • ${w.onlineCount || 0} online • ${w.chatCount || 0} messages`; info.appendChild(meta); row.appendChild(info);
         const actions=document.createElement('div'); actions.className='admin-actions';
         const clear=document.createElement('button'); clear.className='admin-action warn'; clear.textContent='CLEAR CHAT'; clear.onclick=async()=>{if(await kwgConfirm(`Permanently clear all chat messages in "${w.name}"?`,{title:'CLEAR CHAT?',okLabel:'CLEAR CHAT',danger:true})) adminRequest('admin_clear_world_chat',{worldName:w.name},`Chat cleared for ${w.name}.`)}; actions.appendChild(clear);
-        const templ=document.createElement('button'); templ.className='admin-action'; templ.textContent='MAKE TEMPLATE'; templ.onclick=async()=>{const templateName=await kwgPrompt('Template name:',w.name,{title:'MAKE TEMPLATE',okLabel:'CREATE'}); if(templateName?.trim()) adminRequest('admin_make_world_template',{worldName:w.name,templateName:templateName.trim()},`${w.name} is now available as the "${templateName.trim()}" template.`)}; actions.appendChild(templ);
         const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE WORLD'; del.onclick=async()=>{if(await kwgConfirm(`Permanently delete world "${w.name}"? This cannot be undone.`,{title:'DELETE WORLD?',okLabel:'DELETE',danger:true})) adminRequest('admin_delete_world',{worldName:w.name},`${w.name} was permanently deleted.`)}; actions.appendChild(del);
         row.appendChild(actions); worlds.appendChild(row);
       });
@@ -8759,7 +8770,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const editorSettingsWindow = document.createElement('div');
     editorSettingsWindow.id = 'kwg-settings-window';
     editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save with Save & Exit.</div></div>';
+    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><button id="kwg-info-auto-btn" type="button" class="kwg-info-camera-button">GENERATE SPAWN PREVIEW</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save with Save & Exit.</div></div>';
     document.body.appendChild(editorSettingsWindow);
     const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
     if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
@@ -8858,6 +8869,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(velocity.lengthSq()>0)camera.position.addScaledVector(velocity.normalize(),delta*(cam.keys.has('shift')?35:12));
     }
     document.getElementById('kwg-info-camera-btn').addEventListener('click',startWorldThumbnailCamera);
+    document.getElementById('kwg-info-auto-btn').addEventListener('click',async()=>{
+      const btn=document.getElementById('kwg-info-auto-btn');btn.disabled=true;
+      try{
+        // Explicitly discard an unsaved custom photo only after confirmation.
+        if(kwgInfoDraft.thumbnailData){showToast('Save & Exit your custom photo first, or retake it.');return;}
+        const ok=await kwgEnsureSpawnThumbnail(true);
+        if(ok)showToast('Spawn preview generated!');
+      }finally{btn.disabled=false;}
+    });
     kwgCameraDragzone.addEventListener('contextmenu',e=>{
       if(kwgFreeCamera.active)e.preventDefault();
     });
@@ -8900,7 +8920,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const was=hidden.map(o=>o.visible);
       const previousAspect=viewCamera.aspect;
       const previousTarget=renderer.getRenderTarget();
-      const w=960,h=540;
+      const w=640,h=360;
       const target=new THREE.WebGLRenderTarget(w,h,{depthBuffer:true});
       const pixels=new Uint8Array(w*h*4);
       try{
@@ -8916,38 +8936,54 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const ctx=canvas.getContext('2d');const frame=ctx.createImageData(w,h);
       for(let y=0;y<h;y++)frame.data.set(pixels.subarray((h-1-y)*w*4,(h-y)*w*4),y*w*4);
       ctx.putImageData(frame,0,0);
-      return canvas.toDataURL('image/jpeg',.79);
+      return canvas.toDataURL('image/jpeg',.78);
     }
     // Capture from the same spawn-facing camera angle used by normal gameplay.
     // This never moves the player's actual camera or includes other players/editor gizmos.
     function kwgCaptureSpawnThumbnail(){
-      const spawn=kwgChooseSpawnPosition(currentWorldData);
+      const spawnParts=Object.values(currentWorldData?.blocks||{}).filter(b=>b&&b.actionType==='spawn');
+      const preferred=spawnParts[0];
+      const spawn=preferred?(()=>{
+        const bounds=getBlockAABB(preferred);
+        return {x:Number(preferred.x)||0,y:(Number.isFinite(bounds.maxY)?bounds.maxY:0)+.18,z:Number(preferred.z)||0};
+      })():kwgChooseSpawnPosition(currentWorldData);
       const view=new THREE.PerspectiveCamera(60,16/9,.1,1000);
       view.position.set(spawn.x,spawn.y+3.5,spawn.z-6);
       view.lookAt(spawn.x,spawn.y+1.2,spawn.z+7);
       return captureWorldThumbnail(view);
     }
     let kwgAutoThumbnailPending=false;
-    async function kwgEnsureSpawnThumbnail(refresh=false){
-      if(kwgAutoThumbnailPending||!currentWorldName||!canEditCurrentWorld||!currentWorldData)return;
-      if(currentWorldData.thumbnailUrl&&!currentWorldData.thumbnailAuto)return; // preserve custom uploads
-      if(currentWorldData.thumbnailUrl&&!refresh)return;
+    async function kwgEnsureSpawnThumbnail(refresh=false,quiet=false){
+      if(kwgAutoThumbnailPending||!currentWorldName||!canEditCurrentWorld||!currentWorldData)return false;
+      if(currentWorldData.thumbnailUrl&&!currentWorldData.thumbnailAuto)return true;
+      if(currentWorldData.thumbnailUrl&&!refresh)return true;
       const worldName=currentWorldName;
       kwgAutoThumbnailPending=true;
       try{
+        // An offscreen screenshot of the loaded world, never a file from the user's device.
         const thumbnailData=kwgCaptureSpawnThumbnail();
-        if(thumbnailData.length>2400000)throw new Error('Spawn screenshot exceeds upload limit.');
+        if(!thumbnailData.startsWith('data:image/jpeg;base64,')||thumbnailData.length>2400000)
+          throw new Error('The world screenshot could not be encoded as a small JPEG.');
         const res=await new Promise(resolve=>{
           const timer=setTimeout(()=>resolve({success:false,message:'Thumbnail upload timed out.'}),22000);
           socket.emit('set_auto_world_thumbnail',{worldName,thumbnailData},reply=>{clearTimeout(timer);resolve(reply);});
         });
-        if(res?.success&&currentWorldName===worldName&&currentWorldData){
+        if(!res?.success)throw new Error(res?.message||'The server could not save the screenshot.');
+        if(currentWorldName===worldName&&currentWorldData){
           currentWorldData.thumbnailUrl=res.thumbnailUrl;
           currentWorldData.thumbnailAuto=res.thumbnailAuto===true;
-          if(!kwgInfoDraft.thumbnailData){kwgInfoDraft.thumbnailUrl=res.thumbnailUrl;kwgInfoOriginal.thumbnailUrl=res.thumbnailUrl;refreshWorldInfoThumbnail();}
-        }else if(!res?.success){console.warn('Automatic spawn thumbnail:',res?.message||'Upload failed');}
-      }catch(err){console.warn('Could not capture automatic spawn thumbnail:',err);}
-      finally{kwgAutoThumbnailPending=false;}
+          if(!kwgInfoDraft.thumbnailData){
+            kwgInfoDraft.thumbnailUrl=res.thumbnailUrl;
+            kwgInfoOriginal.thumbnailUrl=res.thumbnailUrl;
+            refreshWorldInfoThumbnail();
+          }
+        }
+        return true;
+      }catch(err){
+        console.warn('Automatic spawn thumbnail failed:',err);
+        if(!quiet&&currentWorldName===worldName)showToast('Auto thumbnail failed: '+(err.message||'Try again from World Editor → Info.'),6500);
+        return false;
+      }finally{kwgAutoThumbnailPending=false;}
     }
     kwgCameraUI.querySelector('#kwg-camera-cancel').addEventListener('click',stopWorldThumbnailCamera);
     kwgCameraUI.querySelector('#kwg-camera-capture').addEventListener('click',()=>{
