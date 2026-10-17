@@ -1690,7 +1690,7 @@ io.on('connection', (socket) => {
       const cosmetics = await resolveAppearanceAssets(app);
       const equippedPetRow=await pool.query('SELECT pet_key FROM user_pet_equipment WHERE user_id=$1',[userId]);
       const storedPetKey=equippedPetRow.rows[0]?.pet_key||null;
-      const petKey=/^(skeleton|mummy|zombie)_[1-4]$/.test(storedPetKey||'')?null:storedPetKey;
+      const petKey=null; // V24: companions temporarily disabled, keep stored equipment untouched.
       if (!socket.connected || !socket.user) throw new Error('Disconnected during world join.');
       socket.user.appearance = app;
 
@@ -1859,9 +1859,10 @@ io.on('connection', (socket) => {
                 const e=new Error('Part limit reached (1400/1400 parts).');e.clientMessage=e.message;throw e;
               }
               // Preserve standard and enemy spawner types, with validated enemy limits.
-              blockData.actionType=['normal','kill','checkpoint','spawn','enemy_spawner'].includes(blockData.actionType)?blockData.actionType:'normal';
+              blockData.actionType=['normal','kill','checkpoint','spawn','enemy_spawner','health'].includes(blockData.actionType)?blockData.actionType:'normal';
               blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
               normalizeEnemySpawner(blockData);
+              if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
               data.blocks[blockData.id]=blockData;
             }else if(action==='delete'){
               const target=data.blocks[blockId];
@@ -1949,9 +1950,10 @@ io.on('connection', (socket) => {
           // Only supported block types and three current
           // materials may be saved by clients. Existing legacy worlds are
           // not rewritten on load; their old flags stay intact until edited.
-          blockData.actionType = ['normal','kill','checkpoint','spawn','enemy_spawner'].includes(blockData.actionType) ? blockData.actionType : 'normal';
+          blockData.actionType = ['normal','kill','checkpoint','spawn','enemy_spawner','health'].includes(blockData.actionType) ? blockData.actionType : 'normal';
           blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
           normalizeEnemySpawner(blockData);
+          if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
           data.blocks[blockData.id] = blockData;
         } else if (action === 'delete') {
           const target = data.blocks[blockId];
@@ -2118,6 +2120,7 @@ io.on('connection', (socket) => {
   // KWG V3.49: pet shop, ownership and equipped companion.
   socket.on('get_pets', async (cb) => {
     if (!requireAuth(socket,cb)) return;
+    if(typeof cb==='function')return cb({success:true,pets:[],owned:[],equippedPet:null});
     try {
       const [catalog,owned,equipped]=await Promise.all([
         pool.query(`SELECT pet_key AS "petKey",name,price,species,is_visible AS "isVisible" FROM pet_catalog WHERE species NOT IN ('skeleton','mummy','zombie') AND ($1::boolean OR is_visible=true OR pet_key IN (SELECT pet_key FROM user_pets WHERE user_id=$2)) ORDER BY species,pet_key`,[!!socket.user.isAdmin,socket.user.id]),
@@ -2130,6 +2133,7 @@ io.on('connection', (socket) => {
 
   socket.on('buy_pet', async ({petKey}={},cb) => {
     if (!requireAuth(socket,cb)) return;
+    if(typeof cb==='function')return cb({success:false,message:'Pets are temporarily unavailable.'});
     if (typeof petKey!=='string'||!/^([a-z0-9_]{1,32})$/.test(petKey))
       return cb({success:false,message:'Invalid pet.'});
     if(kwgRetiredPetKey(petKey))return cb({success:false,message:'This pet is temporarily unavailable.'});
@@ -2154,6 +2158,7 @@ io.on('connection', (socket) => {
 
   socket.on('equip_pet', async ({petKey}={},cb) => {
     if (!requireAuth(socket,cb)) return;
+    if(typeof cb==='function')return cb({success:false,message:'Pets are temporarily unavailable.'});
     if(petKey!==null && (typeof petKey!=='string'||!/^([a-z0-9_]{1,32})$/.test(petKey)))
       return cb({success:false,message:'Invalid pet.'});
     if(kwgRetiredPetKey(petKey))return cb({success:false,message:'This pet is temporarily unavailable.'});
