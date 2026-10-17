@@ -25,6 +25,7 @@ function normalizeEnemySpawner(block){
   block.enemySpeed=bounded(block.enemySpeed,.5,15,3);
   block.enemyCount=Math.round(bounded(block.enemyCount,1,12,1));
   block.enemyRespawn=bounded(block.enemyRespawn,0,300,5);
+  block.enemyDamage=Math.round(bounded(block.enemyDamage,1,100,25));
   block.enemyKillable=block.enemyKillable!==false;
 }
 const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
@@ -1809,10 +1810,12 @@ io.on('connection', (socket) => {
     // Cosmetic front-flip pose only; never affects authoritative position.
     p.stompAngle = (typeof data.stompAngle==='number' && Number.isFinite(data.stompAngle))
       ? Math.max(-8,Math.min(8,data.stompAngle)) : 0;
+    p.ragdollPose=(typeof data.ragdollPose==='number'&&Number.isFinite(data.ragdollPose))
+      ?Math.max(0,Math.min(1,data.ragdollPose)):0;
     socket.to(`world:${p.worldName}`).emit('player_moved',{
       id:p.id,x:p.x,y:p.y,z:p.z,rotationY:p.rotationY,walkClock:p.walkClock,
       verticalVelocity:p.verticalVelocity,isMoving:p.isMoving,isGrounded:p.isGrounded,
-      stompAngle:p.stompAngle
+      stompAngle:p.stompAngle,ragdollPose:p.ragdollPose
     });
   });
 
