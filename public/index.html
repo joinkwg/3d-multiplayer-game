@@ -3225,7 +3225,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <label class="kwg-recolor-field"><span>Can Collide</span><input type="checkbox" id="kwg-place-collide" checked></label>
       <div id="kwg-place-enemy-properties" class="kwg-enemy-properties" style="display:none">
         <div class="kwg-enemy-props-title">ENEMY SPAWNER PRESET</div>
-        <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-place-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option></select></label>
+        <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-place-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option><option value="bot_bus">Bot Bus</option></select></label>
         <label class="kwg-recolor-field"><span>Notice Range</span><input id="kwg-place-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
         <label class="kwg-recolor-field"><span>Enemy Speed</span><input id="kwg-place-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
         <label class="kwg-recolor-field"><span>Enemy Count</span><input id="kwg-place-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
@@ -3313,7 +3313,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           </div>
           <div id="kwg-enemy-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">ENEMY SETTINGS</div>
-            <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option></select></label>
+            <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option><option value="bot_bus">Bot Bus</option></select></label>
             <label class="kwg-recolor-field"><span>Notice Range (studs)</span><input id="kwg-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
             <label class="kwg-recolor-field"><span>Enemy Speed (studs / second)</span><input id="kwg-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
             <label class="kwg-recolor-field"><span>Number of Enemies</span><input id="kwg-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
@@ -3646,7 +3646,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         spider_spit:[[610,.11,'sawtooth',.11,210],[330,.09,'triangle',.12,170]],
         spider_bite:[[180,.12,'sawtooth',.16,75]],
         alien_zap:[[1040,.09,'sawtooth',.15,240],[840,.17,'square',.13,105]],
-        alien_land:[[380,.14,'triangle',.14,130],[160,.12,'sawtooth',.09,90]]
+        alien_land:[[380,.14,'triangle',.14,130],[160,.12,'sawtooth',.09,90]],
+        bus_ram:[[95,.22,'sawtooth',.25,46],[210,.12,'square',.10,90]],
+        robot_deploy:[[380,.08,'square',.09,170],[175,.10,'triangle',.10,100]]
       };
       // V27: sampled/filtered effects have the shape of real sounds instead of
       // only square-wave notes. Deliberate 8kHz sample-and-hold gives a light
@@ -9771,7 +9773,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       el.value=String(kwgTransparencyValue(id));
     }
     const kwgToolKind=value=>value==='minigun'?'minigun':'pistol';
-    const kwgEnemyCharacter=value=>['devil','sniper','hops','spider','alien'].includes(value)?value:'devil';
+    const kwgEnemyCharacter=value=>['devil','sniper','hops','spider','alien','bot_bus'].includes(value)?value:'devil';
     const kwgEnemyDefaults={noticeRange:18,enemySpeed:3,enemyCount:1,enemyKillable:true,enemyRespawn:5,enemyDamage:25};
     function kwgEnemyNumber(value,min,max,fallback,integer=false){
       const v=Number(value);
@@ -11610,6 +11612,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           if(!slot.mesh||slot.deadUntil>now||slot.squishUntil>now)continue;
           const hits=ray.intersectObject(slot.mesh,true);
           if(hits.length&&hits[0].distance<maxDistance){maxDistance=hits[0].distance;best={kind:'enemy',id,index,slot,entry};}
+          // A forgiving saucer silhouette makes UFO pilots hittable at range.
+          // The same world-obstruction limit still applies to every shot.
+          if(entry.block.enemyCharacter==='alien'&&slot.alienMode!=='foot'){
+            const sphere=new THREE.Sphere(slot.mesh.position.clone().add(new THREE.Vector3(0,.2,0)),2.0);
+            const impact=ray.ray.intersectSphere(sphere,new THREE.Vector3());
+            if(impact){const t=impact.distanceTo(ray.ray.origin);if(t<maxDistance){maxDistance=t;best={kind:'enemy',id,index,slot,entry};}}
+          }
+          if(entry.block.enemyCharacter==='bot_bus'&&slot.robots){
+            for(const robot of slot.robots){
+              if(robot.dead||!robot.mesh)continue;
+              const hit=ray.intersectObject(robot.mesh,true)[0];
+              if(hit&&hit.distance<maxDistance){maxDistance=hit.distance;best={kind:'robot',id,index,slot,entry,robot};}
+            }
+          }
         }
       }
       if(currentWorldData?.friendlyFire===true){
@@ -11620,7 +11636,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       const tracerEnd=ray.ray.origin.clone().addScaledVector(ray.ray.direction,maxDistance);
       kwgShowShotTracer(localPlayerAvatar.position.clone().add(new THREE.Vector3(0,1.35,0)),tracerEnd,kind==='minigun'?0xffe9a3:0xffc665);
-      if(best?.kind==='enemy'){
+      if(best?.kind==='robot'){
+         const bot=best.robot;bot.health-=kwgToolDamage[kind];bot.hitUntil=now+330;
+         kwgBlockyHitSplash(tracerEnd,kind==='minigun'?7:13);kwgAudio.play('hit_enemy');
+         kwgShowEnemyHealth(bot,'devil');
+         if(bot.health<=0)kwgDestroyBusRobot(bot);
+       }else if(best?.kind==='enemy'){
         // Can Be Stomped controls stomp immunity, not weapon damage.
         // Hops is immune to stomps but must remain defeatable by tools.
         best.slot.weaponHealth=(best.slot.weaponHealth??100)-kwgToolDamage[kind];
@@ -11977,17 +11998,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
     // Enemy HP is local to the current game client. The bar is only shown
     // after damage; the same value drives the weapon defeat threshold.
-    function kwgEnemyMaxWeaponHealth(kind){return kind==='hops'?160:kind==='alien'?125:kind==='spider'?110:100;}
+    function kwgEnemyMaxWeaponHealth(kind){return kind==='hops'?160:kind==='alien'?125:kind==='spider'?110:kind==='bot_bus'?230:100;}
     function kwgShowEnemyHealth(slot,kind){
       const npc=slot?.mesh;if(!npc)return;
       const max=kwgEnemyMaxWeaponHealth(kind);
-      const hp=Math.max(0,Math.min(max,Number(slot.weaponHealth??max)));
+      const hp=Math.max(0,Math.min(max,Number(slot.weaponHealth??slot.health??max)));
       let sprite=npc.userData.kwgEnemyHealth;
       if(!sprite){
         const canvas=document.createElement('canvas');canvas.width=256;canvas.height=52;
         const texture=new THREE.CanvasTexture(canvas);texture.minFilter=THREE.NearestFilter;
         sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:false}));
-        sprite.name='kwg-enemy-health';sprite.position.set(0,kind==='hops'?3.65:kind==='alien'?2.9:kind==='spider'?2.25:2.40,0);
+        sprite.name='kwg-enemy-health';sprite.position.set(0,kind==='bot_bus'?3.55:kind==='hops'?3.65:kind==='alien'?2.9:kind==='spider'?2.25:2.40,0);
         sprite.scale.set(1.62,.34,1);npc.add(sprite);
         npc.userData.kwgEnemyHealth=sprite;sprite.userData.canvas=canvas;sprite.userData.lastHp=-1;
       }
@@ -12002,8 +12023,182 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       ctx.fillRect(13,17,Math.round(230*hp/max),18);
       sprite.material.map.needsUpdate=true;
     }
+    // V32: a gray city bus with animated wheels, front glass and side doors.
+    function kwgBotBusModel(){
+      const root=new THREE.Group(),rig=new THREE.Group();root.add(rig);
+      const gray=new THREE.MeshLambertMaterial({color:0x9ba5b0}),trim=new THREE.MeshLambertMaterial({color:0x424e5c});
+      const glass=new THREE.MeshLambertMaterial({color:0x83d2e7,transparent:true,opacity:.78});
+      const red=new THREE.MeshBasicMaterial({color:0xff5260}),yellow=new THREE.MeshBasicMaterial({color:0xffe49d});
+      const box=(w,h,d,x,y,z,mat,parent=rig)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);parent.add(m);return m;};
+      box(2.35,1.96,4.45,0,1.35,0,gray);
+      box(2.38,.25,4.52,0,2.42,0,trim);
+      box(1.90,.79,.07,0,1.83,2.26,glass);
+      box(1.9,.27,.12,0,.70,2.28,trim);
+      for(const side of [-1,1]){
+        for(const z of [-1.36,-.28,.78])box(.055,.73,.82,side*1.20,1.78,z,glass);
+        for(const z of [-1.52,1.50]){
+          const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.46,.46,.23,12),trim);
+          wheel.rotation.z=Math.PI/2;wheel.position.set(side*1.23,.53,z);rig.add(wheel);
+          (root.userData.wheels??=[]).push(wheel);
+        }
+      }
+      box(.34,.24,.09,-.78,.91,2.31,yellow);box(.34,.24,.09,.78,.91,2.31,yellow);
+      box(.28,.22,.08,-.78,.91,-2.30,red);box(.28,.22,.08,.78,.91,-2.30,red);
+      const doorL=new THREE.Group(),doorR=new THREE.Group();
+      doorL.position.set(1.22,1.29,.75);doorR.position.set(1.22,1.29,-.15);rig.add(doorL,doorR);
+      box(.09,1.53,.85,0,0,.41,gray,doorL);box(.09,1.53,.85,0,0,-.41,gray,doorR);
+      root.userData.busDoors=[doorL,doorR];root.userData.devilRig=rig;
+      root.userData.devilLimbs=[doorL,doorR,doorL,doorR];root.userData.devilBody=rig.children[0];
+      root.userData.devilNotice=kwgEnemySpeechBubble('!',3.25,root);
+      root.userData.devilTired=kwgEnemySpeechBubble('x_x',3.25,root);
+      root.userData.isEnemyCharacter=true;return root;
+    }
+    function kwgBusRobotModel(){
+      const root=new THREE.Group(),rig=new THREE.Group();root.add(rig);
+      const steel=new THREE.MeshLambertMaterial({color:0x737c8e}),dark=new THREE.MeshLambertMaterial({color:0x323746});
+      const eye=new THREE.MeshBasicMaterial({color:0xff313f});
+      const box=(w,h,d,x,y,z,mat,parent=rig)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);parent.add(m);return m;};
+      box(.60,.74,.42,0,.95,0,steel);box(.62,.51,.49,0,1.60,0,dark);
+      box(.18,.12,.06,-.17,1.63,.28,eye);box(.18,.12,.06,.17,1.63,.28,eye);
+      const arms=[];
+      for(const side of [-1,1]){
+        const arm=new THREE.Group();arm.position.set(side*.41,1.26,0);rig.add(arm);
+        box(.20,.64,.24,0,-.29,0,steel,arm);arms.push(arm);
+      }
+      for(const side of [-1,1])box(.22,.57,.24,side*.18,.28,0,dark);
+      const blaster=box(.26,.23,.68,0,-.50,.32,dark,arms[1]);
+      const muzzle=box(.17,.14,.09,0,-.50,.71,eye,arms[1]);
+      root.userData.devilRig=rig;root.userData.devilLimbs=[arms[0],arms[1],arms[0],arms[1]];
+      root.userData.blaster=blaster;root.userData.muzzle=muzzle;
+      return root;
+    }
+    function kwgBusCanFit(x,z,feet,blocks){
+      const halfW=1.31,halfL=2.28;
+      for(const b of blocks){
+        if(b.canCollide===false)continue;
+        const a=getBlockAABB(b);
+        if(a.maxX<=x-halfW||a.minX>=x+halfW||a.maxZ<=z-halfL||a.minZ>=z+halfL)continue;
+        if(a.maxY>feet+.14&&a.minY<feet+2.65)return false;
+      }
+      return true;
+    }
+    function kwgDestroyBusRobot(robot){
+      if(!robot||robot.dead)return;
+      robot.dead=true;
+      if(robot.beam){scene.remove(robot.beam);robot.beam.geometry.dispose();robot.beam.material.dispose();robot.beam=null;}
+      if(robot.mesh){scene.remove(robot.mesh);robot.mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();o.material?.map?.dispose();});robot.mesh=null;}
+    }
+    function kwgClearBusRobots(slot){
+      for(const robot of slot.robots||[])kwgDestroyBusRobot(robot);
+      slot.robots=[];
+    }
+    function kwgRobotLaser(slot,robot,player,props,blocks,now,dt,playerAlive){
+      if(robot.dead||!robot.mesh)return;
+      const npc=robot.mesh,from=npc.position.clone().add(new THREE.Vector3(0,1.18,.36));
+      const target=player.position.clone().add(new THREE.Vector3(0,1.04,0));
+      const dist=Math.hypot(target.x-npc.position.x,target.z-npc.position.z);
+      if(now<robot.exitAt){npc.visible=false;return;}
+      npc.visible=true;
+      const hop=Math.min(1,(now-robot.exitAt)/620);
+      npc.position.copy(robot.exitStart).lerp(robot.exitEnd,hop);
+      npc.position.y=robot.baseY+Math.sin(hop*Math.PI)*.85;
+      if(hop>=1)npc.position.y=robot.baseY;
+      npc.rotation.y=Math.atan2(target.x-npc.position.x,target.z-npc.position.z);
+      npc.userData.devilRig.rotation.z=now<(robot.hitUntil||0)?Math.sin(now*.06)*.15:0;
+      if(!robot.beam){
+        const mat=new THREE.LineBasicMaterial({color:0xff3149,transparent:true,opacity:.86,depthTest:true});
+        robot.beam=new THREE.Line(new THREE.BufferGeometry().setFromPoints([from,target]),mat);
+        scene.add(robot.beam);
+      }
+      const clear=playerAlive&&!isEditMode&&hop>=1&&dist<Math.min(props.noticeRange,17)&&
+        kwgRayWorldClear(from,target,blocks);
+      robot.beam.visible=clear;
+      if(!clear){robot.lockAt=0;return;}
+      const positions=robot.beam.geometry.getAttribute('position');
+      positions.setXYZ(0,from.x,from.y,from.z);positions.setXYZ(1,target.x,target.y,target.z);
+      positions.needsUpdate=true;robot.beam.geometry.computeBoundingSphere();
+      if(!robot.lockAt)robot.lockAt=now;
+      const ramp=Math.min(1,(now-robot.lockAt)/4700);
+      robot.beam.material.color.setHex(ramp>.6?0xff121c:0xff6270);
+      robot.beam.material.opacity=.56+ramp*.44;
+      if(now>=(robot.nextDamageAt||0)){
+        robot.nextDamageAt=now+260;
+        // Continuous lock damage is intentionally separate from knockout
+        // immunity: a focused laser grows more dangerous while it stays on you.
+        kwgApplyRobotLaserDamage(1.5+6.5*ramp,npc.position);
+      }
+    }
+    function kwgApplyRobotLaserDamage(amount,position){
+      if(isEditMode||kwgDeadUntil||kwgHealth<=0||!localPlayerAvatar)return;
+      const before=kwgHealth;
+      kwgHealth=Math.max(0,kwgHealth-Math.max(1,Math.round(amount)));
+      if(before===kwgHealth)return;
+      kwgPulseDamageScreen();kwgUpdateHealthHud();
+      if(kwgHealth<=0){kwgDiePlayer('enemy');return;}
+      const now=performance.now();
+      if(now-(kwgApplyRobotLaserDamage.lastSfx||0)>600){
+        kwgAudio.play('alien_zap');kwgApplyRobotLaserDamage.lastSfx=now;
+        kwgBlockyHitSplash(localPlayerAvatar.position.clone().add(new THREE.Vector3(0,1.1,0)),5);
+      }
+    }
+    function kwgBotBusStep(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ,playerAlive){
+      const npc=slot.mesh;
+      const doors=npc.userData.busDoors;
+      if(!slot.robots)slot.robots=[];
+      if(!slot.busDeployed&&chasing){
+        const dx=player.position.x-npc.position.x,dz=player.position.z-npc.position.z;
+        const distance=Math.hypot(dx,dz);
+        const heading=Math.atan2(dx,dz);
+        // Broad AABB checks mean the bus cannot squeeze through human gaps.
+        const step=Math.min(distance,Math.max(3.7,props.enemySpeed*1.65)*dt);
+        const nx=npc.position.x+Math.sin(heading)*step,nz=npc.position.z+Math.cos(heading)*step;
+        const ground=kwgEnemyGroundY(nx,npc.position.y+1,nz,blocks,3.8);
+        const blockedClose=distance<=2.4&&!kwgRayWorldClear(
+          npc.position.clone().add(new THREE.Vector3(0,1.3,0)),
+          player.position.clone().add(new THREE.Vector3(0,1.0,0)),blocks);
+        const reachable=distance>2.4&&Number.isFinite(ground)&&Math.abs(ground-npc.position.y)<.40&&
+          Math.hypot(nx-centerX,nz-centerZ)<props.noticeRange-.5&&kwgBusCanFit(nx,nz,ground,blocks);
+        if(reachable){
+          npc.rotation.y=heading;
+          npc.position.set(nx,ground,nz);
+          slot.busBlockedAt=0;
+          for(const wheel of npc.userData.wheels||[])wheel.rotation.x+=dt*7;
+        }else if(distance>2.4||blockedClose){
+          if(!slot.busBlockedAt)slot.busBlockedAt=now;
+          if(now-slot.busBlockedAt>850){slot.busDeployed=true;slot.busDoorAt=now;slot.busDeployCount=0;}
+        }
+        if(distance<2.15&&!blockedClose&&Math.abs(player.position.y-npc.position.y)<2.5&&now>=(slot.busNextRam||0)){
+          slot.busNextRam=now+1900;
+          if(kwgEnemyHitPlayer(Math.max(40,props.enemyDamage),npc.position))kwgAudio.play('bus_ram');
+        }
+      }
+      if(slot.busDeployed){
+        const opening=Math.min(1,(now-slot.busDoorAt)/550);
+        if(doors){doors[0].rotation.y=opening*.98;doors[1].rotation.y=-opening*.98;}
+        const count=Math.min(3,Math.floor(Math.max(0,now-slot.busDoorAt-500)/730)+1);
+        while(slot.robots.length<count){
+          const i=slot.robots.length;
+          const robotMesh=kwgBusRobotModel();
+          const offset=new THREE.Vector3(1.95,0,.95-i*.67).applyAxisAngle(new THREE.Vector3(0,1,0),npc.rotation.y);
+          const doorOffset=new THREE.Vector3(.9,0,.95-i*.67).applyAxisAngle(new THREE.Vector3(0,1,0),npc.rotation.y);
+          const exitStart=npc.position.clone().add(doorOffset);
+          const exitEnd=npc.position.clone().add(offset);
+          robotMesh.position.copy(exitStart);
+          scene.add(robotMesh);
+          slot.robots.push({mesh:robotMesh,health:100,dead:false,exitAt:slot.busDoorAt+500+i*730,
+            exitStart,exitEnd,baseY:npc.position.y,lockAt:0,nextDamageAt:0,beam:null});
+          kwgAudio.play('robot_deploy');
+        }
+        for(const robot of slot.robots)kwgRobotLaser(slot,robot,player,props,blocks,now,dt,playerAlive&&chasing);
+      }
+      if(!chasing){for(const robot of slot.robots){robot.lockAt=0;if(robot.beam)robot.beam.visible=false;}}
+      npc.userData.devilRig.position.y=.025*Math.sin(now*.003);
+      npc.userData.devilRig.rotation.z=now<(slot.hitUntil||0)?Math.sin(now*.06)*.11:0;
+      if(npc.userData.devilNotice)npc.userData.devilNotice.visible=chasing&&now<(slot.noticeBubbleUntil||0);
+    }
+
     function kwgCreateEnemyModel(kind){
-      return kind==='sniper'?kwgSniperCatModel():kind==='hops'?kwgHopsBunnyModel():kind==='spider'?kwgSpiderModel():kind==='alien'?kwgAlienModel():kwgDevilModel();
+      return kind==='sniper'?kwgSniperCatModel():kind==='hops'?kwgHopsBunnyModel():kind==='spider'?kwgSpiderModel():kind==='alien'?kwgAlienModel():kind==='bot_bus'?kwgBotBusModel():kwgDevilModel();
     }
 
     // V31: Webs are world-anchored puddles. They NEVER attach to an avatar.
@@ -12011,17 +12206,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgWebPatch(position){
       const group=new THREE.Group();group.position.copy(position);group.position.y+=.045;
       const silk=new THREE.MeshBasicMaterial({color:0xdceeff,transparent:true,opacity:.56,depthWrite:false,side:THREE.DoubleSide});
-      const disk=new THREE.Mesh(new THREE.CircleGeometry(1.43,12),silk);disk.rotation.x=-Math.PI/2;group.add(disk);
+      const disk=new THREE.Mesh(new THREE.CircleGeometry(2.25,16),silk);disk.rotation.x=-Math.PI/2;group.add(disk);
       const lines=new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.90,depthWrite:false});
-      for(const radius of [.46,.90,1.40]){
+      for(const radius of [.68,1.40,2.19]){
         const points=[];for(let i=0;i<=24;i++){const a=i*Math.PI/12;points.push(new THREE.Vector3(Math.cos(a)*radius,.018,Math.sin(a)*radius));}
         group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),lines));
       }
       for(let i=0;i<8;i++){
         const a=i*Math.PI/4;
-        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,.02,0),new THREE.Vector3(Math.cos(a)*1.43,.02,Math.sin(a)*1.43)]),lines));
+        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,.02,0),new THREE.Vector3(Math.cos(a)*2.23,.02,Math.sin(a)*2.23)]),lines));
       }
-      scene.add(group);kwgWebPatches.push({mesh:group,position:position.clone(),radius:1.43,until:performance.now()+8500});
+      scene.add(group);kwgWebPatches.push({mesh:group,position:position.clone(),radius:2.25,until:performance.now()+9500});
       while(kwgWebPatches.length>42)kwgDisposeWebPatch(kwgWebPatches.shift());
     }
     function kwgDisposeWebPatch(p){scene.remove(p.mesh);p.mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
@@ -12035,7 +12230,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const now=performance.now();
       for(const p of kwgWebPatches){
         if(now>=p.until)continue;
-        if(Math.abs(position.y-p.position.y)<1.35&&Math.hypot(position.x-p.position.x,position.z-p.position.z)<p.radius+.22)return .28;
+        if(Math.abs(position.y-p.position.y)<1.35&&Math.hypot(position.x-p.position.x,position.z-p.position.z)<p.radius+.22)return .12;
       }
       return 1;
     }
@@ -12103,7 +12298,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const radius=Math.max(1,props.noticeRange-.8);
       const ox=targetX-centerX,oz=targetZ-centerZ,scale=Math.min(1,radius/Math.max(.01,Math.hypot(ox,oz)));
       const tx=centerX+ox*scale,tz=centerZ+oz*scale;
-      const flightSpeed=Math.max(4.8,props.enemySpeed*2.25)*dt;
+      const flightSpeed=Math.max(16,props.enemySpeed*4.3)*dt;
       const vx=tx-npc.position.x,vz=tz-npc.position.z,dist=Math.hypot(vx,vz);
       if(dist>.01){const travel=Math.min(dist,flightSpeed);npc.position.x+=vx/dist*travel;npc.position.z+=vz/dist*travel;}
       let hoverY=(chasing?player.position.y:origin.y)+6.0+Math.sin(now*.0025+slot.spawnIndex)*.23;
@@ -12121,8 +12316,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(chasing&&dist>.01)npc.rotation.y=Math.atan2(player.position.x-npc.position.x,player.position.z-npc.position.z);
       slot.grounded=true;slot.aiState=chasing?'chase':'roam';
       const beamStart=npc.position.clone().add(new THREE.Vector3(0,-.20,0));
-      const beamTarget=chasing?player.position.clone().add(new THREE.Vector3(0,1.05,0)):
-        new THREE.Vector3(npc.position.x,origin.y,npc.position.z);
+      // The UFO beam is always vertical; it never tilts toward the player.
+      // First solid surface beneath the ship cuts the beam off, including roofs.
+      const beamTarget=new THREE.Vector3(npc.position.x,
+        Math.min(beamStart.y-.2,chasing?player.position.y+1.05:origin.y),npc.position.z);
       const impact=kwgAlienBeamEnd(beamStart,beamTarget,blocks);
       const beam=slot.alienBeam,beamVector=impact.point.clone().sub(beamStart),beamLength=beamVector.length();
       beam.visible=beamLength>.1;
@@ -12131,7 +12328,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         beam.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),beamVector.normalize());
         beam.scale.set(1,beamLength,1);
       }
-      const canZap=chasing&&impact.clear&&Math.hypot(player.position.x-npc.position.x,player.position.z-npc.position.z)<2.65;
+      const canZap=chasing&&impact.clear&&Math.hypot(player.position.x-npc.position.x,player.position.z-npc.position.z)<1.35;
       if(canZap){
         slot.alienHiddenAt=0;
         if(!slot.alienChargeAt&&now>=(slot.alienNextZap||0))slot.alienChargeAt=now;
@@ -12151,12 +12348,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgShowShotTracer(beamStart,beamTarget,0xff253d);kwgAudio.play('alien_zap');
         kwgEnemyHitPlayer(props.enemyDamage,npc.position);
       }
-      // Roof cover for several seconds forces the alien to park and fight on foot.
+      // Roof cover for several seconds forces a *visible* flight down to a
+      // landing zone. The ship stays attached until its descent is finished.
       if(slot.alienHiddenAt&&now-slot.alienHiddenAt>3600){
-        slot.alienMode='foot';slot.alienChargeAt=0;
-        beam.visible=false;
         let landing=null;
-        // Try nearby points outside the overhead roof, at player-level.
         for(const radius of [3.5,5.5,8,11]){
           for(let i=0;i<12;i++){
             const a=i*Math.PI/6+slot.spawnIndex*.3;
@@ -12170,16 +12365,47 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           if(landing)break;
         }
         if(!landing)landing=new THREE.Vector3(origin.x,origin.y,origin.z);
-        const ship=npc.userData.alienShip;
-        if(ship){
-          npc.remove(ship);ship.position.copy(landing).add(new THREE.Vector3(0,.75,0));
-          ship.rotation.y=npc.rotation.y;scene.add(ship);slot.parkedUfo=ship;npc.userData.alienShip=null;
-        }
-        npc.position.copy(landing);
-        slot.fallSpeed=0;slot.grounded=true;slot.path=[];slot.pathAt=0;
-        kwgAudio.play('alien_land');
+        slot.alienMode='landing';slot.alienLandingTarget=landing;
+        slot.alienLandingAt=now;slot.alienChargeAt=0;
+        slot.alienHiddenAt=0;slot.alienNextZap=Infinity;
+        if(slot.alienBeam)slot.alienBeam.visible=false;
       }
     }
+    function kwgAlienLandStep(slot,now,dt){
+      const npc=slot.mesh,target=slot.alienLandingTarget;
+      if(!npc||!target)return;
+      const elapsed=now-slot.alienLandingAt;
+      // First fly to the parking position, then visibly lower the UFO.
+      const move= Math.min(1,dt*3.5);
+      npc.position.x+=(target.x-npc.position.x)*move;
+      npc.position.z+=(target.z-npc.position.z)*move;
+      if(elapsed>600){
+        const down=Math.min(1,dt*2.5);
+        npc.position.y+=(target.y+.12-npc.position.y)*down;
+      }
+      if(slot.alienBeam)slot.alienBeam.visible=false;
+      if(elapsed<1600||Math.hypot(npc.position.x-target.x,npc.position.z-target.z)>.40||
+         Math.abs(npc.position.y-(target.y+.12))>.22)return;
+      const ship=npc.userData.alienShip;
+      if(ship){
+        // Keep the ship exactly where it visually landed in world space.
+        npc.updateMatrixWorld(true);
+        const worldPos=ship.getWorldPosition(new THREE.Vector3());
+        npc.remove(ship);ship.position.copy(worldPos);
+        ship.rotation.y=npc.rotation.y;scene.add(ship);
+        slot.parkedUfo=ship;npc.userData.alienShip=null;
+      }
+      npc.position.copy(target);slot.alienMode='foot';
+      slot.alienNextZap=now+1300; // the alien takes a beat before attacking
+      slot.fallSpeed=0;slot.grounded=true;slot.path=[];slot.pathAt=0;
+      slot.alienLandingTarget=null;
+      kwgAudio.play('alien_land');
+    }
+    function kwgAlienFlightOrLanding(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ){
+      if(slot.alienMode==='landing')kwgAlienLandStep(slot,now,dt);
+      else kwgAlienFlightStep(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ);
+    }
+
     function kwgAlienFootFire(slot,player,props,blocks,now){
       if(now<(slot.alienNextZap||0)||!slot.mesh||kwgDeadUntil||kwgHealth<=0)return;
       const from=slot.mesh.position.clone().add(new THREE.Vector3(0,1.30,0));
@@ -12244,6 +12470,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
     function kwgDestroyEnemySlot(slot){
       if(!slot)return;
+      kwgClearBusRobots(slot);
       if(slot.alienBeam){scene.remove(slot.alienBeam);slot.alienBeam.geometry.dispose();slot.alienBeam.material.dispose();slot.alienBeam=null;}
       if(slot.parkedUfo){scene.remove(slot.parkedUfo);slot.parkedUfo.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});slot.parkedUfo=null;}
       if(!slot.mesh)return;
@@ -12278,6 +12505,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       slot.deadUntil=slot.squishUntil+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
       slot.path=[];slot.pathAt=0;slot.jumpSpeed=0;slot.isJumping=false;slot.hopsImpactPending=false;
       if(slot.alienBeam)slot.alienBeam.visible=false;
+      kwgClearBusRobots(slot);
       if(notify)kwgAudio.play('devil_stomp');
       if(notify&&socket?.connected)socket.emit('enemy_stomped',{worldName:currentWorldName,spawnerId,index,method:slot.defeatMethod||'stomp'});
       slot.defeatMethod=null;
@@ -12314,7 +12542,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.spawnedOnce=false;slot.nextShotAt=0;slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);
             slot.attackUntil=0;slot.muzzleUntil=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;slot.nextHopAt=0;slot.chaseStartedAt=0;
             slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;slot.wasChasing=false;
-            slot.alienMode='flight';slot.alienChargeAt=0;slot.webChargeAt=0;
+            slot.alienMode='flight';slot.alienChargeAt=0;slot.webChargeAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
             // Replace an already visible NPC right here, even while the
             // World Editor camera is active and the AI update is paused.
             if(wasVisible){
@@ -12745,7 +12973,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.chaseStartedAt=0;slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;
             slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
             slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.nextShotAt=0;slot.nextHopAt=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;
-            slot.alienMode='flight';slot.alienChargeAt=0;slot.alienHiddenAt=0;slot.alienNextZap=0;slot.webChargeAt=0;slot.nextWebAt=0;
+            slot.alienMode='flight';slot.alienChargeAt=0;slot.alienHiddenAt=0;slot.alienNextZap=0;slot.webChargeAt=0;slot.nextWebAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
             if(props.enemyCharacter==='alien')slot.mesh.position.y=origin.y+5.8;
             if(slot.spawnedOnce&&spawnDistance<15)kwgAudio.play('devil_respawn');
             slot.spawnedOnce=true;
@@ -12797,8 +13025,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.pathAt=0;
           }
           if(chasing){slot.roamTarget=null;slot.roamUntil=0;}
+          if(props.enemyCharacter==='bot_bus'){
+            if(chasing&&!slot.wasChasing)slot.noticeBubbleUntil=now+1050;
+            slot.wasChasing=chasing;
+            kwgBotBusStep(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ,playerAlive);
+            continue;
+          }
           if(props.enemyCharacter==='alien'&&slot.alienMode!=='foot'){
-            kwgAlienFlightStep(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ);
+            kwgAlienFlightOrLanding(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ);
             kwgEnemyAnimate(slot,now,false,props.enemySpeed,index);
             continue;
           }
