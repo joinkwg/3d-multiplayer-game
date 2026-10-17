@@ -452,6 +452,13 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS feed_posts_author_idx ON feed_posts(author_user_id,created_at DESC,id DESC);
     CREATE INDEX IF NOT EXISTS feed_posts_recent_idx ON feed_posts(created_at DESC,id DESC);
+    ALTER TABLE profile_messages ALTER COLUMN body TYPE VARCHAR(500);
+    ALTER TABLE profile_messages ADD COLUMN IF NOT EXISTS source_feed_post_id BIGINT;
+    CREATE UNIQUE INDEX IF NOT EXISTS profile_messages_source_feed_post_idx
+      ON profile_messages(source_feed_post_id) WHERE source_feed_post_id IS NOT NULL;
+    INSERT INTO profile_messages(profile_user_id,author_user_id,body,created_at,source_feed_post_id)
+      SELECT author_user_id,author_user_id,body,created_at,id FROM feed_posts
+      ON CONFLICT (source_feed_post_id) WHERE source_feed_post_id IS NOT NULL DO NOTHING;
     CREATE TABLE IF NOT EXISTS notifications (
       id BIGSERIAL PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1148,11 +1155,6 @@ io.on('connection', (socket) => {
         canDelete:Number(m.authorId)===Number(socket.user.id)||Number(u.id)===Number(socket.user.id)
       }));
 
-      const profilePosts=blockBetween?[]:(await pool.query(`
-        SELECT p.id,p.body,p.created_at AS "createdAt",author.username AS "authorUsername"
-        FROM feed_posts p JOIN users author ON author.id=p.author_user_id
-        WHERE p.author_user_id=$1 ORDER BY p.created_at DESC,p.id DESC LIMIT 40
-      `,[u.id])).rows.map(p=>({...p,id:Number(p.id),canDelete:Number(u.id)===Number(socket.user.id)}));
       const onlineSocket = socketsByUser.get(u.id);
       const livePlayer = onlineSocket ? playersBySocket.get(onlineSocket.id) : null;
       cb({
@@ -1175,7 +1177,7 @@ io.on('connection', (socket) => {
           showcasedWorlds,
           likedWorlds:likedRows.rows.map(worldCard),topWorlds,
           createdWorlds:ownedWithIds.rows.map(w=>worldCard({...w,like_count:w.likeCount})),
-          friends,messages,posts:profilePosts,
+          friends,messages,
           ownedWorlds: u.id === socket.user.id ? ownedWithIds.rows.map(w => ({
             id:Number(w.id),name:w.name,displayName:filterKWGUserText(String(w.data?.displayName||w.name)),thumbnailUrl:String(w.data?.thumbnailUrl||''),createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
           })) : []
@@ -1241,24 +1243,27 @@ io.on('connection', (socket) => {
         DELETE FROM profile_messages m USING users owner
         WHERE m.id=$1 AND owner.id=m.profile_user_id
           AND (m.author_user_id=$2 OR owner.id=$2)
-        RETURNING m.id
+        RETURNING m.id,m.source_feed_post_id
       `,[id,socket.user.id]);
       if(!deleted.rowCount)return cb({success:false,message:'Message not found or permission denied.'});
+      // Also retire migrated V16 feed record, if this message came from one.
+      if(deleted.rows[0].source_feed_post_id)await pool.query('DELETE FROM feed_posts WHERE id=$1',[deleted.rows[0].source_feed_post_id]);
       cb({success:true});
     }catch(e){console.error('Profile delete error:',e);cb({success:false,message:'Could not delete message.'});}
   });
 
-  // Feed posts are authored by the signed-in user. The same record appears
-  // on their profile and in accepted friends' feeds.
+  // One source of truth: feed posts are self-authored messages on the
+  // poster's existing profile message board. Other people's board messages
+  // remain on that board, and are never misattributed to its owner.
   socket.on('post_feed_post',async ({body}={},cb)=>{
     if(!requireAuth(socket,cb))return;
     if(typeof cb!=='function')return;
     try{
       body=filterKWGUserText(String(body||'').trim().slice(0,500));
       if(!body)return cb({success:false,message:'Write a post first.'});
-      const recent=await pool.query("SELECT 1 FROM feed_posts WHERE author_user_id=$1 AND created_at>NOW()-INTERVAL '10 seconds' LIMIT 1",[socket.user.id]);
+      const recent=await pool.query("SELECT 1 FROM profile_messages WHERE author_user_id=$1 AND created_at>NOW()-INTERVAL '10 seconds' LIMIT 1",[socket.user.id]);
       if(recent.rowCount)return cb({success:false,message:'Wait a few seconds before posting again.'});
-      await pool.query('INSERT INTO feed_posts(author_user_id,body) VALUES($1,$2)',[socket.user.id,body]);
+      await pool.query('INSERT INTO profile_messages(profile_user_id,author_user_id,body) VALUES($1,$1,$2)',[socket.user.id,body]);
       cb({success:true});
     }catch(e){console.error('Feed post error:',e);cb({success:false,message:'Could not publish post.'});}
   });
@@ -1267,19 +1272,19 @@ io.on('connection', (socket) => {
     if(typeof cb!=='function')return;
     try{
       const result=await pool.query(`
-        SELECT p.id,p.body,p.created_at AS "createdAt",u.username AS "authorUsername",p.author_user_id AS "authorId"
-        FROM feed_posts p JOIN users u ON u.id=p.author_user_id
-        WHERE (p.author_user_id=$1 OR EXISTS(
-          SELECT 1 FROM friendships f
-          WHERE f.status='accepted' AND
-            ((f.requester_id=$1 AND f.addressee_id=p.author_user_id) OR
-             (f.addressee_id=$1 AND f.requester_id=p.author_user_id))
-        )) AND NOT EXISTS(
-          SELECT 1 FROM user_blocks b
-          WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_user_id)
-             OR (b.blocked_id=$1 AND b.blocker_id=p.author_user_id)
-        )
-        ORDER BY p.created_at DESC,p.id DESC LIMIT 50
+        SELECT m.id,m.body,m.created_at AS "createdAt",u.username AS "authorUsername",m.author_user_id AS "authorId"
+        FROM profile_messages m JOIN users u ON u.id=m.author_user_id
+        WHERE m.profile_user_id=m.author_user_id AND
+          (m.author_user_id=$1 OR EXISTS(
+            SELECT 1 FROM friendships f WHERE f.status='accepted' AND
+              ((f.requester_id=$1 AND f.addressee_id=m.author_user_id) OR
+               (f.addressee_id=$1 AND f.requester_id=m.author_user_id))
+          )) AND NOT EXISTS(
+            SELECT 1 FROM user_blocks b
+            WHERE (b.blocker_id=$1 AND b.blocked_id=m.author_user_id)
+               OR (b.blocked_id=$1 AND b.blocker_id=m.author_user_id)
+          )
+        ORDER BY m.created_at DESC,m.id DESC LIMIT 50
       `,[socket.user.id]);
       cb({success:true,posts:result.rows.map(p=>({
         id:Number(p.id),body:filterKWGUserText(p.body),createdAt:p.createdAt,
@@ -1293,7 +1298,8 @@ io.on('connection', (socket) => {
     const id=Number(postId);
     if(!Number.isSafeInteger(id)||id<1)return cb({success:false,message:'Invalid post.'});
     try{
-      const result=await pool.query('DELETE FROM feed_posts WHERE id=$1 AND author_user_id=$2 RETURNING id',[id,socket.user.id]);
+      const result=await pool.query('DELETE FROM profile_messages WHERE id=$1 AND author_user_id=$2 AND profile_user_id=$2 RETURNING id,source_feed_post_id',[id,socket.user.id]);
+      if(result.rows[0]?.source_feed_post_id)await pool.query('DELETE FROM feed_posts WHERE id=$1',[result.rows[0].source_feed_post_id]);
       cb(result.rowCount?{success:true}:{success:false,message:'Post not found or not yours.'});
     }catch(e){console.error('Feed delete error:',e);cb({success:false,message:'Could not delete post.'});}
   });
