@@ -2859,7 +2859,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           </section>
           <section class="kwg-home-panel kwg-home-feed" aria-labelledby="kwg-home-feed-heading">
             <div class="kwg-home-panel-head"><div><div class="kwg-home-kicker">YOU & YOUR FRIENDS</div><h3 id="kwg-home-feed-heading">FEED</h3></div><button id="kwg-feed-refresh" type="button" class="kwg-home-text-button">REFRESH ↻</button></div>
-            <div class="kwg-feed-compose"><label for="kwg-feed-input">SHARE AN UPDATE</label><textarea id="kwg-feed-input" rows="3" maxlength="500" placeholder="What have you been up to?"></textarea><div class="kwg-feed-compose-foot"><span id="kwg-feed-count">0 / 500</span><button type="button" id="kwg-feed-post" class="submit-btn">POST TO FEED</button></div></div>
+            <div class="kwg-feed-compose"><label for="kwg-feed-input">SHARE ON YOUR MESSAGE BOARD & FEED</label><textarea id="kwg-feed-input" rows="3" maxlength="500" placeholder="What have you been up to?"></textarea><div class="kwg-feed-compose-foot"><span id="kwg-feed-count">0 / 500</span><button type="button" id="kwg-feed-post" class="submit-btn">POST TO FEED</button></div></div>
             <div id="kwg-feed-list" class="kwg-feed-list" aria-live="polite"><div class="kwg-home-empty">Loading friends' posts...</div></div>
           </section>
         </div>
@@ -2900,11 +2900,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               </div>
             </section>
           </div>
-          <section class="profile-panel kwg-profile-posts">
-            <div class="profile-panel-title">POSTS</div>
-            <div id="kwg-profile-post-compose" class="kwg-feed-compose" style="display:none"><label for="kwg-profile-post-input">SHARE ON YOUR PROFILE & FEED</label><textarea id="kwg-profile-post-input" rows="3" maxlength="500" placeholder="Write a post..."></textarea><div class="kwg-feed-compose-foot"><span id="kwg-profile-post-count">0 / 500</span><button id="kwg-profile-post-send" type="button" class="submit-btn">POST</button></div></div>
-            <div id="kwg-profile-post-list" class="kwg-feed-list"></div>
-          </section>
           <section class="profile-panel kwg-profile-board">
             <div class="profile-panel-title">MESSAGE BOARD</div>
             <div id="profile-message-list" class="kwg-profile-message-list"></div>
@@ -4597,15 +4592,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const host=document.getElementById('kwg-top-worlds-list');if(!host)return;
       host.replaceChildren();
       if(!worlds.length){host.innerHTML='<div class="kwg-home-empty">No worlds yet. Create one and start collecting likes!</div>';return;}
-      worlds.forEach((w,index)=>{
-        const card=document.createElement('div');card.className='kwg-top-world-card';
-        const rank=document.createElement('span');rank.className='kwg-top-rank';rank.textContent='#'+(index+1);
-        const image=kwgHomeThumbnail(w);
-        const info=document.createElement('div');info.className='kwg-top-world-info';
-        const name=document.createElement('strong');name.textContent=filterKWGUserText(w.displayName||w.name);
-        const meta=document.createElement('span');meta.textContent='♥ '+Number(w.likes||0)+'  ·  '+filterKWGUserText(w.ownerUsername||'Unknown');
-        info.append(name,meta);card.append(rank,image,info,kwgHomeJoinButton(w.name));host.append(card);
-      });
+      worlds.forEach(w=>host.appendChild(makeWorldCard(w)));
     }
     function kwgRenderFeedPosts(posts,host){
       if(!host)return;host.replaceChildren();
@@ -4618,7 +4605,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const date=document.createElement('span');date.className='kwg-feed-date';date.textContent=timeAgo(post.createdAt);
         header.append(author,date);
         if(post.canDelete){const del=document.createElement('button');del.type='button';del.className='kwg-feed-delete';del.textContent='DELETE';
-          del.onclick=async()=>{if(!await kwgConfirm('Delete this post from your profile and the feed?',{title:'DELETE POST?',okLabel:'DELETE',danger:true}))return;
+          del.onclick=async()=>{if(!await kwgConfirm('Delete this post from your message board and the feed?',{title:'DELETE POST?',okLabel:'DELETE',danger:true}))return;
             socket.emit('delete_feed_post',{postId:post.id},res=>{if(res?.success){renderHomeOverview();if(viewedProfile)loadProfile(viewedProfile.username);}else showToast(res?.message||'Could not delete post.');});
           };header.append(del);
         }
@@ -4654,11 +4641,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(after)after();
       });
     }
-    for(const [inputId,countId] of [['kwg-feed-input','kwg-feed-count'],['kwg-profile-post-input','kwg-profile-post-count']]){
+    for(const [inputId,countId] of [['kwg-feed-input','kwg-feed-count']]){
       document.getElementById(inputId).addEventListener('input',e=>{document.getElementById(countId).textContent=e.target.value.length+' / 500';});
     }
     document.getElementById('kwg-feed-post').onclick=()=>kwgSubmitFeedPost('kwg-feed-input','kwg-feed-post',renderHomeOverview);
-    document.getElementById('kwg-profile-post-send').onclick=()=>kwgSubmitFeedPost('kwg-profile-post-input','kwg-profile-post-send',()=>{loadProfile(loggedInUsername);renderHomeOverview();});
     document.getElementById('kwg-feed-refresh').onclick=renderHomeOverview;
 
     document.getElementById('world-sort').addEventListener('change', renderRoomList);
@@ -10218,6 +10204,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           del.onclick=()=>socket.emit('delete_profile_message',{messageId:msg.id},res=>{
             if(!res?.success){showToast(res?.message||'Could not delete message.');return;}
             loadProfile(profile.username);
+            renderHomeOverview();
           });head.append(del);
         }
         const body=document.createElement('div');body.className='kwg-profile-message-body';body.textContent=filterKWGUserText(msg.body);
@@ -10312,8 +10299,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       friendsSort.onchange=drawFriends;
       drawFriends();
       renderProfileMessages(profile);
-      kwgRenderFeedPosts(profile.posts||[],document.getElementById('kwg-profile-post-list'));
-      document.getElementById('kwg-profile-post-compose').style.display=profile.isOwnProfile?'block':'none';
 
       const edit=document.getElementById('profile-edit-area');
       edit.style.display=profile.isOwnProfile?'block':'none';
@@ -10522,6 +10507,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(!res?.success){showToast(res?.message||'Could not post message.');return;}
         input.value='';document.getElementById('profile-message-count').textContent='0/240';
         loadProfile(profile.username);
+        if(profile.username.toLowerCase()===loggedInUsername.toLowerCase())renderHomeOverview();
       });
     });
     document.getElementById('profile-bio-input').addEventListener('input',e=>{
@@ -12195,6 +12181,54 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 #kwg-creator .kwgc-boolean-actions small{grid-column:1/-1;color:#91b5ca;font-size:10px;line-height:1.4}
 #kwg-creator .kwgc-poly-box{background:#21354a;border:1px solid #4f6a83;padding:8px;margin-top:7px}
 #kwg-creator .kwgc-poly-box small{display:block;font-size:10px;color:#9ec0d5;margin-top:5px}
+
+/* V17: Home stays within the viewport; only each panel's content scrolls. */
+#home-main-card > #home-pane.home-pane.active{display:flex!important;flex-direction:column!important;overflow:hidden!important;}
+#home-pane > .kwg-page-heading{flex:0 0 auto!important;margin-bottom:10px!important;}
+#home-pane .kwg-v16-home-layout{flex:1 1 auto!important;min-height:0!important;height:100%!important;
+  align-items:stretch!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;overflow:hidden!important;}
+#home-pane .kwg-v16-home-layout > .kwg-home-panel{display:flex!important;flex-direction:column!important;
+  min-height:0!important;height:100%!important;max-height:100%!important;overflow:hidden!important;box-sizing:border-box!important;}
+#home-pane .kwg-home-panel-head{flex:0 0 auto!important;}
+#home-pane .kwg-top-worlds-list,#home-pane .kwg-feed-list{flex:1 1 auto!important;min-height:0!important;
+  overflow-y:auto!important;overflow-x:hidden!important;padding:3px 5px 5px 2px!important;scrollbar-width:thin!important;}
+#home-pane .kwg-feed-compose{flex:0 0 auto!important;margin:9px 0 10px!important;}
+#home-pane .kwg-feed-compose textarea{min-height:58px!important;max-height:105px!important;}
+/* The Home world's listing uses the exact Worlds-page card markup and actions. */
+#home-pane .kwg-top-worlds-list .room-card{margin:0!important;min-width:0!important;display:grid!important;
+  grid-template-columns:clamp(72px,23%,124px) minmax(0,1fr)!important;align-items:center!important;gap:10px!important;
+  padding:10px!important;box-sizing:border-box!important;}
+#home-pane .kwg-top-worlds-list .kwg-world-card-thumb{width:100%!important;min-width:0!important;grid-row:1 / span 2!important;}
+#home-pane .kwg-top-worlds-list .room-info{grid-column:2!important;min-width:0!important;}
+#home-pane .kwg-top-worlds-list .kwg-world-card-actions{grid-column:2!important;min-width:0!important;}
+/* Consistent button heights, spacing, and label alignment on both pages. */
+#worlds-pane .kwg-world-card-actions,#home-pane .kwg-top-worlds-list .kwg-world-card-actions{
+  display:flex!important;flex-flow:row wrap!important;gap:6px!important;align-items:stretch!important;justify-content:flex-start!important;}
+#worlds-pane .kwg-world-card-actions > button,#home-pane .kwg-top-worlds-list .kwg-world-card-actions > button{
+  flex:1 1 65px!important;min-width:64px!important;max-width:100%!important;min-height:34px!important;
+  height:34px!important;box-sizing:border-box!important;display:inline-flex!important;align-items:center!important;
+  justify-content:center!important;margin:0!important;padding:5px 8px!important;line-height:1.1!important;
+  font-family:inherit!important;font-size:10px!important;font-weight:800!important;white-space:nowrap!important;}
+@media(max-width:650px){
+ #home-pane .kwg-v16-home-layout{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:minmax(0,0.8fr) minmax(0,1.2fr)!important;}
+ #home-pane .kwg-v16-home-layout > .kwg-home-panel{min-height:0!important;}
+ #home-pane .kwg-feed-compose{padding:7px!important;gap:5px!important;}
+ #home-pane .kwg-feed-compose textarea{min-height:32px!important;height:32px!important;max-height:48px!important;padding:5px!important;}
+ #home-pane .kwg-feed-compose label{font-size:9px!important;}
+}
+@media(max-width:650px){
+ #home-pane > .kwg-page-heading{display:none!important;}
+ #home-pane .kwg-v16-home-layout > .kwg-home-panel{padding:7px!important;}
+ #home-pane .kwg-home-panel-head{margin-bottom:4px!important;padding-bottom:4px!important;}
+ #home-pane .kwg-home-panel-head h3{font-size:13px!important;}
+ #home-pane .kwg-home-kicker{display:none!important;}
+ #home-pane .kwg-feed-compose{margin:3px 0 5px!important;padding:5px!important;}
+ #home-pane .kwg-feed-compose textarea{height:28px!important;min-height:28px!important;}
+}
+@media(max-width:600px){
+ #home-pane .kwg-top-worlds-list .room-card{grid-template-columns:64px minmax(0,1fr)!important;gap:7px!important;padding:6px!important;}
+ #home-pane .kwg-top-worlds-list .kwg-world-card-actions > button{flex-basis:58px!important;min-width:56px!important;}
+}
 </style>
 <script>
 (()=>{
