@@ -3065,6 +3065,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   </div>
 
   <style>
+    /* V26: Roblox-inspired quickbar. Controls only appear during gameplay. */
+    #kwg-tool-hotbar{display:none;position:fixed;z-index:72;bottom:max(17px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);gap:7px;align-items:end;max-width:calc(100vw - 30px);pointer-events:auto}
+    body.kwg-in-world:not(.kwg-editing):not(.kwg-thumbnail-camera) #kwg-tool-hotbar{display:flex}
+    .kwg-tool-slot{width:64px;height:62px;flex:none;display:flex;flex-direction:column;justify-content:space-around;align-items:center;background:#132b3fe9;border:2px solid #557a9a;color:#e8f7ff;cursor:pointer;font-family:inherit;font-weight:bold;font-size:10px;box-shadow:2px 3px 0 #07131d;padding:4px}
+    .kwg-tool-slot[aria-pressed="true"]{border-color:#ffe282;background:#244b60;box-shadow:0 0 0 2px #ffe28266}
+    .kwg-tool-slot .kwg-tool-glyph{font-size:22px;line-height:1.1}
+    #kwg-tool-crosshair{display:none;position:fixed;z-index:68;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;pointer-events:none;font-size:24px;font-weight:900;text-shadow:1px 1px 2px #000}
+    body.kwg-in-world:not(.kwg-editing):not(.kwg-thumbnail-camera) #kwg-tool-crosshair.kwg-aiming{display:block}
     #kwg-health-hud{display:none;position:fixed;bottom:max(18px,env(safe-area-inset-bottom));left:max(18px,env(safe-area-inset-left));z-index:65;width:215px;max-width:calc(100vw - 36px);box-sizing:border-box;background:#102437ee;border:2px solid #6788a2;padding:10px 12px;color:#e8f5ff;font-family:inherit;letter-spacing:.03em;box-shadow:3px 4px 0 #071320;pointer-events:none}
     body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-health-hud{display:block}
     @media(max-width:600px){#kwg-health-hud{width:172px;padding:7px 9px;bottom:12px;left:12px}}
@@ -3103,6 +3111,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
   </div>
 
+    <div id="kwg-tool-hotbar" aria-label="Equipped tools"></div>
+    <div id="kwg-tool-crosshair" aria-hidden="true">+</div>
     <div id="kwg-health-hud" role="status" aria-live="polite" aria-label="Player health">
       <div class="kwg-health-top"><span>HEALTH</span><span id="kwg-health-value">100 / 100</span></div>
       <div class="kwg-health-track"><div id="kwg-health-fill"></div></div>
@@ -3203,19 +3213,24 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">+</span> PLACE PRESETS</div>
       <p class="kwg-recolor-help" style="margin:0 0 10px">New parts use these properties automatically.</p>
       <label class="kwg-recolor-field"><span>Shape</span><select id="kwg-place-shape"><option value="box">Cube / Box</option><option value="wedge">Wedge</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option></select></label>
-      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option><option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option><option value="health">Health Block</option></select></label>
+      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option><option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option><option value="health">Health Block</option><option value="tool_dispenser">Tool Dispenser</option></select></label>
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-place-material"><option value="grid">Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
       <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-place-color" value="#888888" aria-label="Place preset color"></span></label>
       <label class="kwg-recolor-field"><span>Transparency (0–1)</span><input type="number" id="kwg-place-transparency" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Place transparency, 0 to 1"></label>
       <label class="kwg-recolor-field"><span>Can Collide</span><input type="checkbox" id="kwg-place-collide" checked></label>
       <div id="kwg-place-enemy-properties" class="kwg-enemy-properties" style="display:none">
         <div class="kwg-enemy-props-title">ENEMY SPAWNER PRESET</div>
+        <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-place-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper (Orange Cat)</option></select></label>
         <label class="kwg-recolor-field"><span>Notice Range</span><input id="kwg-place-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
         <label class="kwg-recolor-field"><span>Enemy Speed</span><input id="kwg-place-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
         <label class="kwg-recolor-field"><span>Enemy Count</span><input id="kwg-place-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
         <label class="kwg-recolor-field"><span>Can Be Stomped</span><input id="kwg-place-enemy-killable" type="checkbox" checked></label>
         <label class="kwg-recolor-field"><span>Contact Damage (HP)</span><input id="kwg-place-enemy-damage" type="number" min="1" max="100" step="1" value="25"></label>
         <label class="kwg-recolor-field"><span>Respawn Delay</span><input id="kwg-place-enemy-respawn" type="number" min="0" max="300" step="0.5" value="5"></label>
+      </div>
+      <div id="kwg-place-dispenser-properties" class="kwg-enemy-properties" style="display:none">
+        <div class="kwg-enemy-props-title">TOOL DISPENSER PRESET</div>
+        <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-place-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option></select></label>
       </div>
       <div id="kwg-place-health-properties" class="kwg-enemy-properties" style="display:none">
         <div class="kwg-enemy-props-title">HEALTH BLOCK PRESET</div>
@@ -3254,7 +3269,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               <option value="normal">Normal Solid Block</option>
               <option value="kill">Kill Part</option>
               <option value="checkpoint">Checkpoint</option>
-              <option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option><option value="health">Health Block</option>
+              <option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option><option value="health">Health Block</option><option value="tool_dispenser">Tool Dispenser</option>
             </select>
           </div>
 
@@ -3281,6 +3296,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             <label>Can Collide:</label>
             <input type="checkbox" id="block-collidable-checkbox" checked>
           </div>
+          <div id="kwg-tool-dispenser-properties" class="kwg-enemy-properties" style="display:none">
+            <div class="kwg-enemy-props-title">TOOL DISPENSER SETTINGS</div>
+            <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option></select></label>
+            <p class="kwg-recolor-help">Touch to collect this tool. Press 1–9 to equip it and click to fire.</p>
+          </div>
           <div id="kwg-health-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">HEALTH SETTINGS</div>
             <label class="kwg-recolor-field"><span>Restore Health (HP)</span><input id="kwg-heal-amount" type="number" min="1" max="100" step="1" value="25"></label>
@@ -3288,6 +3308,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           </div>
           <div id="kwg-enemy-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">ENEMY SETTINGS</div>
+            <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper (Orange Cat)</option></select></label>
             <label class="kwg-recolor-field"><span>Notice Range (studs)</span><input id="kwg-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
             <label class="kwg-recolor-field"><span>Enemy Speed (studs / second)</span><input id="kwg-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
             <label class="kwg-recolor-field"><span>Number of Enemies</span><input id="kwg-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
@@ -3305,6 +3326,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     <div style="border-top: 2px solid #444; margin-top: 8px; padding-top: 8px;">
       <div style="font-weight: bold; color: #5bc0de; margin-bottom: 6px; text-align: center; text-transform: uppercase; font-size: 11px;">World Environment</div>
       
+      <div class="tool-row">
+        <label>Friendly Fire:</label>
+        <input id="kwg-world-friendly-fire" type="checkbox" aria-label="Allow tools to damage other players">
+      </div>
+      <p class="kwg-recolor-help">When enabled, player weapons can damage other players in this world.</p>
       <div class="tool-row">
         <label>Sky Color:</label>
         <input type="color" id="sky-color-input" value="#1e1e7b">
@@ -3602,7 +3628,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         devil_attack:[[240,.095,'sawtooth',.13,120],[110,.13,'square',.12,70]],
         devil_knockout:[[160,.11,'square',.16,90],[110,.13,'triangle',.11,70]],
         double_jump:[[450,.06,'triangle',.11,700],[700,.08,'sine',.13,970]],
-        health_pickup:[[530,.06,'sine',.14,670],[780,.1,'triangle',.1,950]]
+        health_pickup:[[530,.06,'sine',.14,670],[780,.1,'triangle',.1,950]],
+        pistol:[[210,.06,'square',.19,100],[92,.08,'sawtooth',.13,60]],
+        minigun:[[195,.038,'square',.13,90]],
+        sniper_shot:[[680,.04,'square',.11,190],[160,.11,'sawtooth',.13,75]],
+        tool_pickup:[[490,.055,'triangle',.12,760],[820,.07,'square',.11,1000]],
+        hit_enemy:[[230,.055,'triangle',.13,90]]
       };
       function play(name){
         if(!settings.enabled||settings.volume<=0||document.hidden)return;
@@ -4360,7 +4391,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // --- PROCEDURAL TEXTURE GENERATOR ---
     const textureCache = {};
     function getMaterialTexture(matType) {
-      if (!['grid','brick','wood','kill','checkpoint','spawn','enemy_spawner','health','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
+      if (!['grid','brick','wood','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
       if (textureCache[matType]) return textureCache[matType];
 
       const canvas = document.createElement('canvas');
@@ -4438,6 +4469,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         ctx.fillStyle='#343a43';
         ctx.fillRect(45,55,8,9);ctx.fillRect(75,55,8,9);
         ctx.fillRect(53,81,7,8);ctx.fillRect(68,81,7,8);
+      } else if (matType === 'tool_dispenser') {
+        // Pixelated tool silhouette on the dispenser's warm orange tile.
+        ctx.fillStyle='#343a43';
+        ctx.fillRect(24,35,78,22);ctx.fillRect(74,57,19,13);
+        ctx.fillRect(38,57,23,28);ctx.fillRect(42,83,17,15);
+        ctx.fillStyle='#ffffff';ctx.fillRect(31,41,46,7);
       } else if (matType === 'health') {
         // Pixel heart in dark ink on white so the block's green tint stays visible.
         ctx.fillStyle='#343a43';
@@ -4481,7 +4518,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // exact same UVs, so scaling works consistently on every shape.
     function getBlockSurfaceTexture(materialType, actionType) {
       const baseType=['grid','brick','wood'].includes(materialType) ? materialType : 'grid';
-      const iconType=['kill','checkpoint','spawn','enemy_spawner','health'].includes(actionType) ? actionType : null;
+      const iconType=['kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(actionType) ? actionType : null;
       if (!iconType) return getMaterialTexture(baseType);
       const key='combined:'+baseType+':'+iconType;
       if(textureCache[key])return textureCache[key];
@@ -8634,7 +8671,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
 
       const matOptions = { 
-        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : blockData.actionType === 'spawn' ? '#a86cff' : blockData.actionType === 'enemy_spawner' ? '#57b9f4' : blockData.actionType === 'health' ? '#5fe082' : '#888888'),
+        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : blockData.actionType === 'spawn' ? '#a86cff' : blockData.actionType === 'enemy_spawner' ? '#57b9f4' : blockData.actionType === 'health' ? '#5fe082' : blockData.actionType === 'tool_dispenser' ? '#f5b35b' : '#888888'),
         transparent: isUncollidable || transparency > 0,
         opacity: opacityVal
       };
@@ -8705,6 +8742,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       selectBlock(null);
       for (const id in worldBlocks) { scene.remove(worldBlocks[id]); delete worldBlocks[id]; }
 
+      document.getElementById('kwg-world-friendly-fire').checked=world.friendlyFire===true;
       const skyHex = world.skyColor || '#1e1e7b';
       scene.background.set(skyHex);
       document.getElementById('sky-color-input').value = skyHex; kwgSyncRGBField('sky-color-input');
@@ -8787,6 +8825,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if (!currentWorldData) return;
       Object.assign(currentWorldData, settings);
 
+      if(settings.friendlyFire!==undefined)document.getElementById('kwg-world-friendly-fire').checked=!!settings.friendlyFire;
       if (settings.skyColor) {
         scene.background.set(settings.skyColor);
         document.getElementById('sky-color-input').value = settings.skyColor; kwgSyncRGBField('sky-color-input');
@@ -9365,7 +9404,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         partFields.style.display = 'block';
 
         document.getElementById('block-shape-select').value = (!block.shape || block.shape === 'baseplate') ? 'box' : block.shape;
-        document.getElementById('block-action-select').value = ['normal','kill','checkpoint','spawn','enemy_spawner','health'].includes(block.actionType) ? block.actionType : 'normal';
+        document.getElementById('block-action-select').value = ['normal','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(block.actionType) ? block.actionType : 'normal';
         document.getElementById('block-material-select').value = ['grid','brick','wood'].includes(block.material) ? block.material : 'grid';
         document.getElementById('block-color-input').value = block.color || '#888888'; kwgSyncRGBField('block-color-input');
         document.getElementById('block-transparency-input').value = block.transparency !== undefined ? block.transparency : 0;
@@ -9375,6 +9414,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           document.getElementById('kwg-enemy-'+id).value=enemy[key];
         document.getElementById('kwg-enemy-killable').checked=enemy.enemyKillable;
         document.getElementById('kwg-heal-amount').value=kwgEnemyNumber(block.healAmount,1,100,25,true);
+        document.getElementById('kwg-tool-kind').value=kwgToolKind(block.toolKind);
+        document.getElementById('kwg-enemy-character').value=enemy.enemyCharacter;
       } else {
         noSelMsg.style.display = 'block';
         partFields.style.display = 'none';
@@ -9396,6 +9437,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(nextType==='kill')document.getElementById('block-color-input').value='#d95757';
         if(nextType==='enemy_spawner')document.getElementById('block-color-input').value='#57b9f4';
         if(nextType==='health')document.getElementById('block-color-input').value='#5fe082';
+        if(nextType==='tool_dispenser')document.getElementById('block-color-input').value='#f5b35b';
         kwgSyncRGBField('block-color-input');
       }
       blockData.actionType=nextType;
@@ -9405,6 +9447,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       blockData.canCollide = document.getElementById('block-collidable-checkbox').checked;
       if(nextType==='enemy_spawner')Object.assign(blockData,kwgEnemyPropsFromUI('kwg-enemy-'));
       if(nextType==='health')blockData.healAmount=kwgEnemyNumber(document.getElementById('kwg-heal-amount').value,1,100,25,true);
+      if(nextType==='tool_dispenser')blockData.toolKind=kwgToolKind(document.getElementById('kwg-tool-kind').value);
       kwgToggleEnemyFields();
 
       emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
@@ -9423,7 +9466,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     ['block-shape-select', 'block-action-select', 'block-material-select', 'block-color-input', 'block-transparency-input', 'block-collidable-checkbox',
-      'kwg-enemy-range','kwg-enemy-speed','kwg-enemy-count','kwg-enemy-killable','kwg-enemy-respawn','kwg-enemy-damage','kwg-heal-amount'].forEach(id => {
+      'kwg-enemy-range','kwg-enemy-speed','kwg-enemy-count','kwg-enemy-killable','kwg-enemy-respawn','kwg-enemy-damage','kwg-enemy-character','kwg-heal-amount','kwg-tool-kind'].forEach(id => {
       const elem = document.getElementById(id);
       elem.addEventListener('change', applySelectedPartPropertyChange);
       elem.addEventListener('input', applySelectedPartPropertyChange);
@@ -9645,6 +9688,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const el=document.getElementById(id);
       el.value=String(kwgTransparencyValue(id));
     }
+    const kwgToolKind=value=>value==='minigun'?'minigun':'pistol';
+    const kwgEnemyCharacter=value=>value==='sniper'?'sniper':'devil';
     const kwgEnemyDefaults={noticeRange:18,enemySpeed:3,enemyCount:1,enemyKillable:true,enemyRespawn:5,enemyDamage:25};
     function kwgEnemyNumber(value,min,max,fallback,integer=false){
       const v=Number(value);
@@ -9659,7 +9704,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         enemyCount:kwgEnemyNumber(document.getElementById(prefix+'count').value,1,12,1,true),
         enemyKillable:document.getElementById(prefix+'killable').checked,
         enemyRespawn:kwgEnemyNumber(document.getElementById(prefix+'respawn').value,0,300,5),
-        enemyDamage:kwgEnemyNumber(document.getElementById(prefix+'damage').value,1,100,25,true)
+        enemyDamage:kwgEnemyNumber(document.getElementById(prefix+'damage').value,1,100,25,true),
+        enemyCharacter:kwgEnemyCharacter(document.getElementById(prefix+'character').value)
       };
     }
     function kwgEnemyPropsOf(block){
@@ -9669,7 +9715,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         enemyCount:kwgEnemyNumber(block.enemyCount,1,12,1,true),
         enemyKillable:block.enemyKillable!==false,
         enemyRespawn:kwgEnemyNumber(block.enemyRespawn,0,300,5),
-        enemyDamage:kwgEnemyNumber(block.enemyDamage,1,100,25,true)
+        enemyDamage:kwgEnemyNumber(block.enemyDamage,1,100,25,true),
+        enemyCharacter:kwgEnemyCharacter(block.enemyCharacter)
       };
     }
     function kwgToggleEnemyFields(){
@@ -9681,6 +9728,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const healthSelected=document.getElementById('kwg-health-properties');
       if(healthPlace)healthPlace.style.display=document.getElementById('kwg-place-type').value==='health'?'block':'none';
       if(healthSelected)healthSelected.style.display=selectedBlockId&&currentWorldData?.blocks?.[selectedBlockId]?.actionType==='health'?'block':'none';
+      const toolPlace=document.getElementById('kwg-place-dispenser-properties');
+      if(toolPlace)toolPlace.style.display=document.getElementById('kwg-place-type').value==='tool_dispenser'?'block':'none';
+      const toolSelected=document.getElementById('kwg-tool-dispenser-properties');
+      if(toolSelected)toolSelected.style.display=selectedBlockId&&currentWorldData?.blocks?.[selectedBlockId]?.actionType==='tool_dispenser'?'block':'none';
     }
     function kwgPlacePreset(){
       const value=id=>document.getElementById(id).value;
@@ -9695,14 +9746,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         scaleX:1,scaleY:1,scaleZ:1,
         rotationX:0,rotationY:0,
         ...(value('kwg-place-type')==='enemy_spawner'?kwgEnemyPropsFromUI('kwg-place-enemy-'):{}),
-        ...(value('kwg-place-type')==='health'?{healAmount:kwgEnemyNumber(document.getElementById('kwg-place-heal-amount').value,1,100,25,true)}:{})
+        ...(value('kwg-place-type')==='health'?{healAmount:kwgEnemyNumber(document.getElementById('kwg-place-heal-amount').value,1,100,25,true)}:{}),
+        ...(value('kwg-place-type')==='tool_dispenser'?{toolKind:kwgToolKind(value('kwg-place-tool-kind'))}:{})
       };
     }
     const kwgPlacePresetFields=[
       'kwg-place-shape','kwg-place-type','kwg-place-material',
       'kwg-place-color','kwg-place-transparency','kwg-place-collide',
       'kwg-place-enemy-range','kwg-place-enemy-speed','kwg-place-enemy-count',
-      'kwg-place-enemy-killable','kwg-place-enemy-respawn','kwg-place-enemy-damage','kwg-place-heal-amount'
+      'kwg-place-enemy-killable','kwg-place-enemy-respawn','kwg-place-enemy-damage','kwg-place-enemy-character','kwg-place-heal-amount','kwg-place-tool-kind'
     ];
     let kwgLastPlaceType='normal';
     kwgPlacePresetFields.forEach(id=>{
@@ -9717,6 +9769,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             else if(type==='kill')colorInput.value='#d95757';
             else if(type==='enemy_spawner')colorInput.value='#57b9f4';
             else if(type==='health')colorInput.value='#5fe082';
+            else if(type==='tool_dispenser')colorInput.value='#f5b35b';
             else if(kwgLastPlaceType!=='normal')colorInput.value='#888888';
             kwgLastPlaceType=type;
             kwgSyncRGBField('kwg-place-color');
@@ -9739,6 +9792,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       scene.add(previewMesh);
     }
 
+    document.getElementById('kwg-world-friendly-fire').addEventListener('change',e=>{
+      if(currentWorldName&&canEditCurrentWorld){
+        if(currentWorldData)currentWorldData.friendlyFire=e.target.checked;
+        stageWorldSettings({friendlyFire:e.target.checked});
+      }
+    });
     document.getElementById('sky-color-input').addEventListener('input', (e) => {
       const color = e.target.value;
       scene.background.set(color);
@@ -11177,6 +11236,136 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const bounds=getBlockAABB(block);
       kwgEnemyRangeIndicator.position.set(Number(block.x)||0,bounds.maxY+.11,Number(block.z)||0);
     }
+    // V26: session-only tools. Dispensers are persisted blocks; weapons reset
+    // on leaving a world. Hotbar order is stable and keys 1-9 equip slots.
+    const kwgTools=[];let kwgEquippedTool=null,kwgLastShot=0,kwgFireHeld=false;
+    const kwgToolCooldown={pistol:390,minigun:95};
+    const kwgToolDamage={pistol:32,minigun:9};
+    const kwgAimNdc=new THREE.Vector2(0,0);
+    const kwgToolPickupCooldowns=new Map();
+    const kwgShotTracers=[];
+    function kwgShowShotTracer(start,end,color=0xffd67a){
+      const geom=new THREE.BufferGeometry().setFromPoints([start,end]);
+      const mat=new THREE.LineBasicMaterial({color,transparent:true,opacity:.9,depthWrite:false});
+      const line=new THREE.Line(geom,mat);line.renderOrder=100;scene.add(line);
+      kwgShotTracers.push({line,until:performance.now()+135});
+    }
+    function kwgUpdateShotTracers(){
+      const now=performance.now();
+      for(let i=kwgShotTracers.length-1;i>=0;i--){
+        const entry=kwgShotTracers[i];if(now<entry.until)continue;
+        scene.remove(entry.line);entry.line.geometry.dispose();entry.line.material.dispose();kwgShotTracers.splice(i,1);
+      }
+    }
+
+    function kwgRenderTools(){
+      const bar=document.getElementById('kwg-tool-hotbar');if(!bar)return;
+      bar.replaceChildren();
+      kwgTools.forEach((kind,index)=>{
+        const btn=document.createElement('button');btn.type='button';btn.className='kwg-tool-slot';
+        btn.setAttribute('aria-pressed',String(kwgEquippedTool===kind));
+        btn.title=`Equip ${kind} (${index+1})`;
+        const glyph=document.createElement('span');glyph.className='kwg-tool-glyph';glyph.textContent=kind==='minigun'?'▤':'⌁';
+        const label=document.createElement('span');label.textContent=`${index+1} ${kind==='minigun'?'MINIGUN':'PISTOL'}`;
+        btn.append(glyph,label);btn.addEventListener('click',()=>kwgEquipTool(kwgEquippedTool===kind?null:kind));bar.appendChild(btn);
+      });
+      document.getElementById('kwg-tool-crosshair')?.classList.toggle('kwg-aiming',!!kwgEquippedTool);
+    }
+    function kwgEquipTool(kind){kwgEquippedTool=kwgTools.includes(kind)?kind:null;kwgRenderTools();}
+    function kwgClearTools(){
+      kwgTools.length=0;kwgEquippedTool=null;kwgFireHeld=false;kwgToolPickupCooldowns.clear();kwgRenderTools();
+      for(const entry of kwgShotTracers){scene.remove(entry.line);entry.line.geometry.dispose();entry.line.material.dispose();}
+      kwgShotTracers.length=0;
+    }
+    function kwgTouchToolDispensers(blocks,player){
+      if(isEditMode||kwgDeadUntil||!player)return;
+      const now=performance.now();
+      for(const block of blocks){
+        if(block.actionType!=='tool_dispenser'||!isPlayerTouchingSpecialPart(block,player.position))continue;
+        const kind=kwgToolKind(block.toolKind);
+        if(kwgTools.includes(kind)||now<(kwgToolPickupCooldowns.get(block.id)||0))continue;
+        kwgToolPickupCooldowns.set(block.id,now+1250);
+        if(!socket?.connected)continue;
+        const pickupWorld=currentWorldName;
+        socket.emit('tool_pickup',{worldName:pickupWorld,blockId:block.id},response=>{
+          if(!response?.success||pickupWorld!==currentWorldName||kwgTools.includes(kind))return;
+          kwgTools.push(kind);kwgEquippedTool=kind;kwgRenderTools();kwgAudio.play('tool_pickup');
+          showToast(`${kind==='minigun'?'Minigun':'Pistol'} collected! Press ${kwgTools.length} to equip.`);
+        });
+      }
+    }
+    function kwgFireTool(){
+      if(!currentWorldName||isEditMode||kwgFreeCamera.active||kwgDeadUntil||kwgKnockedUntil||!localPlayerAvatar||!kwgEquippedTool)return;
+      const now=performance.now(),kind=kwgEquippedTool;
+      if(now-kwgLastShot<kwgToolCooldown[kind])return;
+      kwgLastShot=now;
+      kwgAudio.play(kind);
+      // Mouse-position aiming lets players target enemies anywhere in the
+      // third-person view; the reticle follows the cursor over the canvas.
+      const ray=new THREE.Raycaster();ray.setFromCamera(kwgAimNdc,camera);
+      ray.far=115;
+      const solids=Object.values(worldBlocks).filter(mesh=>{
+        const b=currentWorldData?.blocks?.[mesh.userData.blockId];return b&&b.canCollide!==false;
+      });
+      const obstruction=ray.intersectObjects(solids,true)[0];
+      let maxDistance=obstruction?obstruction.distance:115;
+      let best=null;
+      for(const [id,entry] of kwgEnemySpawners){
+        for(let index=0;index<entry.slots.length;index++){
+          const slot=entry.slots[index];
+          if(!slot.mesh||slot.deadUntil>now||slot.squishUntil>now)continue;
+          const hits=ray.intersectObject(slot.mesh,true);
+          if(hits.length&&hits[0].distance<maxDistance){maxDistance=hits[0].distance;best={kind:'enemy',id,index,slot,entry};}
+        }
+      }
+      if(currentWorldData?.friendlyFire===true){
+        for(const [id,p] of Object.entries(otherPlayers)){
+          const hits=ray.intersectObject(p.mesh,true);
+          if(hits.length&&hits[0].distance<maxDistance){maxDistance=hits[0].distance;best={kind:'player',id};}
+        }
+      }
+      const tracerEnd=ray.ray.origin.clone().addScaledVector(ray.ray.direction,maxDistance);
+      kwgShowShotTracer(localPlayerAvatar.position.clone().add(new THREE.Vector3(0,1.35,0)),tracerEnd,kind==='minigun'?0xffe9a3:0xffc665);
+      if(best?.kind==='enemy'){
+        if(best.entry.block.enemyKillable===false)return;
+        best.slot.weaponHealth=(best.slot.weaponHealth??100)-kwgToolDamage[kind];
+        kwgAudio.play('hit_enemy');
+        if(best.slot.weaponHealth<=0)kwgDefeatEnemy(best.id,best.index,true);
+      }else if(best?.kind==='player'&&socket?.connected){
+        const start=ray.ray.origin,dir=ray.ray.direction;
+        socket.emit('tool_hit_player',{worldName:currentWorldName,targetId:best.id,toolKind:kind,
+          origin:{x:start.x,y:start.y,z:start.z},direction:{x:dir.x,y:dir.y,z:dir.z}});
+      }
+    }
+    function kwgUpdateAimFromPointer(e){
+      const rect=renderer.domElement.getBoundingClientRect();
+      if(!rect.width||!rect.height)return;
+      kwgAimNdc.set(((e.clientX-rect.left)/rect.width)*2-1,-((e.clientY-rect.top)/rect.height)*2+1);
+      const reticle=document.getElementById('kwg-tool-crosshair');
+      if(reticle){reticle.style.left=e.clientX+'px';reticle.style.top=e.clientY+'px';}
+    }
+    renderer.domElement.addEventListener('pointermove',e=>{if(kwgEquippedTool)kwgUpdateAimFromPointer(e);});
+    renderer.domElement.addEventListener('pointerdown',e=>{
+      if(e.button!==0||isEditMode||!kwgEquippedTool||!currentWorldName)return;
+      kwgUpdateAimFromPointer(e);
+      kwgFireHeld=true;kwgFireTool();
+    });
+    window.addEventListener('pointerup',()=>{kwgFireHeld=false;});
+    window.addEventListener('blur',()=>{kwgFireHeld=false;});
+    window.addEventListener('keydown',e=>{
+      if(!currentWorldName||isEditMode||e.ctrlKey||e.altKey||e.metaKey||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+      const index=Number(e.key)-1;
+      if(index>=0&&index<kwgTools.length&&index<9){kwgEquipTool(kwgTools[index]);e.preventDefault();}
+    });
+    let kwgPvpLastDamageAt=0;
+    socket.on('tool_damage_taken',({damage,shooterPosition}={})=>{
+      if(!currentWorldName||isEditMode||kwgDeadUntil||!shooterPosition)return;
+      const now=performance.now();if(now-kwgPvpLastDamageAt<90)return;
+      kwgPvpLastDamageAt=now;
+      kwgHealth=Math.max(0,kwgHealth-Math.max(1,Math.min(100,Math.round(Number(damage)||1))));
+      if(kwgHealth===0)kwgDiePlayer('tool');
+      else{kwgAudio.play('devil_knockout');kwgUpdateHealthHud();}
+    });
     let kwgAirJumps=0,kwgDoubleJumpStomp=false;
     const kwgMaxHealth=100;
     let kwgHealth=kwgMaxHealth,kwgInvulnerableUntil=0,kwgKnockedUntil=0,kwgDeadUntil=0;
@@ -11197,6 +11386,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgKnockX=kwgKnockZ=0;kwgRagdollStarted=0;kwgLastSafeFeet=null;kwgDeathCause=null;
       kwgRagdollSide=1;kwgRagdollPitch=-.4;kwgRagdollYaw=0;kwgRagdollPhase=0;
       kwgEnemyPreviousPlayerPos=null;
+      kwgFireHeld=false;
       if(localPlayerAvatar){
         const pivot=localPlayerAvatar.userData.kwgStompPivot;
         if(pivot){pivot.rotation.set(0,0,0);pivot.position.y=1.05;}
@@ -11328,6 +11518,35 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       root.userData.isEnemyCharacter=true;
       return root;
     }
+    // Sniper: orange blocky cat with a little rifle and alert facial markings.
+    function kwgSniperCatModel(){
+      const root=new THREE.Group(),rig=new THREE.Group();root.add(rig);
+      const orange=new THREE.MeshLambertMaterial({color:0xf99b35}),cream=new THREE.MeshLambertMaterial({color:0xffe6aa}),dark=new THREE.MeshLambertMaterial({color:0x3b2834}),pink=new THREE.MeshLambertMaterial({color:0xff8d9c});
+      const part=(w,h,d,x,y,z,mat,parent=rig)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);parent.add(m);return m;};
+      part(.81,.8,.60,0,.86,0,orange);part(.84,.67,.70,0,1.47,0,orange);
+      part(.18,.25,.18,-.32,1.9,0,orange);part(.18,.25,.18,.32,1.9,0,orange);
+      part(.14,.12,.07,-.18,1.55,.39,dark);part(.14,.12,.07,.18,1.55,.39,dark);
+      part(.15,.12,.07,0,1.37,.40,pink);part(.3,.1,.06,0,1.18,.36,cream);
+      const leftArm=new THREE.Group(),rightArm=new THREE.Group();leftArm.position.set(-.52,1.04,0);rightArm.position.set(.52,1.04,0);rig.add(leftArm,rightArm);
+      part(.23,.57,.24,0,-.25,0,orange,leftArm);part(.23,.57,.24,0,-.25,0,orange,rightArm);
+      const leftLeg=new THREE.Group(),rightLeg=new THREE.Group();leftLeg.position.set(-.22,.49,0);rightLeg.position.set(.22,.49,0);rig.add(leftLeg,rightLeg);
+      part(.25,.47,.28,0,-.24,0,dark,leftLeg);part(.25,.47,.28,0,-.24,0,dark,rightLeg);
+      const tail=new THREE.Group();tail.position.set(0,.75,-.33);rig.add(tail);part(.13,.14,.55,0,.03,-.3,orange,tail);part(.17,.17,.19,0,.15,-.58,cream,tail);
+      const gun=new THREE.Group();gun.position.set(.38,1.06,.38);rig.add(gun);
+      part(.20,.20,.60,0,0,.27,dark,gun);part(.27,.18,.24,0,-.06,.01,cream,gun);part(.12,.14,.17,0,-.15,-.05,dark,gun);
+      const muzzle=part(.18,.18,.11,0,0,.65,pink,gun);muzzle.visible=false;
+      root.userData.devilRig=rig;root.userData.devilLimbs=[leftArm,rightArm,leftLeg,rightLeg];
+      root.userData.devilTail=tail;root.userData.devilBody=rig.children[0];root.userData.devilBrows=null;root.userData.devilMouth=null;
+      const bubbleCanvas=document.createElement('canvas');bubbleCanvas.width=96;bubbleCanvas.height=80;
+      const bc=bubbleCanvas.getContext('2d');bc.fillStyle='#fff';bc.fillRect(8,7,80,56);
+      bc.strokeStyle='#343a43';bc.lineWidth=5;bc.strokeRect(8,7,80,56);
+      bc.fillStyle='#343a43';bc.font='bold 45px monospace';bc.textAlign='center';bc.fillText('!',48,52);
+      const bubble=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(bubbleCanvas),transparent:true,depthWrite:false,depthTest:false}));
+      bubble.position.set(0,2.65,0);bubble.scale.set(1,.82,1);bubble.visible=false;root.add(bubble);
+      root.userData.devilNotice=bubble;root.userData.devilTired=null;
+      root.userData.sniperGun=gun;root.userData.sniperMuzzle=muzzle;
+      root.userData.isEnemyCharacter=true;return root;
+    }
     function kwgEnemySlotSpawn(block,index,count){
       // A spaced spiral keeps multi-enemy spawns from stacking inside each other.
       // Wider rings may begin off the platform; gravity handles the drop.
@@ -11355,6 +11574,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgEnemyRangeIndicator.visible=false;
       kwgEnemyPreviousPlayerPos=null;
       kwgResetStompAnimation(true);
+      kwgClearTools();
     }
     function kwgDefeatEnemy(spawnerId,index,notify=true){
       const entry=kwgEnemySpawners.get(spawnerId);
@@ -11389,6 +11609,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const id=block.id,props=kwgEnemyPropsOf(block);
         let entry=kwgEnemySpawners.get(id);
         if(!entry){entry={block,slots:[]};kwgEnemySpawners.set(id,entry);}
+        if(entry.block&&kwgEnemyCharacter(entry.block.enemyCharacter)!==props.enemyCharacter){for(const slot of entry.slots)kwgDestroyEnemySlot(slot);}
         entry.block=block;
         while(entry.slots.length>props.enemyCount)kwgDestroyEnemySlot(entry.slots.pop());
         while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,squishUntil:0,walkTime:0,fallSpeed:0,jumpSpeed:0,isJumping:false,grounded:false,path:[],pathAt:0,noticeAt:0,stepAt:0,chaseStartedAt:0,exhaustedUntil:0,chaseCooldownUntil:0,chaseSoundAt:0});
@@ -11545,8 +11766,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const dx=toX-fromX,dz=toZ-fromZ;
       const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.13));
       let x=fromX,z=fromZ;
-      for(let i=1;i<=steps;i++){
-        const targetX=fromX+dx*i/steps,targetZ=fromZ+dz*i/steps;
+      // Each substep starts at the last *accepted* position. Using a
+      // precomputed absolute target let blocked enemies skip across walls
+      // when a later sample happened to be on the far side of the wall.
+      const stepX=dx/steps,stepZ=dz/steps;
+      for(let i=0;i<steps;i++){
+        const targetX=x+stepX,targetZ=z+stepZ;
         if(kwgEnemyBodyClear(targetX,targetZ,feet,blocks)&&!kwgEnemyCrowded(targetX,targetZ,slot)){
           x=targetX;z=targetZ;continue;
         }
@@ -11575,8 +11800,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       rl.rotation.x=walking?stride*.8:-Math.sin(now*.003+index)*.08;
       la.rotation.z=walking?-.15:-.18+idle*.09;
       ra.rotation.z=walking?.15:.18-idle*.09;
-      npc.userData.devilTail.rotation.x=Math.sin(now*.007+index)*.35;
-      npc.userData.devilBody.rotation.z=Math.sin(now*.005+index)*.04;
+      if(npc.userData.devilTail)npc.userData.devilTail.rotation.x=Math.sin(now*.007+index)*.35;
+      if(npc.userData.devilBody)npc.userData.devilBody.rotation.z=Math.sin(now*.005+index)*.04;
       const brows=npc.userData.devilBrows,mouth=npc.userData.devilMouth;
       if(brows){
         // Brows pinch inward when angry and droop when winded.
@@ -11606,6 +11831,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         la.rotation.x=-1.45*punch;ra.rotation.x=-1.45*punch;
         la.rotation.z=-.32*punch;ra.rotation.z=.32*punch;
       }
+      if(npc.userData.sniperGun){npc.userData.sniperGun.rotation.x=now<(slot.attackUntil||0)?-.16:0;npc.userData.sniperMuzzle.visible=now<(slot.muzzleUntil||0);}
       const bubble=npc.userData.devilNotice;
       if(bubble){
         bubble.visible=!exhausted&&now<(slot.noticeBubbleUntil||0);
@@ -11674,6 +11900,30 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgFinishStompPose(){
       if(kwgStompStarted){kwgStompStarted=0;kwgStompLandingAt=kwgEnemyClock();}
     }
+    // Both player weapons and sniper shots use first-hit ray tests: a solid
+    // world part shields targets behind it. Non-colliding decor does not.
+    function kwgRayWorldClear(start,end,blocks){
+      const direction=new THREE.Vector3().subVectors(end,start),length=direction.length();
+      if(length<.001)return true;
+      direction.normalize();
+      const ray=new THREE.Raycaster(start,direction,.04,length-.04);
+      const meshes=[];
+      for(const block of blocks){
+        if(block.canCollide===false||block.actionType==='tool_dispenser'||block.actionType==='enemy_spawner')continue;
+        const mesh=worldBlocks[block.id];if(mesh)meshes.push(mesh);
+      }
+      return !ray.intersectObjects(meshes,true).some(hit=>hit.distance<length-.12);
+    }
+    function kwgSniperFire(slot,player,props,blocks,now){
+      if(!slot.mesh||now<(slot.nextShotAt||0)||isEditMode||kwgDeadUntil||kwgHealth<=0)return;
+      const muzzle=slot.mesh.position.clone().add(new THREE.Vector3(0,1.35,0));
+      const target=player.position.clone().add(new THREE.Vector3(0,1.0,0));
+      if(muzzle.distanceTo(target)>props.noticeRange||!kwgRayWorldClear(muzzle,target,blocks))return;
+      slot.nextShotAt=now+1500;slot.muzzleUntil=now+125;slot.attackUntil=now+320;
+      kwgShowShotTracer(muzzle,target,0xffae5c);
+      kwgAudio.play('sniper_shot');
+      kwgEnemyHitPlayer(props.enemyDamage,slot.mesh.position);
+    }
     function kwgUpdateEnemies(delta){
       if(!currentWorldName||!localPlayerAvatar||kwgFreeCamera.active)return;
       kwgSyncEnemySpawners();
@@ -11708,13 +11958,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           }
           visibleDevils++;
           if(!slot.mesh){
-            slot.mesh=kwgDevilModel();scene.add(slot.mesh);
+            slot.mesh=props.enemyCharacter==='sniper'?kwgSniperCatModel():kwgDevilModel();scene.add(slot.mesh);
             slot.mesh.position.set(origin.x,origin.y,origin.z);
             slot.fallSpeed=0;slot.jumpSpeed=0;slot.isJumping=false;slot.grounded=false;
             slot.spawnIndex=index;slot.walkTime=0;slot.path=[];slot.pathAt=0;
             slot.roamTarget=null;slot.roamUntil=0;slot.attackUntil=0;slot.noticeBubbleUntil=0;
             slot.chaseStartedAt=0;slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;
-            slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
+            slot.weaponHealth=100;slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
+            slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.nextShotAt=0;
             if(slot.spawnedOnce&&spawnDistance<15)kwgAudio.play('devil_respawn');
             slot.spawnedOnce=true;
           }
@@ -11775,6 +12026,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             // player; per-enemy throttling prevents continuous audio spam.
             kwgAudio.play('devil_chase');slot.chaseSoundAt=now;
           }
+          if(props.enemyCharacter==='sniper'&&chasing&&distance<=props.noticeRange){
+            kwgSniperFire(slot,player,props,blocks,now);
+          }
           let tx=targetX,tz=targetZ;
           if(!exhausted&&now>=slot.pathAt&&pathBudget>0){
             pathBudget--;
@@ -11790,7 +12044,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             }).map(b=>({...b,_kwgNavBounds:getBlockAABB(b)}));
             const straight=kwgEnemyDirectPath(npc.position.x,npc.position.z,npc.position.y,targetX,targetZ,pathBlocks);
             slot.path=straight?[]:kwgEnemyFindPath(npc.position.x,npc.position.y,npc.position.z,targetX,targetZ,pathBlocks);
-            slot.pathAt=now+900+index*53;
+            slot.pathAt=now+(slot.stuckSince?240:900+index*53);
+            // Keep stuck state until the NPC actually makes progress.
           }
           if(!exhausted&&slot.path?.length){
             // Do not consume a jump waypoint until we have landed on its level.
@@ -11801,6 +12056,22 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               slot.path.shift();
             }
             if(slot.path.length){tx=slot.path[0].x;tz=slot.path[0].z;}
+          }
+          // V26: stuck recovery. The original chase could repeatedly try to
+          // walk into the side of a wall while its 9s exhaustion timer ran.
+          // Force fresh A* and temporarily steer around the blocking edge.
+          if(chasing&&slot.stuckSince&&now-slot.stuckSince>360){
+            if(now>(slot.escapeUntil||0)){
+              slot.escapeUntil=now+820;
+              slot.escapeSide=-(slot.escapeSide||1);
+            }
+            if(!slot.path.length){
+              const towardX=targetX-npc.position.x,towardZ=targetZ-npc.position.z;
+              const magnitude=Math.max(.01,Math.hypot(towardX,towardZ));
+              const sideX=-towardZ/magnitude*slot.escapeSide,sideZ=towardX/magnitude*slot.escapeSide;
+              tx=npc.position.x+sideX*1.6+ towardX/magnitude*.25;
+              tz=npc.position.z+sideZ*1.6+ towardZ/magnitude*.25;
+            }
           }
           const vx=tx-npc.position.x,vz=tz-npc.position.z;
           const d=Math.hypot(vx,vz);
@@ -11833,7 +12104,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             const nx=oldX+vx/d*travel,nz=oldZ+vz/d*travel;
             // Never cross the spawner's configured territory, even while chasing.
             const outsideTerritory=Math.hypot(nx-centerX,nz-centerZ)>props.noticeRange-.38;
-            if(outsideTerritory){slot.pathAt=0;if(!chasing)slot.roamTarget=null;}
+            if(outsideTerritory){slot.pathAt=now+190;if(!chasing)slot.roamTarget=null;}
             const nextGround=kwgEnemyWalkable(nx,nz,npc.position.y,blocks);
             // Airborne devils can move across a gap and descend onto a lower
             // platform. Grounded devils may walk off a ledge, but cannot phase
@@ -11852,9 +12123,24 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
                 if(chasing&&distance<12&&now-slot.stepAt>450){
                   kwgAudio.play('devil_step');slot.stepAt=now;
                 }
-              }else slot.pathAt=0;
-            }else slot.pathAt=0;
+              }else slot.pathAt=now+190;
+            }else slot.pathAt=now+190;
           }
+          if(chasing&&d>.65){
+            const progress=Math.hypot(npc.position.x-(slot.lastProgressX??npc.position.x),npc.position.z-(slot.lastProgressZ??npc.position.z));
+            if(progress>.30){slot.lastProgressAt=now;slot.lastProgressX=npc.position.x;slot.lastProgressZ=npc.position.z;slot.stuckSince=0;}
+            else if(now-(slot.lastProgressAt||now)>450&&!slot.stuckSince){slot.stuckSince=now;slot.pathAt=0;}
+            // If a jumpable ledge is immediately ahead, jump from the foot
+            // of the wall rather than waiting for a waypoint behind it.
+            if(slot.stuckSince&&slot.grounded&&d>.2){
+              const aheadX=npc.position.x+vx/d*.55,aheadZ=npc.position.z+vz/d*.55;
+              const rise=kwgEnemyWalkable(aheadX,aheadZ,npc.position.y,blocks);
+              if(rise!==null&&rise>npc.position.y+.35&&rise<npc.position.y+kwgEnemyJumpRise&&
+                 kwgEnemyBodyClear(npc.position.x,npc.position.z,npc.position.y+.38,blocks)){
+                slot.fallSpeed=8.65;slot.grounded=false;slot.isJumping=true;
+              }
+            }
+          }else{slot.stuckSince=0;slot.lastProgressAt=now;slot.lastProgressX=npc.position.x;slot.lastProgressZ=npc.position.z;}
           // Actual vertical velocity and gravity: devils jump onto ledges,
           // fall from their spawner, and land on world collision surfaces.
           const oldY=npc.position.y;
@@ -11922,7 +12208,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const bodyOverlaps=feetLow<npc.position.y+1.58&&feetHigh+1.95>npc.position.y+.2;
           const isContact=bodyOverlaps&&contactDistance<=.89;
           if(bodyOverlaps)kwgResolvePlayerDevilOverlap(player,npc,blocks);
-          if(isContact&&kwgEnemyHitPlayer(props.enemyDamage,npc.position)){
+          if(isContact&&props.enemyCharacter!=='sniper'&&kwgEnemyHitPlayer(props.enemyDamage,npc.position)){
             slot.attackUntil=now+480;
             kwgAudio.play('devil_attack');
             return;
@@ -13008,6 +13294,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgEnemyPreviousFeet=localPlayerAvatar?.position.y??-Infinity;
         updatePlayerPhysics(delta);
         kwgUpdateEnemies(delta);
+        kwgUpdateShotTracers();
+        if(!isEditMode&&currentWorldData?.blocks)kwgTouchToolDispensers(Object.values(currentWorldData.blocks),localPlayerAvatar);
+        if(kwgFireHeld&&kwgEquippedTool)kwgFireTool();
         kwgAnimateStomp(kwgEnemyClock());
       }
       kwgUpdateEnemyRangeIndicator();
