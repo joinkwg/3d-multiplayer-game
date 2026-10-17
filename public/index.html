@@ -11323,7 +11323,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgEnemyRangeIndicator.position.set(Number(block.x)||0,bounds.maxY+.11,Number(block.z)||0);
     }
     // V26: session-only tools. Dispensers are persisted blocks; weapons reset
-    // on leaving a world. Hotbar order is stable and keys 1-9 equip slots.
+    // on leaving a world. Hotbar order is stable; keys 1-9 toggle slots.
     const kwgTools=[];let kwgEquippedTool=null,kwgLastShot=0,kwgFireHeld=false;
     const kwgToolCooldown={pistol:390,minigun:95};
     const kwgToolDamage={pistol:32,minigun:9};
@@ -11422,10 +11422,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgTools.forEach((kind,index)=>{
         const btn=document.createElement('button');btn.type='button';btn.className='kwg-tool-slot';
         btn.setAttribute('aria-pressed',String(kwgEquippedTool===kind));
-        btn.title=`Equip ${kind} (${index+1})`;
+        btn.title=`${kwgEquippedTool===kind?'Unequip':'Equip'} ${kind} (${index+1})`;
         const glyph=document.createElement('span');glyph.className='kwg-tool-glyph';glyph.textContent=kind==='minigun'?'▤':'⌁';
         const label=document.createElement('span');label.textContent=`${index+1} ${kind==='minigun'?'MINIGUN':'PISTOL'}`;
-        btn.append(glyph,label);btn.addEventListener('click',()=>kwgEquipTool(kwgEquippedTool===kind?null:kind));bar.appendChild(btn);
+        btn.append(glyph,label);btn.addEventListener('click',()=>kwgToggleToolSlot(index));bar.appendChild(btn);
       });
       document.getElementById('kwg-tool-crosshair')?.classList.toggle('kwg-aiming',!!kwgEquippedTool);
     }
@@ -11468,6 +11468,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       group.position.set(-.03,-.72,.28);group.rotation.x=.72;
       return group;
     }
+    // V30: walking/jumping animation only updates arm X rotations. The tool
+    // aiming animation also modifies Y and Z, so unequipping must clear all
+    // three axes or the avatar keeps its aiming pose with empty hands.
+    function kwgResetHeldToolPose(avatar){
+      const limbs=avatar?.userData?.limbs;
+      if(!limbs)return;
+      for(const arm of [limbs.leftArm,limbs.rightArm]){
+        if(arm)arm.rotation.set(0,0,0);
+      }
+    }
     function kwgSyncRemoteHeldTool(avatar,kind){
       if(!avatar)return;
       const arm=avatar.userData?.limbs?.rightArm;
@@ -11476,6 +11486,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(old?.userData.kind===kind&&old.parent===arm)return;
       if(old){old.parent?.remove(old);old.traverse(o=>{o.geometry?.dispose();if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});}
       avatar.userData.kwgRemoteTool=null;
+      if(old)kwgResetHeldToolPose(avatar);
       if(kind==='pistol'||kind==='minigun'){
         const model=kwgMakeHeldTool(kind);model.userData.kind=kind;
         arm.add(model);avatar.userData.kwgRemoteTool=model;
@@ -11531,9 +11542,22 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         gun.userData.barrels.rotation.z+=local&&kwgFireHeld?.52:.065;
       }
     }
-    function kwgEquipTool(kind){kwgEquippedTool=kwgTools.includes(kind)?kind:null;kwgRenderTools();kwgSyncHeldTool();}
+    function kwgEquipTool(kind){
+      const previous=kwgEquippedTool;
+      kwgEquippedTool=kwgTools.includes(kind)?kind:null;
+      if(previous!==kwgEquippedTool){
+        kwgFireHeld=false; // A held mouse button must not keep firing after a swap.
+        kwgResetHeldToolPose(localPlayerAvatar);
+      }
+      kwgRenderTools();kwgSyncHeldTool();
+    }
+    function kwgToggleToolSlot(index){
+      if(index<0||index>=kwgTools.length||index>=9)return;
+      const kind=kwgTools[index];
+      kwgEquipTool(kwgEquippedTool===kind?null:kind);
+    }
     function kwgClearTools(){
-      kwgTools.length=0;kwgEquippedTool=null;kwgFireHeld=false;kwgToolPickupCooldowns.clear();kwgRenderTools();kwgRemoveHeldTool();
+      kwgTools.length=0;kwgEquippedTool=null;kwgFireHeld=false;kwgToolPickupCooldowns.clear();kwgRenderTools();kwgRemoveHeldTool();kwgResetHeldToolPose(localPlayerAvatar);
       for(const entry of kwgShotTracers){scene.remove(entry.line);entry.line.geometry.dispose();entry.line.material.dispose();}
       kwgShotTracers.length=0;
     }
@@ -11619,9 +11643,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     window.addEventListener('pointerup',()=>{kwgFireHeld=false;});
     window.addEventListener('blur',()=>{kwgFireHeld=false;});
     window.addEventListener('keydown',e=>{
-      if(!currentWorldName||isEditMode||e.ctrlKey||e.altKey||e.metaKey||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+      if(!currentWorldName||isEditMode||e.repeat||e.ctrlKey||e.altKey||e.metaKey||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
       const index=Number(e.key)-1;
-      if(index>=0&&index<kwgTools.length&&index<9){kwgEquipTool(kwgTools[index]);e.preventDefault();}
+      if(index>=0&&index<kwgTools.length&&index<9){kwgToggleToolSlot(index);e.preventDefault();}
     });
     let kwgPvpLastDamageAt=0;
     socket.on('tool_damage_taken',({damage,shooterPosition}={})=>{
