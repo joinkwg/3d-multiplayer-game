@@ -27,6 +27,7 @@ function normalizeEnemySpawner(block){
   block.enemyRespawn=bounded(block.enemyRespawn,0,300,5);
   block.enemyDamage=Math.round(bounded(block.enemyDamage,1,100,25));
   block.enemyKillable=block.enemyKillable!==false;
+  block.enemyCharacter=block.enemyCharacter==='sniper'?'sniper':'devil';
 }
 const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
 const STORE_CATEGORIES = new Set(['eyes','mouth','torso_decal','hat','head_shape','hair','hats','heads','eyes','mouth','skin','tops','bottoms','shoes','flightsuits']);
@@ -1753,6 +1754,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leave_world', () => {
+    kwgServerTools.clear();
     const p = playersBySocket.get(socket.id);
     if (p?.worldName) {
       socket.to(`world:${p.worldName}`).emit('player_left', socket.id);
@@ -1766,6 +1768,68 @@ io.on('connection', (socket) => {
       socket.data.worldReleasePromise=releaseWorldSession(uid,socket.id)
         .catch(err=>console.error('Could not release world session:',err));
     }
+  });
+
+  // V26: Tool ownership is server-verified at the dispenser and only lasts
+  // for this world session. PVP is opt-in per world, with range, cooldown,
+  // aiming and wall checks. This is not a full authoritative combat engine.
+  const kwgServerTools=new Set();
+  const kwgShotAt={pistol:0,minigun:0};
+  socket.on('tool_pickup',async ({worldName,blockId}={},cb)=>{
+    const player=playersBySocket.get(socket.id);
+    const key=cleanWorldName(worldName);
+    if(!player||player.worldName!==key||socket.data.worldName!==key||typeof blockId!=='string')return cb?.({success:false});
+    try{
+      const world=await getWorldByName(key),block=world?.data?.blocks?.[blockId];
+      if(!block||block.actionType!=='tool_dispenser')return cb?.({success:false});
+      const hx=Math.max(.5,Math.abs(Number(block.scaleX)||1)/2+.75),hy=Math.max(.5,Math.abs(Number(block.scaleY)||1)/2+2.5),hz=Math.max(.5,Math.abs(Number(block.scaleZ)||1)/2+.75);
+      if(Math.abs(player.x-(Number(block.x)||0))>hx||Math.abs(player.y-(Number(block.y)||0))>hy||Math.abs(player.z-(Number(block.z)||0))>hz)return cb?.({success:false});
+      const kind=block.toolKind==='minigun'?'minigun':'pistol';
+      kwgServerTools.add(kind);
+      cb?.({success:true,kind});
+    }catch(err){console.warn('Tool pickup:',err.message);cb?.({success:false});}
+  });
+  function kwgRayBoxDistance(o,d,box){
+    let tmin=0,tmax=115;
+    for(const axis of ['x','y','z']){
+      if(Math.abs(d[axis])<1e-7){if(o[axis]<box['min'+axis.toUpperCase()]||o[axis]>box['max'+axis.toUpperCase()])return Infinity;continue;}
+      const a=(box['min'+axis.toUpperCase()]-o[axis])/d[axis],b=(box['max'+axis.toUpperCase()]-o[axis])/d[axis];
+      tmin=Math.max(tmin,Math.min(a,b));tmax=Math.min(tmax,Math.max(a,b));
+      if(tmax<tmin)return Infinity;
+    }
+    return tmin;
+  }
+  socket.on('tool_hit_player',async ({worldName,targetId,toolKind,origin,direction}={})=>{
+    if(!kwgServerTools.has(toolKind)||!['pistol','minigun'].includes(toolKind))return;
+    const shooter=playersBySocket.get(socket.id),target=playersBySocket.get(targetId),key=cleanWorldName(worldName);
+    if(!shooter||!target||shooter.worldName!==key||target.worldName!==key||shooter.id===target.id||socket.data.worldName!==key)return;
+    const now=Date.now(),interval=toolKind==='minigun'?90:360;
+    if(now-kwgShotAt[toolKind]<interval)return;
+    if(!origin||!direction||!['x','y','z'].every(k=>Number.isFinite(origin[k])&&Number.isFinite(direction[k])))return;
+    const magnitude=Math.hypot(direction.x,direction.y,direction.z);
+    if(magnitude<.9||magnitude>1.1)return;
+    if(Math.hypot(origin.x-shooter.x,origin.y-(shooter.y+1.5),origin.z-shooter.z)>8)return;
+    const distance=Math.hypot(target.x-origin.x,target.y+1.1-origin.y,target.z-origin.z);
+    if(distance>115||distance<.4)return;
+    const toTarget={x:target.x-origin.x,y:target.y+1.1-origin.y,z:target.z-origin.z};
+    const dot=(toTarget.x*direction.x+toTarget.y*direction.y+toTarget.z*direction.z)/distance;
+    if(dot<Math.cos(Math.atan2(1.2,Math.max(1,distance))))return;
+    try{
+      const world=await getWorldByName(key);
+      if(world?.data?.friendlyFire!==true)return;
+      const targetBox={minX:target.x-.55,maxX:target.x+.55,minY:target.y-.2,maxY:target.y+2.45,minZ:target.z-.55,maxZ:target.z+.55};
+      const hit=kwgRayBoxDistance(origin,direction,targetBox);
+      if(!Number.isFinite(hit)||hit>115)return;
+      for(const block of Object.values(world.data.blocks||{})){
+        if(block.canCollide===false||block.actionType==='tool_dispenser')continue;
+        const bx=Number(block.x)||0,by=Number(block.y)||0,bz=Number(block.z)||0;
+        const hx=Math.max(.01,Math.abs(Number(block.scaleX)||1)/2),hy=Math.max(.01,Math.abs(Number(block.scaleY)||1)/2),hz=Math.max(.01,Math.abs(Number(block.scaleZ)||1)/2);
+        const box={minX:bx-hx,maxX:bx+hx,minY:by-hy,maxY:by+hy,minZ:bz-hz,maxZ:bz+hz};
+        if(kwgRayBoxDistance(origin,direction,box)<hit-.12)return;
+      }
+      kwgShotAt[toolKind]=now;
+      io.to(targetId).emit('tool_damage_taken',{damage:toolKind==='minigun'?9:32,shooterPosition:{x:shooter.x,y:shooter.y,z:shooter.z}});
+    }catch(err){console.warn('PVP hit validation:',err.message);}
   });
 
   // Stomp events are room-scoped and validated against saved spawner settings.
@@ -1859,10 +1923,11 @@ io.on('connection', (socket) => {
                 const e=new Error('Part limit reached (1400/1400 parts).');e.clientMessage=e.message;throw e;
               }
               // Preserve standard and enemy spawner types, with validated enemy limits.
-              blockData.actionType=['normal','kill','checkpoint','spawn','enemy_spawner','health'].includes(blockData.actionType)?blockData.actionType:'normal';
+              blockData.actionType=['normal','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(blockData.actionType)?blockData.actionType:'normal';
               blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
               normalizeEnemySpawner(blockData);
               if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
+              if(blockData.actionType==='tool_dispenser')blockData.toolKind=blockData.toolKind==='minigun'?'minigun':'pistol';
               data.blocks[blockData.id]=blockData;
             }else if(action==='delete'){
               const target=data.blocks[blockId];
@@ -1879,13 +1944,14 @@ io.on('connection', (socket) => {
             if(!settings||typeof settings!=='object'||Array.isArray(settings)){
               const e=new Error('Invalid world settings.');e.clientMessage=e.message;throw e;
             }
-            const allowed=['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint'];
+            const allowed=['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint','friendlyFire'];
             const next={};
             for(const k of allowed)if(Object.prototype.hasOwnProperty.call(settings,k))next[k]=settings[k];
             if(next.skyColor&&!validColor(next.skyColor))delete next.skyColor;
             if(next.cloudColor&&!validColor(next.cloudColor))delete next.cloudColor;
             if(next.cloudSpeed!==undefined)next.cloudSpeed=Math.max(0,Math.min(10,Number(next.cloudSpeed)||0));
             if(next.cloudsEnabled!==undefined)next.cloudsEnabled=!!next.cloudsEnabled;
+            if(next.friendlyFire!==undefined)next.friendlyFire=next.friendlyFire===true;
             if(next.spawnPoint){
               const p=next.spawnPoint;
               if(![p.x,p.y,p.z].every(Number.isFinite))delete next.spawnPoint;
@@ -1950,10 +2016,11 @@ io.on('connection', (socket) => {
           // Only supported block types and three current
           // materials may be saved by clients. Existing legacy worlds are
           // not rewritten on load; their old flags stay intact until edited.
-          blockData.actionType = ['normal','kill','checkpoint','spawn','enemy_spawner','health'].includes(blockData.actionType) ? blockData.actionType : 'normal';
+          blockData.actionType = ['normal','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(blockData.actionType) ? blockData.actionType : 'normal';
           blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
           normalizeEnemySpawner(blockData);
           if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
+          if(blockData.actionType==='tool_dispenser')blockData.toolKind=blockData.toolKind==='minigun'?'minigun':'pistol';
           data.blocks[blockData.id] = blockData;
         } else if (action === 'delete') {
           const target = data.blocks[blockId];
@@ -1991,13 +2058,14 @@ io.on('connection', (socket) => {
       const world = await getWorldByName(worldName);
       if (!world) return cb && cb({success:false,message:'World not found.'});
       if (!canEditWorld(socket, world)) return cb && cb({success:false,message:'Only the world owner or an admin can edit this world.'});
-      const allowed = ['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint'];
+      const allowed = ['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint','friendlyFire'];
       const next = {};
       for (const k of allowed) if (Object.prototype.hasOwnProperty.call(settings,k)) next[k] = settings[k];
       if (next.skyColor && !validColor(next.skyColor)) delete next.skyColor;
       if (next.cloudColor && !validColor(next.cloudColor)) delete next.cloudColor;
       if (next.cloudSpeed !== undefined) next.cloudSpeed = Math.max(0, Math.min(10, Number(next.cloudSpeed) || 0));
       if (next.cloudsEnabled !== undefined) next.cloudsEnabled = !!next.cloudsEnabled;
+      if (next.friendlyFire !== undefined) next.friendlyFire = next.friendlyFire === true;
       if (next.spawnPoint) {
         const s = next.spawnPoint;
         if (![s.x,s.y,s.z].every(Number.isFinite)) delete next.spawnPoint;
