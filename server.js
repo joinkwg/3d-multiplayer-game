@@ -1975,13 +1975,14 @@ io.on('connection', (socket) => {
         let thumbnailUrl=data.thumbnailUrl||'';
         if (thumbnailData!==undefined && thumbnailData!==null) {
           thumbnailUrl=await uploadWorldThumbnail(world.id,thumbnailData);
+          data.thumbnailAuto=false;
         }
         data.displayName=title;
         data.description=desc;
         data.thumbnailUrl=thumbnailUrl;
         await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
-        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,thumbnailUrl});
-        return {success:true,displayName:title,description:desc,thumbnailUrl};
+        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true});
+        return {success:true,displayName:title,description:desc,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true};
       });
       cb && cb(result);
     } catch(e){console.error('World info update:',e);cb && cb({success:false,message:e.clientMessage||'Could not save world info or thumbnail. Check thumbnail storage configuration.'});}
@@ -2004,14 +2005,39 @@ io.on('connection', (socket) => {
         if(Number(world.owner_user_id)!==Number(socket.user.id))return {success:false,message:'Only the owner can edit this world.'};
         const data=world.data||{};
         let thumbnailUrl=data.thumbnailUrl||'';
-        if(thumbnailData!==undefined&&thumbnailData!==null)thumbnailUrl=await uploadWorldThumbnail(world.id,thumbnailData);
+        if(thumbnailData!==undefined&&thumbnailData!==null){thumbnailUrl=await uploadWorldThumbnail(world.id,thumbnailData);data.thumbnailAuto=false;}
         data.displayName=title;data.description=desc;data.thumbnailUrl=thumbnailUrl;
         await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
-        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,thumbnailUrl});
-        return {success:true,displayName:title,description:desc,thumbnailUrl};
+        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true});
+        return {success:true,displayName:title,description:desc,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true};
       });
       cb(result);
     }catch(e){console.error('Owner world edit error:',e);cb({success:false,message:e.clientMessage||'Could not save world info.'});}
+  });
+
+  // Auto thumbnails are captured by the world owner's browser from spawn view.
+  // Never allow a visitor to upload a thumbnail or overwrite a manually chosen one.
+  socket.on('set_auto_world_thumbnail',async ({worldName,thumbnailData}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    if(typeof cb!=='function')return;
+    const key=cleanWorldName(worldName);
+    if(!key||socket.data.worldName!==key)return cb({success:false,message:'Join your world to generate its thumbnail.'});
+    try{
+      const result=await queueWorldSave(key,async()=>{
+        const world=await getWorldByName(key);
+        if(!world)return {success:false,message:'World not found.'};
+        if(Number(world.owner_user_id)!==Number(socket.user.id))return {success:false,message:'Only the owner can generate a thumbnail.'};
+        const data=world.data||{};
+        if(data.thumbnailUrl&&!data.thumbnailAuto)return {success:true,thumbnailUrl:data.thumbnailUrl,thumbnailAuto:false};
+        const thumbnailUrl=await uploadWorldThumbnail(world.id,thumbnailData);
+        data.thumbnailUrl=thumbnailUrl;
+        data.thumbnailAuto=true;
+        await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
+        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:data.displayName||key,description:data.description||'',thumbnailUrl,thumbnailAuto:true});
+        return {success:true,thumbnailUrl,thumbnailAuto:true};
+      });
+      cb(result);
+    }catch(err){console.warn('Automatic world thumbnail:',err);cb({success:false,message:err.clientMessage||'Automatic thumbnail could not be saved.'});}
   });
 
   socket.on('save_appearance', async (appearance, cb) => {
