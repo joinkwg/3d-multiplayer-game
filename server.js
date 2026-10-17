@@ -29,6 +29,8 @@ function normalizeEnemySpawner(block){
   block.enemyCharacter=['devil','sniper','hops','spider','alien','bot_bus'].includes(block.enemyCharacter)?block.enemyCharacter:'devil';
   block.enemyKillable=block.enemyCharacter!=='hops'&&block.enemyKillable!==false;
 }
+const SUPABASE_WORLD_IMAGE_BUCKET=String(process.env.SUPABASE_WORLD_IMAGE_BUCKET||'world-images');
+const KWG_IMAGE_MODERATION_KEY=String(process.env.OPENAI_API_KEY||'');
 const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
 const STORE_CATEGORIES = new Set(['eyes','mouth','torso_decal','hat','head_shape','hair','hats','heads','eyes','mouth','skin','tops','bottoms','shoes','flightsuits']);
 
@@ -309,6 +311,45 @@ async function uploadWorldThumbnail(worldId, imageData) {
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${key}`;
 }
 
+// V34: Fail-closed moderation. Never place unreviewed bytes in public storage.
+async function kwgModerateWorldImage(bytes,mime){
+  if(!KWG_IMAGE_MODERATION_KEY)throw new Error('AI moderation is not configured. Set OPENAI_API_KEY on the server.');
+  const res=await fetch('https://api.openai.com/v1/moderations',{
+    method:'POST',headers:{Authorization:`Bearer ${KWG_IMAGE_MODERATION_KEY}`,'Content-Type':'application/json'},
+    body:JSON.stringify({model:'omni-moderation-latest',input:[{type:'image_url',image_url:{url:`data:${mime};base64,${bytes.toString('base64')}`}}]}),
+    signal:AbortSignal.timeout(25000)
+  });
+  if(!res.ok)throw new Error(`Image moderation unavailable (${res.status}).`);
+  const result=(await res.json()).results?.[0];
+  if(!result||typeof result.flagged!=='boolean')throw new Error('Invalid image moderation result.');
+  return !result.flagged && !result.categories?.sexual && !result.categories?.['sexual/minors'];
+}
+async function kwgUploadApprovedWorldImage(worldId,bytes,mime){
+  if(!SUPABASE_URL||!SUPABASE_SERVICE_ROLE_KEY)throw new Error('Image storage is not configured.');
+  const bucket=encodeURIComponent(SUPABASE_WORLD_IMAGE_BUCKET);
+  const check=await fetch(`${SUPABASE_URL}/storage/v1/bucket/${bucket}`,{headers:storageHeaders()});
+  if(check.status===404){
+    const created=await fetch(`${SUPABASE_URL}/storage/v1/bucket`,{method:'POST',headers:storageHeaders({'Content-Type':'application/json'}),body:JSON.stringify({id:SUPABASE_WORLD_IMAGE_BUCKET,name:SUPABASE_WORLD_IMAGE_BUCKET,public:true})});
+    if(!created.ok&&created.status!==409)throw new Error('Cannot create image storage bucket.');
+  }else if(!check.ok)throw new Error('Cannot access image storage bucket.');
+  const ext=mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg';
+  const key=`world-${Number(worldId)}/${crypto.randomUUID()}.${ext}`;
+  const uploaded=await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${key}`,{method:'POST',headers:storageHeaders({'Content-Type':mime,'x-upsert':'false'}),body:bytes});
+  if(!uploaded.ok)throw new Error(`Approved image upload failed (${uploaded.status}).`);
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${key}`;
+}
+function kwgValidImageBytes(bytes,mime){
+  if(!bytes||bytes.length<100||bytes.length>1500000)return false;
+  if(mime==='image/png')return bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+  if(mime==='image/jpeg')return bytes[0]===255&&bytes[1]===216&&bytes[bytes.length-2]===255&&bytes[bytes.length-1]===217;
+  if(mime==='image/webp')return bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP';
+  return false;
+}
+function kwgPreserveApprovedDecals(block,previous){
+  // Client-authored image URLs/statuses are untrusted, even from world owners.
+  if(previous?.decals)block.decals=structuredClone(previous.decals);
+  else delete block.decals;
+}
 function fileBufferFromSocket(value) {
   if (!value) return null;
   if (Buffer.isBuffer(value)) return value;
@@ -1821,12 +1862,14 @@ io.on('connection', (socket) => {
     if(distance>115||distance<.4)return;
     const toTarget={x:target.x-origin.x,y:target.y+1.1-origin.y,z:target.z-origin.z};
     const dot=(toTarget.x*direction.x+toTarget.y*direction.y+toTarget.z*direction.z)/distance;
-    if(dot<Math.cos(Math.atan2(1.2,Math.max(1,distance))))return;
+    if(toolKind!=='ufo'&&dot<Math.cos(Math.atan2(1.2,Math.max(1,distance))))return;
+    if(toolKind==='ufo'&&(Math.hypot(target.x-origin.x,target.z-origin.z)>2.35||target.y>origin.y+.2))return;
     try{
       const world=await getWorldByName(key);
       if(world?.data?.friendlyFire!==true)return;
       const targetBox={minX:target.x-.55,maxX:target.x+.55,minY:target.y-.2,maxY:target.y+2.45,minZ:target.z-.55,maxZ:target.z+.55};
-      const hit=kwgRayBoxDistance(origin,direction,targetBox);
+       if(toolKind==='ufo'){targetBox.minX-=1.85;targetBox.maxX+=1.85;targetBox.minZ-=1.85;targetBox.maxZ+=1.85;}
+       const hit=kwgRayBoxDistance(origin,direction,targetBox);
       if(!Number.isFinite(hit)||hit>115)return;
       for(const block of Object.values(world.data.blocks||{})){
         if(block.canCollide===false||block.actionType==='tool_dispenser')continue;
@@ -1947,7 +1990,8 @@ io.on('connection', (socket) => {
               blockData.actionType=['normal','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(blockData.actionType)?blockData.actionType:'normal';
               blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
               normalizeEnemySpawner(blockData);
-              if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
+              kwgPreserveApprovedDecals(blockData,data.blocks[blockData.id]);
+               if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
               if(blockData.actionType==='tool_dispenser')blockData.toolKind=['pistol','minigun','laser','ufo'].includes(blockData.toolKind)?blockData.toolKind:'pistol';
               data.blocks[blockData.id]=blockData;
             }else if(action==='delete'){
@@ -1973,7 +2017,7 @@ io.on('connection', (socket) => {
             if(next.brightness!==undefined)next.brightness=Math.max(.4,Math.min(2,Number(next.brightness)||1));
             if(next.saturation!==undefined)next.saturation=Math.max(0,Math.min(2,Number(next.saturation)||0));
             if(next.resolution!==undefined)next.resolution=['120p','240p','480p','720p','1080p'].includes(next.resolution)?next.resolution:'1080p';
-            if(next.lightDirection!==undefined)next.lightDirection=['morning','noon','evening','north','south'].includes(next.lightDirection)?next.lightDirection:'noon';
+            if(next.lightDirection!==undefined)next.lightDirection=['east','overhead','west','north','south'].includes(next.lightDirection)?next.lightDirection:({morning:'east',noon:'overhead',evening:'west'}[next.lightDirection]||'overhead');
             if(next.cloudsEnabled!==undefined)next.cloudsEnabled=!!next.cloudsEnabled;
             if(next.friendlyFire!==undefined)next.friendlyFire=next.friendlyFire===true;
             if(next.spawnPoint){
@@ -2043,7 +2087,8 @@ io.on('connection', (socket) => {
           blockData.actionType = ['normal','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(blockData.actionType) ? blockData.actionType : 'normal';
           blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
           normalizeEnemySpawner(blockData);
-          if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
+          kwgPreserveApprovedDecals(blockData,data.blocks[blockData.id]);
+           if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
           if(blockData.actionType==='tool_dispenser')blockData.toolKind=['pistol','minigun','laser','ufo'].includes(blockData.toolKind)?blockData.toolKind:'pistol';
           data.blocks[blockData.id] = blockData;
         } else if (action === 'delete') {
@@ -2075,6 +2120,64 @@ io.on('connection', (socket) => {
     }
   });
 
+  // V34: server-owned image reviews. Pending/rejected images are NEVER public.
+  socket.on('kwg_image_submit',async ({worldName,kind,blockId,side,mimeType,bytes:raw}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    const key=cleanWorldName(worldName);
+    if(socket.data.worldName!==key)return cb?.({success:false,message:'Join the world before uploading.'});
+    if(!['sky','decal'].includes(kind)||kind==='decal'&&!['front','back','left','right','top','bottom'].includes(side))return cb?.({success:false,message:'Invalid image target.'});
+    const bytes=fileBufferFromSocket(raw);
+    if(!kwgValidImageBytes(bytes,mimeType))return cb?.({success:false,message:'Use PNG, JPEG, or WebP under 1.5 MB.'});
+    if(!KWG_IMAGE_MODERATION_KEY||!SUPABASE_URL||!SUPABASE_SERVICE_ROLE_KEY)return cb?.({success:false,message:'Image moderation/storage not configured: set OPENAI_API_KEY and Supabase storage environment variables.'});
+    const token=crypto.randomUUID();let worldId;
+    try{
+      await queueWorldSave(key,async()=>{
+        const world=await getWorldByName(key);
+        if(!world||!canEditWorld(socket,world))throw new Error('Not allowed to upload to this world.');
+        worldId=world.id;
+        if(kind==='decal'&&!world.data.blocks?.[blockId])throw new Error('Select a saved part first.');
+        const review={status:'pending',token};
+        if(kind==='sky')world.data.skyImageReview=review;
+        else{const block=world.data.blocks[blockId];block.decals=block.decals||{};block.decals[side]=review;}
+        await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(world.data),world.id]);
+        io.to(`world:${key}`).emit('kwg_image_review_updated',{kind,blockId,side,review});
+      });
+      cb?.({success:true,status:'pending'});
+    }catch(e){return cb?.({success:false,message:e.message||'Could not submit image.'});}
+    // Complete review asynchronously; compare token so an older result cannot
+    // overwrite a newer image or a removal. If review fails, stay non-public.
+    (async()=>{
+      let approved=false,url=null,failed=false;
+      try{approved=await kwgModerateWorldImage(bytes,mimeType);
+        if(approved)url=await kwgUploadApprovedWorldImage(worldId,bytes,mimeType);
+      }catch(e){failed=true;console.error('KWG world image review:',e.message);}
+      try{await queueWorldSave(key,async()=>{
+        const world=await getWorldByName(key);if(!world)return;
+        const record=kind==='sky'?world.data.skyImageReview:world.data.blocks?.[blockId]?.decals?.[side];
+        if(record?.token!==token||record.status!=='pending')return;
+        const review={status:failed?'error':approved?'approved':'rejected',token};
+        if(url)review.url=url;
+        if(kind==='sky')world.data.skyImageReview=review;
+        else world.data.blocks[blockId].decals[side]=review;
+        await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(world.data),world.id]);
+        io.to(`world:${key}`).emit('kwg_image_review_updated',{kind,blockId,side,review});
+      });}catch(e){console.error('KWG image review persistence:',e.message);}
+    })();
+  });
+  socket.on('kwg_image_clear',async ({worldName,kind,blockId,side}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    const key=cleanWorldName(worldName);
+    if(socket.data.worldName!==key)return cb?.({success:false,message:'Join the world first.'});
+    if(!['sky','decal'].includes(kind)||kind==='decal'&&!['front','back','left','right','top','bottom'].includes(side))return cb?.({success:false,message:'Invalid image target.'});
+    try{await queueWorldSave(key,async()=>{
+      const world=await getWorldByName(key);if(!world||!canEditWorld(socket,world))throw new Error('Not allowed to edit images.');
+      if(kind==='sky')delete world.data.skyImageReview;
+      else if(world.data.blocks?.[blockId]?.decals)delete world.data.blocks[blockId].decals[side];
+      await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(world.data),world.id]);
+      io.to(`world:${key}`).emit('kwg_image_review_updated',{kind,blockId,side,review:null});
+    });cb?.({success:true});}catch(e){cb?.({success:false,message:e.message});}
+  });
+
   socket.on('world_settings_update', async ({worldName,settings}, cb) => {
     if (!requireAuth(socket)) return;
     if (socket.data.worldName !== cleanWorldName(worldName) || !settings) return;
@@ -2090,7 +2193,7 @@ io.on('connection', (socket) => {
       if(next.brightness!==undefined)next.brightness=Math.max(.4,Math.min(2,Number(next.brightness)||1));
       if(next.saturation!==undefined)next.saturation=Math.max(0,Math.min(2,Number(next.saturation)||0));
       if(next.resolution!==undefined)next.resolution=['120p','240p','480p','720p','1080p'].includes(next.resolution)?next.resolution:'1080p';
-      if(next.lightDirection!==undefined)next.lightDirection=['morning','noon','evening','north','south'].includes(next.lightDirection)?next.lightDirection:'noon';
+      if(next.lightDirection!==undefined)next.lightDirection=['east','overhead','west','north','south'].includes(next.lightDirection)?next.lightDirection:({morning:'east',noon:'overhead',evening:'west'}[next.lightDirection]||'overhead');
       if (next.cloudsEnabled !== undefined) next.cloudsEnabled = !!next.cloudsEnabled;
       if (next.friendlyFire !== undefined) next.friendlyFire = next.friendlyFire === true;
       if (next.spawnPoint) {
