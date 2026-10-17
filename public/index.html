@@ -3063,7 +3063,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   </div>
 
   <style>
-    #kwg-health-hud{width:150px;min-width:110px;box-sizing:border-box;background:#102437e8;border:2px solid #6788a2;padding:6px 8px;align-self:center;color:#e8f5ff;font-family:inherit;letter-spacing:.03em}
+    #kwg-health-hud{display:none;position:fixed;bottom:max(18px,env(safe-area-inset-bottom));left:max(18px,env(safe-area-inset-left));z-index:65;width:215px;max-width:calc(100vw - 36px);box-sizing:border-box;background:#102437ee;border:2px solid #6788a2;padding:10px 12px;color:#e8f5ff;font-family:inherit;letter-spacing:.03em;box-shadow:3px 4px 0 #071320;pointer-events:none}
+    body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-health-hud{display:block}
+    @media(max-width:600px){#kwg-health-hud{width:172px;padding:7px 9px;bottom:12px;left:12px}}
     .kwg-health-top{display:flex;justify-content:space-between;gap:8px;font-size:9px;font-weight:800;white-space:nowrap}
     .kwg-health-track{height:10px;background:#263544;border:1px solid #87a5b4;margin-top:4px;overflow:hidden}
     #kwg-health-fill{height:100%;width:100%;background:#68d991;transition:width .12s linear,background-color .12s linear}
@@ -3093,15 +3095,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   <div id="hud">
     <button class="hud-btn kwg-control-icon" id="toggle-edit-btn" title="Enable Edit Mode" aria-label="Enable Edit Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M5 15l10-10 4 4-10 10H5zM13 7l4 4"/></svg><span class="kwg-hud-button-label" id="kwg-edit-mode-label">EDIT</span></button>
     <button class="hud-btn kwg-control-icon" id="respawn-btn" title="Respawn" aria-label="Respawn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 1-3-6M20 4v7h-7"/></svg><span class="kwg-hud-button-label">RESPAWN</span></button>
+
+    <button class="hud-btn kwg-control-icon" id="kwg-open-pets-btn" title="Pets Inventory" aria-label="Pets Inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="8" r="1.5"/><circle cx="12" cy="5" r="1.5"/><circle cx="17" cy="8" r="1.5"/><circle cx="19" cy="13" r="1.5"/><path d="M8 14c1.3-2 2.5-2.8 4-2.8s2.7.8 4 2.8c3.4 4.7-2.1 6.2-4 4.6-1.9 1.6-7.4.1-4-4.6z"/></svg><span class="kwg-hud-button-label">PETS</span></button>
+    <button class="hud-btn kwg-control-icon" id="leave-world-btn" title="Leave World" aria-label="Leave World"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg><span class="kwg-hud-button-label">LEAVE</span></button>
+    <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
+  </div>
+
     <div id="kwg-health-hud" role="status" aria-live="polite" aria-label="Player health">
       <div class="kwg-health-top"><span>HEALTH</span><span id="kwg-health-value">100 / 100</span></div>
       <div class="kwg-health-track"><div id="kwg-health-fill"></div></div>
       <div id="kwg-health-state" aria-live="polite"></div>
     </div>
-    <button class="hud-btn kwg-control-icon" id="kwg-open-pets-btn" title="Pets Inventory" aria-label="Pets Inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="8" r="1.5"/><circle cx="12" cy="5" r="1.5"/><circle cx="17" cy="8" r="1.5"/><circle cx="19" cy="13" r="1.5"/><path d="M8 14c1.3-2 2.5-2.8 4-2.8s2.7.8 4 2.8c3.4 4.7-2.1 6.2-4 4.6-1.9 1.6-7.4.1-4-4.6z"/></svg><span class="kwg-hud-button-label">PETS</span></button>
-    <button class="hud-btn kwg-control-icon" id="leave-world-btn" title="Leave World" aria-label="Leave World"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg><span class="kwg-hud-button-label">LEAVE</span></button>
-    <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
-  </div>
 
   <div id="kwg-pet-inventory-modal" class="kwg-pet-inventory-modal" aria-hidden="true">
     <div class="kwg-pet-inventory-card" role="dialog" aria-modal="true" aria-labelledby="kwg-pet-inventory-title">
@@ -6426,6 +6430,36 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       sprite.name='kwg-name-tag';sprite.position.set(0,3.14,0);
       return sprite;
     }
+    // Small billboarded health bars for both local and remote avatars.
+    // Their sprite is attached directly to the avatar root, outside the flip/ragdoll rig.
+    function kwgAttachOverheadHealth(avatar,health=100){
+      if(!avatar)return;
+      let sprite=avatar.userData.kwgHealthSprite;
+      if(!sprite){
+        const canvas=document.createElement('canvas');canvas.width=256;canvas.height=42;
+        const texture=new THREE.CanvasTexture(canvas);
+        texture.minFilter=THREE.LinearFilter;texture.magFilter=THREE.LinearFilter;
+        const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:true});
+        sprite=new THREE.Sprite(material);
+        sprite.name='kwg-health-overhead';sprite.position.set(0,2.80,0);
+        sprite.scale.set(1.75,.29,1);
+        avatar.add(sprite);
+        sprite.userData.kwgHealthCanvas=canvas;
+        avatar.userData.kwgHealthSprite=sprite;
+      }
+      const hp=Math.max(0,Math.min(100,Math.round(Number(health)||0)));
+      if(sprite.userData.kwgLastHealth===hp)return;
+      sprite.userData.kwgLastHealth=hp;
+      const ctx=sprite.userData.kwgHealthCanvas.getContext('2d');
+      ctx.clearRect(0,0,256,42);
+      ctx.fillStyle='#0c1c2b';ctx.fillRect(0,0,256,42);
+      ctx.fillStyle='#8ca7b8';ctx.fillRect(0,0,256,4);ctx.fillRect(0,38,256,4);
+      ctx.fillRect(0,0,4,42);ctx.fillRect(252,0,4,42);
+      ctx.fillStyle='#263544';ctx.fillRect(8,8,240,26);
+      ctx.fillStyle=hp>55?'#68d991':hp>25?'#f1c65e':'#f16e76';
+      ctx.fillRect(8,8,Math.round(240*hp/100),26);
+      sprite.material.map.needsUpdate=true;
+    }
     function wrapKWGBubbleText(value){
       const words=filterKWGUserText(String(value||'')).replace(/\s+/g,' ').trim().split(' ');
       const lines=[];let line='';
@@ -8254,6 +8288,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if (pData.id === socket.id) return;
       const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
       mesh.add(createNameTagSprite(pData.username || 'Player'));
+      kwgAttachOverheadHealth(mesh,pData.health??100);
       mesh.position.set(pData.x, pData.y, pData.z);
       scene.add(mesh);
       otherPlayers[pData.id] = { mesh, username: pData.username };
@@ -8268,6 +8303,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       scene.remove(p.mesh);
       const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
       mesh.add(createNameTagSprite(pData.username || p.username || 'Player'));
+      kwgAttachOverheadHealth(mesh,pData.health??100);
       mesh.position.copy(currentPos);
       mesh.rotation.y = currentRot;
       scene.add(mesh);
@@ -8280,14 +8316,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if (!p) return;
       p.mesh.position.set(pData.x, pData.y, pData.z);
       p.mesh.rotation.y = pData.rotationY;
+      kwgAttachOverheadHealth(p.mesh,pData.health??100);
 
       updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
       // Other visitors see the front flip too, without rotating the physics root.
       const ragdoll=Number(pData.ragdollPose)||0;
       if(ragdoll>0){
         const pivot=kwgBuildStompPivot(p.mesh);
-        pivot.rotation.x=-.4*ragdoll;
-        pivot.rotation.z=1.43*ragdoll;
+        pivot.rotation.x=Number(pData.ragdollX)||0;
+        pivot.rotation.y=Number(pData.ragdollY)||0;
+        pivot.rotation.z=Number(pData.ragdollZ)||0;
         pivot.position.y=1.05-.27*ragdoll;
         const limbs=p.mesh.userData.limbs;
         if(limbs){
@@ -8298,7 +8336,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       if(p.mesh.userData.kwgStompPivot){
         const pivot=p.mesh.userData.kwgStompPivot;
-        pivot.rotation.z*=.6;pivot.position.y+=(1.05-pivot.position.y)*.3;
+        pivot.rotation.z*=.6;pivot.rotation.y*=.6;pivot.position.y+=(1.05-pivot.position.y)*.3;
       }
       const flip=Number(pData.stompAngle)||0;
       if(Math.abs(flip)>.02){
@@ -8670,6 +8708,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       localPlayerAvatar = buildBlockyAvatar(playerAppearance, equippedCosmetics);
       localPlayerAvatar.add(createNameTagSprite(loggedInUsername || 'Player'));
+      kwgAttachOverheadHealth(localPlayerAvatar,100);
       localPlayerAvatar.position.set(initialSpawn.x, initialSpawn.y, initialSpawn.z);
       localPlayerAvatar.userData.walkClock = 0;
       kwgResetLifeState();
@@ -8682,6 +8721,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const pData = initialPlayers[pId];
           const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
           mesh.add(createNameTagSprite(pData.username || 'Player'));
+      kwgAttachOverheadHealth(mesh,pData.health??100);
           mesh.position.set(pData.x, pData.y, pData.z);
           scene.add(mesh);
           otherPlayers[pId] = { mesh, username: pData.username };
@@ -11112,6 +11152,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const kwgMaxHealth=100;
     let kwgHealth=kwgMaxHealth,kwgInvulnerableUntil=0,kwgKnockedUntil=0,kwgDeadUntil=0;
     let kwgKnockX=0,kwgKnockZ=0,kwgLastSafeFeet=null,kwgRagdollStarted=0,kwgDeathCause=null;
+    let kwgRagdollSide=1,kwgRagdollPitch=-.4,kwgRagdollYaw=0,kwgRagdollPhase=0;
     let kwgEnemyPreviousPlayerPos=null;
     function kwgUpdateHealthHud(){
       const bar=document.getElementById('kwg-health-fill'),value=document.getElementById('kwg-health-value'),status=document.getElementById('kwg-health-state');
@@ -11120,10 +11161,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       bar.style.background=kwgHealth>55?'#68d991':kwgHealth>25?'#f1c65e':'#f16e76';
       value.textContent=kwgHealth+' / '+kwgMaxHealth;
       status.textContent=kwgDeadUntil?'RESPAWNING...':kwgKnockedUntil?'KNOCKED OUT':'';
+      kwgAttachOverheadHealth(localPlayerAvatar,kwgHealth);
     }
     function kwgResetLifeState(){
       kwgHealth=kwgMaxHealth;kwgInvulnerableUntil=0;kwgKnockedUntil=0;kwgDeadUntil=0;
       kwgKnockX=kwgKnockZ=0;kwgRagdollStarted=0;kwgLastSafeFeet=null;kwgDeathCause=null;
+      kwgRagdollSide=1;kwgRagdollPitch=-.4;kwgRagdollYaw=0;kwgRagdollPhase=0;
       kwgEnemyPreviousPlayerPos=null;
       if(localPlayerAvatar){
         const pivot=localPlayerAvatar.userData.kwgStompPivot;
@@ -11138,6 +11181,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const now=performance.now();
       kwgHealth=0;kwgDeadUntil=now+2000;kwgKnockedUntil=0;kwgDeathCause=reason;
       kwgInvulnerableUntil=kwgDeadUntil+1100;kwgRagdollStarted=now;
+      kwgRagdollSide=Math.random()<.5?-1:1;
+      kwgRagdollPitch=-(.25+Math.random()*.85);
+      kwgRagdollYaw=(Math.random()-.5)*1.5;
+      kwgRagdollPhase=Math.random()*Math.PI*2;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;velocityY=reason==='enemy'?.06:0;isGrounded=false;
       kwgResetStompAnimation(true);
       kwgEnsureStompRig(localPlayerAvatar);
@@ -11153,12 +11200,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const dist=Math.hypot(dx,dz);
       if(dist<.001){dx=Math.sin(localPlayerAvatar.rotation.y);dz=Math.cos(localPlayerAvatar.rotation.y);}
       else{dx/=dist;dz/=dist;}
-      kwgKnockX=dx*5.8;kwgKnockZ=dz*5.8;
+      // Larger initial impulse, with wall collisions still enforced below.
+      kwgKnockX=dx*17.5;kwgKnockZ=dz*17.5;
       kwgHealth=Math.max(0,kwgHealth-Math.max(1,Math.min(100,Math.round(amount))));
       if(kwgHealth<=0){kwgDiePlayer('enemy');}
       else{
-        kwgKnockedUntil=now+850;kwgInvulnerableUntil=now+1450;kwgRagdollStarted=now;
-        velocityY=Math.max(velocityY,.075);isGrounded=false;
+        kwgKnockedUntil=now+1150;kwgInvulnerableUntil=now+1650;kwgRagdollStarted=now;
+        kwgRagdollSide=Math.random()<.5?-1:1;
+        kwgRagdollPhase=Math.random()*Math.PI*2;
+        velocityY=Math.max(velocityY,.095);isGrounded=false;
         kwgResetStompAnimation(true);kwgEnsureStompRig(localPlayerAvatar);
         kwgAudio.play('devil_knockout');kwgUpdateHealthHud();
       }
@@ -11456,7 +11506,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const pivot=new THREE.Group(),contents=new THREE.Group();
       pivot.position.y=1.05;contents.position.y=-1.05;
       for(const child of [...avatar.children]){
-        if(child.name!=='kwg-name-tag')contents.add(child);
+        if(child.name!=='kwg-name-tag'&&child.name!=='kwg-health-overhead')contents.add(child);
       }
       pivot.add(contents);avatar.add(pivot);
       avatar.userData.kwgStompPivot=pivot;
@@ -11641,14 +11691,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           kwgEnemySeparate(slot,blocks);
           kwgEnemyAnimate(slot,now,walking,props.enemySpeed,index);
           // Landing from above bounces. A double-jump flip gives a finishing stomp.
-          if(isEditMode||!withinRange||kwgDeadUntil)continue;
+          if(isEditMode||kwgDeadUntil)continue;
           const contactDistance=kwgEnemyContactDistance(playerBefore,player.position,enemyBefore,npc.position);
-          if(contactDistance>.82)continue;
+          // Stomps use the pre-separation position, so the landing stays reliable.
           const top=npc.position.y+1.79;
           const feet=player.position.y;
           const descending=velocityY<-.001||playerBefore.y>feet+.02;
           const landing=descending&&kwgEnemyPreviousFeet>=top-.12&&feet<=top+.16&&feet>=top-.55;
-          if(landing&&!kwgKnockedUntil){
+          if(landing&&contactDistance<=.82&&!kwgKnockedUntil){
             player.position.y=top+.12;
             velocityY=kwgDoubleJumpStomp?jumpStrength*.8:jumpStrength*.68;
             isGrounded=false;
@@ -11658,6 +11708,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               kwgAudio.play('devil_bounce');
             }
             kwgFinishStompPose();
+            kwgEnsureStompRig(localPlayerAvatar);
+            kwgStompStarted=now;kwgStompLandingAt=0; // A full playful front flip on EVERY bounce.
             kwgDoubleJumpStomp=false;
             // Every enemy bounce is a fresh first jump, even after a kill.
             // A new (released then pressed) Space triggers another flip stomp
@@ -11670,12 +11722,38 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           // Contact after a smush is evaluated against EVERY remaining devil.
           const feetLow=Math.min(playerBefore.y,feet),feetHigh=Math.max(playerBefore.y,feet);
           const bodyOverlaps=feetLow<npc.position.y+1.58&&feetHigh+1.95>npc.position.y+.2;
-          if(bodyOverlaps&&kwgEnemyHitPlayer(props.enemyDamage,npc.position)){
+          const isContact=bodyOverlaps&&contactDistance<=.89;
+          if(bodyOverlaps)kwgResolvePlayerDevilOverlap(player,npc,blocks);
+          if(isContact&&kwgEnemyHitPlayer(props.enemyDamage,npc.position)){
             kwgAudio.play('devil_attack');
             return;
           }
         }
       }
+    }
+    // Solid devil bodies: separate player/enemy horizontally without passing through walls.
+    // The actual hit check happens BEFORE separation so touching still causes damage.
+    function kwgResolvePlayerDevilOverlap(player,npc,blocks){
+      const py=player.position.y,ey=npc.position.y;
+      if(py>=ey+1.70||py+1.9<=ey+.15)return false;
+      let dx=player.position.x-npc.position.x,dz=player.position.z-npc.position.z;
+      let d=Math.hypot(dx,dz);
+      const minDistance=.89;
+      if(d>=minDistance)return false;
+      if(d<.00001){const angle=player.rotation.y||0;dx=Math.sin(angle)||1;dz=Math.cos(angle);d=Math.hypot(dx,dz);}
+      const ux=dx/d,uz=dz/d,amount=Math.min(1.15,minDistance-d+.008);
+      const oldX=player.position.x,oldZ=player.position.z;
+      player.position.x+=ux*amount;player.position.z+=uz*amount;
+      resolveHorizontalCollisionsMP(player.position,blocks,oldX,oldZ);
+      // When a wall prevents pushing the player, push the devil instead.
+      const remaining=Math.max(0,minDistance-Math.hypot(player.position.x-npc.position.x,player.position.z-npc.position.z));
+      if(remaining>.01){
+        const nx=npc.position.x-ux*(remaining+.02),nz=npc.position.z-uz*(remaining+.02);
+        if(kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)){
+          npc.position.x=nx;npc.position.z=nz;
+        }
+      }
+      return true;
     }
     let kwgEnemyPreviousFeet=-Infinity;
     // Second discrete Space press in mid-air enables a stomp. Holding Space
@@ -12326,20 +12404,32 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgEnsureStompRig(localPlayerAvatar);
       const pivot=localPlayerAvatar.userData.kwgStompPivot;
       const t=Math.max(0,(now-kwgRagdollStarted)/1000);
-      const settle=1-Math.exp(-t*5);
-      const wobble=Math.sin(t*17)*Math.exp(-t*3.8);
-      pivot.rotation.z=(dead?1.43:.92)*settle+wobble*.18;
-      pivot.rotation.x=(dead?-.45:-.38)*settle;
-      pivot.position.y=1.05-(dead?.27:.08)*settle;
+      const settle=1-Math.exp(-t*(dead?4:5));
+      const side=kwgRagdollSide;
+      if(dead){
+        // Each death has a fresh side, pitch, twist and limb timing.
+        const wobble=Math.sin(t*12+kwgRagdollPhase)*Math.exp(-t*3.1);
+        pivot.rotation.z=side*(1.15+.48*Math.abs(kwgRagdollPitch))*settle+wobble*.23;
+        pivot.rotation.x=kwgRagdollPitch*settle;
+        pivot.rotation.y=kwgRagdollYaw*settle;
+        pivot.position.y=1.05-(.23+.09*Math.abs(kwgRagdollPitch))*settle;
+      }else{
+        // Exaggerated side-to-side cartoon dizziness rather than one-sided falling.
+        const wobble=Math.sin(t*16+kwgRagdollPhase)*(.62+.17*Math.sin(t*5));
+        pivot.rotation.z=wobble+side*.16*Math.sin(t*7);
+        pivot.rotation.x=-.28+.15*Math.sin(t*11+kwgRagdollPhase);
+        pivot.rotation.y=Math.sin(t*9+kwgRagdollPhase)*.27;
+        pivot.position.y=1.05+.10*Math.abs(Math.sin(t*13));
+      }
       const limbs=localPlayerAvatar.userData.limbs;
       if(limbs){
-        const swing=Math.sin(t*15)*Math.exp(-t*3.3);
-        limbs.leftArm.rotation.x=-.95+swing*.6;
-        limbs.rightArm.rotation.x=.65-swing*.55;
-        limbs.leftLeg.rotation.x=.55-swing*.4;
-        limbs.rightLeg.rotation.x=-.6+swing*.4;
-        limbs.leftArm.rotation.z=-.55;
-        limbs.rightArm.rotation.z=.55;
+        const swing=Math.sin(t*(dead?13:21)+kwgRagdollPhase)*(dead?Math.exp(-t*2.8):1);
+        limbs.leftArm.rotation.x=-.85+swing*.85;
+        limbs.rightArm.rotation.x=.75-swing*.8;
+        limbs.leftLeg.rotation.x=.5-swing*.55;
+        limbs.rightLeg.rotation.x=-.55+swing*.6;
+        limbs.leftArm.rotation.z=-.65+Math.sin(t*17)*.25;
+        limbs.rightArm.rotation.z=.65-Math.sin(t*17)*.25;
       }
     }
     function kwgUpdateLifeMotion(delta,blocks){
@@ -12352,7 +12442,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           p.x+=kwgKnockX*Math.min(delta,.05);
           p.z+=kwgKnockZ*Math.min(delta,.05);
           resolveHorizontalCollisionsMP(p,blocks,oldX,oldZ);
-          kwgKnockX*=Math.exp(-delta*6);kwgKnockZ*=Math.exp(-delta*6);
+          kwgKnockX*=Math.exp(-delta*2.8);kwgKnockZ*=Math.exp(-delta*2.8);
           p.y+=velocityY;
           resolveCeilingCollisionMP(p,oldY,blocks);
           velocityY=Math.max(-.16,velocityY+gravity);
@@ -12378,7 +12468,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           p.x+=kwgKnockX*Math.min(.05,delta);
           p.z+=kwgKnockZ*Math.min(.05,delta);
           resolveHorizontalCollisionsMP(p,blocks,oldX,oldZ);
-          kwgKnockX*=Math.exp(-delta*3.4);kwgKnockZ*=Math.exp(-delta*3.4);
+          kwgKnockX*=Math.exp(-delta*2.6);kwgKnockZ*=Math.exp(-delta*2.6);
           const oldY=p.y;
           p.y+=velocityY;
           resolveCeilingCollisionMP(p,oldY,blocks);
@@ -12395,14 +12485,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       const pivot=localPlayerAvatar?.userData.kwgStompPivot;
       if(pivot&&kwgRagdollStarted){
-        pivot.rotation.z*=.7;pivot.rotation.x*=.7;
+        pivot.rotation.z*=.7;pivot.rotation.x*=.7;pivot.rotation.y*=.7;
         pivot.position.y+=(1.05-pivot.position.y)*.3;
         const limbs=localPlayerAvatar.userData.limbs;
         if(limbs){
           limbs.leftArm.rotation.z*=.7;
           limbs.rightArm.rotation.z*=.7;
         }
-        if(Math.abs(pivot.rotation.z)<.01){pivot.rotation.z=0;pivot.rotation.x=0;pivot.position.y=1.05;kwgRagdollStarted=0;}
+        if(Math.abs(pivot.rotation.z)<.01&&Math.abs(pivot.rotation.y)<.01){pivot.rotation.set(0,0,0);pivot.position.y=1.05;kwgRagdollStarted=0;}
       }
       return false;
     }
@@ -12450,7 +12540,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         rotationY:player.rotation.y,walkClock:player.userData.walkClock||0,
         verticalVelocity:velocityY,isMoving,isGrounded,
         stompAngle:kwgStompAvatar===player&&kwgStompPivot&&!kwgDeadUntil&&!kwgKnockedUntil?kwgStompPivot.rotation.x:0,
-        ragdollPose:kwgDeadUntil?1:kwgKnockedUntil?.6:0
+        ragdollPose:kwgDeadUntil?1:kwgKnockedUntil?.6:0,
+        ragdollX:kwgDeadUntil||kwgKnockedUntil?player.userData.kwgStompPivot?.rotation.x||0:0,
+        ragdollY:kwgDeadUntil||kwgKnockedUntil?player.userData.kwgStompPivot?.rotation.y||0:0,
+        ragdollZ:kwgDeadUntil||kwgKnockedUntil?player.userData.kwgStompPivot?.rotation.z||0:0,
+        health:kwgHealth
       });
     }
 
