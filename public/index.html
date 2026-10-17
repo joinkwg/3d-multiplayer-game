@@ -1839,29 +1839,9 @@ body.kwg-thumbnail-camera #kwg-audio-dock{display:none!important}
 
 /* KWG V3.33.2 — Studio Settings field consistency.
    Match Cloud Speed to World Name / Description input surfaces. */
-body.kwg-editing #kwg-settings-environment #cloud-speed-input{
-  box-sizing:border-box!important;
-  width:130px!important;
-  min-width:0!important;
-  max-width:57%!important;
-  height:36px!important;
-  padding:7px 10px!important;
-  border:2px solid #57758d!important;
-  border-radius:0!important;
-  background:#132132!important;
-  color:#f0f5e9!important;
-  font-family:'Pixelify Sans','Courier New',monospace!important;
-  font-size:12px!important;
-  line-height:1.3!important;
-  box-shadow:inset 3px 3px 0 #0b1420!important;
-  outline-offset:2px;
-}
-body.kwg-editing #kwg-settings-environment #cloud-speed-input:hover{
-  border-color:#83a6b9!important;
-}
-body.kwg-editing #kwg-settings-environment #cloud-speed-input:focus-visible{
-  outline:2px dashed #f9cb65!important;
-}
+
+
+
 
     /* V3.34 — One consistent pixel loading dialog throughout KWG. */
     #kwg-loading-overlay{
@@ -3109,8 +3089,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   <div id="hud">
     <button class="hud-btn kwg-control-icon" id="toggle-edit-btn" title="Enable Edit Mode" aria-label="Enable Edit Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M5 15l10-10 4 4-10 10H5zM13 7l4 4"/></svg><span class="kwg-hud-button-label" id="kwg-edit-mode-label">EDIT</span></button>
     <button class="hud-btn kwg-control-icon" id="respawn-btn" title="Respawn" aria-label="Respawn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 1-3-6M20 4v7h-7"/></svg><span class="kwg-hud-button-label">RESPAWN</span></button>
-
-    <button style="display:none" class="hud-btn kwg-control-icon" id="kwg-open-pets-btn" title="Pets Inventory" aria-label="Pets Inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="8" r="1.5"/><circle cx="12" cy="5" r="1.5"/><circle cx="17" cy="8" r="1.5"/><circle cx="19" cy="13" r="1.5"/><path d="M8 14c1.3-2 2.5-2.8 4-2.8s2.7.8 4 2.8c3.4 4.7-2.1 6.2-4 4.6-1.9 1.6-7.4.1-4-4.6z"/></svg><span class="kwg-hud-button-label">PETS</span></button>
     <button class="hud-btn kwg-control-icon" id="leave-world-btn" title="Leave World" aria-label="Leave World"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg><span class="kwg-hud-button-label">LEAVE</span></button>
     <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
   </div>
@@ -3235,7 +3213,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       </div>
       <div id="kwg-place-dispenser-properties" class="kwg-enemy-properties" style="display:none">
         <div class="kwg-enemy-props-title">TOOL DISPENSER PRESET</div>
-        <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-place-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option></select></label>
+        <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-place-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option><option value="laser">Laser Gun</option><option value="ufo">UFO</option></select></label>
       </div>
       <div id="kwg-place-health-properties" class="kwg-enemy-properties" style="display:none">
         <div class="kwg-enemy-props-title">HEALTH BLOCK PRESET</div>
@@ -3303,7 +3281,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           </div>
           <div id="kwg-tool-dispenser-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">TOOL DISPENSER SETTINGS</div>
-            <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option></select></label>
+            <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option><option value="laser">Laser Gun</option><option value="ufo">UFO</option></select></label>
             <p class="kwg-recolor-help">Touch to collect this tool. Press 1–9 to equip it and click to fire.</p>
           </div>
           <div id="kwg-health-properties" class="kwg-enemy-properties" style="display:none">
@@ -3341,20 +3319,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         <input type="color" id="sky-color-input" value="#1e1e7b">
       </div>
 
-      <div class="tool-row">
-        <label>Clouds Enabled:</label>
-        <input type="checkbox" id="clouds-enabled-checkbox" checked>
-      </div>
-
-      <div class="tool-row">
-        <label>Cloud Speed:</label>
-        <input type="number" id="cloud-speed-input" value="1.0" step="0.1" min="0" max="10">
-      </div>
-
-      <div class="tool-row">
-        <label>Cloud Color:</label>
-        <input type="color" id="cloud-color-input" value="#ffffff">
-      </div>
+      <div class="tool-row"><label for="kwg-env-brightness">Brightness:</label><input type="range" id="kwg-env-brightness" min="0.4" max="2" step="0.05" value="1"></div>
+      <div class="tool-row"><label for="kwg-env-saturation">Saturation:</label><input type="range" id="kwg-env-saturation" min="0" max="2" step="0.05" value="1"></div>
+      <div class="tool-row"><label for="kwg-env-resolution">Resolution:</label><select id="kwg-env-resolution"><option value="120p">120p</option><option value="240p">240p</option><option value="480p">480p</option><option value="720p">720p</option><option value="1080p" selected>1080p</option></select></div>
+      <div class="tool-row"><label for="kwg-env-light-color">Light Color:</label><input type="color" id="kwg-env-light-color" value="#ffffff"></div>
+      <div class="tool-row"><label for="kwg-env-light-direction">Light Direction:</label><select id="kwg-env-light-direction"><option value="morning">Morning (East)</option><option value="noon" selected>Noon (Overhead)</option><option value="evening">Evening (West)</option><option value="north">North</option><option value="south">South</option></select></div>
     </div>
   </div>
 
@@ -3636,6 +3605,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         health_pickup:[[530,.06,'sine',.14,670],[780,.1,'triangle',.1,950]],
         pistol:[[210,.06,'square',.19,100],[92,.08,'sawtooth',.13,60]],
         minigun:[[195,.038,'square',.13,90]],
+        laser:[[850,.10,'sawtooth',.10,330]],
+        ufo:[[1100,.15,'sawtooth',.15,175]],
         sniper_shot:[[680,.04,'square',.11,190],[160,.11,'sawtooth',.13,75]],
         tool_pickup:[[490,.055,'triangle',.12,760],[820,.07,'square',.11,1000]],
         hit_enemy:[[230,.055,'triangle',.13,90]],
@@ -3809,7 +3780,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     let loggedInUsername = null;
     let localPlayerAvatar = null;
     let currentCheckpoint = null;
-    let cloudRotationSpeedMultiplier = 1.0;
     let currentWorldData = null;
     let isAdmin = false;
     let canEditCurrentWorld = false;
@@ -5581,15 +5551,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.body.appendChild(kwgWorldViewport);
     const kwgWorldCanvasHost = document.getElementById('kwg-world-canvas');
     kwgWorldCanvasHost.appendChild(renderer.domElement);
+    let kwgRenderResolution='1080p';
     function resizeWorldViewport() {
       const rect = kwgWorldCanvasHost.getBoundingClientRect();
       const width = Math.max(1,Math.round(rect.width));
       const height = Math.max(1,Math.round(rect.height));
-      if(renderer.domElement.width === width && renderer.domElement.height === height &&
-         Math.abs(camera.aspect-width/height)<0.0001) return;
-      camera.aspect = width/height;
+      const targetHeight=Number(String(kwgRenderResolution||'1080p').replace('p',''))||1080;
+      const factor=Math.min(1,targetHeight/height);
+      const renderW=Math.max(1,Math.round(width*factor)),renderH=Math.max(1,Math.round(height*factor));
+      if(renderer.domElement.width===renderW&&renderer.domElement.height===renderH&&
+         Math.abs(camera.aspect-width/height)<0.0001)return;
+      camera.aspect=width/height;
       camera.updateProjectionMatrix();
-      renderer.setSize(width,height,false);
+      renderer.setPixelRatio(1);
+      renderer.setSize(renderW,renderH,false);
+      renderer.domElement.style.width='100%';renderer.domElement.style.height='100%';
     }
     // Pointer positions must use the canvas rectangle after the viewport has moved/resized.
     function updateWorldMouseFromPointer(e) {
@@ -5606,72 +5582,30 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const light = new THREE.DirectionalLight(0xffffff, 1.1);
     light.position.set(15, 30, 20);
     scene.add(light);
-    scene.add(new THREE.AmbientLight(0x707070));
+    const kwgAmbientLight=new THREE.AmbientLight(0x707070,1);
+    scene.add(kwgAmbientLight);
+    function kwgApplyEnvironment(settings={}){
+      const brightness=Math.max(.4,Math.min(2,Number.isFinite(Number(settings.brightness))&&Number(settings.brightness)>0?Number(settings.brightness):1));
+      const saturation=Math.max(0,Math.min(2,settings.saturation!==undefined&&Number.isFinite(Number(settings.saturation))?Number(settings.saturation):1));
+      const resolution=['120p','240p','480p','720p','1080p'].includes(settings.resolution)?settings.resolution:'1080p';
+      const color=/^#[0-9a-f]{6}$/i.test(settings.lightColor||'')?settings.lightColor:'#ffffff';
+      const direction=['morning','noon','evening','north','south'].includes(settings.lightDirection)?settings.lightDirection:'noon';
+      renderer.domElement.style.filter=`saturate(${saturation}) brightness(${brightness})`;
+      light.color.set(color);light.intensity=1.1;
+      const dirs={morning:[30,18,0],noon:[15,30,20],evening:[-30,18,0],north:[0,25,-30],south:[0,25,30]};
+      light.position.set(...dirs[direction]);
+      for(const [id,value] of [['kwg-env-brightness',brightness],['kwg-env-saturation',saturation],['kwg-env-resolution',resolution],['kwg-env-light-color',color],['kwg-env-light-direction',direction]]){
+        const input=document.getElementById(id);if(input&&String(input.value)!==String(value))input.value=value;
+      }
+      kwgRenderResolution=resolution;
+      resizeWorldViewport();
+    }
 
     const spawnMarkerGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 16);
     const spawnMarkerMat = new THREE.MeshBasicMaterial({ color: 0x8e44ad, wireframe: true });
     const spawnMarker = new THREE.Mesh(spawnMarkerGeo, spawnMarkerMat);
     spawnMarker.position.set(0, 0.05, 0);
     spawnMarker.visible=false; // V3.42: real Spawn parts replace the old marker.
-
-    // --- CIRCULATING SKY CLOUDS SYSTEM ---
-    const cloudsGroup = new THREE.Group();
-    scene.add(cloudsGroup);
-
-    let cloudsMaterial = new THREE.MeshLambertMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.85,
-      depthTest: true,
-      depthWrite: true
-    });
-
-    function createBlockyCloudsSystem() {
-      while (cloudsGroup.children.length > 0) {
-        cloudsGroup.remove(cloudsGroup.children[0]);
-      }
-
-      const numCloudClusters = 16;
-      const radius = 55;
-
-      for (let i = 0; i < numCloudClusters; i++) {
-        const cluster = new THREE.Group();
-        const angle = (i / numCloudClusters) * Math.PI * 2;
-        
-        const dist = radius + (Math.random() * 20 - 10);
-        const yHeight = 12 + (Math.random() * 4);
-
-        cluster.position.x = Math.cos(angle) * dist;
-        cluster.position.z = Math.sin(angle) * dist;
-        cluster.position.y = yHeight;
-
-        const numBlocks = 6 + Math.floor(Math.random() * 6);
-        for (let b = 0; b < numBlocks; b++) {
-          const w = 4 + Math.random() * 5;
-          const h = 1.8 + Math.random() * 1.5;
-          const d = 4 + Math.random() * 5;
-
-          const blockMesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cloudsMaterial);
-          blockMesh.position.set(
-            (Math.random() - 0.5) * 8,
-            (Math.random() - 0.5) * 1.2,
-            (Math.random() - 0.5) * 8
-          );
-          cluster.add(blockMesh);
-        }
-
-        cloudsGroup.add(cluster);
-      }
-    }
-
-    createBlockyCloudsSystem();
-
-    function updateCloudsAppearance(enabled, hexColor) {
-      cloudsGroup.visible = enabled !== false;
-      if (hexColor) {
-        cloudsMaterial.color.set(hexColor);
-      }
-    }
 
     // --- HAT CREATOR HELPER ---
     function createHatMesh(hatType) {
@@ -8391,7 +8325,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const modal=document.getElementById('kwg-pet-inventory-modal');
       modal.classList.remove('open');modal.setAttribute('aria-hidden','true');
     }
-    document.getElementById('kwg-open-pets-btn').addEventListener('click',kwgOpenPetsInventory);
+    document.getElementById('kwg-open-pets-btn')?.addEventListener('click',kwgOpenPetsInventory);
     document.getElementById('kwg-close-pets-btn').addEventListener('click',kwgClosePetsInventory);
     document.getElementById('kwg-unequip-pet-btn').addEventListener('click',()=>kwgEquipPet(null));
     document.getElementById('kwg-pet-inventory-modal').addEventListener('click',e=>{
@@ -8450,6 +8384,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
       kwgSyncRemoteHeldTool(p.mesh,pData.equippedTool);
+      if(pData.equippedTool==='ufo')kwgUfoBeamVisual(p.mesh,Object.values(currentWorldData?.blocks||{}),performance.now());
       if(pData.equippedTool)kwgAnimateHeldWeapon(p.mesh,pData.equippedTool,performance.now(),false);
       // Other visitors see the front flip too, without rotating the physics root.
       const ragdoll=Number(pData.ragdollPose)||0;
@@ -8822,16 +8757,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       scene.background.set(skyHex);
       document.getElementById('sky-color-input').value = skyHex; kwgSyncRGBField('sky-color-input');
 
-      const cloudsEnabled = world.cloudsEnabled !== false;
-      const cloudSpeed = (world.cloudSpeed !== undefined) ? world.cloudSpeed : 1.0;
-      const cloudColorHex = world.cloudColor || '#ffffff';
-
-      document.getElementById('clouds-enabled-checkbox').checked = cloudsEnabled;
-      document.getElementById('cloud-speed-input').value = cloudSpeed;
-      document.getElementById('cloud-color-input').value = cloudColorHex; kwgSyncRGBField('cloud-color-input');
-      cloudRotationSpeedMultiplier = parseFloat(cloudSpeed) || 0;
-
-      updateCloudsAppearance(cloudsEnabled, cloudColorHex);
+      kwgApplyEnvironment(world);
 
       // The server selects each player's join spawn so other players see
       // the exact same starting position. Older servers still fall back locally.
@@ -8909,9 +8835,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if (settings.spawnPoint) {
         spawnMarker.position.set(settings.spawnPoint.x, settings.spawnPoint.y, settings.spawnPoint.z);
       }
-      if (settings.cloudsEnabled !== undefined || settings.cloudColor) {
-        updateCloudsAppearance(settings.cloudsEnabled !== false, settings.cloudColor || document.getElementById('cloud-color-input').value);
-      }
+      kwgApplyEnvironment(currentWorldData);
     });
 
     // --- EDIT MODE CONTROLS & GIZMOS & SELECTION OUTLINES ---
@@ -9772,7 +9696,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const el=document.getElementById(id);
       el.value=String(kwgTransparencyValue(id));
     }
-    const kwgToolKind=value=>value==='minigun'?'minigun':'pistol';
+    const kwgToolKind=value=>['pistol','minigun','laser','ufo'].includes(value)?value:'pistol';
     const kwgEnemyCharacter=value=>['devil','sniper','hops','spider','alien','bot_bus'].includes(value)?value:'devil';
     const kwgEnemyDefaults={noticeRange:18,enemySpeed:3,enemyCount:1,enemyKillable:true,enemyRespawn:5,enemyDamage:25};
     function kwgEnemyNumber(value,min,max,fallback,integer=false){
@@ -9903,30 +9827,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     });
 
-    document.getElementById('clouds-enabled-checkbox').addEventListener('change', (e) => {
-      const enabled = e.target.checked;
-      updateCloudsAppearance(enabled, document.getElementById('cloud-color-input').value);
-      if (currentWorldName) {
-        stageWorldSettings({ cloudsEnabled: enabled });
-      }
-    });
-
-    document.getElementById('cloud-speed-input').addEventListener('input', (e) => {
-      const spd = parseFloat(e.target.value);
-      cloudRotationSpeedMultiplier = isNaN(spd) ? 0 : spd;
-      if (currentWorldName) {
-        stageWorldSettings({ cloudSpeed: cloudRotationSpeedMultiplier });
-      }
-    });
-
-    document.getElementById('cloud-color-input').addEventListener('input', (e) => {
-      const color = e.target.value;
-      updateCloudsAppearance(document.getElementById('clouds-enabled-checkbox').checked, color);
-      if (currentWorldName) {
-        stageWorldSettings({ cloudColor: color });
-      }
-    });
-
+    for(const [id,key] of [['kwg-env-brightness','brightness'],['kwg-env-saturation','saturation'],
+      ['kwg-env-resolution','resolution'],['kwg-env-light-color','lightColor'],['kwg-env-light-direction','lightDirection']]){
+      document.getElementById(id).addEventListener('input',e=>{
+        if(!currentWorldData||!canEditCurrentWorld)return;
+        currentWorldData[key]=e.target.value;
+        kwgApplyEnvironment(currentWorldData);
+        stageWorldSettings({[key]:key==='brightness'||key==='saturation'?Number(e.target.value):e.target.value});
+      });
+    }
 
     // V3.36: Every game color swatch has one copy/paste friendly RGB field.
     // Native color inputs remain as optional swatches; RGB text is the primary editor.
@@ -11336,8 +11245,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // V26: session-only tools. Dispensers are persisted blocks; weapons reset
     // on leaving a world. Hotbar order is stable; keys 1-9 toggle slots.
     const kwgTools=[];let kwgEquippedTool=null,kwgLastShot=0,kwgFireHeld=false;
-    const kwgToolCooldown={pistol:390,minigun:95};
-    const kwgToolDamage={pistol:32,minigun:9};
+    const kwgToolCooldown={pistol:390,minigun:95,laser:245,ufo:1300};
+    const kwgToolDamage={pistol:32,minigun:9,laser:4,ufo:48};
+    let kwgLaserLockAt=0,kwgLaserTargetKey=null,kwgLaserLastTick=0;
     const kwgAimNdc=new THREE.Vector2(0,0);
     const kwgToolPickupCooldowns=new Map();
     // V28: blocky, arcade-style hit feedback (not photo-realistic gore).
@@ -11413,11 +11323,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgDustPuffs.length=0;
     }
     const kwgShotTracers=[];
-    function kwgShowShotTracer(start,end,color=0xffd67a){
+    function kwgShowShotTracer(start,end,color=0xffd67a,lifetime=135){
       const geom=new THREE.BufferGeometry().setFromPoints([start,end]);
       const mat=new THREE.LineBasicMaterial({color,transparent:true,opacity:.9,depthWrite:false});
       const line=new THREE.Line(geom,mat);line.renderOrder=100;scene.add(line);
-      kwgShotTracers.push({line,until:performance.now()+135});
+      kwgShotTracers.push({line,until:performance.now()+lifetime});
     }
     function kwgUpdateShotTracers(){
       const now=performance.now();
@@ -11434,11 +11344,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const btn=document.createElement('button');btn.type='button';btn.className='kwg-tool-slot';
         btn.setAttribute('aria-pressed',String(kwgEquippedTool===kind));
         btn.title=`${kwgEquippedTool===kind?'Unequip':'Equip'} ${kind} (${index+1})`;
-        const glyph=document.createElement('span');glyph.className='kwg-tool-glyph';glyph.textContent=kind==='minigun'?'▤':'⌁';
-        const label=document.createElement('span');label.textContent=`${index+1} ${kind==='minigun'?'MINIGUN':'PISTOL'}`;
+        const glyph=document.createElement('span');glyph.className='kwg-tool-glyph';glyph.textContent=({minigun:'▤',laser:'⚡',ufo:'◉',pistol:'⌁'})[kind];
+        const label=document.createElement('span');label.textContent=`${index+1} ${({minigun:'MINIGUN',laser:'LASER GUN',ufo:'UFO',pistol:'PISTOL'})[kind]}`;
         btn.append(glyph,label);btn.addEventListener('click',()=>kwgToggleToolSlot(index));bar.appendChild(btn);
       });
-      document.getElementById('kwg-tool-crosshair')?.classList.toggle('kwg-aiming',!!kwgEquippedTool);
+      document.getElementById('kwg-tool-crosshair')?.classList.toggle('kwg-aiming',!!kwgEquippedTool&&kwgEquippedTool!=='ufo');
+      let help=document.getElementById('kwg-ufo-help');
+      if(!help){help=document.createElement('div');help.id='kwg-ufo-help';help.style.cssText='position:fixed;bottom:102px;left:50%;transform:translateX(-50%);padding:7px 11px;background:#162534e8;border:2px solid #91e9e3;border-radius:7px;color:#cffff6;font:bold 11px monospace;z-index:40;pointer-events:none;white-space:nowrap';document.body.appendChild(help);}
+      help.textContent='UFO: W/S FLY  •  A/D TURN  •  SPACE UP  •  SHIFT DOWN  •  CLICK ZAP';
+      help.style.display=kwgEquippedTool==='ufo'&&!!currentWorldName&&!isEditMode&&!kwgDeadUntil?'block':'none';
     }
     // V27: visible tool in the player's right hand. Kept on the arm pivot so
     // it follows walk/jump/stomp animations, never floats at the avatar origin.
@@ -11453,7 +11367,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const group=new THREE.Group();group.name='kwg-held-'+kind;
       const dark=new THREE.MeshLambertMaterial({color:0x344254});
       const steel=new THREE.MeshLambertMaterial({color:0x98a7b9});
-      const accent=new THREE.MeshLambertMaterial({color:kind==='minigun'?0xf4b85c:0x71c8f0});
+      const accent=new THREE.MeshLambertMaterial({color:kind==='minigun'?0xf4b85c:kind==='laser'?0xff475f:0x71c8f0});
       const piece=(w,h,d,x,y,z,mat)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);group.add(m);return m;};
       if(kind==='minigun'){
         piece(.30,.24,.47,0,.01,.22,dark);
@@ -11465,6 +11379,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         piece(.29,.18,.18,0,0,.87,accent);
         piece(.14,.25,.16,0,-.21,-.03,dark);
         group.userData.barrels=barrels;
+      }else if(kind==='laser'){
+        piece(.29,.25,.52,0,.01,.24,dark);piece(.19,.16,.39,0,.01,.64,accent);
+        piece(.13,.26,.14,0,-.22,0,steel);piece(.26,.12,.16,0,.16,.20,accent);
       }else{
         piece(.23,.18,.45,0,.02,.23,dark);
         piece(.12,.11,.25,0,.025,.57,steel);
@@ -11473,8 +11390,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       const flash=new THREE.Group();
       const sparkMat=new THREE.MeshBasicMaterial({color:0xffec83,depthWrite:false});
-      const spark=new THREE.Mesh(new THREE.OctahedronGeometry(kind==='minigun'?.17:.23,0),sparkMat);
-      flash.add(spark);flash.position.set(0,0,kind==='minigun'?1.02:.74);
+      const spark=new THREE.Mesh(new THREE.OctahedronGeometry(kind==='minigun'?.17:kind==='laser'?.16:.23,0),sparkMat);
+      flash.add(spark);flash.position.set(0,0,kind==='minigun'?1.02:kind==='laser'?.95:.74);
       flash.visible=false;group.add(flash);group.userData.flash=flash;
       group.position.set(-.03,-.72,.28);group.rotation.x=.72;
       return group;
@@ -11489,16 +11406,57 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(arm)arm.rotation.set(0,0,0);
       }
     }
+    // V33: the UFO is a rideable tool, not a rifle. It is attached below
+    // the avatar's feet and follows the player's authoritative position.
+    function kwgMakePlayerUfo(){
+      const ship=kwgAlienUfoModel();ship.name='kwg-player-ufo';
+      ship.position.set(0,-.48,0);
+      const beam=new THREE.Mesh(new THREE.CylinderGeometry(.95,1.65,1,18,1,true),
+        new THREE.MeshBasicMaterial({color:0x85ffeb,transparent:true,opacity:.16,depthWrite:false,side:THREE.DoubleSide}));
+      beam.name='kwg-player-ufo-beam';ship.add(beam);beam.visible=false;
+      ship.userData.beam=beam;return ship;
+    }
+    function kwgSyncUfoRide(avatar,kind){
+      if(!avatar)return;
+      let ship=avatar.userData.kwgPlayerUfo;
+      if(kind!=='ufo'){
+        if(ship){avatar.remove(ship);ship.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});avatar.userData.kwgPlayerUfo=null;}
+        return;
+      }
+      if(!ship){ship=kwgMakePlayerUfo();avatar.add(ship);avatar.userData.kwgPlayerUfo=ship;}
+    }
+    function kwgUfoBeamVisual(avatar,blocks,now){
+      const ship=avatar?.userData.kwgPlayerUfo;if(!ship)return;
+      const beam=ship.userData.beam;
+      if(!beam)return;
+      const origin=avatar.position.clone().add(new THREE.Vector3(0,-.65,0));
+      let bottom=origin.y-28;
+      for(const block of blocks){
+        if(block.canCollide===false)continue;
+        const a=getBlockAABB(block);
+        if(origin.x<a.minX||origin.x>a.maxX||origin.z<a.minZ||origin.z>a.maxZ)continue;
+        if(a.maxY<=origin.y-.2&&a.maxY>bottom)bottom=a.maxY;
+      }
+      const height=Math.max(.05,origin.y-bottom);
+      beam.visible=height>.2;
+      beam.scale.y=height;
+      // Beam mesh is a child of the saucer; coordinates are saucer-local.
+      beam.position.y=-height/2-.17;
+      const firing=avatar===localPlayerAvatar&&now-kwgLastShot<220;
+      beam.material.color.setHex(firing?0xff3e57:0x8effe8);
+      beam.material.opacity=firing?.40:.13;
+    }
     function kwgSyncRemoteHeldTool(avatar,kind){
       if(!avatar)return;
       const arm=avatar.userData?.limbs?.rightArm;
       if(!arm)return;
       const old=avatar.userData.kwgRemoteTool;
+      kwgSyncUfoRide(avatar,kind);
       if(old?.userData.kind===kind&&old.parent===arm)return;
       if(old){old.parent?.remove(old);old.traverse(o=>{o.geometry?.dispose();if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});}
       avatar.userData.kwgRemoteTool=null;
       if(old)kwgResetHeldToolPose(avatar);
-      if(kind==='pistol'||kind==='minigun'){
+      if(kind==='pistol'||kind==='minigun'||kind==='laser'){
         const model=kwgMakeHeldTool(kind);model.userData.kind=kind;
         arm.add(model);avatar.userData.kwgRemoteTool=model;
       }
@@ -11506,7 +11464,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgSyncHeldTool(){
       const arm=localPlayerAvatar?.userData?.limbs?.rightArm;
       const kind=(!isEditMode&&!kwgDeadUntil&&currentWorldName)?kwgEquippedTool:null;
-      if(!arm||!kind){kwgRemoveHeldTool();return;}
+      kwgSyncUfoRide(localPlayerAvatar,kind);
+      if(!arm||!kind||kind==='ufo'){kwgRemoveHeldTool();return;}
       if(kwgHeldToolOwner===arm&&kwgHeldToolVisual?.userData.kind===kind)return;
       kwgRemoveHeldTool();
       kwgHeldToolVisual=kwgMakeHeldTool(kind);kwgHeldToolVisual.userData.kind=kind;
@@ -11516,7 +11475,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // muzzle flash and (for minigun) spinning barrel cluster.
     function kwgAnimateHeldWeapon(avatar,kind,now,local=false){
       const limbs=avatar?.userData?.limbs;
-      if(!limbs||!kind)return;
+      if(!limbs||!kind||kind==='ufo')return;
       const gun=local?kwgHeldToolVisual:avatar.userData.kwgRemoteTool;
       if(!gun||gun.userData.kind!==kind)return;
       const right=limbs.rightArm,left=limbs.leftArm;
@@ -11539,9 +11498,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       right.rotation.x+=(-1.07-pitch-recoil*.31-right.rotation.x)*ease;
       right.rotation.y+=(yaw-right.rotation.y)*ease;
       right.rotation.z+=(-.10-right.rotation.z)*ease;
-      left.rotation.x+=((kind==='minigun'?-1.04:-.46)-pitch*.5-left.rotation.x)*ease;
+      left.rotation.x+=((kind==='minigun'||kind==='laser'?-1.04:-.46)-pitch*.5-left.rotation.x)*ease;
       left.rotation.y+=(yaw*.60-left.rotation.y)*ease;
-      left.rotation.z+=((kind==='minigun'?.40:-.10)-left.rotation.z)*ease;
+      left.rotation.z+=((kind==='minigun'||kind==='laser'?.40:-.10)-left.rotation.z)*ease;
       gun.position.z=.28-recoil*(kind==='pistol'?.15:.065);
       gun.rotation.x=.72+recoil*(kind==='pistol'?.34:.15);
       const flash=gun.userData.flash;
@@ -11557,6 +11516,27 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const previous=kwgEquippedTool;
       kwgEquippedTool=kwgTools.includes(kind)?kind:null;
       if(previous!==kwgEquippedTool){
+        if(kwgEquippedTool==='ufo'&&localPlayerAvatar&&currentWorldData?.blocks){
+          const p=localPlayerAvatar.position;
+          const blocks=Object.values(currentWorldData.blocks);
+          // Take off gradually to the highest unobstructed level above the
+          // current spot. Under a roof, remain below it.
+          let lift=0;
+          for(let y=p.y+1.5;y<=p.y+5.8;y+=.35){
+            const obstructed=blocks.some(b=>{
+              if(b.canCollide===false)return false;
+              const a=getBlockAABB(b);
+              if(a.maxY<=p.y+.18)return false; // launch from a solid floor
+              return a.maxX>p.x-1.4&&a.minX<p.x+1.4&&a.maxZ>p.z-1.4&&a.minZ<p.z+1.4&&
+                a.maxY>y-.7&&a.minY<y+1;
+            });
+            if(obstructed)break;
+            lift=y-p.y;
+          }
+          p.y+=lift;
+          velocityY=0;isGrounded=false;
+        }
+        kwgLaserLockAt=0;kwgLaserTargetKey=null;kwgLaserLastTick=0;
         kwgFireHeld=false; // A held mouse button must not keep firing after a swap.
         kwgResetHeldToolPose(localPlayerAvatar);
       }
@@ -11568,6 +11548,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgEquipTool(kwgEquippedTool===kind?null:kind);
     }
     function kwgClearTools(){
+      kwgSyncUfoRide(localPlayerAvatar,null);
       kwgTools.length=0;kwgEquippedTool=null;kwgFireHeld=false;kwgToolPickupCooldowns.clear();kwgRenderTools();kwgRemoveHeldTool();kwgResetHeldToolPose(localPlayerAvatar);
       for(const entry of kwgShotTracers){scene.remove(entry.line);entry.line.geometry.dispose();entry.line.material.dispose();}
       kwgShotTracers.length=0;
@@ -11583,9 +11564,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(!socket?.connected)continue;
         const pickupWorld=currentWorldName;
         socket.emit('tool_pickup',{worldName:pickupWorld,blockId:block.id},response=>{
-          if(!response?.success||pickupWorld!==currentWorldName||kwgTools.includes(kind))return;
+          if(!response?.success||pickupWorld!==currentWorldName||response.kind!==kind||kwgTools.includes(kind))return;
           kwgTools.push(kind);kwgEquippedTool=kind;kwgRenderTools();kwgSyncHeldTool();kwgAudio.play('tool_pickup');
-          showToast(`${kind==='minigun'?'Minigun':'Pistol'} collected! Press ${kwgTools.length} to equip.`);
+          showToast(`${({pistol:'Pistol',minigun:'Minigun',laser:'Laser Gun',ufo:'UFO'})[kind]} collected! Press ${kwgTools.length} to equip.`);
         });
       }
     }
@@ -11598,7 +11579,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgAnimateHeldWeapon(localPlayerAvatar,kind,now,true);
       // Mouse-position aiming lets players target enemies anywhere in the
       // third-person view; the reticle follows the cursor over the canvas.
-      const ray=new THREE.Raycaster();ray.setFromCamera(kwgAimNdc,camera);
+      const ray=new THREE.Raycaster();
+      if(kind==='ufo'){ray.set(localPlayerAvatar.position.clone().add(new THREE.Vector3(0,-.65,0)),new THREE.Vector3(0,-1,0));}
+      else ray.setFromCamera(kwgAimNdc,camera);
       ray.far=115;
       const solids=Object.values(worldBlocks).filter(mesh=>{
         const b=currentWorldData?.blocks?.[mesh.userData.blockId];return b&&b.canCollide!==false;
@@ -11635,23 +11618,30 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         }
       }
       const tracerEnd=ray.ray.origin.clone().addScaledVector(ray.ray.direction,maxDistance);
-      kwgShowShotTracer(localPlayerAvatar.position.clone().add(new THREE.Vector3(0,1.35,0)),tracerEnd,kind==='minigun'?0xffe9a3:0xffc665);
+      if(kind==='laser'){
+        const key=best?`${best.kind}:${best.id}:${best.index??''}:${best.robot?.mesh?.uuid||''}`:null;
+        if(!key||key!==kwgLaserTargetKey){kwgLaserLockAt=now;kwgLaserTargetKey=key;}
+        const ramp=key?Math.min(1,(now-kwgLaserLockAt)/4700):0;
+        kwgToolDamage.laser=Math.round(2+6*ramp);
+      }
+      kwgShowShotTracer(kind==='ufo'?ray.ray.origin:localPlayerAvatar.position.clone().add(new THREE.Vector3(0,1.35,0)),tracerEnd,
+        kind==='laser'?0xff334d:kind==='ufo'?0x92ffee:kind==='minigun'?0xffe9a3:0xffc665,kind==='laser'?280:kind==='ufo'?370:135);
       if(best?.kind==='robot'){
          const bot=best.robot;bot.health-=kwgToolDamage[kind];bot.hitUntil=now+330;
-         kwgBlockyHitSplash(tracerEnd,kind==='minigun'?7:13);kwgAudio.play('hit_enemy');
+         kwgBlockyHitSplash(tracerEnd,kind==='minigun'||kind==='laser'?7:13);kwgAudio.play('hit_enemy');
          kwgShowEnemyHealth(bot,'devil');
          if(bot.health<=0)kwgDestroyBusRobot(bot);
        }else if(best?.kind==='enemy'){
         // Can Be Stomped controls stomp immunity, not weapon damage.
         // Hops is immune to stomps but must remain defeatable by tools.
         best.slot.weaponHealth=(best.slot.weaponHealth??100)-kwgToolDamage[kind];
-        kwgBlockyHitSplash(tracerEnd,kind==='minigun'?7:13);
+        kwgBlockyHitSplash(tracerEnd,kind==='minigun'||kind==='laser'?7:13);
         kwgAudio.play('hit_enemy');
         kwgShowEnemyHealth(best.slot,best.entry.block.enemyCharacter);
         best.slot.hitUntil=now+370;best.slot.hitSide=Math.random()<.5?-1:1;
         if(best.slot.weaponHealth<=0){best.slot.defeatMethod='weapon';kwgDefeatEnemy(best.id,best.index,true);}
       }else if(best?.kind==='player'&&socket?.connected){
-        kwgBlockyHitSplash(tracerEnd,kind==='minigun'?6:11);
+        kwgBlockyHitSplash(tracerEnd,kind==='minigun'||kind==='laser'?6:11);
         const start=ray.ray.origin,dir=ray.ray.direction;
         socket.emit('tool_hit_player',{worldName:currentWorldName,targetId:best.id,toolKind:kind,
           origin:{x:start.x,y:start.y,z:start.z},direction:{x:dir.x,y:dir.y,z:dir.z}});
@@ -11670,8 +11660,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgUpdateAimFromPointer(e);
       kwgFireHeld=true;kwgFireTool();
     });
-    window.addEventListener('pointerup',()=>{kwgFireHeld=false;});
-    window.addEventListener('blur',()=>{kwgFireHeld=false;});
+    window.addEventListener('pointerup',()=>{kwgFireHeld=false;kwgLaserLockAt=0;kwgLaserTargetKey=null;});
+    window.addEventListener('blur',()=>{kwgFireHeld=false;kwgLaserLockAt=0;kwgLaserTargetKey=null;});
     window.addEventListener('keydown',e=>{
       if(!currentWorldName||isEditMode||e.repeat||e.ctrlKey||e.altKey||e.metaKey||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
       const index=Number(e.key)-1;
@@ -12082,6 +12072,33 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       return true;
     }
+    // Bus-sized oriented footprint. This is intentionally much wider than
+    // the devil capsule and also applies when the bus is parked.
+    function kwgResolveBusPlayerCollision(bus,player,blocks){
+      if(!bus||!player||Math.abs(player.position.y-bus.position.y)>2.6)return false;
+      const dx=player.position.x-bus.position.x,dz=player.position.z-bus.position.z;
+      const sin=Math.sin(bus.rotation.y),cos=Math.cos(bus.rotation.y);
+      const x=dx*cos-dz*sin,z=dx*sin+dz*cos;
+      const halfW=1.20+.38,halfL=2.25+.38;
+      if(Math.abs(x)>=halfW||Math.abs(z)>=halfL)return false;
+      // Push toward the nearest side rather than allowing the player to
+      // remain inside the vehicle; walls still block the correction.
+      const gapX=halfW-Math.abs(x),gapZ=halfL-Math.abs(z);
+      const pushedX=gapX<gapZ?(x<0?-halfW:halfW):x;
+      const pushedZ=gapX<gapZ?z:(z<0?-halfL:halfL);
+      const oldX=player.position.x,oldZ=player.position.z;
+      player.position.x=bus.position.x+pushedX*cos+pushedZ*sin;
+      player.position.z=bus.position.z-pushedX*sin+pushedZ*cos;
+      resolveHorizontalCollisionsMP(player.position,blocks,oldX,oldZ);
+      return true;
+    }
+    function kwgBusHasFrontContact(bus,player){
+      const dx=player.position.x-bus.position.x,dz=player.position.z-bus.position.z;
+      const sin=Math.sin(bus.rotation.y),cos=Math.cos(bus.rotation.y);
+      const side=dx*cos-dz*sin,front=dx*sin+dz*cos;
+      return Math.abs(side)<1.60&&front>-1.2&&front<3.0&&
+        Math.abs(player.position.y-bus.position.y)<2.5;
+    }
     function kwgDestroyBusRobot(robot){
       if(!robot||robot.dead)return;
       robot.dead=true;
@@ -12142,34 +12159,54 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     }
     function kwgBotBusStep(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ,playerAlive){
-      const npc=slot.mesh;
-      const doors=npc.userData.busDoors;
+      const npc=slot.mesh,doors=npc.userData.busDoors;
       if(!slot.robots)slot.robots=[];
+      // Resolve penetration even while parked and when the player is idle.
+      // The previous 2.4-unit chase cutoff stopped the bus before impact.
+      const canRam=playerAlive&&chasing&&kwgBusHasFrontContact(npc,player);
+      if(canRam&&now>=(slot.busNextRam||0)){
+        slot.busNextRam=now+1900;
+        if(kwgEnemyHitPlayer(Math.max(40,props.enemyDamage),npc.position))kwgAudio.play('bus_ram');
+      }
+      kwgResolveBusPlayerCollision(npc,player,blocks);
       if(!slot.busDeployed&&chasing){
         const dx=player.position.x-npc.position.x,dz=player.position.z-npc.position.z;
         const distance=Math.hypot(dx,dz);
         const heading=Math.atan2(dx,dz);
-        // Broad AABB checks mean the bus cannot squeeze through human gaps.
-        const step=Math.min(distance,Math.max(3.7,props.enemySpeed*1.65)*dt);
-        const nx=npc.position.x+Math.sin(heading)*step,nz=npc.position.z+Math.cos(heading)*step;
-        const ground=kwgEnemyGroundY(nx,npc.position.y+1,nz,blocks,3.8);
-        const blockedClose=distance<=2.4&&!kwgRayWorldClear(
-          npc.position.clone().add(new THREE.Vector3(0,1.3,0)),
-          player.position.clone().add(new THREE.Vector3(0,1.0,0)),blocks);
-        const reachable=distance>2.4&&Number.isFinite(ground)&&Math.abs(ground-npc.position.y)<.40&&
-          Math.hypot(nx-centerX,nz-centerZ)<props.noticeRange-.5&&kwgBusCanFit(nx,nz,ground,blocks);
+        npc.rotation.y=heading;
+        const speed=Math.max(4.2,props.enemySpeed*1.8);
+        const step=Math.min(distance, speed*dt);
+        const nx=npc.position.x+Math.sin(heading)*step;
+        const nz=npc.position.z+Math.cos(heading)*step;
+        // Probe down from the current height by up to 8 units. A bus on
+        // a raised spawn platform must be able to drive off the edge.
+        const ground=kwgEnemyGroundY(nx,npc.position.y+.6,nz,blocks,8.0);
+        const withinHome=Math.hypot(nx-centerX,nz-centerZ)<props.noticeRange-.7;
+        const drop=Number.isFinite(ground)?npc.position.y-ground:Infinity;
+        const rise=Number.isFinite(ground)?ground-npc.position.y:Infinity;
+        const reachable=withinHome&&Number.isFinite(ground)&&drop<7.5&&rise<.55&&
+          // Clearance is checked at current driving height first so a ledge
+          // does not become an impassable wall during the descent.
+          kwgBusCanFit(nx,nz,npc.position.y,blocks);
         if(reachable){
-          npc.rotation.y=heading;
-          npc.position.set(nx,ground,nz);
+          npc.position.x=nx;npc.position.z=nz;
+          // Descend smoothly; never hover/bob when stopped.
+          const desiredY=ground;
+          if(desiredY<npc.position.y){
+            const nextY=Math.max(desiredY,npc.position.y-Math.max(.12,dt*9));
+            if(kwgBusCanFit(nx,nz,nextY,blocks))npc.position.y=nextY;
+          }else if(desiredY>npc.position.y){npc.position.y=desiredY;}
           slot.busBlockedAt=0;
-          for(const wheel of npc.userData.wheels||[])wheel.rotation.x+=dt*7;
-        }else if(distance>2.4||blockedClose){
+          for(const wheel of npc.userData.wheels||[])wheel.rotation.x+=step*2.4;
+          // Front-bumper contact is checked after movement as well.
+          if(playerAlive&&kwgBusHasFrontContact(npc,player)&&now>=(slot.busNextRam||0)){
+            slot.busNextRam=now+1900;
+            if(kwgEnemyHitPlayer(Math.max(40,props.enemyDamage),npc.position))kwgAudio.play('bus_ram');
+          }
+          kwgResolveBusPlayerCollision(npc,player,blocks);
+        }else if(distance>1.0){
           if(!slot.busBlockedAt)slot.busBlockedAt=now;
-          if(now-slot.busBlockedAt>850){slot.busDeployed=true;slot.busDoorAt=now;slot.busDeployCount=0;}
-        }
-        if(distance<2.15&&!blockedClose&&Math.abs(player.position.y-npc.position.y)<2.5&&now>=(slot.busNextRam||0)){
-          slot.busNextRam=now+1900;
-          if(kwgEnemyHitPlayer(Math.max(40,props.enemyDamage),npc.position))kwgAudio.play('bus_ram');
+          if(now-slot.busBlockedAt>1150){slot.busDeployed=true;slot.busDoorAt=now;slot.busDeployCount=0;}
         }
       }
       if(slot.busDeployed){
@@ -12192,7 +12229,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         for(const robot of slot.robots)kwgRobotLaser(slot,robot,player,props,blocks,now,dt,playerAlive&&chasing);
       }
       if(!chasing){for(const robot of slot.robots){robot.lockAt=0;if(robot.beam)robot.beam.visible=false;}}
-      npc.userData.devilRig.position.y=.025*Math.sin(now*.003);
+      npc.userData.devilRig.position.y=0; // Heavy tires stay planted; no idle hovering.
       npc.userData.devilRig.rotation.z=now<(slot.hitUntil||0)?Math.sin(now*.06)*.11:0;
       if(npc.userData.devilNotice)npc.userData.devilNotice.visible=chasing&&now<(slot.noticeBubbleUntil||0);
     }
@@ -14228,6 +14265,34 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const player=localPlayerAvatar;
       const blocks=currentWorldData ? Object.values(currentWorldData.blocks) : [];
       if(kwgUpdateLifeMotion(delta,blocks))return;
+      if(!isEditMode&&kwgEquippedTool==='ufo'){
+        // W/S fly forward/back, A/D steer, Space ascend, Shift descend.
+        // The craft keeps the player above the local ground, never tunnels
+        // through a roof, and can descend again after unequipping.
+        if(keys['a']||keys['arrowleft'])player.rotation.y+=turnSpeed;
+        if(keys['d']||keys['arrowright'])player.rotation.y-=turnSpeed;
+        const forward=(keys['w']||keys['arrowup']?1:0)-(keys['s']||keys['arrowdown']?1:0);
+        const vertical=(keys[' ']?1:0)-(keys['shift']?1:0);
+        const speed=.16,oldX=player.position.x,oldZ=player.position.z,oldY=player.position.y;
+        const nx=oldX+Math.sin(player.rotation.y)*forward*speed;
+        const nz=oldZ+Math.cos(player.rotation.y)*forward*speed;
+        // Check a wide cross-section before translating the saucer.
+        const hullClear=(x,z,y)=>!blocks.some(b=>{
+          if(b.canCollide===false)return false;
+          const a=getBlockAABB(b);
+          return a.maxX>x-1.5&&a.minX<x+1.5&&a.maxZ>z-1.5&&a.minZ<z+1.5&&
+            a.maxY>y-.7&&a.minY<y+1.0;
+        });
+        if(hullClear(nx,nz,oldY)){player.position.x=nx;player.position.z=nz;}
+        const newY=Math.max(2.2,Math.min(110,oldY+vertical*.14));
+        if(hullClear(player.position.x,player.position.z,newY))player.position.y=newY;
+        velocityY=0;isGrounded=false;kwgAirJumps=0;kwgDoubleJumpStomp=false;
+        kwgUpdateBlink(player,performance.now());
+        updateAvatarAnimations(player,false,false,delta,undefined,0);
+        kwgSendPlayerMovement(player,forward!==0||vertical!==0);
+        kwgUfoBeamVisual(player,blocks,performance.now());
+        return;
+      }
 
       if (!isRightClicking) {
         if (keys['a']||keys['arrowleft']) player.rotation.y+=turnSpeed;
@@ -14381,17 +14446,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgUpdateEnemyRangeIndicator();
       if(!kwgFreeCamera.active) updateGizmoScreenScale();
       else updateWorldThumbnailCamera(delta);
-
-      if (localPlayerAvatar) {
-        // Sky-layer clouds follow the player instead of occupying fixed map space.
-        cloudsGroup.position.x = localPlayerAvatar.position.x;
-        cloudsGroup.position.z = localPlayerAvatar.position.z;
-        cloudsGroup.position.y = localPlayerAvatar.position.y;
-      }
-
-      if (cloudsGroup.visible && cloudRotationSpeedMultiplier > 0) {
-        cloudsGroup.rotation.y += delta * 0.02 * cloudRotationSpeedMultiplier;
-      }
 
       if (localPlayerAvatar && !kwgFreeCamera.active) {
         // Exact single-player camera: same distance, height, rotation, smoothing,
