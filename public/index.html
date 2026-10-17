@@ -2751,6 +2751,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
  .kwg-top-world-card .kwg-home-thumb{width:55px;height:49px;min-height:49px}
 }
 </style>
+
+<style id="kwg-v17-1-world-thumbnail-fixes">
+/* Match thumbnail edges to the combined text + action row height. */
+#home-pane .kwg-top-worlds-list .room-card{
+  grid-template-rows:auto auto!important;
+  align-items:stretch!important;
+}
+#home-pane .kwg-top-worlds-list .kwg-world-card-thumb{
+  grid-column:1!important;grid-row:1 / 3!important;
+  align-self:stretch!important;justify-self:stretch!important;
+  height:auto!important;min-height:0!important;aspect-ratio:auto!important;
+  position:relative!important;box-sizing:border-box!important;
+}
+#home-pane .kwg-top-worlds-list .kwg-world-card-thumb img{
+  position:absolute!important;inset:0!important;width:100%!important;height:100%!important;
+  object-fit:cover!important;
+}
+/* Keep card actions uniform even when only Like and Enter are present. */
+#home-pane .kwg-top-worlds-list .kwg-world-card-actions{align-self:end!important;}
+</style>
 </head>
 <body>
   <div id="kwg-loading-overlay" role="status" aria-live="polite" aria-atomic="true" aria-label="Loading" aria-hidden="true">
@@ -4457,7 +4477,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function makeWorldCard(w) {
       const card = document.createElement('div');
       card.className = 'room-card';
-      card.innerHTML = `<div class="kwg-world-card-thumb"><span>NO PHOTO</span></div><div class="room-info"><span class="room-title"></span><span class="room-description"></span><span class="room-meta"></span></div><div class="kwg-world-card-actions"><button class="world-like-btn ${w.likedByMe ? 'liked' : ''}">${w.likedByMe ? '♥' : '♡'} ${w.likes || 0}</button><button class="join-btn">Enter</button></div>`;
+      card.innerHTML = `<div class="kwg-world-card-thumb"><span>PREVIEW PENDING</span></div><div class="room-info"><span class="room-title"></span><span class="room-description"></span><span class="room-meta"></span></div><div class="kwg-world-card-actions"><button class="world-like-btn ${w.likedByMe ? 'liked' : ''}">${w.likedByMe ? '♥' : '♡'} ${w.likes || 0}</button><button class="join-btn">Enter</button></div>`;
       card.querySelector('.room-title').textContent = filterKWGUserText(w.displayName || w.name);
       card.querySelector('.room-description').textContent = filterKWGUserText(w.description || 'Explore this world');
       card.querySelector('.room-meta').textContent = `By ${filterKWGUserText(w.ownerUsername || 'Unknown')} • ${w.onlineCount} online • ♥ ${w.likes || 0}`;
@@ -4701,6 +4721,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgEquippedPet=res.selfPetKey||null;
         kwgSetWorldPet(socket.id,kwgEquippedPet);
         resetWorldInfoEditor(res.worldData,roomName);
+        if(canEditCurrentWorld&&!res.worldData?.thumbnailUrl){
+          setTimeout(()=>{if(currentWorldName===roomName)kwgEnsureSpawnThumbnail(false);},1300);
+        }
         document.getElementById('world-chat').style.display = 'block';
         startWorldIdleWatch();
         loadWorldChat();
@@ -4791,7 +4814,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
     socket.on('world_info_updated', info=>{
       if(!info || info.worldName!==currentWorldName)return;
-      if(currentWorldData)Object.assign(currentWorldData,{displayName:info.displayName,description:info.description,thumbnailUrl:info.thumbnailUrl});
+      if(currentWorldData)Object.assign(currentWorldData,{displayName:info.displayName,description:info.description,thumbnailUrl:info.thumbnailUrl,thumbnailAuto:info.thumbnailAuto===true});
       document.getElementById('current-room-text').textContent=filterKWGUserText(info.displayName||currentWorldName);
       if(!isEditMode)resetWorldInfoEditor(currentWorldData,currentWorldName);
     });
@@ -4847,7 +4870,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const completed=stagedWorldEdits.splice(0,count);
           for(const edit of completed){
             if(edit.eventName==='world_info_update') {
-              if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl});
+              if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl,thumbnailAuto:res.thumbnailAuto===true});
               kwgInfoOriginal={displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl};
               kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
               document.getElementById('current-room-text').textContent=filterKWGUserText(res.displayName);
@@ -4862,6 +4885,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         }
         const status=document.getElementById('save-status');
         if(status){status.textContent='All changes saved';setTimeout(()=>{if(!stagedWorldEdits.length&&status)status.style.display='none';},1400);}
+        if(canEditCurrentWorld&&(!currentWorldData?.thumbnailUrl||currentWorldData?.thumbnailAuto)){
+          await kwgEnsureSpawnThumbnail(true);
+        }
         return true;
       }finally{
         saveLoading.end();
@@ -8867,20 +8893,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgFreeCamera.keys.delete(e.key.toLowerCase());
     },true);
     window.addEventListener('blur',()=>kwgFreeCamera.keys.clear());
-    function captureWorldThumbnail(){
+    function captureWorldThumbnail(viewCamera=camera){
       const hidden=[spawnMarker,gizmoGroup,hoverOutlineGroup,selectionOutlineGroup,localPlayerAvatar,previewMesh,...Object.values(otherPlayers).map(p=>p.mesh),...Array.from(kwgWorldPets.values()).map(p=>p.mesh)].filter(Boolean);
       const was=hidden.map(o=>o.visible);
-      const previousAspect=camera.aspect;
+      const previousAspect=viewCamera.aspect;
+      const previousTarget=renderer.getRenderTarget();
       const w=960,h=540;
       const target=new THREE.WebGLRenderTarget(w,h,{depthBuffer:true});
       const pixels=new Uint8Array(w*h*4);
       try{
         hidden.forEach(o=>o.visible=false);
-        camera.aspect=w/h;camera.updateProjectionMatrix();
-        renderer.setRenderTarget(target);renderer.render(scene,camera);
+        viewCamera.aspect=w/h;viewCamera.updateProjectionMatrix();
+        renderer.setRenderTarget(target);renderer.render(scene,viewCamera);
         renderer.readRenderTargetPixels(target,0,0,w,h,pixels);
       }finally{
-        renderer.setRenderTarget(null);target.dispose();camera.aspect=previousAspect;camera.updateProjectionMatrix();
+        renderer.setRenderTarget(previousTarget);target.dispose();viewCamera.aspect=previousAspect;viewCamera.updateProjectionMatrix();
         hidden.forEach((o,i)=>o.visible=was[i]);
       }
       const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
@@ -8888,6 +8915,37 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       for(let y=0;y<h;y++)frame.data.set(pixels.subarray((h-1-y)*w*4,(h-y)*w*4),y*w*4);
       ctx.putImageData(frame,0,0);
       return canvas.toDataURL('image/jpeg',.79);
+    }
+    // Capture from the same spawn-facing camera angle used by normal gameplay.
+    // This never moves the player's actual camera or includes other players/editor gizmos.
+    function kwgCaptureSpawnThumbnail(){
+      const spawn=kwgChooseSpawnPosition(currentWorldData);
+      const view=new THREE.PerspectiveCamera(60,16/9,.1,1000);
+      view.position.set(spawn.x,spawn.y+3.5,spawn.z-6);
+      view.lookAt(spawn.x,spawn.y+1.2,spawn.z+7);
+      return captureWorldThumbnail(view);
+    }
+    let kwgAutoThumbnailPending=false;
+    async function kwgEnsureSpawnThumbnail(refresh=false){
+      if(kwgAutoThumbnailPending||!currentWorldName||!canEditCurrentWorld||!currentWorldData)return;
+      if(currentWorldData.thumbnailUrl&&!currentWorldData.thumbnailAuto)return; // preserve custom uploads
+      if(currentWorldData.thumbnailUrl&&!refresh)return;
+      const worldName=currentWorldName;
+      kwgAutoThumbnailPending=true;
+      try{
+        const thumbnailData=kwgCaptureSpawnThumbnail();
+        if(thumbnailData.length>2400000)throw new Error('Spawn screenshot exceeds upload limit.');
+        const res=await new Promise(resolve=>{
+          const timer=setTimeout(()=>resolve({success:false,message:'Thumbnail upload timed out.'}),22000);
+          socket.emit('set_auto_world_thumbnail',{worldName,thumbnailData},reply=>{clearTimeout(timer);resolve(reply);});
+        });
+        if(res?.success&&currentWorldName===worldName&&currentWorldData){
+          currentWorldData.thumbnailUrl=res.thumbnailUrl;
+          currentWorldData.thumbnailAuto=res.thumbnailAuto===true;
+          if(!kwgInfoDraft.thumbnailData){kwgInfoDraft.thumbnailUrl=res.thumbnailUrl;kwgInfoOriginal.thumbnailUrl=res.thumbnailUrl;refreshWorldInfoThumbnail();}
+        }else if(!res?.success){console.warn('Automatic spawn thumbnail:',res?.message||'Upload failed');}
+      }catch(err){console.warn('Could not capture automatic spawn thumbnail:',err);}
+      finally{kwgAutoThumbnailPending=false;}
     }
     kwgCameraUI.querySelector('#kwg-camera-cancel').addEventListener('click',stopWorldThumbnailCamera);
     kwgCameraUI.querySelector('#kwg-camera-capture').addEventListener('click',()=>{
