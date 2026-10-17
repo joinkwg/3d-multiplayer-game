@@ -3063,6 +3063,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   </div>
 
   <style>
+    #kwg-health-hud{width:150px;min-width:110px;box-sizing:border-box;background:#102437e8;border:2px solid #6788a2;padding:6px 8px;align-self:center;color:#e8f5ff;font-family:inherit;letter-spacing:.03em}
+    .kwg-health-top{display:flex;justify-content:space-between;gap:8px;font-size:9px;font-weight:800;white-space:nowrap}
+    .kwg-health-track{height:10px;background:#263544;border:1px solid #87a5b4;margin-top:4px;overflow:hidden}
+    #kwg-health-fill{height:100%;width:100%;background:#68d991;transition:width .12s linear,background-color .12s linear}
+    #kwg-health-state{font-size:9px;font-weight:bold;min-height:0;text-align:center;color:#ffc68b}
+    #kwg-health-state:empty{display:none}
     .kwg-enemy-properties{margin:9px 0;padding:10px;background:#122d46;border:1px solid #4d96c8;color:#e3f3ff}
     .kwg-enemy-props-title{font-size:10px;font-weight:900;color:#7bcaff;margin-bottom:9px;letter-spacing:.06em}
     .kwg-enemy-properties .kwg-recolor-field{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0;font-size:11px}
@@ -3087,6 +3093,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   <div id="hud">
     <button class="hud-btn kwg-control-icon" id="toggle-edit-btn" title="Enable Edit Mode" aria-label="Enable Edit Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M5 15l10-10 4 4-10 10H5zM13 7l4 4"/></svg><span class="kwg-hud-button-label" id="kwg-edit-mode-label">EDIT</span></button>
     <button class="hud-btn kwg-control-icon" id="respawn-btn" title="Respawn" aria-label="Respawn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 1-3-6M20 4v7h-7"/></svg><span class="kwg-hud-button-label">RESPAWN</span></button>
+    <div id="kwg-health-hud" role="status" aria-live="polite" aria-label="Player health">
+      <div class="kwg-health-top"><span>HEALTH</span><span id="kwg-health-value">100 / 100</span></div>
+      <div class="kwg-health-track"><div id="kwg-health-fill"></div></div>
+      <div id="kwg-health-state" aria-live="polite"></div>
+    </div>
     <button class="hud-btn kwg-control-icon" id="kwg-open-pets-btn" title="Pets Inventory" aria-label="Pets Inventory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="8" r="1.5"/><circle cx="12" cy="5" r="1.5"/><circle cx="17" cy="8" r="1.5"/><circle cx="19" cy="13" r="1.5"/><path d="M8 14c1.3-2 2.5-2.8 4-2.8s2.7.8 4 2.8c3.4 4.7-2.1 6.2-4 4.6-1.9 1.6-7.4.1-4-4.6z"/></svg><span class="kwg-hud-button-label">PETS</span></button>
     <button class="hud-btn kwg-control-icon" id="leave-world-btn" title="Leave World" aria-label="Leave World"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/></svg><span class="kwg-hud-button-label">LEAVE</span></button>
     <div id="save-status" style="display:none; align-items:center; padding:8px 12px; border-radius:0; background:rgba(0,0,0,.58); color:#fff; font-weight:700; font-size:13px;">Saving changes...</div>
@@ -3197,6 +3208,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         <label class="kwg-recolor-field"><span>Enemy Speed</span><input id="kwg-place-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
         <label class="kwg-recolor-field"><span>Enemy Count</span><input id="kwg-place-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
         <label class="kwg-recolor-field"><span>Can Be Stomped</span><input id="kwg-place-enemy-killable" type="checkbox" checked></label>
+        <label class="kwg-recolor-field"><span>Contact Damage (HP)</span><input id="kwg-place-enemy-damage" type="number" min="1" max="100" step="1" value="25"></label>
         <label class="kwg-recolor-field"><span>Respawn Delay</span><input id="kwg-place-enemy-respawn" type="number" min="0" max="300" step="0.5" value="5"></label>
       </div>
       <p class="kwg-recolor-help">Click a surface to place a part with these presets.</p>
@@ -3265,6 +3277,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             <label class="kwg-recolor-field"><span>Enemy Speed (studs / second)</span><input id="kwg-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
             <label class="kwg-recolor-field"><span>Number of Enemies</span><input id="kwg-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
             <label class="kwg-recolor-field"><span>Can Be Stomped</span><input id="kwg-enemy-killable" type="checkbox" checked></label>
+            <label class="kwg-recolor-field"><span>Contact Damage (HP)</span><input id="kwg-enemy-damage" type="number" min="1" max="100" step="1" value="25"></label>
             <label class="kwg-recolor-field"><span>Respawn Delay (seconds)</span><input id="kwg-enemy-respawn" type="number" min="0" max="300" step="0.5" value="5"></label>
             <p class="kwg-recolor-help">Jump on a devil to bounce. Double-jump before landing to squish it!</p>
           </div>
@@ -3571,6 +3584,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         devil_stomp:[[190,.11,'sawtooth',.2,90],[115,.14,'square',.12,65],[560,.08,'triangle',.08,270]],
         devil_respawn:[[270,.065,'triangle',.09,450],[420,.08,'square',.08,610]],
         devil_attack:[[240,.095,'sawtooth',.13,120],[110,.13,'square',.12,70]],
+        devil_knockout:[[160,.11,'square',.16,90],[110,.13,'triangle',.11,70]],
         double_jump:[[450,.06,'triangle',.11,700],[700,.08,'sine',.13,970]]
       };
       function play(name){
@@ -4960,6 +4974,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
     function performLeaveWorld() {
       kwgClearEnemySpawners();
+      kwgResetLifeState();
       kwgClearWorldPets();
       kwgClosePetsInventory();
       clearInterval(worldIdleTimer);
@@ -8268,6 +8283,23 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
       // Other visitors see the front flip too, without rotating the physics root.
+      const ragdoll=Number(pData.ragdollPose)||0;
+      if(ragdoll>0){
+        const pivot=kwgBuildStompPivot(p.mesh);
+        pivot.rotation.x=-.4*ragdoll;
+        pivot.rotation.z=1.43*ragdoll;
+        pivot.position.y=1.05-.27*ragdoll;
+        const limbs=p.mesh.userData.limbs;
+        if(limbs){
+          limbs.leftArm.rotation.x=-.95;limbs.rightArm.rotation.x=.65;
+          limbs.leftLeg.rotation.x=.55;limbs.rightLeg.rotation.x=-.6;
+        }
+        return;
+      }
+      if(p.mesh.userData.kwgStompPivot){
+        const pivot=p.mesh.userData.kwgStompPivot;
+        pivot.rotation.z*=.6;pivot.position.y+=(1.05-pivot.position.y)*.3;
+      }
       const flip=Number(pData.stompAngle)||0;
       if(Math.abs(flip)>.02){
         kwgBuildStompPivot(p.mesh).rotation.x=Math.max(-8,Math.min(8,flip));
@@ -8640,6 +8672,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       localPlayerAvatar.add(createNameTagSprite(loggedInUsername || 'Player'));
       localPlayerAvatar.position.set(initialSpawn.x, initialSpawn.y, initialSpawn.z);
       localPlayerAvatar.userData.walkClock = 0;
+      kwgResetLifeState();
+      kwgLastSafeFeet=localPlayerAvatar.position.clone();
+      kwgInvulnerableUntil=performance.now()+1200;
       scene.add(localPlayerAvatar);
 
       for (const pId in initialPlayers) {
@@ -9276,7 +9311,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         document.getElementById('block-transparency-input').value = block.transparency !== undefined ? block.transparency : 0;
         document.getElementById('block-collidable-checkbox').checked = block.canCollide !== false;
         const enemy=kwgEnemyPropsOf(block);
-        for(const [key,id] of Object.entries({noticeRange:'range',enemySpeed:'speed',enemyCount:'count',enemyRespawn:'respawn'}))
+        for(const [key,id] of Object.entries({noticeRange:'range',enemySpeed:'speed',enemyCount:'count',enemyRespawn:'respawn',enemyDamage:'damage'}))
           document.getElementById('kwg-enemy-'+id).value=enemy[key];
         document.getElementById('kwg-enemy-killable').checked=enemy.enemyKillable;
       } else {
@@ -9325,7 +9360,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     ['block-shape-select', 'block-action-select', 'block-material-select', 'block-color-input', 'block-transparency-input', 'block-collidable-checkbox',
-      'kwg-enemy-range','kwg-enemy-speed','kwg-enemy-count','kwg-enemy-killable','kwg-enemy-respawn'].forEach(id => {
+      'kwg-enemy-range','kwg-enemy-speed','kwg-enemy-count','kwg-enemy-killable','kwg-enemy-respawn','kwg-enemy-damage'].forEach(id => {
       const elem = document.getElementById(id);
       elem.addEventListener('change', applySelectedPartPropertyChange);
       elem.addEventListener('input', applySelectedPartPropertyChange);
@@ -9547,7 +9582,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const el=document.getElementById(id);
       el.value=String(kwgTransparencyValue(id));
     }
-    const kwgEnemyDefaults={noticeRange:18,enemySpeed:3,enemyCount:1,enemyKillable:true,enemyRespawn:5};
+    const kwgEnemyDefaults={noticeRange:18,enemySpeed:3,enemyCount:1,enemyKillable:true,enemyRespawn:5,enemyDamage:25};
     function kwgEnemyNumber(value,min,max,fallback,integer=false){
       const v=Number(value);
       if(!Number.isFinite(v))return fallback;
@@ -9560,7 +9595,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         enemySpeed:kwgEnemyNumber(document.getElementById(prefix+'speed').value,.5,15,3),
         enemyCount:kwgEnemyNumber(document.getElementById(prefix+'count').value,1,12,1,true),
         enemyKillable:document.getElementById(prefix+'killable').checked,
-        enemyRespawn:kwgEnemyNumber(document.getElementById(prefix+'respawn').value,0,300,5)
+        enemyRespawn:kwgEnemyNumber(document.getElementById(prefix+'respawn').value,0,300,5),
+        enemyDamage:kwgEnemyNumber(document.getElementById(prefix+'damage').value,1,100,25,true)
       };
     }
     function kwgEnemyPropsOf(block){
@@ -9569,7 +9605,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         enemySpeed:kwgEnemyNumber(block.enemySpeed,.5,15,3),
         enemyCount:kwgEnemyNumber(block.enemyCount,1,12,1,true),
         enemyKillable:block.enemyKillable!==false,
-        enemyRespawn:kwgEnemyNumber(block.enemyRespawn,0,300,5)
+        enemyRespawn:kwgEnemyNumber(block.enemyRespawn,0,300,5),
+        enemyDamage:kwgEnemyNumber(block.enemyDamage,1,100,25,true)
       };
     }
     function kwgToggleEnemyFields(){
@@ -9597,7 +9634,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       'kwg-place-shape','kwg-place-type','kwg-place-material',
       'kwg-place-color','kwg-place-transparency','kwg-place-collide',
       'kwg-place-enemy-range','kwg-place-enemy-speed','kwg-place-enemy-count',
-      'kwg-place-enemy-killable','kwg-place-enemy-respawn'
+      'kwg-place-enemy-killable','kwg-place-enemy-respawn','kwg-place-enemy-damage'
     ];
     let kwgLastPlaceType='normal';
     kwgPlacePresetFields.forEach(id=>{
@@ -11072,7 +11109,71 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgEnemyRangeIndicator.position.set(Number(block.x)||0,bounds.maxY+.11,Number(block.z)||0);
     }
     let kwgAirJumps=0,kwgDoubleJumpStomp=false;
-    let kwgEnemyLastAttack=0;
+    const kwgMaxHealth=100;
+    let kwgHealth=kwgMaxHealth,kwgInvulnerableUntil=0,kwgKnockedUntil=0,kwgDeadUntil=0;
+    let kwgKnockX=0,kwgKnockZ=0,kwgLastSafeFeet=null,kwgRagdollStarted=0,kwgDeathCause=null;
+    let kwgEnemyPreviousPlayerPos=null;
+    function kwgUpdateHealthHud(){
+      const bar=document.getElementById('kwg-health-fill'),value=document.getElementById('kwg-health-value'),status=document.getElementById('kwg-health-state');
+      if(!bar||!value||!status)return;
+      bar.style.width=Math.max(0,Math.min(100,kwgHealth))+'%';
+      bar.style.background=kwgHealth>55?'#68d991':kwgHealth>25?'#f1c65e':'#f16e76';
+      value.textContent=kwgHealth+' / '+kwgMaxHealth;
+      status.textContent=kwgDeadUntil?'RESPAWNING...':kwgKnockedUntil?'KNOCKED OUT':'';
+    }
+    function kwgResetLifeState(){
+      kwgHealth=kwgMaxHealth;kwgInvulnerableUntil=0;kwgKnockedUntil=0;kwgDeadUntil=0;
+      kwgKnockX=kwgKnockZ=0;kwgRagdollStarted=0;kwgLastSafeFeet=null;kwgDeathCause=null;
+      kwgEnemyPreviousPlayerPos=null;
+      if(localPlayerAvatar){
+        const pivot=localPlayerAvatar.userData.kwgStompPivot;
+        if(pivot){pivot.rotation.set(0,0,0);pivot.position.y=1.05;}
+        const limbs=localPlayerAvatar.userData.limbs;
+        if(limbs)for(const limb of [limbs.leftArm,limbs.rightArm,limbs.leftLeg,limbs.rightLeg])limb.rotation.set(0,0,0);
+      }
+      kwgUpdateHealthHud();
+    }
+    function kwgDiePlayer(reason='hazard'){
+      if(kwgDeadUntil||!localPlayerAvatar)return;
+      const now=performance.now();
+      kwgHealth=0;kwgDeadUntil=now+2000;kwgKnockedUntil=0;kwgDeathCause=reason;
+      kwgInvulnerableUntil=kwgDeadUntil+1100;kwgRagdollStarted=now;
+      kwgAirJumps=0;kwgDoubleJumpStomp=false;velocityY=reason==='enemy'?.06:0;isGrounded=false;
+      kwgResetStompAnimation(true);
+      kwgEnsureStompRig(localPlayerAvatar);
+      // If the player fell into the void, display the ragdoll on their last safe ledge.
+      if(reason==='fall'&&kwgLastSafeFeet)localPlayerAvatar.position.copy(kwgLastSafeFeet);
+      kwgAudio.play('death');kwgUpdateHealthHud();
+    }
+    function kwgEnemyHitPlayer(amount,enemyPosition){
+      const now=performance.now();
+      if(isEditMode||kwgDeadUntil||now<kwgInvulnerableUntil||!localPlayerAvatar)return false;
+      const p=localPlayerAvatar.position;
+      let dx=p.x-enemyPosition.x,dz=p.z-enemyPosition.z;
+      const dist=Math.hypot(dx,dz);
+      if(dist<.001){dx=Math.sin(localPlayerAvatar.rotation.y);dz=Math.cos(localPlayerAvatar.rotation.y);}
+      else{dx/=dist;dz/=dist;}
+      kwgKnockX=dx*5.8;kwgKnockZ=dz*5.8;
+      kwgHealth=Math.max(0,kwgHealth-Math.max(1,Math.min(100,Math.round(amount))));
+      if(kwgHealth<=0){kwgDiePlayer('enemy');}
+      else{
+        kwgKnockedUntil=now+850;kwgInvulnerableUntil=now+1450;kwgRagdollStarted=now;
+        velocityY=Math.max(velocityY,.075);isGrounded=false;
+        kwgResetStompAnimation(true);kwgEnsureStompRig(localPlayerAvatar);
+        kwgAudio.play('devil_knockout');kwgUpdateHealthHud();
+      }
+      return true;
+    }
+    // Collision is tested every frame, even while both characters are idle.
+    // Relative swept movement catches an enemy that crosses a stationary player.
+    function kwgEnemyContactDistance(playerBefore,playerAfter,enemyBefore,enemyAfter){
+      const rx=playerBefore.x-enemyBefore.x,rz=playerBefore.z-enemyBefore.z;
+      const vx=(playerAfter.x-playerBefore.x)-(enemyAfter.x-enemyBefore.x);
+      const vz=(playerAfter.z-playerBefore.z)-(enemyAfter.z-enemyBefore.z);
+      const speedSq=vx*vx+vz*vz;
+      const t=speedSq>1e-8?Math.max(0,Math.min(1,-(rx*vx+rz*vz)/speedSq)):0;
+      return Math.hypot(rx+vx*t,rz+vz*t);
+    }
     const kwgEnemyClock=()=>performance.now();
     function kwgDevilModel(){
       const root=new THREE.Group();
@@ -11140,6 +11241,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgLastEnemySync=0;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
       kwgEnemyRangeIndicator.visible=false;
+      kwgEnemyPreviousPlayerPos=null;
       kwgResetStompAnimation(true);
     }
     function kwgDefeatEnemy(spawnerId,index,notify=true){
@@ -11389,6 +11491,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(!currentWorldName||!localPlayerAvatar||kwgFreeCamera.active)return;
       kwgSyncEnemySpawners();
       const player=localPlayerAvatar,now=kwgEnemyClock();
+      const playerBefore=kwgEnemyPreviousPlayerPos||{x:player.position.x,y:player.position.y,z:player.position.z};
+      kwgEnemyPreviousPlayerPos={x:player.position.x,y:player.position.y,z:player.position.z};
       const blocks=Object.values(currentWorldData.blocks||{});
       const dt=Math.min(delta,.05);
       let visibleDevils=0,pathBudget=1;
@@ -11424,6 +11528,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.spawnedOnce=true;
           }
           const npc=slot.mesh;
+          const enemyBefore={x:npc.position.x,z:npc.position.z};
           const dx=player.position.x-npc.position.x,dz=player.position.z-npc.position.z;
           const distance=Math.hypot(dx,dz);
           const withinRange=Math.hypot(player.position.x-origin.x,player.position.z-origin.z)<=props.noticeRange&&Math.abs(player.position.y-origin.y)<props.noticeRange;
@@ -11536,11 +11641,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           kwgEnemySeparate(slot,blocks);
           kwgEnemyAnimate(slot,now,walking,props.enemySpeed,index);
           // Landing from above bounces. A double-jump flip gives a finishing stomp.
-          if(isEditMode||!withinRange||distance>.72)continue;
+          if(isEditMode||!withinRange||kwgDeadUntil)continue;
+          const contactDistance=kwgEnemyContactDistance(playerBefore,player.position,enemyBefore,npc.position);
+          if(contactDistance>.82)continue;
           const top=npc.position.y+1.79;
           const feet=player.position.y;
-          const landing=velocityY<=0&&kwgEnemyPreviousFeet>=top-.12&&feet<=top+.16&&feet>=top-.55;
-          if(landing){
+          const descending=velocityY<-.001||playerBefore.y>feet+.02;
+          const landing=descending&&kwgEnemyPreviousFeet>=top-.12&&feet<=top+.16&&feet>=top-.55;
+          if(landing&&!kwgKnockedUntil){
             player.position.y=top+.12;
             velocityY=kwgDoubleJumpStomp?jumpStrength*.8:jumpStrength*.68;
             isGrounded=false;
@@ -11558,9 +11666,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             kwgEnemyPreviousFeet=player.position.y;
             continue;
           }
-          if(distance<.64&&feet<npc.position.y+1.4&&feet+2.1>npc.position.y+.25&&now-kwgEnemyLastAttack>1250){
-            kwgEnemyLastAttack=now;
-            kwgAudio.play('devil_attack');respawnPlayer();
+          // Full capsule-height overlap, not movement-key or position-change dependent.
+          // Contact after a smush is evaluated against EVERY remaining devil.
+          const feetLow=Math.min(playerBefore.y,feet),feetHigh=Math.max(playerBefore.y,feet);
+          const bodyOverlaps=feetLow<npc.position.y+1.58&&feetHigh+1.95>npc.position.y+.2;
+          if(bodyOverlaps&&kwgEnemyHitPlayer(props.enemyDamage,npc.position)){
+            kwgAudio.play('devil_attack');
             return;
           }
         }
@@ -11570,7 +11681,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // Second discrete Space press in mid-air enables a stomp. Holding Space
     // cannot accidentally count as a double-jump.
     window.addEventListener('keydown',e=>{
-      if(e.code!=='Space'||e.repeat||isEditMode||kwgFreeCamera.active||!currentWorldName)return;
+      if(e.code!=='Space'||e.repeat||isEditMode||kwgFreeCamera.active||!currentWorldName||kwgKnockedUntil||kwgDeadUntil)return;
       if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
       if(!isGrounded&&kwgAirJumps===1){
         kwgAirJumps=2;kwgDoubleJumpStomp=true;
@@ -12210,7 +12321,94 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return {x:0,y:.18,z:0};
     }
 
+    function kwgAnimatePlayerRagdoll(now,dead=false){
+      if(!localPlayerAvatar)return;
+      kwgEnsureStompRig(localPlayerAvatar);
+      const pivot=localPlayerAvatar.userData.kwgStompPivot;
+      const t=Math.max(0,(now-kwgRagdollStarted)/1000);
+      const settle=1-Math.exp(-t*5);
+      const wobble=Math.sin(t*17)*Math.exp(-t*3.8);
+      pivot.rotation.z=(dead?1.43:.92)*settle+wobble*.18;
+      pivot.rotation.x=(dead?-.45:-.38)*settle;
+      pivot.position.y=1.05-(dead?.27:.08)*settle;
+      const limbs=localPlayerAvatar.userData.limbs;
+      if(limbs){
+        const swing=Math.sin(t*15)*Math.exp(-t*3.3);
+        limbs.leftArm.rotation.x=-.95+swing*.6;
+        limbs.rightArm.rotation.x=.65-swing*.55;
+        limbs.leftLeg.rotation.x=.55-swing*.4;
+        limbs.rightLeg.rotation.x=-.6+swing*.4;
+        limbs.leftArm.rotation.z=-.55;
+        limbs.rightArm.rotation.z=.55;
+      }
+    }
+    function kwgUpdateLifeMotion(delta,blocks){
+      const now=performance.now();
+      if(kwgDeadUntil){
+        if(now>=kwgDeadUntil){respawnPlayer();return true;}
+        // Lethal devil hits throw the ragdoll back before it settles.
+        if(kwgDeathCause==='enemy'){
+          const p=localPlayerAvatar.position,oldX=p.x,oldZ=p.z,oldY=p.y;
+          p.x+=kwgKnockX*Math.min(delta,.05);
+          p.z+=kwgKnockZ*Math.min(delta,.05);
+          resolveHorizontalCollisionsMP(p,blocks,oldX,oldZ);
+          kwgKnockX*=Math.exp(-delta*6);kwgKnockZ*=Math.exp(-delta*6);
+          p.y+=velocityY;
+          resolveCeilingCollisionMP(p,oldY,blocks);
+          velocityY=Math.max(-.16,velocityY+gravity);
+          const ground=getGroundSurfaceUnderPlayerMP(p.x,p.y,p.z,blocks);
+          if(velocityY<=0&&ground.floorY!==-Infinity&&oldY>=ground.floorY-.12&&p.y<=ground.floorY+.08){
+            p.y=ground.floorY;velocityY=0;
+          }
+          if(p.y < -30){
+            if(kwgLastSafeFeet)p.copy(kwgLastSafeFeet);
+            kwgKnockX=kwgKnockZ=0;velocityY=0;kwgDeathCause='fall';
+          }
+        }
+        kwgAnimatePlayerRagdoll(now,true);
+        kwgSendPlayerMovement(localPlayerAvatar,false);
+        return true;
+      }
+      if(kwgKnockedUntil){
+        if(now>=kwgKnockedUntil){
+          kwgKnockedUntil=0;kwgKnockX=kwgKnockZ=0;
+          kwgUpdateHealthHud();
+        }else{
+          const p=localPlayerAvatar.position,oldX=p.x,oldZ=p.z;
+          p.x+=kwgKnockX*Math.min(.05,delta);
+          p.z+=kwgKnockZ*Math.min(.05,delta);
+          resolveHorizontalCollisionsMP(p,blocks,oldX,oldZ);
+          kwgKnockX*=Math.exp(-delta*3.4);kwgKnockZ*=Math.exp(-delta*3.4);
+          const oldY=p.y;
+          p.y+=velocityY;
+          resolveCeilingCollisionMP(p,oldY,blocks);
+          velocityY+=gravity;
+          const ground=getGroundSurfaceUnderPlayerMP(p.x,p.y,p.z,blocks);
+          if(velocityY<=0&&ground.floorY!==-Infinity&&oldY>=ground.floorY-.12&&p.y<=ground.floorY+.08){
+            p.y=ground.floorY;velocityY=0;isGrounded=true;
+          }
+          if(touchesAnyKillPart(blocks,p)||p.y < -30){kwgDiePlayer(p.y < -30?'fall':'hazard');return true;}
+          kwgAnimatePlayerRagdoll(now,false);
+          kwgSendPlayerMovement(localPlayerAvatar,false);
+          return true;
+        }
+      }
+      const pivot=localPlayerAvatar?.userData.kwgStompPivot;
+      if(pivot&&kwgRagdollStarted){
+        pivot.rotation.z*=.7;pivot.rotation.x*=.7;
+        pivot.position.y+=(1.05-pivot.position.y)*.3;
+        const limbs=localPlayerAvatar.userData.limbs;
+        if(limbs){
+          limbs.leftArm.rotation.z*=.7;
+          limbs.rightArm.rotation.z*=.7;
+        }
+        if(Math.abs(pivot.rotation.z)<.01){pivot.rotation.z=0;pivot.rotation.x=0;pivot.position.y=1.05;kwgRagdollStarted=0;}
+      }
+      return false;
+    }
     function respawnPlayer() {
+      kwgResetLifeState();
+      kwgInvulnerableUntil=performance.now()+1600; // Brief spawn protection.
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
       kwgResetStompAnimation(true);
       if (localPlayerAvatar) {
@@ -12220,6 +12418,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(!checkpointValid)currentCheckpoint=null;
         const spawnPos=currentCheckpoint||kwgChooseSpawnPosition(currentWorldData);
         localPlayerAvatar.position.set(spawnPos.x,spawnPos.y,spawnPos.z);
+        kwgLastSafeFeet=localPlayerAvatar.position.clone();
         velocityY = 0;
       }
     }
@@ -12242,6 +12441,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     let lastSendTime = 0;
+    function kwgSendPlayerMovement(player,isMoving){
+      const now=Date.now();
+      if(!player||!currentWorldName||now-lastSendTime<=40)return;
+      lastSendTime=now;
+      socket.emit('player_movement',{
+        x:player.position.x,y:player.position.y,z:player.position.z,
+        rotationY:player.rotation.y,walkClock:player.userData.walkClock||0,
+        verticalVelocity:velocityY,isMoving,isGrounded,
+        stompAngle:kwgStompAvatar===player&&kwgStompPivot&&!kwgDeadUntil&&!kwgKnockedUntil?kwgStompPivot.rotation.x:0,
+        ragdollPose:kwgDeadUntil?1:kwgKnockedUntil?.6:0
+      });
+    }
 
     function getVisualSurfaceY(b, x, z) {
       const shape=b.shape || 'box';
@@ -12350,6 +12561,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if (!localPlayerAvatar || !currentWorldName) return;
       const player=localPlayerAvatar;
       const blocks=currentWorldData ? Object.values(currentWorldData.blocks) : [];
+      if(kwgUpdateLifeMotion(delta,blocks))return;
 
       if (!isRightClicking) {
         if (keys['a']||keys['arrowleft']) player.rotation.y+=turnSpeed;
@@ -12416,6 +12628,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           player.position.y=ground.floorY;
           velocityY=0;
           isGrounded=true;
+          if(!touchesAnyKillPart(blocks,player.position))kwgLastSafeFeet=player.position.clone();
           kwgAirJumps=0;kwgDoubleJumpStomp=false;
           kwgFinishStompPose();
         } else if (velocityY<=0) {
@@ -12445,8 +12658,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       if (touchedHazard || player.position.y < -30) {
         kwgStepDistance=0;
-        kwgAudio.play('death');
-        respawnPlayer();
+        kwgDiePlayer(touchedHazard?'hazard':'fall');
         return;
       }
 
@@ -12466,18 +12678,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgUpdateBlink(player,performance.now());
       updateAvatarAnimations(player,isMoving,isGrounded,delta,undefined,velocityY);
 
-      const now=Date.now();
-      if (now-lastSendTime>40) {
-        lastSendTime=now;
-        socket.emit('player_movement',{
-          x:player.position.x,y:player.position.y,z:player.position.z,
-          rotationY:player.rotation.y,
-          walkClock:player.userData.walkClock,
-          verticalVelocity:velocityY,
-          isMoving,isGrounded,
-          stompAngle:kwgStompAvatar===player&&kwgStompPivot?kwgStompPivot.rotation.x:0
-        });
-      }
+      kwgSendPlayerMovement(player,isMoving);
     }
 
     window.addEventListener('beforeunload', (e) => {
