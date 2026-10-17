@@ -1600,7 +1600,7 @@ io.on('connection', (socket) => {
             }
           },
           spawnPoint:{x:0,y:0.05,z:0},skyColor:'#1e1e7b',
-          cloudsEnabled:true,cloudSpeed:1.0,cloudColor:'#ffffff'
+          brightness:1,saturation:1,resolution:'1080p',lightColor:'#ffffff',lightDirection:'noon'
         };
         const initialSpawn=makeDefaultSpawnBlock(data);
         data.blocks[initialSpawn.id]=initialSpawn;
@@ -1702,6 +1702,7 @@ io.on('connection', (socket) => {
       if (socket.data.worldName) socket.leave(`world:${socket.data.worldName}`);
       socket.join(`world:${world.name}`);
       socket.data.worldName = world.name;
+      kwgServerTools.clear(); // Dispenser tools belong only to this world session.
       const players = {};
       for (const [sid, p] of playersBySocket) {
         if (p.worldName === world.name) {
@@ -1774,7 +1775,8 @@ io.on('connection', (socket) => {
   // for this world session. PVP is opt-in per world, with range, cooldown,
   // aiming and wall checks. This is not a full authoritative combat engine.
   const kwgServerTools=new Set();
-  const kwgShotAt={pistol:0,minigun:0};
+  const kwgShotAt={pistol:0,minigun:0,laser:0,ufo:0};
+  let kwgPvpLaserTarget=null,kwgPvpLaserSince=0,kwgPvpLaserLastAt=0;
   socket.on('tool_pickup',async ({worldName,blockId}={},cb)=>{
     const player=playersBySocket.get(socket.id);
     const key=cleanWorldName(worldName);
@@ -1784,7 +1786,7 @@ io.on('connection', (socket) => {
       if(!block||block.actionType!=='tool_dispenser')return cb?.({success:false});
       const hx=Math.max(.5,Math.abs(Number(block.scaleX)||1)/2+.75),hy=Math.max(.5,Math.abs(Number(block.scaleY)||1)/2+2.5),hz=Math.max(.5,Math.abs(Number(block.scaleZ)||1)/2+.75);
       if(Math.abs(player.x-(Number(block.x)||0))>hx||Math.abs(player.y-(Number(block.y)||0))>hy||Math.abs(player.z-(Number(block.z)||0))>hz)return cb?.({success:false});
-      const kind=block.toolKind==='minigun'?'minigun':'pistol';
+      const kind=['pistol','minigun','laser','ufo'].includes(block.toolKind)?block.toolKind:'pistol';
       kwgServerTools.add(kind);
       cb?.({success:true,kind});
     }catch(err){console.warn('Tool pickup:',err.message);cb?.({success:false});}
@@ -1800,15 +1802,21 @@ io.on('connection', (socket) => {
     return tmin;
   }
   socket.on('tool_hit_player',async ({worldName,targetId,toolKind,origin,direction}={})=>{
-    if(!kwgServerTools.has(toolKind)||!['pistol','minigun'].includes(toolKind))return;
+    if(!kwgServerTools.has(toolKind)||!['pistol','minigun','laser','ufo'].includes(toolKind))return;
+    const equipped=playersBySocket.get(socket.id)?.equippedTool;
+    if(equipped!==toolKind)return;
     const shooter=playersBySocket.get(socket.id),target=playersBySocket.get(targetId),key=cleanWorldName(worldName);
     if(!shooter||!target||shooter.worldName!==key||target.worldName!==key||shooter.id===target.id||socket.data.worldName!==key)return;
-    const now=Date.now(),interval=toolKind==='minigun'?90:360;
+    const now=Date.now(),interval=({pistol:360,minigun:90,laser:220,ufo:1200})[toolKind];
     if(now-kwgShotAt[toolKind]<interval)return;
     if(!origin||!direction||!['x','y','z'].every(k=>Number.isFinite(origin[k])&&Number.isFinite(direction[k])))return;
     const magnitude=Math.hypot(direction.x,direction.y,direction.z);
     if(magnitude<.9||magnitude>1.1)return;
-    if(Math.hypot(origin.x-shooter.x,origin.y-(shooter.y+1.5),origin.z-shooter.z)>8)return;
+    if(toolKind==='ufo'){
+      if(Math.hypot(origin.x-shooter.x,origin.y-(shooter.y-.65),origin.z-shooter.z)>1.6)return;
+      if(direction.y>-.985||Math.abs(direction.x)>.14||Math.abs(direction.z)>.14)return;
+      if(shooter.y<3)return;
+    }else if(Math.hypot(origin.x-shooter.x,origin.y-(shooter.y+1.5),origin.z-shooter.z)>8)return;
     const distance=Math.hypot(target.x-origin.x,target.y+1.1-origin.y,target.z-origin.z);
     if(distance>115||distance<.4)return;
     const toTarget={x:target.x-origin.x,y:target.y+1.1-origin.y,z:target.z-origin.z};
@@ -1828,7 +1836,12 @@ io.on('connection', (socket) => {
         if(kwgRayBoxDistance(origin,direction,box)<hit-.12)return;
       }
       kwgShotAt[toolKind]=now;
-      io.to(targetId).emit('tool_damage_taken',{damage:toolKind==='minigun'?9:32,shooterPosition:{x:shooter.x,y:shooter.y,z:shooter.z}});
+      if(toolKind!=='laser'){kwgPvpLaserTarget=null;kwgPvpLaserSince=0;}
+      else if(kwgPvpLaserTarget!==targetId||now-kwgPvpLaserLastAt>650){kwgPvpLaserTarget=targetId;kwgPvpLaserSince=now;}
+      if(toolKind==='laser')kwgPvpLaserLastAt=now;
+      const laserRamp=toolKind==='laser'?Math.min(1,(now-kwgPvpLaserSince)/4700):0;
+      const damage=toolKind==='ufo'?48:toolKind==='laser'?Math.round(2+6*laserRamp):toolKind==='minigun'?9:32;
+      io.to(targetId).emit('tool_damage_taken',{damage,shooterPosition:{x:shooter.x,y:shooter.y,z:shooter.z}});
     }catch(err){console.warn('PVP hit validation:',err.message);}
   });
 
@@ -1885,7 +1898,7 @@ io.on('connection', (socket) => {
       p[key]=(typeof data[key]==='number'&&Number.isFinite(data[key]))?Math.max(-4,Math.min(4,data[key])):0;
     p.health=(typeof data.health==='number'&&Number.isFinite(data.health))?Math.max(0,Math.min(100,Math.round(data.health))):100;
     // Never broadcast a held weapon that this connection hasn't collected.
-    p.equippedTool=['pistol','minigun'].includes(data.equippedTool)&&kwgServerTools.has(data.equippedTool)&&p.health>0?data.equippedTool:null;
+    p.equippedTool=['pistol','minigun','laser','ufo'].includes(data.equippedTool)&&kwgServerTools.has(data.equippedTool)&&p.health>0?data.equippedTool:null;
     socket.to(`world:${p.worldName}`).emit('player_moved',{
       id:p.id,x:p.x,y:p.y,z:p.z,rotationY:p.rotationY,walkClock:p.walkClock,
       verticalVelocity:p.verticalVelocity,isMoving:p.isMoving,isGrounded:p.isGrounded,
@@ -1935,7 +1948,7 @@ io.on('connection', (socket) => {
               blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
               normalizeEnemySpawner(blockData);
               if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
-              if(blockData.actionType==='tool_dispenser')blockData.toolKind=blockData.toolKind==='minigun'?'minigun':'pistol';
+              if(blockData.actionType==='tool_dispenser')blockData.toolKind=['pistol','minigun','laser','ufo'].includes(blockData.toolKind)?blockData.toolKind:'pistol';
               data.blocks[blockData.id]=blockData;
             }else if(action==='delete'){
               const target=data.blocks[blockId];
@@ -1952,12 +1965,15 @@ io.on('connection', (socket) => {
             if(!settings||typeof settings!=='object'||Array.isArray(settings)){
               const e=new Error('Invalid world settings.');e.clientMessage=e.message;throw e;
             }
-            const allowed=['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint','friendlyFire'];
+            const allowed=['skyColor','spawnPoint','friendlyFire','brightness','saturation','resolution','lightColor','lightDirection'];
             const next={};
             for(const k of allowed)if(Object.prototype.hasOwnProperty.call(settings,k))next[k]=settings[k];
             if(next.skyColor&&!validColor(next.skyColor))delete next.skyColor;
-            if(next.cloudColor&&!validColor(next.cloudColor))delete next.cloudColor;
-            if(next.cloudSpeed!==undefined)next.cloudSpeed=Math.max(0,Math.min(10,Number(next.cloudSpeed)||0));
+            if(next.lightColor&&!validColor(next.lightColor))delete next.lightColor;
+            if(next.brightness!==undefined)next.brightness=Math.max(.4,Math.min(2,Number(next.brightness)||1));
+            if(next.saturation!==undefined)next.saturation=Math.max(0,Math.min(2,Number(next.saturation)||0));
+            if(next.resolution!==undefined)next.resolution=['120p','240p','480p','720p','1080p'].includes(next.resolution)?next.resolution:'1080p';
+            if(next.lightDirection!==undefined)next.lightDirection=['morning','noon','evening','north','south'].includes(next.lightDirection)?next.lightDirection:'noon';
             if(next.cloudsEnabled!==undefined)next.cloudsEnabled=!!next.cloudsEnabled;
             if(next.friendlyFire!==undefined)next.friendlyFire=next.friendlyFire===true;
             if(next.spawnPoint){
@@ -2028,7 +2044,7 @@ io.on('connection', (socket) => {
           blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
           normalizeEnemySpawner(blockData);
           if(blockData.actionType==='health')blockData.healAmount=Math.max(1,Math.min(100,Math.round(Number(blockData.healAmount)||25)));
-          if(blockData.actionType==='tool_dispenser')blockData.toolKind=blockData.toolKind==='minigun'?'minigun':'pistol';
+          if(blockData.actionType==='tool_dispenser')blockData.toolKind=['pistol','minigun','laser','ufo'].includes(blockData.toolKind)?blockData.toolKind:'pistol';
           data.blocks[blockData.id] = blockData;
         } else if (action === 'delete') {
           const target = data.blocks[blockId];
@@ -2066,12 +2082,15 @@ io.on('connection', (socket) => {
       const world = await getWorldByName(worldName);
       if (!world) return cb && cb({success:false,message:'World not found.'});
       if (!canEditWorld(socket, world)) return cb && cb({success:false,message:'Only the world owner or an admin can edit this world.'});
-      const allowed = ['skyColor','cloudsEnabled','cloudSpeed','cloudColor','spawnPoint','friendlyFire'];
+      const allowed = ['skyColor','spawnPoint','friendlyFire','brightness','saturation','resolution','lightColor','lightDirection'];
       const next = {};
       for (const k of allowed) if (Object.prototype.hasOwnProperty.call(settings,k)) next[k] = settings[k];
       if (next.skyColor && !validColor(next.skyColor)) delete next.skyColor;
-      if (next.cloudColor && !validColor(next.cloudColor)) delete next.cloudColor;
-      if (next.cloudSpeed !== undefined) next.cloudSpeed = Math.max(0, Math.min(10, Number(next.cloudSpeed) || 0));
+      if (next.lightColor && !validColor(next.lightColor)) delete next.lightColor;
+      if(next.brightness!==undefined)next.brightness=Math.max(.4,Math.min(2,Number(next.brightness)||1));
+      if(next.saturation!==undefined)next.saturation=Math.max(0,Math.min(2,Number(next.saturation)||0));
+      if(next.resolution!==undefined)next.resolution=['120p','240p','480p','720p','1080p'].includes(next.resolution)?next.resolution:'1080p';
+      if(next.lightDirection!==undefined)next.lightDirection=['morning','noon','evening','north','south'].includes(next.lightDirection)?next.lightDirection:'noon';
       if (next.cloudsEnabled !== undefined) next.cloudsEnabled = !!next.cloudsEnabled;
       if (next.friendlyFire !== undefined) next.friendlyFire = next.friendlyFire === true;
       if (next.spawnPoint) {
