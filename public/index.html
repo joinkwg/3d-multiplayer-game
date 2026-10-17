@@ -11116,8 +11116,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       return root;
     }
     function kwgEnemySlotSpawn(block,index,count){
-      const angle=index*Math.PI*2/Math.max(1,count);
-      const r=count===1?0:Math.min(1.4,Math.max(.4,Math.min(Math.abs(Number(block.scaleX)||1),Math.abs(Number(block.scaleZ)||1))*.23));
+      // A spaced spiral keeps multi-enemy spawns from stacking inside each other.
+      // Wider rings may begin off the platform; gravity handles the drop.
+      const ring=index===0?0:Math.ceil((Math.sqrt(index+1)-1)/1.8);
+      const angle=index*2.399963229728653; // golden angle
+      const r=ring*1.15;
       const bounds=getBlockAABB(block);
       return {x:(Number(block.x)||0)+Math.cos(angle)*r,
               y:bounds.maxY+.06,z:(Number(block.z)||0)+Math.sin(angle)*r};
@@ -11147,7 +11150,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       // Keep the flattened model on screen before despawning; respawn delay starts after it.
       slot.squishUntil=now+480;
       slot.deadUntil=slot.squishUntil+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
-      slot.path=[];slot.pathAt=0;
+      slot.path=[];slot.pathAt=0;slot.jumpSpeed=0;slot.isJumping=false;
       if(notify)kwgAudio.play('devil_stomp');
       if(notify&&socket?.connected)socket.emit('enemy_stomped',{worldName:currentWorldName,spawnerId,index});
     }
@@ -11174,92 +11177,147 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(!entry){entry={block,slots:[]};kwgEnemySpawners.set(id,entry);}
         entry.block=block;
         while(entry.slots.length>props.enemyCount)kwgDestroyEnemySlot(entry.slots.pop());
-        while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,squishUntil:0,walkTime:0,fallSpeed:0,path:[],pathAt:0,noticeAt:0,stepAt:0});
+        while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,squishUntil:0,walkTime:0,fallSpeed:0,jumpSpeed:0,isJumping:false,grounded:false,path:[],pathAt:0,noticeAt:0,stepAt:0});
       }
     }
-    function kwgEnemyGroundY(x,y,z,blocks){
+    // V21: Navigation has *vertical* transitions. A path can hop onto a low
+    // platform or step off an elevated spawner, instead of treating any height
+    // difference as an impassable wall. All movement still checks solid parts.
+    const kwgEnemyBodyRadius=.38,kwgEnemyBodyHeight=1.84;
+    const kwgEnemyJumpRise=1.55,kwgEnemyMaxDrop=4.25;
+    function kwgEnemyGroundY(x,y,z,blocks,drop=7){
       let top=-Infinity;
       for(const block of blocks){
         if(block.canCollide===false)continue;
-        // Fast broad phase: only sample floors near this enemy.
-        const maxDimension=Math.max(Math.abs(Number(block.scaleX)||1),Math.abs(Number(block.scaleY)||1),Math.abs(Number(block.scaleZ)||1));
-        const reach=maxDimension*1.5+1;
-        if(Math.abs(x-(Number(block.x)||0))>reach||Math.abs(z-(Number(block.z)||0))>reach)continue;
+        const a=block._kwgNavBounds||getBlockAABB(block);
+        if(x<a.minX-.24||x>a.maxX+.24||z<a.minZ-.24||z>a.maxZ+.24)continue;
+        if(a.maxY<y-drop-1||a.minY>y+.75)continue;
         const surface=getPartSurfaceYFromData(block,x,z,y);
-        if(surface!==null&&surface<=y+.65&&surface>y-2.8&&surface>top)top=surface;
+        if(surface!==null&&surface<=y+.65&&surface>=y-drop&&surface>top)top=surface;
       }
       return top;
     }
-    // Obstacle-aware navigation. The grid samples walkable world surfaces and
-    // checks a devil-sized body against the same collidable world parts as players.
-    // Search is bounded so complex worlds cannot stall the frame.
-    const kwgEnemyBodyRadius=.38,kwgEnemyBodyHeight=1.84;
-    function kwgEnemyWalkable(x,z,feetY,blocks){
-      const ground=kwgEnemyGroundY(x,feetY+.55,z,blocks);
-      if(!Number.isFinite(ground)||ground>feetY+.66||ground<feetY-1.45)return null;
+    function kwgEnemyBodyClear(x,z,feetY,blocks){
       for(const b of blocks){
         if(b.canCollide===false)continue;
         const a=b._kwgNavBounds||getBlockAABB(b);
-        // Floors under the feet are allowed, walls through the body are not.
-        if(a.maxY<=ground+.09||a.minY>=ground+kwgEnemyBodyHeight-.12)continue;
-        // The same sloped/curved surface the enemy is standing on is a floor,
-        // not a wall. This permits ramps and rounded platforms.
-        const standingSurface=getPartSurfaceYFromData(b,x,z,ground+.75);
-        if(standingSurface!==null&&Math.abs(standingSurface-ground)<.14)continue;
+        if(a.maxY<=feetY+.09||a.minY>=feetY+kwgEnemyBodyHeight-.10)continue;
         const nearestX=Math.max(a.minX,Math.min(x,a.maxX));
         const nearestZ=Math.max(a.minZ,Math.min(z,a.maxZ));
-        if((x-nearestX)**2+(z-nearestZ)**2<kwgEnemyBodyRadius**2)return null;
+        if((x-nearestX)**2+(z-nearestZ)**2>=kwgEnemyBodyRadius**2)continue;
+        // Ground under the feet is not an obstruction. This matters on ramps.
+        const surface=getPartSurfaceYFromData(b,x,z,feetY+.68);
+        if(surface!==null&&Math.abs(surface-feetY)<.16)continue;
+        return false;
       }
+      return true;
+    }
+    function kwgEnemyWalkable(x,z,feetY,blocks){
+      // Probe high enough to discover jumpable ledges, and far enough down to
+      // discover safe drop-offs from the top of an enemy spawner.
+      const ground=kwgEnemyGroundY(x,feetY+kwgEnemyJumpRise-.35,z,blocks,kwgEnemyMaxDrop+kwgEnemyJumpRise);
+      if(!Number.isFinite(ground)||ground>feetY+kwgEnemyJumpRise+.04||ground<feetY-kwgEnemyMaxDrop)return null;
+      if(!kwgEnemyBodyClear(x,z,ground,blocks))return null;
       return ground;
+    }
+    function kwgEnemyTransitionClear(x,z,y,tx,tz,ty,blocks){
+      const rise=ty-y;
+      if(rise>kwgEnemyJumpRise+.02||rise<-kwgEnemyMaxDrop)return false;
+      const d=Math.hypot(tx-x,tz-z);
+      const steps=Math.max(2,Math.ceil(d/.27));
+      for(let i=1;i<=steps;i++){
+        const t=i/steps;
+        // A jump has an arcing clearance; a drop begins at the old height.
+        const feet=rise>.48?y+rise*t+Math.sin(Math.PI*t)*.62:
+          rise<-.65?y+rise*Math.pow(t,8):y+rise*t;
+        if(!kwgEnemyBodyClear(x+(tx-x)*t,z+(tz-z)*t,feet,blocks))return false;
+      }
+      return true;
     }
     function kwgEnemyDirectPath(x,z,y,tx,tz,blocks){
       const d=Math.hypot(tx-x,tz-z);
-      let lastY=y;
-      for(let i=1,n=Math.ceil(d/.48);i<=n;i++){
-        const t=i/n;
-        const nextY=kwgEnemyWalkable(x+(tx-x)*t,z+(tz-z)*t,lastY,blocks);
-        if(nextY===null)return false;
-        lastY=nextY;
+      let lastY=y,lastX=x,lastZ=z;
+      for(let i=1,n=Math.max(1,Math.ceil(d/.48));i<=n;i++){
+        const t=i/n,nx=x+(tx-x)*t,nz=z+(tz-z)*t;
+        const nextY=kwgEnemyWalkable(nx,nz,lastY,blocks);
+        // Direct chase is for walkable ground only; jump/drop requires a
+        // waypoint so the character can trigger its vertical movement.
+        if(nextY===null||nextY-lastY>.42||lastY-nextY>.62||
+           !kwgEnemyTransitionClear(lastX,lastZ,lastY,nx,nz,nextY,blocks))return false;
+        lastY=nextY;lastX=nx;lastZ=nz;
       }
       return true;
     }
     function kwgEnemyFindPath(fromX,fromY,fromZ,toX,toZ,blocks){
-      const cell=1.25,limit=19;
+      const cell=1.05,limit=23;
       const originX=fromX,originZ=fromZ;
       const goalX=Math.round((toX-originX)/cell),goalZ=Math.round((toZ-originZ)/cell);
-      const key=(x,z)=>x+','+z;
+      // Height is part of the key: a bridge over another walkway is not
+      // the same navigation node as the ground underneath it.
+      const key=(x,z,y)=>x+','+z+','+Math.round(y*2);
       const start={x:0,z:0,y:fromY,g:0,h:Math.hypot(goalX,goalZ),parent:null};
-      const open=[start],best=new Map([[key(0,0),start]]),closed=new Set();
+      const open=[start],best=new Map([[key(0,0,fromY),start]]),closed=new Set();
       let nearest=start,iterations=0;
-      while(open.length&&iterations++<850){
+      while(open.length&&iterations++<620){
         let pick=0;
         for(let i=1;i<open.length;i++)if(open[i].g+open[i].h<open[pick].g+open[pick].h)pick=i;
-        const node=open.splice(pick,1)[0],id=key(node.x,node.z);
+        const node=open.splice(pick,1)[0],id=key(node.x,node.z,node.y);
         if(closed.has(id))continue;
         closed.add(id);
         if(node.h<nearest.h)nearest=node;
         if(node.h<=.75){nearest=node;break;}
         for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
           const nx=node.x+dx,nz=node.z+dz;
-          if(Math.abs(nx)>limit||Math.abs(nz)>limit||closed.has(key(nx,nz)))continue;
+          if(Math.abs(nx)>limit||Math.abs(nz)>limit)continue;
           const x=originX+nx*cell,z=originZ+nz*cell;
           const height=kwgEnemyWalkable(x,z,node.y,blocks);
-          if(height===null)continue;
+          if(height===null||!kwgEnemyTransitionClear(originX+node.x*cell,originZ+node.z*cell,node.y,x,z,height,blocks))continue;
           if(dx&&dz){
-            if(kwgEnemyWalkable(originX+(node.x+dx)*cell,originZ+node.z*cell,node.y,blocks)===null||
-               kwgEnemyWalkable(originX+node.x*cell,originZ+(node.z+dz)*cell,node.y,blocks)===null)continue;
+            const ax=originX+(node.x+dx)*cell,az=originZ+node.z*cell;
+            const bx=originX+node.x*cell,bz=originZ+(node.z+dz)*cell;
+            const ay=kwgEnemyWalkable(ax,az,node.y,blocks),by=kwgEnemyWalkable(bx,bz,node.y,blocks);
+            if(ay===null||by===null||
+               !kwgEnemyTransitionClear(originX+node.x*cell,originZ+node.z*cell,node.y,ax,az,ay,blocks)||
+               !kwgEnemyTransitionClear(originX+node.x*cell,originZ+node.z*cell,node.y,bx,bz,by,blocks))continue;
           }
-          const g=node.g+Math.hypot(dx,dz)+Math.abs(height-node.y)*.65;
-          const nk=key(nx,nz),old=best.get(nk);
+          const nk=key(nx,nz,height);
+          if(closed.has(nk))continue;
+          const g=node.g+Math.hypot(dx,dz)+Math.abs(height-node.y)*.7;
+          const old=best.get(nk);
           if(old&&old.g<=g)continue;
           const next={x:nx,z:nz,y:height,g,h:Math.hypot(goalX-nx,goalZ-nz),parent:node};
           best.set(nk,next);open.push(next);
         }
       }
       const result=[];
-      for(let node=nearest;node?.parent;node=node.parent)result.push({x:originX+node.x*cell,z:originZ+node.z*cell});
+      for(let node=nearest;node?.parent;node=node.parent)
+        result.push({x:originX+node.x*cell,z:originZ+node.z*cell,y:node.y});
       result.reverse();
       return result;
+    }
+    function kwgEnemyCrowded(x,z,slot){
+      for(const entry of kwgEnemySpawners.values())for(const other of entry.slots){
+        if(other===slot||!other.mesh||other.deadUntil>kwgEnemyClock())continue;
+        if(Math.abs(other.mesh.position.y-(slot.mesh?.position.y??0))>1.55)continue;
+        if(Math.hypot(x-other.mesh.position.x,z-other.mesh.position.z)<kwgEnemyBodyRadius*2+.12)return true;
+      }
+      return false;
+    }
+    function kwgEnemySeparate(slot,blocks){
+      const npc=slot.mesh;if(!npc)return;
+      for(const entry of kwgEnemySpawners.values())for(const other of entry.slots){
+        if(other===slot||!other.mesh||other.deadUntil>kwgEnemyClock())continue;
+        const dx=npc.position.x-other.mesh.position.x,dz=npc.position.z-other.mesh.position.z;
+        const d=Math.hypot(dx,dz),min=kwgEnemyBodyRadius*2+.10;
+        if(d>=min||Math.abs(npc.position.y-other.mesh.position.y)>1.4)continue;
+        const angle=(slot.spawnIndex||0)*2.4+1;
+        const ux=d>.0001?dx/d:Math.cos(angle),uz=d>.0001?dz/d:Math.sin(angle);
+        const push=Math.min(.18,(min-d)*.55);
+        const nx=npc.position.x+ux*push,nz=npc.position.z+uz*push;
+        if(kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)){
+          npc.position.x=nx;npc.position.z=nz;
+        }
+      }
     }
     function kwgEnemyAnimate(slot,now,walking,speed,index){
       const npc=slot.mesh;if(!npc)return;
@@ -11280,6 +11338,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       ra.rotation.z=walking?.15:.18-idle*.09;
       npc.userData.devilTail.rotation.x=Math.sin(now*.007+index)*.35;
       npc.userData.devilBody.rotation.z=Math.sin(now*.005+index)*.04;
+      // Cartoon hop: knees tuck on the way up; arms flare as the devil falls.
+      if(!slot.grounded){
+        const rising=slot.fallSpeed>0;
+        la.rotation.x=rising?-1.05:.55;ra.rotation.x=rising?-1.05:.55;
+        ll.rotation.x=rising?.85:-.30;rl.rotation.x=rising?.85:-.30;
+        rig.rotation.z+=Math.sin(now*.009+index)*.065;
+        rig.position.y+=rising?.12:.035;
+      }
     }
     // Stomp flips the VISUAL avatar around its center, never the collision root.
     let kwgStompAvatar=null,kwgStompPivot=null,kwgStompStarted=0,kwgStompLandingAt=0;
@@ -11325,7 +11391,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const player=localPlayerAvatar,now=kwgEnemyClock();
       const blocks=Object.values(currentWorldData.blocks||{});
       const dt=Math.min(delta,.05);
-      let visibleDevils=0,pathBudget=2;
+      let visibleDevils=0,pathBudget=1;
       for(const [id,entry] of kwgEnemySpawners){
         const props=kwgEnemyPropsOf(entry.block);
         for(let index=0;index<entry.slots.length;index++){
@@ -11352,7 +11418,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           if(!slot.mesh){
             slot.mesh=kwgDevilModel();scene.add(slot.mesh);
             slot.mesh.position.set(origin.x,origin.y,origin.z);
-            slot.fallSpeed=0;slot.walkTime=0;slot.path=[];slot.pathAt=0;
+            slot.fallSpeed=0;slot.jumpSpeed=0;slot.isJumping=false;slot.grounded=false;
+            slot.spawnIndex=index;slot.walkTime=0;slot.path=[];slot.pathAt=0;
             if(slot.spawnedOnce&&spawnDistance<15)kwgAudio.play('devil_respawn');
             slot.spawnedOnce=true;
           }
@@ -11377,33 +11444,57 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               const a=getBlockAABB(b);
               if(a.maxX<npc.position.x-26||a.minX>npc.position.x+26||
                  a.maxZ<npc.position.z-26||a.minZ>npc.position.z+26||
-                 a.maxY<npc.position.y-4||a.minY>npc.position.y+5)return false;
+                 a.maxY<npc.position.y-8||a.minY>npc.position.y+6)return false;
               return true;
             }).map(b=>({...b,_kwgNavBounds:getBlockAABB(b)}));
             const straight=kwgEnemyDirectPath(npc.position.x,npc.position.z,npc.position.y,targetX,targetZ,pathBlocks);
             slot.path=straight?[]:kwgEnemyFindPath(npc.position.x,npc.position.y,npc.position.z,targetX,targetZ,pathBlocks);
-            slot.pathAt=now+650+index*47;
+            slot.pathAt=now+900+index*53;
           }
           if(slot.path?.length){
-            while(slot.path.length>1&&Math.hypot(slot.path[0].x-npc.position.x,slot.path[0].z-npc.position.z)<.55)slot.path.shift();
-            if(slot.path.length&&Math.hypot(slot.path[0].x-npc.position.x,slot.path[0].z-npc.position.z)<.4)slot.path.shift();
+            // Do not consume a jump waypoint until we have landed on its level.
+            while(slot.path.length){
+              const point=slot.path[0];
+              if(Math.hypot(point.x-npc.position.x,point.z-npc.position.z)>.46||
+                 Math.abs(point.y-npc.position.y)>.55)break;
+              slot.path.shift();
+            }
             if(slot.path.length){tx=slot.path[0].x;tz=slot.path[0].z;}
           }
           const vx=tx-npc.position.x,vz=tz-npc.position.z;
           const d=Math.hypot(vx,vz);
+          const currentGround=kwgEnemyGroundY(npc.position.x,npc.position.y+.28,npc.position.z,blocks);
+          slot.grounded=Number.isFinite(currentGround)&&Math.abs(currentGround-npc.position.y)<.18&&slot.fallSpeed<=0;
+          const waypoint=slot.path?.length?slot.path[0]:null;
+          if(waypoint&&d<1.9&&waypoint.y>npc.position.y+.52&&slot.grounded){
+            // Low ledges are reachable with a short cartoon hop. A jump is
+            // only triggered if there is clearance above the devil's head.
+            if(kwgEnemyBodyClear(npc.position.x,npc.position.z,npc.position.y+.3,blocks)){
+              slot.fallSpeed=7.9;slot.isJumping=true;slot.grounded=false;
+            }
+          }
           let walking=false;
           if(d>.13&&(chasing||homeDist>.15)){
             const speed=props.enemySpeed*(chasing?1:.65);
             const travel=Math.min(d,speed*dt);
             const oldX=npc.position.x,oldZ=npc.position.z;
             const nx=oldX+vx/d*travel,nz=oldZ+vz/d*travel;
-            const ground=kwgEnemyWalkable(nx,nz,npc.position.y,blocks);
-            if(ground!==null){
-              // The shared player collision resolver handles rotated/curved parts.
-              const proposed={x:nx,y:Math.max(npc.position.y,ground),z:nz};
+            const nextGround=kwgEnemyWalkable(nx,nz,npc.position.y,blocks);
+            // Airborne devils can move across a gap and descend onto a lower
+            // platform. Grounded devils may walk off a ledge, but cannot phase
+            // through a wall or instant-teleport up to a higher platform.
+            const highLedge=nextGround!==null&&nextGround>npc.position.y+.48;
+            const canStep=nextGround!==null&&nextGround>=npc.position.y-.52&&nextGround<=npc.position.y+.48;
+            const airborne=!slot.grounded||slot.fallSpeed>0;
+            if((airborne||canStep||nextGround===null)&&
+               kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)&&
+               !kwgEnemyCrowded(nx,nz,slot)){
+              const proposed={x:nx,y:npc.position.y,z:nz};
               resolveHorizontalCollisionsMP(proposed,blocks,oldX,oldZ);
               const moved=Math.hypot(proposed.x-oldX,proposed.z-oldZ);
-              if(moved<=travel+.07&&moved>.0001&&kwgEnemyWalkable(proposed.x,proposed.z,npc.position.y,blocks)!==null){
+              if(moved>.0001&&moved<=travel+.07&&
+                 kwgEnemyBodyClear(proposed.x,proposed.z,npc.position.y,blocks)&&
+                 !kwgEnemyCrowded(proposed.x,proposed.z,slot)){
                 npc.position.x=proposed.x;npc.position.z=proposed.z;
                 npc.rotation.y=Math.atan2(vx,vz);
                 slot.walkTime+=dt*speed*6;
@@ -11414,15 +11505,35 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               }else slot.pathAt=0;
             }else slot.pathAt=0;
           }
-          const ground=kwgEnemyGroundY(npc.position.x,npc.position.y,npc.position.z,blocks);
-          if(ground!==-Infinity&&npc.position.y<=ground+.65){
-            npc.position.y+=Math.min(.18,Math.max(-.18,ground-npc.position.y));
-            slot.fallSpeed=0;
+          // Actual vertical velocity and gravity: devils jump onto ledges,
+          // fall from their spawner, and land on world collision surfaces.
+          const oldY=npc.position.y;
+          slot.fallSpeed=Math.max(-16,slot.fallSpeed-19*dt);
+          const proposedY=oldY+slot.fallSpeed*dt;
+          if(slot.fallSpeed>0){
+            let ceiling=Infinity;
+            for(const b of blocks){
+              if(b.canCollide===false)continue;
+              const a=getBlockAABB(b);
+              if(npc.position.x<a.minX-kwgEnemyBodyRadius||npc.position.x>a.maxX+kwgEnemyBodyRadius||
+                 npc.position.z<a.minZ-kwgEnemyBodyRadius||npc.position.z>a.maxZ+kwgEnemyBodyRadius)continue;
+              if(a.minY>=oldY+kwgEnemyBodyHeight-.06&&a.minY<proposedY+kwgEnemyBodyHeight)
+                ceiling=Math.min(ceiling,a.minY);
+            }
+            if(Number.isFinite(ceiling)){
+              npc.position.y=ceiling-kwgEnemyBodyHeight-.02;slot.fallSpeed=0;
+            }else npc.position.y=proposedY;
           }else{
-            slot.fallSpeed=Math.max(-10,slot.fallSpeed-20*dt);
-            npc.position.y+=slot.fallSpeed*dt;
-            if(npc.position.y<origin.y-30){npc.position.set(origin.x,origin.y,origin.z);slot.fallSpeed=0;slot.path=[];}
+            const landingY=kwgEnemyGroundY(npc.position.x,oldY+.35,npc.position.z,blocks,7);
+            if(Number.isFinite(landingY)&&oldY>=landingY-.10&&proposedY<=landingY+.06){
+              npc.position.y=landingY;slot.fallSpeed=0;slot.isJumping=false;slot.grounded=true;
+            }else{npc.position.y=proposedY;slot.grounded=false;}
           }
+          if(npc.position.y<origin.y-30){
+            npc.position.set(origin.x,origin.y,origin.z);
+            slot.fallSpeed=0;slot.path=[];slot.grounded=false;
+          }
+          kwgEnemySeparate(slot,blocks);
           kwgEnemyAnimate(slot,now,walking,props.enemySpeed,index);
           // Landing from above bounces. A double-jump flip gives a finishing stomp.
           if(isEditMode||!withinRange||distance>.72)continue;
@@ -11440,6 +11551,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             }
             kwgFinishStompPose();
             kwgDoubleJumpStomp=false;
+            // Every enemy bounce is a fresh first jump, even after a kill.
+            // A new (released then pressed) Space triggers another flip stomp
+            // without needing to land on an ordinary platform first.
+            kwgAirJumps=1;
             kwgEnemyPreviousFeet=player.position.y;
             continue;
           }
