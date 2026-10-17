@@ -2197,10 +2197,9 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
 /* KWG V18 — safe, screenshot-only world creation */
 #create-world-modal .card{width:min(470px,calc(100vw - 32px));max-height:90dvh;overflow-y:auto}
 #create-world-modal .kwg-create-world-label{display:block;margin:13px 0 5px;font-size:11px;font-weight:900;color:#b8d9f4;letter-spacing:.07em}
-#create-world-modal #new-world-description,#create-world-modal #new-world-thumbnail-mode{width:100%;box-sizing:border-box;background:#101c2a;color:#e9f4ff;border:1px solid #526d88;border-radius:2px;padding:9px;font:inherit}
+#create-world-modal #new-world-description{width:100%;box-sizing:border-box;background:#101c2a;color:#e9f4ff;border:1px solid #526d88;border-radius:2px;padding:9px;font:inherit}
 #create-world-modal #new-world-description{resize:vertical;min-height:72px}
 .kwg-create-world-hint{font-size:11px;color:#a4b9cf;line-height:1.5;margin:4px 0 8px}
-#kwg-world-edit-camera{align-self:flex-start;min-height:34px;padding:8px 12px}
 #kwg-info-auto-btn{margin-top:5px;background:#244c68;color:#e6f5ff;border:1px solid #6796b9;padding:8px;cursor:pointer}
 </style>
 
@@ -2739,8 +2738,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 .kwg-world-edit-dialog input:not([type=file]),.kwg-world-edit-dialog textarea{width:100%;box-sizing:border-box;padding:9px;
   background:#0e1b29;color:#fff;border:1px solid #607f9b;font:inherit}
 .kwg-world-edit-dialog input[type=file]{font-size:12px;max-width:100%}
-#kwg-world-edit-preview{max-width:100%;height:145px;object-fit:contain;background:#101a27}
-#kwg-world-edit-preview[hidden]{display:none}
 #kwg-world-edit-status{font-size:11px;color:#c4d7e7;min-height:18px}
 .kwg-world-edit-actions{display:flex;gap:9px;justify-content:flex-end}
 .kwg-world-edit-actions button{padding:8px 12px;cursor:pointer}
@@ -3065,22 +3062,22 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     </div>
   </div>
 
+  <style>
+    .kwg-enemy-properties{margin:9px 0;padding:10px;background:#122d46;border:1px solid #4d96c8;color:#e3f3ff}
+    .kwg-enemy-props-title{font-size:10px;font-weight:900;color:#7bcaff;margin-bottom:9px;letter-spacing:.06em}
+    .kwg-enemy-properties .kwg-recolor-field{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0;font-size:11px}
+    .kwg-enemy-properties input[type=number]{width:82px;min-width:62px;background:#0c1a2c;border:1px solid #6c91b2;color:#fff;padding:6px}
+    .kwg-enemy-properties input[type=checkbox]{width:17px;height:17px}
+  </style>
   <!-- Create World Modal -->
   <div id="create-world-modal" class="modal">
     <div class="card" style="position: relative;">
       <span class="close-btn" id="close-create-world">X</span>
       <h3 style="margin: 0 0 10px 0; text-transform: uppercase;">Create World</h3>
       <label class="kwg-create-world-label" for="new-world-name">WORLD NAME (OPTIONAL)</label>
-      <input type="text" id="new-world-name" placeholder="Leave blank for a surprise name!" maxlength="20" autocomplete="off" />
-      <div class="kwg-create-world-hint">Blank names get a unique randomly generated name.</div>
+      <input type="text" id="new-world-name" placeholder="World name" maxlength="20" autocomplete="off" />
       <label class="kwg-create-world-label" for="new-world-description">DESCRIPTION</label>
       <textarea id="new-world-description" maxlength="300" rows="3" placeholder="What's your world about?"></textarea>
-      <label class="kwg-create-world-label" for="new-world-thumbnail-mode">THUMBNAIL</label>
-      <select id="new-world-thumbnail-mode">
-        <option value="auto">Automatic screenshot from spawn</option>
-        <option value="camera">Take a custom screenshot after launch</option>
-      </select>
-      <div class="kwg-create-world-hint">Thumbnails use screenshots of your actual world. No pictures can be uploaded from your computer.</div>
       <button id="confirm-create-world-btn" class="submit-btn">Build & Launch</button>
       <div id="create-world-error" class="error-msg"></div>
     </div>
@@ -3189,11 +3186,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">+</span> PLACE PRESETS</div>
       <p class="kwg-recolor-help" style="margin:0 0 10px">New parts use these properties automatically.</p>
       <label class="kwg-recolor-field"><span>Shape</span><select id="kwg-place-shape"><option value="box">Cube / Box</option><option value="wedge">Wedge</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option></select></label>
-      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option><option value="spawn">Spawn</option></select></label>
+      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option><option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option></select></label>
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-place-material"><option value="grid">Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
       <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-place-color" value="#888888" aria-label="Place preset color"></span></label>
       <label class="kwg-recolor-field"><span>Transparency (0–1)</span><input type="number" id="kwg-place-transparency" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Place transparency, 0 to 1"></label>
       <label class="kwg-recolor-field"><span>Can Collide</span><input type="checkbox" id="kwg-place-collide" checked></label>
+      <div id="kwg-place-enemy-properties" class="kwg-enemy-properties" style="display:none">
+        <div class="kwg-enemy-props-title">ENEMY SPAWNER PRESET</div>
+        <label class="kwg-recolor-field"><span>Notice Range</span><input id="kwg-place-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
+        <label class="kwg-recolor-field"><span>Enemy Speed</span><input id="kwg-place-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
+        <label class="kwg-recolor-field"><span>Enemy Count</span><input id="kwg-place-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
+        <label class="kwg-recolor-field"><span>Can Be Stomped</span><input id="kwg-place-enemy-killable" type="checkbox" checked></label>
+        <label class="kwg-recolor-field"><span>Respawn Delay</span><input id="kwg-place-enemy-respawn" type="number" min="0" max="300" step="0.5" value="5"></label>
+      </div>
       <p class="kwg-recolor-help">Click a surface to place a part with these presets.</p>
     </section>
     <section id="kwg-recolor-panel" class="kwg-recolor-panel" aria-label="Recolor brush settings" style="display:none">
@@ -3227,7 +3232,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               <option value="normal">Normal Solid Block</option>
               <option value="kill">Kill Part</option>
               <option value="checkpoint">Checkpoint</option>
-              <option value="spawn">Spawn</option>
+              <option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option>
             </select>
           </div>
 
@@ -3254,6 +3259,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             <label>Can Collide:</label>
             <input type="checkbox" id="block-collidable-checkbox" checked>
           </div>
+          <div id="kwg-enemy-properties" class="kwg-enemy-properties" style="display:none">
+            <div class="kwg-enemy-props-title">DEVIL ENEMY SETTINGS</div>
+            <label class="kwg-recolor-field"><span>Notice Range (studs)</span><input id="kwg-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
+            <label class="kwg-recolor-field"><span>Enemy Speed (studs / second)</span><input id="kwg-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
+            <label class="kwg-recolor-field"><span>Number of Enemies</span><input id="kwg-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
+            <label class="kwg-recolor-field"><span>Can Be Stomped</span><input id="kwg-enemy-killable" type="checkbox" checked></label>
+            <label class="kwg-recolor-field"><span>Respawn Delay (seconds)</span><input id="kwg-enemy-respawn" type="number" min="0" max="300" step="0.5" value="5"></label>
+            <p class="kwg-recolor-help">Jump on a devil to bounce. Double-jump before landing to squish it!</p>
+          </div>
+
         </div>
       </div>
     </div>
@@ -3289,10 +3304,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     <div class="kwg-world-edit-header"><div class="profile-kicker">WORLD MANAGEMENT</div><h2 id="kwg-world-edit-heading">EDIT WORLD</h2></div>
     <label for="kwg-world-edit-name">DISPLAY NAME</label><input id="kwg-world-edit-name" maxlength="40" required>
     <label for="kwg-world-edit-description">DESCRIPTION</label><textarea id="kwg-world-edit-description" maxlength="300" rows="4"></textarea>
-    <label>THUMBNAIL — IN-GAME SCREENSHOT</label>
-    <div class="kwg-create-world-hint">Use the World Editor camera to choose your shot. You cannot upload pictures from your computer.</div>
-    <button id="kwg-world-edit-camera" class="kwg-world-edit-button" type="button">SAVE & OPEN THUMBNAIL CAMERA</button>
-    <img id="kwg-world-edit-preview" alt="World thumbnail preview" hidden>
     <div id="kwg-world-edit-status" role="status" aria-live="polite"></div>
     <div class="kwg-world-edit-actions"><button id="kwg-world-edit-cancel" type="button">CANCEL</button><button id="kwg-world-edit-save" class="submit-btn" type="submit">SAVE CHANGES</button></div>
   </form>
@@ -4310,7 +4321,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // --- PROCEDURAL TEXTURE GENERATOR ---
     const textureCache = {};
     function getMaterialTexture(matType) {
-      if (!['grid','brick','wood','kill','checkpoint','spawn','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
+      if (!['grid','brick','wood','kill','checkpoint','spawn','enemy_spawner','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
       if (textureCache[matType]) return textureCache[matType];
 
       const canvas = document.createElement('canvas');
@@ -4376,6 +4387,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         ctx.fillRect(63,53,10,10);
         ctx.fillRect(73,43,10,10);
         ctx.fillRect(83,33,10,10);
+      } else if (matType === 'enemy_spawner') {
+        // Repeatable pixel-art devil face, dark on white so the blue tint shows.
+        ctx.fillStyle='#343a43';
+        ctx.fillRect(27,33,74,67); // head
+        ctx.fillRect(19,18,16,24);ctx.fillRect(24,11,10,12); // left horn
+        ctx.fillRect(93,18,16,24);ctx.fillRect(94,11,10,12); // right horn
+        ctx.fillStyle='#ffffff';
+        ctx.fillRect(40,52,15,16);ctx.fillRect(73,52,15,16);
+        ctx.fillRect(46,81,36,9);
+        ctx.fillStyle='#343a43';
+        ctx.fillRect(45,55,8,9);ctx.fillRect(75,55,8,9);
+        ctx.fillRect(53,81,7,8);ctx.fillRect(68,81,7,8);
       } else if (matType === 'spawn') {
         // Repeatable pixel-art PLAY button, tinted purple by the part color.
         ctx.fillStyle='#343a43';
@@ -4414,7 +4437,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // exact same UVs, so scaling works consistently on every shape.
     function getBlockSurfaceTexture(materialType, actionType) {
       const baseType=['grid','brick','wood'].includes(materialType) ? materialType : 'grid';
-      const iconType=['kill','checkpoint','spawn'].includes(actionType) ? actionType : null;
+      const iconType=['kill','checkpoint','spawn','enemy_spawner'].includes(actionType) ? actionType : null;
       if (!iconType) return getMaterialTexture(baseType);
       const key='combined:'+baseType+':'+iconType;
       if(textureCache[key])return textureCache[key];
@@ -4445,9 +4468,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgEditingWorld=world;
       document.getElementById('kwg-world-edit-name').value=world.displayName||world.name;
       document.getElementById('kwg-world-edit-description').value=world.description||'';
-      const img=document.getElementById('kwg-world-edit-preview');
-      img.hidden=!world.thumbnailUrl;img.src=world.thumbnailUrl||'';
-      document.getElementById('kwg-world-edit-status').textContent='Save details here, or open the World Editor camera to capture a thumbnail.';
+      document.getElementById('kwg-world-edit-status').textContent='Edit the world name and description here. Set thumbnails inside World Editor.';
       document.getElementById('kwg-world-edit-overlay').hidden=false;
       document.getElementById('kwg-world-edit-name').focus();
     }
@@ -4455,26 +4476,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.getElementById('kwg-world-edit-cancel').onclick=kwgCloseWorldEdit;
     document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.getElementById('kwg-world-edit-overlay').hidden)kwgCloseWorldEdit();});
     document.getElementById('kwg-world-edit-overlay').addEventListener('click',e=>{if(e.target.id==='kwg-world-edit-overlay')kwgCloseWorldEdit();});
-    let kwgOpenCameraAfterWorldInfoSave=false;
-    document.getElementById('kwg-world-edit-camera').addEventListener('click',()=>{
-      kwgOpenCameraAfterWorldInfoSave=true;
-      document.getElementById('kwg-world-edit-form').requestSubmit();
-    });
     document.getElementById('kwg-world-edit-form').addEventListener('submit',async e=>{
       e.preventDefault();if(!kwgEditingWorld)return;
       const button=document.getElementById('kwg-world-edit-save'),status=document.getElementById('kwg-world-edit-status');
       const title=document.getElementById('kwg-world-edit-name').value.trim(),description=document.getElementById('kwg-world-edit-description').value.trim();
-      if(!title||title.length>40||description.length>300){status.textContent='Name must be 1–40 characters; description up to 300.';kwgOpenCameraAfterWorldInfoSave=false;return;}
+      if(!title||title.length>40||description.length>300){status.textContent='Name must be 1–40 characters; description up to 300.';return;}
       button.disabled=true;status.textContent='Saving world...';
       const key=kwgEditingWorld.name;
-      const openCamera=kwgOpenCameraAfterWorldInfoSave;
-      kwgOpenCameraAfterWorldInfoSave=false;
       socket.timeout(20000).emit('update_owned_world_info',{worldName:key,displayName:title,description},(err,res)=>{
         button.disabled=false;
         if(err||!res?.success){status.textContent=res?.message||'Save timed out. Please retry.';return;}
         kwgCloseWorldEdit();
-        if(openCamera)joinSelectedWorld(key,null,false,'camera');
-        else{showToast('World updated!');renderRoomList();renderHomeOverview();}
+        showToast('World updated!');renderRoomList();renderHomeOverview();
       });
     });
     function makeWorldCard(w) {
@@ -4492,7 +4505,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       card.querySelector('.world-like-btn').addEventListener('click', () => socket.emit('toggle_world_like',{worldName:w.name},res=>{ if(res?.success){ renderRoomList(); renderHomeOverview(); if(document.getElementById('search-pane')?.classList.contains('active'))kwgSearchRun(); } }));
       if ((w.ownerUsername || '').toLowerCase() === (loggedInUsername || '').toLowerCase()) {
         const actions=card.lastElementChild;
-        const edit=document.createElement('button');edit.className='kwg-world-edit-button';edit.textContent='EDIT';edit.title='Change world name, description and thumbnail';
+        const edit=document.createElement('button');edit.className='kwg-world-edit-button';edit.textContent='EDIT';edit.title='Change world name and description';
         edit.onclick=()=>kwgOpenWorldEdit(w);
         actions.insertBefore(edit,actions.querySelector('.join-btn'));
         const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE';
@@ -4753,7 +4766,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.getElementById('open-create-world-btn').addEventListener('click', () => {
       document.getElementById('new-world-name').value = '';
       document.getElementById('new-world-description').value = '';
-      document.getElementById('new-world-thumbnail-mode').value = 'auto';
       document.getElementById('create-world-error').textContent = '';
       document.getElementById('home-screen').style.display = 'none';
       createModal.style.display = 'flex';
@@ -4765,7 +4777,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.getElementById('confirm-create-world-btn').addEventListener('click', () => {
       const name=document.getElementById('new-world-name').value.trim();
       const description=document.getElementById('new-world-description').value.trim();
-      const thumbnailMode=document.getElementById('new-world-thumbnail-mode').value;
       const error=document.getElementById('create-world-error');
       const button=document.getElementById('confirm-create-world-btn');
       if(name&&!/^[A-Za-z0-9 _-]{1,20}$/.test(name)){
@@ -4777,7 +4788,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         button.disabled=false;
         if(err||!res?.success){error.textContent=res?.message||'Could not create world. Please retry.';return;}
         createModal.style.display='none';
-        joinSelectedWorld(res.worldName||name,null,false,thumbnailMode==='camera'?'camera':null);
+        joinSelectedWorld(res.worldName||name);
       });
     });
 
@@ -4941,6 +4952,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     function performLeaveWorld() {
+      kwgClearEnemySpawners();
       kwgClearWorldPets();
       kwgClosePetsInventory();
       clearInterval(worldIdleTimer);
@@ -8516,7 +8528,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
 
       const matOptions = { 
-        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : blockData.actionType === 'spawn' ? '#a86cff' : '#888888'),
+        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : blockData.actionType === 'spawn' ? '#a86cff' : blockData.actionType === 'enemy_spawner' ? '#57b9f4' : '#888888'),
         transparent: isUncollidable || transparency > 0,
         opacity: opacityVal
       };
@@ -8576,6 +8588,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     function loadWorldData(world, initialPlayers, selfId, selfSpawn) {
+      kwgClearEnemySpawners();
       kwgClearWorldPets();
       currentWorldData = world;
       if (localPlayerAvatar) { scene.remove(localPlayerAvatar); localPlayerAvatar = null; }
@@ -9241,15 +9254,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         partFields.style.display = 'block';
 
         document.getElementById('block-shape-select').value = (!block.shape || block.shape === 'baseplate') ? 'box' : block.shape;
-        document.getElementById('block-action-select').value = ['normal','kill','checkpoint','spawn'].includes(block.actionType) ? block.actionType : 'normal';
+        document.getElementById('block-action-select').value = ['normal','kill','checkpoint','spawn','enemy_spawner'].includes(block.actionType) ? block.actionType : 'normal';
         document.getElementById('block-material-select').value = ['grid','brick','wood'].includes(block.material) ? block.material : 'grid';
         document.getElementById('block-color-input').value = block.color || '#888888'; kwgSyncRGBField('block-color-input');
         document.getElementById('block-transparency-input').value = block.transparency !== undefined ? block.transparency : 0;
         document.getElementById('block-collidable-checkbox').checked = block.canCollide !== false;
+        const enemy=kwgEnemyPropsOf(block);
+        for(const [key,id] of Object.entries({noticeRange:'range',enemySpeed:'speed',enemyCount:'count',enemyRespawn:'respawn'}))
+          document.getElementById('kwg-enemy-'+id).value=enemy[key];
+        document.getElementById('kwg-enemy-killable').checked=enemy.enemyKillable;
       } else {
         noSelMsg.style.display = 'block';
         partFields.style.display = 'none';
       }
+      kwgToggleEnemyFields();
     }
 
     function applySelectedPartPropertyChange() {
@@ -9264,6 +9282,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(nextType==='checkpoint')document.getElementById('block-color-input').value='#f4cf45';
         if(nextType==='spawn')document.getElementById('block-color-input').value='#a86cff';
         if(nextType==='kill')document.getElementById('block-color-input').value='#d95757';
+        if(nextType==='enemy_spawner')document.getElementById('block-color-input').value='#57b9f4';
         kwgSyncRGBField('block-color-input');
       }
       blockData.actionType=nextType;
@@ -9271,6 +9290,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       blockData.color = document.getElementById('block-color-input').value;
       blockData.transparency = kwgTransparencyValue('block-transparency-input');
       blockData.canCollide = document.getElementById('block-collidable-checkbox').checked;
+      if(nextType==='enemy_spawner')Object.assign(blockData,kwgEnemyPropsFromUI('kwg-enemy-'));
+      kwgToggleEnemyFields();
 
       emitWorldSave('block_update', { worldName: currentWorldName, action: 'update', blockData }, (r) => { if (r && !r.success) showToast('Could not save changes'); });
 
@@ -9287,7 +9308,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     }
 
-    ['block-shape-select', 'block-action-select', 'block-material-select', 'block-color-input', 'block-transparency-input', 'block-collidable-checkbox'].forEach(id => {
+    ['block-shape-select', 'block-action-select', 'block-material-select', 'block-color-input', 'block-transparency-input', 'block-collidable-checkbox',
+      'kwg-enemy-range','kwg-enemy-speed','kwg-enemy-count','kwg-enemy-killable','kwg-enemy-respawn'].forEach(id => {
       const elem = document.getElementById(id);
       elem.addEventListener('change', applySelectedPartPropertyChange);
       elem.addEventListener('input', applySelectedPartPropertyChange);
@@ -9509,6 +9531,37 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const el=document.getElementById(id);
       el.value=String(kwgTransparencyValue(id));
     }
+    const kwgEnemyDefaults={noticeRange:18,enemySpeed:3,enemyCount:1,enemyKillable:true,enemyRespawn:5};
+    function kwgEnemyNumber(value,min,max,fallback,integer=false){
+      const v=Number(value);
+      if(!Number.isFinite(v))return fallback;
+      const clamped=Math.min(max,Math.max(min,v));
+      return integer?Math.round(clamped):Math.round(clamped*10)/10;
+    }
+    function kwgEnemyPropsFromUI(prefix){
+      return {
+        noticeRange:kwgEnemyNumber(document.getElementById(prefix+'range').value,2,100,18),
+        enemySpeed:kwgEnemyNumber(document.getElementById(prefix+'speed').value,.5,15,3),
+        enemyCount:kwgEnemyNumber(document.getElementById(prefix+'count').value,1,12,1,true),
+        enemyKillable:document.getElementById(prefix+'killable').checked,
+        enemyRespawn:kwgEnemyNumber(document.getElementById(prefix+'respawn').value,0,300,5)
+      };
+    }
+    function kwgEnemyPropsOf(block){
+      return {
+        noticeRange:kwgEnemyNumber(block.noticeRange,2,100,18),
+        enemySpeed:kwgEnemyNumber(block.enemySpeed,.5,15,3),
+        enemyCount:kwgEnemyNumber(block.enemyCount,1,12,1,true),
+        enemyKillable:block.enemyKillable!==false,
+        enemyRespawn:kwgEnemyNumber(block.enemyRespawn,0,300,5)
+      };
+    }
+    function kwgToggleEnemyFields(){
+      const place=document.getElementById('kwg-place-enemy-properties');
+      const selected=document.getElementById('kwg-enemy-properties');
+      if(place)place.style.display=document.getElementById('kwg-place-type').value==='enemy_spawner'?'block':'none';
+      if(selected)selected.style.display=selectedBlockId&&currentWorldData?.blocks?.[selectedBlockId]?.actionType==='enemy_spawner'?'block':'none';
+    }
     function kwgPlacePreset(){
       const value=id=>document.getElementById(id).value;
       return {
@@ -9520,12 +9573,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         canCollide:document.getElementById('kwg-place-collide').checked,
         anchored:true,
         scaleX:1,scaleY:1,scaleZ:1,
-        rotationX:0,rotationY:0
+        rotationX:0,rotationY:0,
+        ...(value('kwg-place-type')==='enemy_spawner'?kwgEnemyPropsFromUI('kwg-place-enemy-'):{})
       };
     }
     const kwgPlacePresetFields=[
       'kwg-place-shape','kwg-place-type','kwg-place-material',
-      'kwg-place-color','kwg-place-transparency','kwg-place-collide'
+      'kwg-place-color','kwg-place-transparency','kwg-place-collide',
+      'kwg-place-enemy-range','kwg-place-enemy-speed','kwg-place-enemy-count',
+      'kwg-place-enemy-killable','kwg-place-enemy-respawn'
     ];
     let kwgLastPlaceType='normal';
     kwgPlacePresetFields.forEach(id=>{
@@ -9538,11 +9594,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             if(type==='checkpoint')colorInput.value='#f4cf45';
             else if(type==='spawn')colorInput.value='#a86cff';
             else if(type==='kill')colorInput.value='#d95757';
+            else if(type==='enemy_spawner')colorInput.value='#57b9f4';
             else if(kwgLastPlaceType!=='normal')colorInput.value='#888888';
             kwgLastPlaceType=type;
             kwgSyncRGBField('kwg-place-color');
           }
         }
+        kwgToggleEnemyFields();
         if(isEditMode&&buildSubTool==='place')updatePreviewMesh();
       });
       element.addEventListener('change',()=>{
@@ -10964,6 +11022,213 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     });
     window.addEventListener('keyup', (e) => { const key = (typeof e.key === 'string') ? e.key.toLowerCase() : ''; if (key) keys[key] = false; });
 
+    // Enemy Spawner: independent runtime characters, never serialized as blocks.
+    // Spawner configuration IS saved as a normal world block. Each client renders
+    // the devils; stomp events are broadcast so defeats appear to all visitors.
+    const kwgEnemySpawners=new Map();
+    let kwgAirJumps=0,kwgDoubleJumpStomp=false;
+    let kwgEnemyLastAttack=0;
+    const kwgEnemyClock=()=>performance.now();
+    function kwgDevilModel(){
+      const root=new THREE.Group();
+      const red=new THREE.MeshLambertMaterial({color:0xd94860});
+      const dark=new THREE.MeshLambertMaterial({color:0x521f35});
+      const eye=new THREE.MeshBasicMaterial({color:0xffffff});
+      const pupil=new THREE.MeshBasicMaterial({color:0x1c1724});
+      const part=(w,h,d,x,y,z,mat,parent=root)=>{
+        const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+        mesh.position.set(x,y,z);parent.add(mesh);return mesh;
+      };
+      part(.85,.78,.58,0,.83,0,red);
+      part(.8,.66,.66,0,1.42,0,red);
+      part(.17,.36,.17,-.29,1.92,0,dark);
+      part(.17,.36,.17,.29,1.92,0,dark);
+      part(.16,.17,.06,-.19,1.49,.36,eye);
+      part(.16,.17,.06,.19,1.49,.36,eye);
+      part(.07,.11,.07,-.19,1.48,.402,pupil);
+      part(.07,.11,.07,.19,1.48,.402,pupil);
+      part(.35,.09,.065,0,1.18,.36,dark);
+      const leftArm=new THREE.Group(),rightArm=new THREE.Group();
+      leftArm.position.set(-.52,1.04,0);rightArm.position.set(.52,1.04,0);
+      root.add(leftArm,rightArm);
+      part(.23,.57,.24,0,-.25,0,red,leftArm);
+      part(.23,.57,.24,0,-.25,0,red,rightArm);
+      const leftLeg=new THREE.Group(),rightLeg=new THREE.Group();
+      leftLeg.position.set(-.22,.49,0);rightLeg.position.set(.22,.49,0);
+      root.add(leftLeg,rightLeg);
+      part(.25,.47,.28,0,-.24,0,dark,leftLeg);
+      part(.25,.47,.28,0,-.24,0,dark,rightLeg);
+      root.userData.devilLimbs=[leftArm,rightArm,leftLeg,rightLeg];
+      root.userData.devilBody=root.children[0];
+      root.userData.isEnemyCharacter=true;
+      return root;
+    }
+    function kwgEnemySlotSpawn(block,index,count){
+      const angle=index*Math.PI*2/Math.max(1,count);
+      const r=count===1?0:Math.min(1.4,Math.max(.4,Math.min(Math.abs(Number(block.scaleX)||1),Math.abs(Number(block.scaleZ)||1))*.23));
+      const bounds=getBlockAABB(block);
+      return {x:(Number(block.x)||0)+Math.cos(angle)*r,
+              y:bounds.maxY+.06,z:(Number(block.z)||0)+Math.sin(angle)*r};
+    }
+    function kwgDestroyEnemySlot(slot){
+      if(!slot?.mesh)return;
+      scene.remove(slot.mesh);
+      slot.mesh.traverse(obj=>{
+        if(obj.geometry)obj.geometry.dispose();
+        if(obj.material){for(const m of (Array.isArray(obj.material)?obj.material:[obj.material]))m.dispose();}
+      });
+      slot.mesh=null;
+    }
+    function kwgClearEnemySpawners(){
+      for(const entry of kwgEnemySpawners.values())for(const slot of entry.slots)kwgDestroyEnemySlot(slot);
+      kwgEnemySpawners.clear();
+      kwgLastEnemySync=0;
+      kwgAirJumps=0;kwgDoubleJumpStomp=false;
+    }
+    function kwgDefeatEnemy(spawnerId,index,notify=true){
+      const entry=kwgEnemySpawners.get(spawnerId);
+      if(!entry||!entry.slots[index]||entry.slots[index].deadUntil>kwgEnemyClock())return;
+      const slot=entry.slots[index];
+      slot.deadUntil=kwgEnemyClock()+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
+      kwgDestroyEnemySlot(slot);
+      if(notify&&socket?.connected)socket.emit('enemy_stomped',{worldName:currentWorldName,spawnerId,index});
+    }
+    socket.on('enemy_stomped',({worldName,spawnerId,index}={})=>{
+      if(worldName===currentWorldName)kwgDefeatEnemy(spawnerId,index,false);
+    });
+    let kwgLastEnemySync=0;
+    function kwgSyncEnemySpawners(){
+      if(!currentWorldName||!currentWorldData?.blocks)return;
+      const now=kwgEnemyClock();
+      if(now-kwgLastEnemySync<180)return;
+      kwgLastEnemySync=now;
+      const blocks=currentWorldData.blocks;
+      for(const [id,entry] of kwgEnemySpawners){
+        if(!blocks[id]||blocks[id].actionType!=='enemy_spawner'){
+          for(const slot of entry.slots)kwgDestroyEnemySlot(slot);
+          kwgEnemySpawners.delete(id);
+        }
+      }
+      for(const block of Object.values(blocks)){
+        if(block?.actionType!=='enemy_spawner')continue;
+        const id=block.id,props=kwgEnemyPropsOf(block);
+        let entry=kwgEnemySpawners.get(id);
+        if(!entry){entry={block,slots:[]};kwgEnemySpawners.set(id,entry);}
+        entry.block=block;
+        while(entry.slots.length>props.enemyCount)kwgDestroyEnemySlot(entry.slots.pop());
+        while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,walkTime:0,fallSpeed:0});
+      }
+    }
+    function kwgEnemyGroundY(x,y,z,blocks){
+      let top=-Infinity;
+      for(const block of blocks){
+        if(block.canCollide===false)continue;
+        // Fast broad phase: only sample floors near this enemy.
+        const maxDimension=Math.max(Math.abs(Number(block.scaleX)||1),Math.abs(Number(block.scaleY)||1),Math.abs(Number(block.scaleZ)||1));
+        const reach=maxDimension*1.5+1;
+        if(Math.abs(x-(Number(block.x)||0))>reach||Math.abs(z-(Number(block.z)||0))>reach)continue;
+        const surface=getPartSurfaceYFromData(block,x,z,y);
+        if(surface!==null&&surface<=y+.65&&surface>y-2.8&&surface>top)top=surface;
+      }
+      return top;
+    }
+    function kwgUpdateEnemies(delta){
+      if(!currentWorldName||!localPlayerAvatar||kwgFreeCamera.active)return;
+      kwgSyncEnemySpawners();
+      const player=localPlayerAvatar,now=kwgEnemyClock();
+      const blocks=Object.values(currentWorldData.blocks||{});
+      const dt=Math.min(delta,.05);
+      let visibleDevils=0;
+      for(const [id,entry] of kwgEnemySpawners){
+        const props=kwgEnemyPropsOf(entry.block);
+        for(let index=0;index<entry.slots.length;index++){
+          const slot=entry.slots[index];
+          if(now<slot.deadUntil)continue;
+          const origin=kwgEnemySlotSpawn(entry.block,index,entry.slots.length);
+          const spawnDistance=Math.hypot(player.position.x-origin.x,player.position.z-origin.z);
+          if(spawnDistance>props.noticeRange+22||visibleDevils>=72){
+            if(slot.mesh)kwgDestroyEnemySlot(slot);
+            continue;
+          }
+          visibleDevils++;
+          if(!slot.mesh){
+            slot.mesh=kwgDevilModel();scene.add(slot.mesh);
+            slot.mesh.position.set(origin.x,origin.y,origin.z);
+            slot.fallSpeed=0;slot.walkTime=0;
+          }
+          const npc=slot.mesh;
+          const dx=player.position.x-npc.position.x,dz=player.position.z-npc.position.z;
+          const distance=Math.hypot(dx,dz);
+          const withinRange=Math.hypot(player.position.x-origin.x,player.position.z-origin.z)<=props.noticeRange&&Math.abs(player.position.y-origin.y)<props.noticeRange;
+          const homeDist=Math.hypot(npc.position.x-origin.x,npc.position.z-origin.z);
+          let targetX=origin.x,targetZ=origin.z;
+          if(!isEditMode&&withinRange){targetX=player.position.x;targetZ=player.position.z;}
+          let tx=targetX-npc.position.x,tz=targetZ-npc.position.z;
+          const distanceToTarget=Math.hypot(tx,tz);
+          const walking=distanceToTarget>.15&&(!isEditMode||homeDist>.15);
+          if(walking){
+            const speed=props.enemySpeed*(withinRange&&!isEditMode?1:.65);
+            const travel=Math.min(distanceToTarget,speed*dt);
+            npc.position.x+=tx/distanceToTarget*travel;
+            npc.position.z+=tz/distanceToTarget*travel;
+            npc.rotation.y=Math.atan2(tx,tz);
+            slot.walkTime+=dt*speed*4;
+          }
+          const ground=kwgEnemyGroundY(npc.position.x,npc.position.y,npc.position.z,blocks);
+          if(ground!==-Infinity&&npc.position.y<=ground+.65){
+            npc.position.y+=Math.min(.18,Math.max(-.18,ground-npc.position.y));
+            slot.fallSpeed=0;
+          }else{
+            slot.fallSpeed=Math.max(-10,slot.fallSpeed-20*dt);
+            npc.position.y+=slot.fallSpeed*dt;
+            if(npc.position.y<origin.y-30){npc.position.set(origin.x,origin.y,origin.z);slot.fallSpeed=0;}
+          }
+          const [la,ra,ll,rl]=npc.userData.devilLimbs;
+          const sway=walking?Math.sin(slot.walkTime)*.52:Math.sin(now*.002+index)*.06;
+          la.rotation.x=sway;ra.rotation.x=-sway;
+          ll.rotation.x=-sway;rl.rotation.x=sway;
+          npc.userData.devilBody.rotation.z=Math.sin(now*.003+index)*.035;
+          // A stomp requires the avatar's feet to CROSS the enemy's head.
+          // Ordinary jumps bounce; a double-jump deals the finishing stomp.
+          if(isEditMode||!withinRange||distance>.72)continue;
+          const top=npc.position.y+1.79;
+          const feet=player.position.y;
+          const landing=velocityY<=0&&kwgEnemyPreviousFeet>=top-.12&&feet<=top+.16&&feet>=top-.55;
+          if(landing){
+            player.position.y=top+.12;
+            velocityY=kwgDoubleJumpStomp?jumpStrength*.8:jumpStrength*.68;
+            isGrounded=false;
+            if(kwgDoubleJumpStomp&&props.enemyKillable){
+              kwgDefeatEnemy(id,index,true);
+              showToast('DEVIL SMUSHED!');
+            }else if(!props.enemyKillable&&kwgDoubleJumpStomp){
+              showToast('This devil cannot be defeated!');
+            }
+            kwgDoubleJumpStomp=false;
+            kwgEnemyPreviousFeet=player.position.y;
+            continue;
+          }
+          // Touching from the side damages the player, with a short grace period.
+          if(distance<.64&&feet<npc.position.y+1.4&&feet+2.1>npc.position.y+.25&&now-kwgEnemyLastAttack>1250){
+            kwgEnemyLastAttack=now;
+            kwgAudio.play('death');showToast('A devil caught you!');respawnPlayer();
+            return;
+          }
+        }
+      }
+    }
+    let kwgEnemyPreviousFeet=-Infinity;
+    // Second discrete Space press in mid-air enables a stomp. Holding Space
+    // cannot accidentally count as a double-jump.
+    window.addEventListener('keydown',e=>{
+      if(e.code!=='Space'||e.repeat||isEditMode||kwgFreeCamera.active||!currentWorldName)return;
+      if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+      if(!isGrounded&&kwgAirJumps===1){
+        kwgAirJumps=2;kwgDoubleJumpStomp=true;
+        velocityY=Math.max(velocityY,jumpStrength*.78);
+        e.preventDefault();
+      }
+    });
     let velocityY = 0;
     const gravity = -0.001375;
     const jumpStrength = 0.1175;
@@ -11594,6 +11859,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     function respawnPlayer() {
+      kwgAirJumps=0;kwgDoubleJumpStomp=false;
       if (localPlayerAvatar) {
         // Keep earned checkpoints; otherwise choose a fresh random Spawn part.
         // If a checkpoint was deleted, fall back to the Spawn parts instead.
@@ -11774,6 +12040,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         velocityY=jumpStrength;
         isGrounded=false;
         targetStepY=0;
+        kwgAirJumps=1;kwgDoubleJumpStomp=false;
       }
 
       const oldFeetY = player.position.y;
@@ -11796,6 +12063,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           player.position.y=ground.floorY;
           velocityY=0;
           isGrounded=true;
+          kwgAirJumps=0;kwgDoubleJumpStomp=false;
         } else if (velocityY<=0) {
           isGrounded=false;
         }
@@ -11870,7 +12138,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       requestAnimationFrame(animate);
       const delta = Math.min(clock.getDelta(), 0.1);
 
-      if(!kwgFreeCamera.active) updatePlayerPhysics(delta);
+      if(!kwgFreeCamera.active){
+        kwgEnemyPreviousFeet=localPlayerAvatar?.position.y??-Infinity;
+        updatePlayerPhysics(delta);
+        kwgUpdateEnemies(delta);
+      }
       if(!kwgFreeCamera.active) updateGizmoScreenScale();
       else updateWorldThumbnailCamera(delta);
 
