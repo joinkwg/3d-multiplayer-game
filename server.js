@@ -444,6 +444,14 @@ async function migrate() {
     );
     CREATE INDEX IF NOT EXISTS profile_messages_profile_idx ON profile_messages(profile_user_id,created_at DESC,id DESC);
     CREATE INDEX IF NOT EXISTS profile_messages_author_idx ON profile_messages(author_user_id,created_at DESC);
+    CREATE TABLE IF NOT EXISTS feed_posts (
+      id BIGSERIAL PRIMARY KEY,
+      author_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body VARCHAR(500) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS feed_posts_author_idx ON feed_posts(author_user_id,created_at DESC,id DESC);
+    CREATE INDEX IF NOT EXISTS feed_posts_recent_idx ON feed_posts(created_at DESC,id DESC);
     CREATE TABLE IF NOT EXISTS notifications (
       id BIGSERIAL PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1140,6 +1148,11 @@ io.on('connection', (socket) => {
         canDelete:Number(m.authorId)===Number(socket.user.id)||Number(u.id)===Number(socket.user.id)
       }));
 
+      const profilePosts=blockBetween?[]:(await pool.query(`
+        SELECT p.id,p.body,p.created_at AS "createdAt",author.username AS "authorUsername"
+        FROM feed_posts p JOIN users author ON author.id=p.author_user_id
+        WHERE p.author_user_id=$1 ORDER BY p.created_at DESC,p.id DESC LIMIT 40
+      `,[u.id])).rows.map(p=>({...p,id:Number(p.id),canDelete:Number(u.id)===Number(socket.user.id)}));
       const onlineSocket = socketsByUser.get(u.id);
       const livePlayer = onlineSocket ? playersBySocket.get(onlineSocket.id) : null;
       cb({
@@ -1162,7 +1175,7 @@ io.on('connection', (socket) => {
           showcasedWorlds,
           likedWorlds:likedRows.rows.map(worldCard),topWorlds,
           createdWorlds:ownedWithIds.rows.map(w=>worldCard({...w,like_count:w.likeCount})),
-          friends,messages,
+          friends,messages,posts:profilePosts,
           ownedWorlds: u.id === socket.user.id ? ownedWithIds.rows.map(w => ({
             id:Number(w.id),name:w.name,displayName:filterKWGUserText(String(w.data?.displayName||w.name)),thumbnailUrl:String(w.data?.thumbnailUrl||''),createdAt:w.createdAt,likeCount:Number(w.likeCount||0)
           })) : []
@@ -1233,6 +1246,71 @@ io.on('connection', (socket) => {
       if(!deleted.rowCount)return cb({success:false,message:'Message not found or permission denied.'});
       cb({success:true});
     }catch(e){console.error('Profile delete error:',e);cb({success:false,message:'Could not delete message.'});}
+  });
+
+  // Feed posts are authored by the signed-in user. The same record appears
+  // on their profile and in accepted friends' feeds.
+  socket.on('post_feed_post',async ({body}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    if(typeof cb!=='function')return;
+    try{
+      body=filterKWGUserText(String(body||'').trim().slice(0,500));
+      if(!body)return cb({success:false,message:'Write a post first.'});
+      const recent=await pool.query("SELECT 1 FROM feed_posts WHERE author_user_id=$1 AND created_at>NOW()-INTERVAL '10 seconds' LIMIT 1",[socket.user.id]);
+      if(recent.rowCount)return cb({success:false,message:'Wait a few seconds before posting again.'});
+      await pool.query('INSERT INTO feed_posts(author_user_id,body) VALUES($1,$2)',[socket.user.id,body]);
+      cb({success:true});
+    }catch(e){console.error('Feed post error:',e);cb({success:false,message:'Could not publish post.'});}
+  });
+  socket.on('get_feed_posts',async (_payload,cb)=>{
+    if(!requireAuth(socket,cb))return;
+    if(typeof cb!=='function')return;
+    try{
+      const result=await pool.query(`
+        SELECT p.id,p.body,p.created_at AS "createdAt",u.username AS "authorUsername",p.author_user_id AS "authorId"
+        FROM feed_posts p JOIN users u ON u.id=p.author_user_id
+        WHERE (p.author_user_id=$1 OR EXISTS(
+          SELECT 1 FROM friendships f
+          WHERE f.status='accepted' AND
+            ((f.requester_id=$1 AND f.addressee_id=p.author_user_id) OR
+             (f.addressee_id=$1 AND f.requester_id=p.author_user_id))
+        )) AND NOT EXISTS(
+          SELECT 1 FROM user_blocks b
+          WHERE (b.blocker_id=$1 AND b.blocked_id=p.author_user_id)
+             OR (b.blocked_id=$1 AND b.blocker_id=p.author_user_id)
+        )
+        ORDER BY p.created_at DESC,p.id DESC LIMIT 50
+      `,[socket.user.id]);
+      cb({success:true,posts:result.rows.map(p=>({
+        id:Number(p.id),body:filterKWGUserText(p.body),createdAt:p.createdAt,
+        authorUsername:p.authorUsername,canDelete:Number(p.authorId)===Number(socket.user.id)
+      }))});
+    }catch(e){console.error('Feed load error:',e);cb({success:false,message:'Could not load feed.'});}
+  });
+  socket.on('delete_feed_post',async ({postId}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    if(typeof cb!=='function')return;
+    const id=Number(postId);
+    if(!Number.isSafeInteger(id)||id<1)return cb({success:false,message:'Invalid post.'});
+    try{
+      const result=await pool.query('DELETE FROM feed_posts WHERE id=$1 AND author_user_id=$2 RETURNING id',[id,socket.user.id]);
+      cb(result.rowCount?{success:true}:{success:false,message:'Post not found or not yours.'});
+    }catch(e){console.error('Feed delete error:',e);cb({success:false,message:'Could not delete post.'});}
+  });
+  socket.on('get_top_rated_worlds',async (_payload,cb)=>{
+    if(!requireAuth(socket,cb))return;
+    if(typeof cb!=='function')return;
+    try{
+      const result=await pool.query(`
+        SELECT w.*,u.username AS owner_username,COUNT(wl.user_id)::int AS like_count,
+               BOOL_OR(wl.user_id=$1) AS liked_by_me
+        FROM worlds w LEFT JOIN users u ON u.id=w.owner_user_id
+        LEFT JOIN world_likes wl ON wl.world_id=w.id
+        GROUP BY w.id,u.username
+        ORDER BY like_count DESC,w.created_at DESC LIMIT 8
+      `,[socket.user.id]);
+      cb({success:true,worlds:await Promise.all(result.rows.map(worldSummary))});
+    }catch(e){console.error('Top worlds error:',e);cb({success:false,message:'Could not load top worlds.'});}
   });
 
   // Home dashboard: recent visits, current rolling-24h like leader,
@@ -1901,6 +1979,33 @@ io.on('connection', (socket) => {
       });
       cb && cb(result);
     } catch(e){console.error('World info update:',e);cb && cb({success:false,message:e.clientMessage||'Could not save world info or thumbnail. Check thumbnail storage configuration.'});}
+  });
+
+  // World owners can edit display metadata directly from the Worlds page.
+  // The internal world key remains stable so existing visits/likes are preserved.
+  socket.on('update_owned_world_info',async ({worldName,displayName,description,thumbnailData}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    if(typeof cb!=='function')return;
+    const key=cleanWorldName(worldName);
+    const title=filterKWGUserText(String(displayName||'').trim());
+    const desc=filterKWGUserText(String(description||'').trim());
+    if(!key||!title||title.length>40||/[\x00-\x1f\x7f]/.test(title))return cb({success:false,message:'Name must be 1–40 characters.'});
+    if(desc.length>300||/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(desc))return cb({success:false,message:'Description must be 300 characters or fewer.'});
+    try{
+      const result=await queueWorldSave(key,async()=>{
+        const world=await getWorldByName(key);
+        if(!world)return {success:false,message:'World not found.'};
+        if(Number(world.owner_user_id)!==Number(socket.user.id))return {success:false,message:'Only the owner can edit this world.'};
+        const data=world.data||{};
+        let thumbnailUrl=data.thumbnailUrl||'';
+        if(thumbnailData!==undefined&&thumbnailData!==null)thumbnailUrl=await uploadWorldThumbnail(world.id,thumbnailData);
+        data.displayName=title;data.description=desc;data.thumbnailUrl=thumbnailUrl;
+        await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
+        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,thumbnailUrl});
+        return {success:true,displayName:title,description:desc,thumbnailUrl};
+      });
+      cb(result);
+    }catch(e){console.error('Owner world edit error:',e);cb({success:false,message:e.clientMessage||'Could not save world info.'});}
   });
 
   socket.on('save_appearance', async (appearance, cb) => {
