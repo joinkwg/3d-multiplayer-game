@@ -1879,11 +1879,14 @@ io.on('connection', (socket) => {
     for(const key of ['ragdollX','ragdollY','ragdollZ'])
       p[key]=(typeof data[key]==='number'&&Number.isFinite(data[key]))?Math.max(-4,Math.min(4,data[key])):0;
     p.health=(typeof data.health==='number'&&Number.isFinite(data.health))?Math.max(0,Math.min(100,Math.round(data.health))):100;
+    // Never broadcast a held weapon that this connection hasn't collected.
+    p.equippedTool=['pistol','minigun'].includes(data.equippedTool)&&kwgServerTools.has(data.equippedTool)&&p.health>0?data.equippedTool:null;
     socket.to(`world:${p.worldName}`).emit('player_moved',{
       id:p.id,x:p.x,y:p.y,z:p.z,rotationY:p.rotationY,walkClock:p.walkClock,
       verticalVelocity:p.verticalVelocity,isMoving:p.isMoving,isGrounded:p.isGrounded,
       stompAngle:p.stompAngle,ragdollPose:p.ragdollPose,
-      ragdollX:p.ragdollX,ragdollY:p.ragdollY,ragdollZ:p.ragdollZ,health:p.health
+      ragdollX:p.ragdollX,ragdollY:p.ragdollY,ragdollZ:p.ragdollZ,health:p.health,
+      equippedTool:p.equippedTool
     });
   });
 
