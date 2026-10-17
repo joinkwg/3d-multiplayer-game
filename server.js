@@ -26,7 +26,7 @@ function normalizeEnemySpawner(block){
   block.enemyCount=Math.round(bounded(block.enemyCount,1,12,1));
   block.enemyRespawn=bounded(block.enemyRespawn,0,300,5);
   block.enemyDamage=Math.round(bounded(block.enemyDamage,1,100,25));
-  block.enemyCharacter=['devil','sniper','hops','spider','alien'].includes(block.enemyCharacter)?block.enemyCharacter:'devil';
+  block.enemyCharacter=['devil','sniper','hops','spider','alien','bot_bus'].includes(block.enemyCharacter)?block.enemyCharacter:'devil';
   block.enemyKillable=block.enemyCharacter!=='hops'&&block.enemyKillable!==false;
 }
 const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
