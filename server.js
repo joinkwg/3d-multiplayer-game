@@ -542,16 +542,6 @@ async function migrate() {
     -- Keep shelved pets and past purchases in the database for a future redesign.
     UPDATE pet_catalog SET is_visible=FALSE WHERE species IN ('skeleton','mummy','zombie');
 
-    CREATE TABLE IF NOT EXISTS world_templates (
-      id BIGSERIAL PRIMARY KEY,
-      name VARCHAR(40) UNIQUE NOT NULL,
-      source_world_id BIGINT REFERENCES worlds(id) ON DELETE SET NULL,
-      data JSONB NOT NULL,
-      created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-
     CREATE TABLE IF NOT EXISTS auth_sessions (
       token_hash TEXT PRIMARY KEY,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1463,14 +1453,6 @@ io.on('connection', (socket) => {
     } catch(e){ console.error(e); cb({success:false,message:'Could not update like.'}); }
   });
 
-  socket.on('get_world_templates', async (cb) => {
-    if (!requireAuth(socket, cb)) return;
-    try {
-      const r = await pool.query('SELECT id,name,created_at FROM world_templates ORDER BY name ASC');
-      cb({success:true,templates:r.rows});
-    } catch (e) { console.error(e); cb({success:false,message:'Could not load world templates.'}); }
-  });
-
   // V3.42: Server chooses the initial Spawn so the multiplayer position
   // broadcast and the joining client's avatar always agree.
   function chooseWorldSpawn(data){
@@ -1564,48 +1546,63 @@ io.on('connection', (socket) => {
     }catch(e){console.error('Unblock player:',e);cb({success:false,message:'Could not unblock player.'});}
   });
 
-  socket.on('create_world', async ({name, templateId}, cb) => {
+  // V18: every new world starts on a blank baseplate. Names may be omitted;
+  // random names are generated server-side so duplicate creation is handled safely.
+  socket.on('create_world', async ({name='',description=''}={}, cb) => {
     if (!requireAuth(socket, cb)) return;
-    name = cleanWorldName(name);
-    if (!/^[A-Za-z0-9 _-]{1,20}$/.test(name)) return cb({success:false,message:'World name contains invalid characters.'});
+    if(typeof cb!=='function')return;
+    const supplied=String(name||'').trim();
+    if(supplied && !/^[A-Za-z0-9 _-]{1,20}$/.test(supplied))
+      return cb({success:false,message:'Use letters, numbers, spaces, _ or - in world names.'});
+    const desc=filterKWGUserText(String(description||'').trim());
+    if(desc.length>300||/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(desc))
+      return cb({success:false,message:'Description must be 300 characters or fewer.'});
+    const adjectives=['Cozy','Sunny','Dreamy','Little','Magic','Cloudy','Happy','Hidden','Misty','Pixel','Golden','Secret'];
+    const places=['Garden','Valley','Island','Castle','Meadow','Forest','Village','Planet','Harbor','Cove','Haven','World'];
+    function randomWorldName(){
+      const prefix=adjectives[crypto.randomInt(adjectives.length)]+' '+places[crypto.randomInt(places.length)];
+      const letters=Array.from({length:3},()=>String.fromCharCode(65+crypto.randomInt(26))).join('');
+      return `${prefix} ${letters}`.slice(0,20);
+    }
     try {
-      const exists = await pool.query('SELECT id FROM worlds WHERE lower(name)=lower($1)', [name]);
-      if (exists.rowCount) return cb({success:false,message:'That world already exists.'});
-
-      let data;
-      if (templateId && String(templateId) !== 'blank') {
-        const t = await pool.query('SELECT data FROM world_templates WHERE id=$1',[Number(templateId)]);
-        if (!t.rowCount) return cb({success:false,message:'That template no longer exists.'});
-        data = JSON.parse(JSON.stringify(t.rows[0].data));
-        data.name = name;
-        delete data.displayName; delete data.description; delete data.thumbnailUrl;
-      } else {
-        data = {
-          name,
-          blocks: {
-            "baseplate": {
-              id: "baseplate", shape: "box", actionType: "normal", material: "grid",
-              color: "#555555", transparency: 0, canCollide: true, anchored: true,
-              x: 0, y: -0.5, z: 0, scaleX: 250, scaleY: 1, scaleZ: 250
+      for(let attempt=0;attempt<(supplied?1:15);attempt++){
+        const key=supplied||randomWorldName();
+        // Existing worlds are looked up case-insensitively throughout KWG.
+        // Keep new names unique under those same lookup rules.
+        const existing=await pool.query('SELECT id FROM worlds WHERE lower(name)=lower($1) LIMIT 1',[key]);
+        if(existing.rowCount){
+          if(supplied)return cb({success:false,message:'That world already exists.'});
+          continue;
+        }
+        const data={
+          name:key,displayName:filterKWGUserText(key),description:desc,
+          thumbnailUrl:'',thumbnailAuto:false,
+          blocks:{
+            baseplate:{
+              id:'baseplate',shape:'box',actionType:'normal',material:'grid',
+              color:'#555555',transparency:0,canCollide:true,anchored:true,
+              x:0,y:-0.5,z:0,scaleX:250,scaleY:1,scaleZ:250
             }
           },
-          spawnPoint: {x:0,y:0.05,z:0},
-          skyColor:'#1e1e7b',
-          cloudsEnabled:true,
-          cloudSpeed:1.0,
-          cloudColor:'#ffffff'
+          spawnPoint:{x:0,y:0.05,z:0},skyColor:'#1e1e7b',
+          cloudsEnabled:true,cloudSpeed:1.0,cloudColor:'#ffffff'
         };
-      }
-      // New worlds always start with one Spawn unless their template already
-      // contains Spawn parts. Existing saved worlds are never modified.
-      data.blocks=data.blocks||{};
-      if(!Object.values(data.blocks).some(b=>b&&b.actionType==='spawn')){
         const initialSpawn=makeDefaultSpawnBlock(data);
         data.blocks[initialSpawn.id]=initialSpawn;
+        try{
+          await pool.query('INSERT INTO worlds(name,owner_user_id,data) VALUES($1,$2,$3)',
+            [key,socket.user.id,JSON.stringify(data)]);
+          return cb({success:true,worldName:key,displayName:data.displayName,description:desc});
+        }catch(err){
+          if(err.code==='23505'){
+            if(supplied)return cb({success:false,message:'That world already exists.'});
+            continue;
+          }
+          throw err;
+        }
       }
-      await pool.query('INSERT INTO worlds(name,owner_user_id,data) VALUES($1,$2,$3)', [name,socket.user.id,JSON.stringify(data)]);
-      cb({success:true});
-    } catch (e) { console.error(e); cb({success:false,message:'Could not create world.'}); }
+      cb({success:false,message:'Could not find an available random world name. Please retry.'});
+    } catch(e){console.error('Create world:',e);cb({success:false,message:'Could not create world.'});}
   });
 
   socket.on('join_world', async ({worldName, appearance, visitUsername, confirmBlocked=false}, cb) => {
@@ -1990,7 +1987,7 @@ io.on('connection', (socket) => {
 
   // World owners can edit display metadata directly from the Worlds page.
   // The internal world key remains stable so existing visits/likes are preserved.
-  socket.on('update_owned_world_info',async ({worldName,displayName,description,thumbnailData}={},cb)=>{
+  socket.on('update_owned_world_info',async ({worldName,displayName,description}={},cb)=>{
     if(!requireAuth(socket,cb))return;
     if(typeof cb!=='function')return;
     const key=cleanWorldName(worldName);
@@ -2005,7 +2002,6 @@ io.on('connection', (socket) => {
         if(Number(world.owner_user_id)!==Number(socket.user.id))return {success:false,message:'Only the owner can edit this world.'};
         const data=world.data||{};
         let thumbnailUrl=data.thumbnailUrl||'';
-        if(thumbnailData!==undefined&&thumbnailData!==null){thumbnailUrl=await uploadWorldThumbnail(world.id,thumbnailData);data.thumbnailAuto=false;}
         data.displayName=title;data.description=desc;data.thumbnailUrl=thumbnailUrl;
         await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
         io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true});
@@ -2574,22 +2570,6 @@ io.on('connection', (socket) => {
       await pool.query('DELETE FROM worlds WHERE id=$1',[world.id]);
       cb({success:true});
     } catch (e) { console.error(e); cb({success:false,message:'Could not delete world.'}); }
-  });
-
-  socket.on('admin_make_world_template', async ({worldName,templateName}, cb) => {
-    if (!requireAdmin(socket, cb)) return;
-    try {
-      const world = await getWorldByName(cleanWorldName(worldName));
-      if (!world) return cb({success:false,message:'World not found.'});
-      const name = String(templateName || world.name).trim().slice(0,40);
-      if (!name) return cb({success:false,message:'Template name is required.'});
-      await pool.query(`
-        INSERT INTO world_templates(name,source_world_id,data,created_by)
-        VALUES($1,$2,$3,$4)
-        ON CONFLICT(name) DO UPDATE SET source_world_id=EXCLUDED.source_world_id,data=EXCLUDED.data,created_by=EXCLUDED.created_by,updated_at=NOW()
-      `,[name,world.id,JSON.stringify(world.data),socket.user.id]);
-      cb({success:true});
-    } catch (e) { console.error(e); cb({success:false,message:'Could not create template.'}); }
   });
 
   socket.on('admin_delete_world', async ({worldName}, cb) => {
