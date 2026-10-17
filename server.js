@@ -14,6 +14,19 @@ if (!DATABASE_URL) throw new Error('DATABASE_URL is required.');
 const SUPABASE_URL = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '');
 const SUPABASE_STORE_BUCKET = String(process.env.SUPABASE_STORE_BUCKET || 'store-assets');
+
+function normalizeEnemySpawner(block){
+  if(!block || block.actionType!=='enemy_spawner')return;
+  const bounded=(v,lo,hi,fallback)=>{
+    const n=Number(v);
+    return Number.isFinite(n)?Math.min(hi,Math.max(lo,n)):fallback;
+  };
+  block.noticeRange=bounded(block.noticeRange,2,100,18);
+  block.enemySpeed=bounded(block.enemySpeed,.5,15,3);
+  block.enemyCount=Math.round(bounded(block.enemyCount,1,12,1));
+  block.enemyRespawn=bounded(block.enemyRespawn,0,300,5);
+  block.enemyKillable=block.enemyKillable!==false;
+}
 const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
 const STORE_CATEGORIES = new Set(['eyes','mouth','torso_decal','hat','head_shape','hair','hats','heads','eyes','mouth','skin','tops','bottoms','shoes','flightsuits']);
 
@@ -1754,6 +1767,32 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Stomp events are room-scoped and validated against saved spawner settings.
+  // Movement/AI remain client-side in this version; defeat broadcasts keep
+  // active visitors' respawn timers consistent.
+  let lastEnemyStomp=0;
+  socket.on('enemy_stomped',async ({worldName,spawnerId,index}={})=>{
+    if(!requireAuth(socket))return;
+    const p=playersBySocket.get(socket.id);
+    const key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key||socket.data.worldName!==key)return;
+    if(typeof spawnerId!=='string'||spawnerId.length>160||!Number.isInteger(index)||index<0||index>=12)return;
+    const now=Date.now();
+    if(now-lastEnemyStomp<180)return;
+    lastEnemyStomp=now;
+    try{
+      const world=await getWorldByName(key);
+      const block=world?.data?.blocks?.[spawnerId];
+      if(!block||block.actionType!=='enemy_spawner'||block.enemyKillable===false)return;
+      normalizeEnemySpawner(block);
+      if(index>=block.enemyCount)return;
+      const dx=p.x-(Number(block.x)||0),dz=p.z-(Number(block.z)||0);
+      const maxRange=block.noticeRange+5;
+      if(Math.hypot(dx,dz)>maxRange||Math.abs(p.y-(Number(block.y)||0))>maxRange+5)return;
+      socket.to(`world:${key}`).emit('enemy_stomped',{worldName:key,spawnerId,index});
+    }catch(err){console.warn('Enemy stomp validation:',err.message);}
+  });
+
   socket.on('player_movement', (data) => {
     if (!requireAuth(socket)) return;
     const p = playersBySocket.get(socket.id);
@@ -1808,9 +1847,10 @@ io.on('connection', (socket) => {
                  && Object.keys(data.blocks).length>=1400){
                 const e=new Error('Part limit reached (1400/1400 parts).');e.clientMessage=e.message;throw e;
               }
-              // V3.41: allow normal, kill, checkpoint and spawn types; preserve materials.
-              blockData.actionType=['normal','kill','checkpoint','spawn'].includes(blockData.actionType)?blockData.actionType:'normal';
+              // Preserve standard and enemy spawner types, with validated enemy limits.
+              blockData.actionType=['normal','kill','checkpoint','spawn','enemy_spawner'].includes(blockData.actionType)?blockData.actionType:'normal';
               blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
+              normalizeEnemySpawner(blockData);
               data.blocks[blockData.id]=blockData;
             }else if(action==='delete'){
               const target=data.blocks[blockId];
@@ -1895,11 +1935,12 @@ io.on('connection', (socket) => {
             err.clientMessage = 'Part limit reached (1400/1400 parts).';
             throw err;
           }
-          // V3.41: Only the four current block types and three current
+          // Only supported block types and three current
           // materials may be saved by clients. Existing legacy worlds are
           // not rewritten on load; their old flags stay intact until edited.
-          blockData.actionType = ['normal','kill','checkpoint','spawn'].includes(blockData.actionType) ? blockData.actionType : 'normal';
+          blockData.actionType = ['normal','kill','checkpoint','spawn','enemy_spawner'].includes(blockData.actionType) ? blockData.actionType : 'normal';
           blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
+          normalizeEnemySpawner(blockData);
           data.blocks[blockData.id] = blockData;
         } else if (action === 'delete') {
           const target = data.blocks[blockId];
