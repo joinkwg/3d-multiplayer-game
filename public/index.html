@@ -2656,6 +2656,101 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     #kwg-pets-inventory-message{font-size:11px;margin-top:10px;color:#9cdeba;min-height:18px}
     @media(max-width:500px){.kwg-pet-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.kwg-pet-preview{height:105px}.kwg-pet-inventory-card{padding:12px}.kwg-pet-card{padding:8px}}
 </style>
+<style id="kwg-v16-dashboard-style">
+/* Full-height dashboard with persistent labeled side navigation. */
+#home-main-card{position:relative!important;display:flex!important;flex-direction:column!important;
+  height:calc(100dvh - 24px)!important;max-height:calc(100dvh - 24px)!important;
+  width:min(1300px,calc(100vw - 24px))!important;max-width:calc(100vw - 24px)!important;
+  overflow:hidden!important;padding:14px!important;box-sizing:border-box!important}
+#home-main-card > .kwg-dashboard-header{flex:0 0 auto!important;min-height:53px}
+#home-main-card > .kwg-icon-nav{
+  position:absolute!important;top:82px!important;left:14px!important;bottom:14px!important;
+  width:184px!important;min-width:184px!important;max-width:184px!important;
+  display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;
+  align-items:stretch!important;justify-content:flex-start!important;
+  margin:0!important;padding:8px!important;overflow-y:auto!important;overflow-x:hidden!important;
+  box-sizing:border-box!important;gap:5px!important;z-index:3}
+#home-main-card > .kwg-icon-nav .home-tab{
+  flex:0 0 43px!important;display:flex!important;flex-direction:row!important;
+  width:100%!important;min-width:0!important;height:43px!important;
+  align-items:center!important;justify-content:flex-start!important;
+  padding:8px 10px!important;gap:11px!important;text-align:left!important}
+#home-main-card > .kwg-icon-nav .nav-label{
+  font-size:11px!important;text-align:left!important;white-space:nowrap!important;
+  overflow:hidden!important;text-overflow:ellipsis!important}
+#home-main-card > .kwg-icon-nav .nav-glyph{flex:0 0 23px!important}
+#home-main-card > .kwg-icon-nav .nav-badge{position:static!important;margin-left:auto!important}
+#home-main-card > #kwg-global-search,#home-main-card > .home-pane{
+  margin-left:196px!important;min-width:0!important;box-sizing:border-box!important}
+#home-main-card > #kwg-global-search{flex:0 0 auto!important;margin-top:10px!important;margin-bottom:11px!important}
+#home-main-card > .home-pane.active{display:block!important;flex:1 1 auto!important;min-height:0!important;
+  overflow-y:auto!important;overflow-x:hidden!important;scrollbar-width:thin!important;
+  scrollbar-color:#567a9a #142132!important;padding-right:5px!important}
+#home-main-card > .home-pane:not(.active){display:none!important}
+#home-main-card #friends-pane,#home-main-card #worlds-pane,#home-main-card #notifications-pane{min-height:0!important}
+#home-main-card #notifications-pane{width:auto!important;max-width:none!important}
+#worlds-pane{display:flex;flex-direction:column}
+#worlds-pane.active{display:flex!important}
+#worlds-pane #room-list{max-height:none!important;overflow-y:auto!important;flex:1 1 auto!important;min-height:180px!important}
+#friends-pane .friends-shell{min-height:100%!important;align-content:start}
+#notifications-pane .notifications-panel{min-height:100%!important;display:flex!important;flex-direction:column!important}
+#notifications-pane .notifications-list{max-height:none!important;flex:1 1 auto!important;overflow-y:auto!important;min-height:180px!important}
+#home-pane .kwg-v16-home-layout{display:grid;grid-template-columns:minmax(290px,.9fr) minmax(350px,1.25fr);gap:12px;align-items:start}
+#home-pane .kwg-v16-home-layout > .kwg-home-panel{min-width:0;min-height:360px}
+.kwg-top-worlds-list,.kwg-feed-list{display:flex;flex-direction:column;gap:9px;min-width:0}
+.kwg-top-world-card{display:grid;grid-template-columns:31px 65px minmax(0,1fr);gap:9px;align-items:center;
+  background:#1b2a3a;border:1px solid #3b5771;padding:9px}
+.kwg-top-rank{font-weight:900;color:#f7d584;font-size:13px}
+.kwg-top-world-card .kwg-home-thumb{width:65px;height:55px;min-height:55px;margin:0;overflow:hidden;border:1px solid #536f87}
+.kwg-top-world-card .kwg-home-thumb img{width:100%;height:100%;object-fit:cover}
+.kwg-top-world-info{display:flex;flex-direction:column;gap:5px;min-width:0}
+.kwg-top-world-info strong{color:#c6e5ff;font-size:12px;overflow-wrap:anywhere}
+.kwg-top-world-info span{font-size:10px;color:#9db2c6}
+.kwg-top-world-card .kwg-home-join{grid-column:2/-1;justify-self:end;margin:0;padding:6px 10px;font-size:10px}
+.kwg-feed-compose{background:#152436;border:1px solid #45637e;padding:11px;margin:10px 0 12px;display:grid;gap:8px}
+.kwg-feed-compose label{font-size:10px;letter-spacing:.09em;color:#b9d7f1;font-weight:900}
+.kwg-feed-compose textarea{width:100%;min-height:70px;resize:vertical;background:#0d1926;color:#e7f3ff;
+  border:1px solid #5b7993;padding:10px;box-sizing:border-box;font:inherit}
+.kwg-feed-compose-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#a5b8cb;font-size:11px}
+.kwg-feed-compose-foot .submit-btn{width:auto!important;margin:0!important;font-size:10px!important;padding:7px 13px!important}
+.kwg-feed-post{background:#1c2b3c;border:1px solid #3b5570;padding:11px;overflow-wrap:anywhere}
+.kwg-feed-post-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kwg-feed-author{border:0;background:none;color:#9acbff;text-align:left;font-size:12px;cursor:pointer;padding:0;font-weight:900}
+.kwg-feed-date{color:#9aaec2;font-size:10px}
+.kwg-feed-delete{margin-left:auto;background:#522e3c;color:#ffd2d2;border:1px solid #935668;font-size:9px;cursor:pointer;padding:5px 7px}
+.kwg-feed-post p{white-space:pre-wrap;margin:9px 0 0;font-size:13px;line-height:1.5;color:#e6f0fa}
+#kwg-world-edit-overlay[hidden]{display:none!important}
+#kwg-world-edit-overlay{position:fixed;inset:0;z-index:55000;background:rgba(3,8,17,.82);
+  display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+.kwg-world-edit-dialog{display:flex;flex-direction:column;gap:9px;width:min(530px,100%);max-height:95vh;overflow-y:auto;
+  background:#1b2b3c;border:3px solid #7797b1;border-top:5px solid #9ce078;padding:18px;box-shadow:8px 8px 0 #070e18;
+  color:#eaf2fb;font-family:'Pixelify Sans',monospace;box-sizing:border-box}
+.kwg-world-edit-header h2{margin:3px 0 10px;font-size:19px}
+.kwg-world-edit-dialog label{font-size:10px;font-weight:900;color:#bad5ec}
+.kwg-world-edit-dialog input:not([type=file]),.kwg-world-edit-dialog textarea{width:100%;box-sizing:border-box;padding:9px;
+  background:#0e1b29;color:#fff;border:1px solid #607f9b;font:inherit}
+.kwg-world-edit-dialog input[type=file]{font-size:12px;max-width:100%}
+#kwg-world-edit-preview{max-width:100%;height:145px;object-fit:contain;background:#101a27}
+#kwg-world-edit-preview[hidden]{display:none}
+#kwg-world-edit-status{font-size:11px;color:#c4d7e7;min-height:18px}
+.kwg-world-edit-actions{display:flex;gap:9px;justify-content:flex-end}
+.kwg-world-edit-actions button{padding:8px 12px;cursor:pointer}
+.kwg-world-edit-actions .submit-btn{width:auto!important;margin:0!important}
+.kwg-world-edit-button{padding:6px 9px;background:#284f70;border:1px solid #73a5d2;color:#d8eeff;cursor:pointer;font-size:10px}
+@media(max-width:920px){#home-pane .kwg-v16-home-layout{grid-template-columns:1fr}}
+@media(max-width:650px){
+ #home-main-card{padding:9px!important}
+ #home-main-card > .kwg-icon-nav{top:100px!important;left:9px!important;bottom:9px!important;width:112px!important;min-width:112px!important;max-width:112px!important;padding:4px!important}
+ #home-main-card > .kwg-icon-nav .home-tab{gap:5px!important;padding:6px 5px!important;height:42px!important;flex-basis:42px!important}
+ #home-main-card > .kwg-icon-nav .nav-label{font-size:8px!important}
+ #home-main-card > .kwg-icon-nav .nav-glyph{flex-basis:18px!important}
+ #home-main-card > .kwg-icon-nav .nav-svg svg{width:18px!important;height:18px!important}
+ #home-main-card > #kwg-global-search,#home-main-card > .home-pane{margin-left:120px!important}
+ #home-main-card > #kwg-global-search{flex-wrap:wrap!important}
+ .kwg-top-world-card{grid-template-columns:22px 55px minmax(0,1fr)}
+ .kwg-top-world-card .kwg-home-thumb{width:55px;height:49px;min-height:49px}
+}
+</style>
 </head>
 <body>
   <div id="kwg-loading-overlay" role="status" aria-live="polite" aria-atomic="true" aria-label="Loading" aria-hidden="true">
@@ -2757,18 +2852,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       </div>
       <div id="home-pane" class="home-pane active">
         <div class="kwg-page-heading"><div><div class="profile-kicker">PLAYER DASHBOARD</div><h2>HOME</h2><p>Jump back in, discover today's favorite, and catch up.</p></div></div>
-        <div class="kwg-home-layout">
-          <section class="kwg-home-panel kwg-home-feature" aria-labelledby="kwg-home-wotd-heading">
-            <div class="kwg-home-panel-head"><div><div class="kwg-home-kicker">COMMUNITY SPOTLIGHT / LAST 24 HOURS</div><h3 id="kwg-home-wotd-heading">WORLD OF THE DAY</h3></div><span class="kwg-home-feature-star" aria-hidden="true">★</span></div>
-            <div id="kwg-home-wotd" class="kwg-home-wotd-content"><div class="kwg-home-empty">Finding today's favorite world...</div></div>
+        <div class="kwg-v16-home-layout">
+          <section class="kwg-home-panel kwg-top-worlds" aria-labelledby="kwg-top-worlds-heading">
+            <div class="kwg-home-panel-head"><div><div class="kwg-home-kicker">COMMUNITY FAVORITES</div><h3 id="kwg-top-worlds-heading">TOP RATED WORLDS</h3></div><button type="button" class="kwg-home-text-button" data-go-tab="worlds">ALL WORLDS →</button></div>
+            <div id="kwg-top-worlds-list" class="kwg-top-worlds-list" aria-live="polite"><div class="kwg-home-empty">Loading top worlds...</div></div>
           </section>
-          <section class="kwg-home-panel kwg-home-recent" aria-labelledby="kwg-home-recent-heading">
-            <div class="kwg-home-panel-head"><div><div class="kwg-home-kicker">YOUR ADVENTURES</div><h3 id="kwg-home-recent-heading">RECENTLY PLAYED</h3></div><button type="button" class="kwg-home-text-button" data-go-tab="worlds">BROWSE WORLDS →</button></div>
-            <div id="kwg-home-recent-worlds" class="kwg-home-recent-grid"><div class="kwg-home-empty">Loading your recently played worlds...</div></div>
-          </section>
-          <section class="kwg-home-panel kwg-home-notices" aria-labelledby="kwg-home-notices-heading">
-            <div class="kwg-home-panel-head"><div><div class="kwg-home-kicker">STAY IN THE LOOP</div><h3 id="kwg-home-notices-heading">RECENT NOTIFICATIONS</h3></div><button type="button" class="kwg-home-text-button" data-go-tab="notifications">VIEW ALL →</button></div>
-            <div id="kwg-home-notices-list" class="kwg-home-notice-list"><div class="kwg-home-empty">Loading notifications...</div></div>
+          <section class="kwg-home-panel kwg-home-feed" aria-labelledby="kwg-home-feed-heading">
+            <div class="kwg-home-panel-head"><div><div class="kwg-home-kicker">YOU & YOUR FRIENDS</div><h3 id="kwg-home-feed-heading">FEED</h3></div><button id="kwg-feed-refresh" type="button" class="kwg-home-text-button">REFRESH ↻</button></div>
+            <div class="kwg-feed-compose"><label for="kwg-feed-input">SHARE AN UPDATE</label><textarea id="kwg-feed-input" rows="3" maxlength="500" placeholder="What have you been up to?"></textarea><div class="kwg-feed-compose-foot"><span id="kwg-feed-count">0 / 500</span><button type="button" id="kwg-feed-post" class="submit-btn">POST TO FEED</button></div></div>
+            <div id="kwg-feed-list" class="kwg-feed-list" aria-live="polite"><div class="kwg-home-empty">Loading friends' posts...</div></div>
           </section>
         </div>
       </div>
@@ -2808,6 +2900,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               </div>
             </section>
           </div>
+          <section class="profile-panel kwg-profile-posts">
+            <div class="profile-panel-title">POSTS</div>
+            <div id="kwg-profile-post-compose" class="kwg-feed-compose" style="display:none"><label for="kwg-profile-post-input">SHARE ON YOUR PROFILE & FEED</label><textarea id="kwg-profile-post-input" rows="3" maxlength="500" placeholder="Write a post..."></textarea><div class="kwg-feed-compose-foot"><span id="kwg-profile-post-count">0 / 500</span><button id="kwg-profile-post-send" type="button" class="submit-btn">POST</button></div></div>
+            <div id="kwg-profile-post-list" class="kwg-feed-list"></div>
+          </section>
           <section class="profile-panel kwg-profile-board">
             <div class="profile-panel-title">MESSAGE BOARD</div>
             <div id="profile-message-list" class="kwg-profile-message-list"></div>
@@ -3158,6 +3255,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     </div>
   </div>
 
+<div id="kwg-world-edit-overlay" role="presentation" hidden>
+  <form id="kwg-world-edit-form" class="kwg-world-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="kwg-world-edit-heading">
+    <div class="kwg-world-edit-header"><div class="profile-kicker">WORLD MANAGEMENT</div><h2 id="kwg-world-edit-heading">EDIT WORLD</h2></div>
+    <label for="kwg-world-edit-name">DISPLAY NAME</label><input id="kwg-world-edit-name" maxlength="40" required>
+    <label for="kwg-world-edit-description">DESCRIPTION</label><textarea id="kwg-world-edit-description" maxlength="300" rows="4"></textarea>
+    <label for="kwg-world-edit-thumbnail">THUMBNAIL (JPEG / PNG IMAGE)</label><input id="kwg-world-edit-thumbnail" type="file" accept="image/png,image/jpeg,image/webp">
+    <img id="kwg-world-edit-preview" alt="World thumbnail preview" hidden>
+    <div id="kwg-world-edit-status" role="status" aria-live="polite"></div>
+    <div class="kwg-world-edit-actions"><button id="kwg-world-edit-cancel" type="button">CANCEL</button><button id="kwg-world-edit-save" class="submit-btn" type="submit">SAVE CHANGES</button></div>
+  </form>
+</div>
   <script>
     // --- SOCKET.IO BACKEND CONNECTION ---
     const socket = (typeof io !== 'undefined') ? io() : null;
@@ -4298,6 +4406,59 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     // --- DASHBOARD NAVIGATION ---
+    let kwgEditingWorld=null;
+    function kwgOpenWorldEdit(world){
+      if(!world)return;
+      kwgEditingWorld=world;
+      document.getElementById('kwg-world-edit-name').value=world.displayName||world.name;
+      document.getElementById('kwg-world-edit-description').value=world.description||'';
+      document.getElementById('kwg-world-edit-thumbnail').value='';
+      const img=document.getElementById('kwg-world-edit-preview');
+      img.hidden=!world.thumbnailUrl;img.src=world.thumbnailUrl||'';
+      document.getElementById('kwg-world-edit-status').textContent='Changes are saved to this world without joining it.';
+      document.getElementById('kwg-world-edit-overlay').hidden=false;
+      document.getElementById('kwg-world-edit-name').focus();
+    }
+    function kwgCloseWorldEdit(){document.getElementById('kwg-world-edit-overlay').hidden=true;kwgEditingWorld=null;}
+    document.getElementById('kwg-world-edit-cancel').onclick=kwgCloseWorldEdit;
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.getElementById('kwg-world-edit-overlay').hidden)kwgCloseWorldEdit();});
+    document.getElementById('kwg-world-edit-overlay').addEventListener('click',e=>{if(e.target.id==='kwg-world-edit-overlay')kwgCloseWorldEdit();});
+    document.getElementById('kwg-world-edit-thumbnail').addEventListener('change',e=>{
+      const file=e.target.files?.[0];if(!file)return;
+      if(!file.type.startsWith('image/')){showToast('Choose an image file.');e.target.value='';return;}
+      const url=URL.createObjectURL(file),img=document.getElementById('kwg-world-edit-preview');
+      img.onload=()=>URL.revokeObjectURL(url);img.src=url;img.hidden=false;
+    });
+    function kwgThumbnailJPEG(file){return new Promise((resolve,reject)=>{
+      const image=new Image(),url=URL.createObjectURL(file);
+      image.onload=()=>{
+        URL.revokeObjectURL(url);
+        const c=document.createElement('canvas');c.width=640;c.height=360;
+        const ctx=c.getContext('2d');ctx.fillStyle='#152233';ctx.fillRect(0,0,c.width,c.height);
+        const ratio=Math.min(c.width/image.width,c.height/image.height),w=image.width*ratio,h=image.height*ratio;
+        ctx.drawImage(image,(c.width-w)/2,(c.height-h)/2,w,h);
+        const data=c.toDataURL('image/jpeg',.8);
+        if(data.length>2400000)reject(new Error('Thumbnail is too large.'));else resolve(data);
+      };
+      image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('Could not read the image.'));};image.src=url;
+    });}
+    document.getElementById('kwg-world-edit-form').addEventListener('submit',async e=>{
+      e.preventDefault();if(!kwgEditingWorld)return;
+      const button=document.getElementById('kwg-world-edit-save'),status=document.getElementById('kwg-world-edit-status');
+      const title=document.getElementById('kwg-world-edit-name').value.trim(),description=document.getElementById('kwg-world-edit-description').value.trim();
+      if(!title||title.length>40||description.length>300){status.textContent='Name must be 1–40 characters; description up to 300.';return;}
+      button.disabled=true;status.textContent='Saving world...';
+      try{
+        const payload={worldName:kwgEditingWorld.name,displayName:title,description};
+        const file=document.getElementById('kwg-world-edit-thumbnail').files?.[0];
+        if(file)payload.thumbnailData=await kwgThumbnailJPEG(file);
+        socket.timeout(20000).emit('update_owned_world_info',payload,(err,res)=>{
+          button.disabled=false;
+          if(err||!res?.success){status.textContent=res?.message||'Save timed out. Please retry.';return;}
+          kwgCloseWorldEdit();showToast('World updated!');renderRoomList();renderHomeOverview();
+        });
+      }catch(err){button.disabled=false;status.textContent=err.message||'Could not prepare thumbnail.';}
+    });
     function makeWorldCard(w) {
       const card = document.createElement('div');
       card.className = 'room-card';
@@ -4313,6 +4474,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       card.querySelector('.world-like-btn').addEventListener('click', () => socket.emit('toggle_world_like',{worldName:w.name},res=>{ if(res?.success){ renderRoomList(); renderHomeOverview(); if(document.getElementById('search-pane')?.classList.contains('active'))kwgSearchRun(); } }));
       if ((w.ownerUsername || '').toLowerCase() === (loggedInUsername || '').toLowerCase()) {
         const actions=card.lastElementChild;
+        const edit=document.createElement('button');edit.className='kwg-world-edit-button';edit.textContent='EDIT';edit.title='Change world name, description and thumbnail';
+        edit.onclick=()=>kwgOpenWorldEdit(w);
+        actions.insertBefore(edit,actions.querySelector('.join-btn'));
         const del=document.createElement('button'); del.className='admin-delete'; del.textContent='DELETE';
         del.title='Delete your world permanently';
         del.onclick=async()=>{
@@ -4428,29 +4592,75 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         body.append(msg,time);row.append(dot,body);box.append(row);
       });
     }
-    function renderHomeOverview(){
-      const requestId=++kwgHomeRequestId;
-      const featured=document.getElementById('kwg-home-wotd');
-      const recent=document.getElementById('kwg-home-recent-worlds');
-      const notices=document.getElementById('kwg-home-notices-list');
-      if(!featured||!recent||!notices)return;
-      featured.innerHTML="<div class='kwg-home-empty'>Finding today's favorite world...</div>";
-      recent.innerHTML='<div class="kwg-home-empty">Loading your recently played worlds...</div>';
-      notices.innerHTML='<div class="kwg-home-empty">Loading notifications...</div>';
-      const username=loggedInUsername;
-      socket.emit('get_home_dashboard',{},res=>{
-        if(requestId!==kwgHomeRequestId || loggedInUsername!==username)return;
-        if(!res?.success){
-          featured.innerHTML='<div class="kwg-home-empty">Could not load World of the Day. Please reopen Home to retry.</div>';
-          recent.innerHTML='<div class="kwg-home-empty">Could not load recent worlds.</div>';
-          notices.innerHTML='<div class="kwg-home-empty">Could not load notifications.</div>';
-          return;
-        }
-        kwgHomeShowFeatured(res.worldOfTheDay);
-        kwgHomeShowRecent(res.recentlyPlayed||[]);
-        kwgHomeShowNotices(res.notifications||[]);
+    let kwgV16HomeRequest=0;
+    function kwgRenderTopWorlds(worlds){
+      const host=document.getElementById('kwg-top-worlds-list');if(!host)return;
+      host.replaceChildren();
+      if(!worlds.length){host.innerHTML='<div class="kwg-home-empty">No worlds yet. Create one and start collecting likes!</div>';return;}
+      worlds.forEach((w,index)=>{
+        const card=document.createElement('div');card.className='kwg-top-world-card';
+        const rank=document.createElement('span');rank.className='kwg-top-rank';rank.textContent='#'+(index+1);
+        const image=kwgHomeThumbnail(w);
+        const info=document.createElement('div');info.className='kwg-top-world-info';
+        const name=document.createElement('strong');name.textContent=filterKWGUserText(w.displayName||w.name);
+        const meta=document.createElement('span');meta.textContent='♥ '+Number(w.likes||0)+'  ·  '+filterKWGUserText(w.ownerUsername||'Unknown');
+        info.append(name,meta);card.append(rank,image,info,kwgHomeJoinButton(w.name));host.append(card);
       });
     }
+    function kwgRenderFeedPosts(posts,host){
+      if(!host)return;host.replaceChildren();
+      if(!posts.length){host.innerHTML='<div class="kwg-home-empty">No posts yet. Share an update or add friends to see their posts!</div>';return;}
+      posts.forEach(post=>{
+        const card=document.createElement('article');card.className='kwg-feed-post';
+        const header=document.createElement('div');header.className='kwg-feed-post-head';
+        const author=document.createElement('button');author.type='button';author.className='kwg-feed-author';author.textContent=filterKWGUserText(post.authorUsername||'Player');
+        author.onclick=()=>openPlayerProfile(post.authorUsername);
+        const date=document.createElement('span');date.className='kwg-feed-date';date.textContent=timeAgo(post.createdAt);
+        header.append(author,date);
+        if(post.canDelete){const del=document.createElement('button');del.type='button';del.className='kwg-feed-delete';del.textContent='DELETE';
+          del.onclick=async()=>{if(!await kwgConfirm('Delete this post from your profile and the feed?',{title:'DELETE POST?',okLabel:'DELETE',danger:true}))return;
+            socket.emit('delete_feed_post',{postId:post.id},res=>{if(res?.success){renderHomeOverview();if(viewedProfile)loadProfile(viewedProfile.username);}else showToast(res?.message||'Could not delete post.');});
+          };header.append(del);
+        }
+        const body=document.createElement('p');body.textContent=filterKWGUserText(post.body||'');
+        card.append(header,body);host.append(card);
+      });
+    }
+    function renderHomeOverview(){
+      const seq=++kwgV16HomeRequest;
+      const top=document.getElementById('kwg-top-worlds-list'),feed=document.getElementById('kwg-feed-list');
+      if(!top||!feed)return;
+      top.innerHTML='<div class="kwg-home-empty">Loading top rated worlds...</div>';
+      feed.innerHTML='<div class="kwg-home-empty">Loading feed...</div>';
+      socket.emit('get_top_rated_worlds',{},res=>{
+        if(seq!==kwgV16HomeRequest)return;
+        if(!res?.success){top.innerHTML='<div class="kwg-home-empty">Could not load top worlds.</div>';return;}
+        kwgRenderTopWorlds(res.worlds||[]);
+      });
+      socket.emit('get_feed_posts',{},res=>{
+        if(seq!==kwgV16HomeRequest)return;
+        if(!res?.success){feed.innerHTML='<div class="kwg-home-empty">Could not load the feed.</div>';return;}
+        kwgRenderFeedPosts(res.posts||[],feed);
+      });
+    }
+    function kwgSubmitFeedPost(inputId,buttonId,after){
+      const input=document.getElementById(inputId),button=document.getElementById(buttonId);
+      const body=input?.value.trim();if(!body){showToast('Write a post first.');return;}
+      button.disabled=true;
+      socket.timeout(12000).emit('post_feed_post',{body},(err,res)=>{
+        button.disabled=false;
+        if(err||!res?.success){showToast(res?.message||'Could not post. Try again.');return;}
+        input.value='';input.dispatchEvent(new Event('input'));
+        if(after)after();
+      });
+    }
+    for(const [inputId,countId] of [['kwg-feed-input','kwg-feed-count'],['kwg-profile-post-input','kwg-profile-post-count']]){
+      document.getElementById(inputId).addEventListener('input',e=>{document.getElementById(countId).textContent=e.target.value.length+' / 500';});
+    }
+    document.getElementById('kwg-feed-post').onclick=()=>kwgSubmitFeedPost('kwg-feed-input','kwg-feed-post',renderHomeOverview);
+    document.getElementById('kwg-profile-post-send').onclick=()=>kwgSubmitFeedPost('kwg-profile-post-input','kwg-profile-post-send',()=>{loadProfile(loggedInUsername);renderHomeOverview();});
+    document.getElementById('kwg-feed-refresh').onclick=renderHomeOverview;
+
     document.getElementById('world-sort').addEventListener('change', renderRoomList);
     document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click',()=>switchHomeTab(b.dataset.goTab)));
 
@@ -10102,6 +10312,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       friendsSort.onchange=drawFriends;
       drawFriends();
       renderProfileMessages(profile);
+      kwgRenderFeedPosts(profile.posts||[],document.getElementById('kwg-profile-post-list'));
+      document.getElementById('kwg-profile-post-compose').style.display=profile.isOwnProfile?'block':'none';
 
       const edit=document.getElementById('profile-edit-area');
       edit.style.display=profile.isOwnProfile?'block':'none';
