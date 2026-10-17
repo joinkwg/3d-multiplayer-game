@@ -26,8 +26,8 @@ function normalizeEnemySpawner(block){
   block.enemyCount=Math.round(bounded(block.enemyCount,1,12,1));
   block.enemyRespawn=bounded(block.enemyRespawn,0,300,5);
   block.enemyDamage=Math.round(bounded(block.enemyDamage,1,100,25));
-  block.enemyKillable=block.enemyKillable!==false;
   block.enemyCharacter=['devil','sniper','hops'].includes(block.enemyCharacter)?block.enemyCharacter:'devil';
+  block.enemyKillable=block.enemyCharacter!=='hops'&&block.enemyKillable!==false;
 }
 const SUPABASE_THUMBNAIL_BUCKET = String(process.env.SUPABASE_THUMBNAIL_BUCKET || 'world-thumbnails');
 const STORE_CATEGORIES = new Set(['eyes','mouth','torso_decal','hat','head_shape','hair','hats','heads','eyes','mouth','skin','tops','bottoms','shoes','flightsuits']);
@@ -1836,7 +1836,7 @@ io.on('connection', (socket) => {
   // Movement/AI remain client-side in this version; defeat broadcasts keep
   // active visitors' respawn timers consistent.
   let lastEnemyStomp=0;
-  socket.on('enemy_stomped',async ({worldName,spawnerId,index}={})=>{
+  socket.on('enemy_stomped',async ({worldName,spawnerId,index,method}={})=>{
     if(!requireAuth(socket))return;
     const p=playersBySocket.get(socket.id);
     const key=cleanWorldName(worldName);
@@ -1848,8 +1848,13 @@ io.on('connection', (socket) => {
     try{
       const world=await getWorldByName(key);
       const block=world?.data?.blocks?.[spawnerId];
-      if(!block||block.actionType!=='enemy_spawner'||block.enemyKillable===false)return;
+      if(!block||block.actionType!=='enemy_spawner')return;
       normalizeEnemySpawner(block);
+      // Hops is stomp-immune but can still be defeated with a collected tool.
+      // This remains client-simulated combat, not authoritative hit validation.
+      if(method==='weapon'){
+        if(!kwgServerTools.size||!p.equippedTool||!kwgServerTools.has(p.equippedTool))return;
+      }else if(block.enemyKillable===false||block.enemyCharacter==='hops')return;
       if(index>=block.enemyCount)return;
       const dx=p.x-(Number(block.x)||0),dz=p.z-(Number(block.z)||0);
       const maxRange=block.noticeRange+5;
