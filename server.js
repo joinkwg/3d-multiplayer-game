@@ -1806,9 +1806,13 @@ io.on('connection', (socket) => {
     p.verticalVelocity = (typeof data.verticalVelocity === 'number' && Number.isFinite(data.verticalVelocity)) ? data.verticalVelocity : 0;
     p.isMoving = !!data.isMoving;
     p.isGrounded = data.isGrounded !== false;
+    // Cosmetic front-flip pose only; never affects authoritative position.
+    p.stompAngle = (typeof data.stompAngle==='number' && Number.isFinite(data.stompAngle))
+      ? Math.max(-8,Math.min(8,data.stompAngle)) : 0;
     socket.to(`world:${p.worldName}`).emit('player_moved',{
       id:p.id,x:p.x,y:p.y,z:p.z,rotationY:p.rotationY,walkClock:p.walkClock,
-      verticalVelocity:p.verticalVelocity,isMoving:p.isMoving,isGrounded:p.isGrounded
+      verticalVelocity:p.verticalVelocity,isMoving:p.isMoving,isGrounded:p.isGrounded,
+      stompAngle:p.stompAngle
     });
   });
 
