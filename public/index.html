@@ -3220,7 +3220,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <label class="kwg-recolor-field"><span>Can Collide</span><input type="checkbox" id="kwg-place-collide" checked></label>
       <div id="kwg-place-enemy-properties" class="kwg-enemy-properties" style="display:none">
         <div class="kwg-enemy-props-title">ENEMY SPAWNER PRESET</div>
-        <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-place-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper (Orange Cat)</option></select></label>
+        <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-place-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option></select></label>
         <label class="kwg-recolor-field"><span>Notice Range</span><input id="kwg-place-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
         <label class="kwg-recolor-field"><span>Enemy Speed</span><input id="kwg-place-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
         <label class="kwg-recolor-field"><span>Enemy Count</span><input id="kwg-place-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
@@ -3308,7 +3308,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           </div>
           <div id="kwg-enemy-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">ENEMY SETTINGS</div>
-            <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper (Orange Cat)</option></select></label>
+            <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option></select></label>
             <label class="kwg-recolor-field"><span>Notice Range (studs)</span><input id="kwg-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
             <label class="kwg-recolor-field"><span>Enemy Speed (studs / second)</span><input id="kwg-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
             <label class="kwg-recolor-field"><span>Number of Enemies</span><input id="kwg-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
@@ -3635,12 +3635,59 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         tool_pickup:[[490,.055,'triangle',.12,760],[820,.07,'square',.11,1000]],
         hit_enemy:[[230,.055,'triangle',.13,90]]
       };
+      // V27: sampled/filtered effects have the shape of real sounds instead of
+      // only square-wave notes. Deliberate 8kHz sample-and-hold gives a light
+      // crunchy bitcrush while leaving growls, breaths and shots recognizable.
+      function texturedSound(ctx,name){
+        const gun=['pistol','minigun','sniper_shot'].includes(name);
+        const growl=name==='devil_chase';
+        const pant=name==='devil_pant';
+        if(!gun&&!growl&&!pant)return false;
+        const duration=gun?(name==='minigun'?.14:name==='sniper_shot'?.34:.28):growl?.44:.60;
+        const rate=ctx.sampleRate,n=Math.ceil(rate*duration),buffer=ctx.createBuffer(1,n,rate),data=buffer.getChannelData(0);
+        const hold=Math.max(1,Math.round(rate/(gun?9500:growl?7600:6500)));
+        let held=0,low=0;
+        const growlPitch=80+Math.random()*23;
+        const breathPhase=Math.random()*6.28;
+        for(let i=0;i<n;i++){
+          const t=i/rate,progress=t/duration;
+          if(i%hold===0)held=Math.random()*2-1;
+          low=low*.82+held*.18;
+          let sample=0;
+          if(gun){
+            const crack=Math.exp(-t*(name==='minigun'?38:25));
+            const body=Math.exp(-t*(name==='sniper_shot'?8:13));
+            sample=held*crack*.88+low*body*.50+Math.sin(t*2*Math.PI*(name==='sniper_shot'?105:78))*body*.22;
+          }else if(growl){
+            const pitch=growlPitch*(1-.36*progress)+Math.sin(t*17)*7;
+            const throat=Math.sin(2*Math.PI*pitch*t+Math.sin(t*26)*.65);
+            const rasp=Math.sin(2*Math.PI*pitch*2.1*t);
+            const envelope=Math.min(1,t*22)*Math.pow(1-progress,1.4);
+            sample=(throat*.56+rasp*.20+low*.32)*envelope;
+          }else{
+            const breath=Math.sin(Math.PI*progress)**1.3;
+            const pulse=.45+.55*Math.abs(Math.sin(t*12+breathPhase));
+            sample=(low*.80+held*.12)*breath*pulse;
+          }
+          data[i]=Math.max(-1,Math.min(1,sample));
+        }
+        const source=ctx.createBufferSource();source.buffer=buffer;
+        const filter=ctx.createBiquadFilter();filter.type=gun?'lowpass':pant?'bandpass':'lowpass';
+        filter.frequency.value=gun?name==='sniper_shot'?3400:4500:pant?1100:1500;
+        filter.Q.value=pant?.5:.8;
+        const amp=ctx.createGain();amp.gain.value=(gun?.46:growl?.29:.20)*settings.volume/100;
+        source.connect(filter);filter.connect(amp);amp.connect(ctx.destination);
+        source.start(ctx.currentTime+.005);
+        source.onended=()=>{source.disconnect();filter.disconnect();amp.disconnect();};
+        return true;
+      }
       function play(name){
         if(!settings.enabled||settings.volume<=0||document.hidden)return;
         const now=performance.now();
         if(now-lastSoundAt<28)return; // prevent overlapping double-click event sounds
         const ctx=getContext();if(!ctx)return;
         lastSoundAt=now;
+        if(texturedSound(ctx,name))return;
         let at=ctx.currentTime+.006;
         for(const [freq,duration,type,gain,endFreq] of (patterns[name]||patterns.click)){
           tone(ctx,at,freq,duration,type,gain,endFreq);
@@ -8346,6 +8393,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
       mesh.add(createNameTagSprite(pData.username || 'Player'));
       kwgAttachOverheadHealth(mesh,pData.health??100);
+      kwgSyncRemoteHeldTool(mesh,pData.equippedTool);
       mesh.position.set(pData.x, pData.y, pData.z);
       scene.add(mesh);
       otherPlayers[pData.id] = { mesh, username: pData.username };
@@ -8361,6 +8409,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
       mesh.add(createNameTagSprite(pData.username || p.username || 'Player'));
       kwgAttachOverheadHealth(mesh,pData.health??100);
+      kwgSyncRemoteHeldTool(mesh,pData.equippedTool);
       mesh.position.copy(currentPos);
       mesh.rotation.y = currentRot;
       scene.add(mesh);
@@ -8376,6 +8425,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgAttachOverheadHealth(p.mesh,pData.health??100);
 
       updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
+      kwgSyncRemoteHeldTool(p.mesh,pData.equippedTool);
       // Other visitors see the front flip too, without rotating the physics root.
       const ragdoll=Number(pData.ragdollPose)||0;
       if(ragdoll>0){
@@ -8778,6 +8828,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if (pId !== selfId) {
           const pData = initialPlayers[pId];
           const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
+          kwgSyncRemoteHeldTool(mesh,pData.equippedTool);
           mesh.add(createNameTagSprite(pData.username || 'Player'));
       kwgAttachOverheadHealth(mesh,pData.health??100);
           mesh.position.set(pData.x, pData.y, pData.z);
@@ -9445,7 +9496,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       blockData.color = document.getElementById('block-color-input').value;
       blockData.transparency = kwgTransparencyValue('block-transparency-input');
       blockData.canCollide = document.getElementById('block-collidable-checkbox').checked;
-      if(nextType==='enemy_spawner')Object.assign(blockData,kwgEnemyPropsFromUI('kwg-enemy-'));
+      if(nextType==='enemy_spawner'){
+        Object.assign(blockData,kwgEnemyPropsFromUI('kwg-enemy-'));
+        // Apply character swaps immediately instead of waiting for the
+        // next AI tick (which may be paused while editing).
+        if(kwgEnemySpawners.get(blockData.id)?.character!==blockData.enemyCharacter){
+          kwgLastEnemySync=0;kwgSyncEnemySpawners();
+        }
+      }
       if(nextType==='health')blockData.healAmount=kwgEnemyNumber(document.getElementById('kwg-heal-amount').value,1,100,25,true);
       if(nextType==='tool_dispenser')blockData.toolKind=kwgToolKind(document.getElementById('kwg-tool-kind').value);
       kwgToggleEnemyFields();
@@ -11271,9 +11329,60 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       });
       document.getElementById('kwg-tool-crosshair')?.classList.toggle('kwg-aiming',!!kwgEquippedTool);
     }
-    function kwgEquipTool(kind){kwgEquippedTool=kwgTools.includes(kind)?kind:null;kwgRenderTools();}
+    // V27: visible tool in the player's right hand. Kept on the arm pivot so
+    // it follows walk/jump/stomp animations, never floats at the avatar origin.
+    let kwgHeldToolVisual=null,kwgHeldToolOwner=null;
+    function kwgRemoveHeldTool(){
+      if(!kwgHeldToolVisual)return;
+      kwgHeldToolVisual.parent?.remove(kwgHeldToolVisual);
+      kwgHeldToolVisual.traverse(o=>{o.geometry?.dispose();if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});
+      kwgHeldToolVisual=null;kwgHeldToolOwner=null;
+    }
+    function kwgMakeHeldTool(kind){
+      const group=new THREE.Group();group.name='kwg-held-'+kind;
+      const dark=new THREE.MeshLambertMaterial({color:0x344254});
+      const steel=new THREE.MeshLambertMaterial({color:0x98a7b9});
+      const accent=new THREE.MeshLambertMaterial({color:kind==='minigun'?0xf4b85c:0x71c8f0});
+      const piece=(w,h,d,x,y,z,mat)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);group.add(m);return m;};
+      if(kind==='minigun'){
+        piece(.30,.24,.47,0,.01,.22,dark);
+        for(const x of [-.10,0,.10])for(const y of [-.06,.06])piece(.055,.055,.55,x,y,.62,steel);
+        piece(.29,.18,.18,0,0,.87,accent);
+        piece(.14,.25,.16,0,-.21,-.03,dark);
+      }else{
+        piece(.23,.18,.45,0,.02,.23,dark);
+        piece(.12,.11,.25,0,.025,.57,steel);
+        piece(.14,.28,.13,0,-.22,-.02,dark);
+        piece(.18,.08,.16,0,.16,.09,accent);
+      }
+      group.position.set(-.03,-.72,.28);group.rotation.x=.72;
+      return group;
+    }
+    function kwgSyncRemoteHeldTool(avatar,kind){
+      if(!avatar)return;
+      const arm=avatar.userData?.limbs?.rightArm;
+      if(!arm)return;
+      const old=avatar.userData.kwgRemoteTool;
+      if(old?.userData.kind===kind&&old.parent===arm)return;
+      if(old){old.parent?.remove(old);old.traverse(o=>{o.geometry?.dispose();if(o.material){for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();}});}
+      avatar.userData.kwgRemoteTool=null;
+      if(kind==='pistol'||kind==='minigun'){
+        const model=kwgMakeHeldTool(kind);model.userData.kind=kind;
+        arm.add(model);avatar.userData.kwgRemoteTool=model;
+      }
+    }
+    function kwgSyncHeldTool(){
+      const arm=localPlayerAvatar?.userData?.limbs?.rightArm;
+      const kind=(!isEditMode&&!kwgDeadUntil&&currentWorldName)?kwgEquippedTool:null;
+      if(!arm||!kind){kwgRemoveHeldTool();return;}
+      if(kwgHeldToolOwner===arm&&kwgHeldToolVisual?.userData.kind===kind)return;
+      kwgRemoveHeldTool();
+      kwgHeldToolVisual=kwgMakeHeldTool(kind);kwgHeldToolVisual.userData.kind=kind;
+      arm.add(kwgHeldToolVisual);kwgHeldToolOwner=arm;
+    }
+    function kwgEquipTool(kind){kwgEquippedTool=kwgTools.includes(kind)?kind:null;kwgRenderTools();kwgSyncHeldTool();}
     function kwgClearTools(){
-      kwgTools.length=0;kwgEquippedTool=null;kwgFireHeld=false;kwgToolPickupCooldowns.clear();kwgRenderTools();
+      kwgTools.length=0;kwgEquippedTool=null;kwgFireHeld=false;kwgToolPickupCooldowns.clear();kwgRenderTools();kwgRemoveHeldTool();
       for(const entry of kwgShotTracers){scene.remove(entry.line);entry.line.geometry.dispose();entry.line.material.dispose();}
       kwgShotTracers.length=0;
     }
@@ -11289,7 +11398,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const pickupWorld=currentWorldName;
         socket.emit('tool_pickup',{worldName:pickupWorld,blockId:block.id},response=>{
           if(!response?.success||pickupWorld!==currentWorldName||kwgTools.includes(kind))return;
-          kwgTools.push(kind);kwgEquippedTool=kind;kwgRenderTools();kwgAudio.play('tool_pickup');
+          kwgTools.push(kind);kwgEquippedTool=kind;kwgRenderTools();kwgSyncHeldTool();kwgAudio.play('tool_pickup');
           showToast(`${kind==='minigun'?'Minigun':'Pistol'} collected! Press ${kwgTools.length} to equip.`);
         });
       }
@@ -11532,9 +11641,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const leftLeg=new THREE.Group(),rightLeg=new THREE.Group();leftLeg.position.set(-.22,.49,0);rightLeg.position.set(.22,.49,0);rig.add(leftLeg,rightLeg);
       part(.25,.47,.28,0,-.24,0,dark,leftLeg);part(.25,.47,.28,0,-.24,0,dark,rightLeg);
       const tail=new THREE.Group();tail.position.set(0,.75,-.33);rig.add(tail);part(.13,.14,.55,0,.03,-.3,orange,tail);part(.17,.17,.19,0,.15,-.58,cream,tail);
-      const gun=new THREE.Group();gun.position.set(.38,1.06,.38);rig.add(gun);
-      part(.20,.20,.60,0,0,.27,dark,gun);part(.27,.18,.24,0,-.06,.01,cream,gun);part(.12,.14,.17,0,-.15,-.05,dark,gun);
-      const muzzle=part(.18,.18,.11,0,0,.65,pink,gun);muzzle.visible=false;
+      // Gun is gripped by the right paw and follows the animated arm.
+      // Local counter-rotation keeps its barrel level while the paw is raised.
+      const gun=new THREE.Group();gun.position.set(-.18,-.51,.31);gun.rotation.x=.95;rightArm.add(gun);
+      part(.19,.18,.72,0,0,.26,dark,gun); // barrel and receiver
+      part(.28,.22,.32,0,-.065,-.02,cream,gun); // stock
+      part(.12,.24,.15,0,-.19,-.07,dark,gun); // grip in paw
+      part(.14,.12,.22,0,.11,.09,dark,gun); // sight
+      const muzzle=part(.22,.22,.08,0,0,.66,pink,gun);muzzle.visible=false;
       root.userData.devilRig=rig;root.userData.devilLimbs=[leftArm,rightArm,leftLeg,rightLeg];
       root.userData.devilTail=tail;root.userData.devilBody=rig.children[0];root.userData.devilBrows=null;root.userData.devilMouth=null;
       const bubbleCanvas=document.createElement('canvas');bubbleCanvas.width=96;bubbleCanvas.height=80;
@@ -11545,6 +11659,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       bubble.position.set(0,2.65,0);bubble.scale.set(1,.82,1);bubble.visible=false;root.add(bubble);
       root.userData.devilNotice=bubble;root.userData.devilTired=null;
       root.userData.sniperGun=gun;root.userData.sniperMuzzle=muzzle;
+      root.userData.sniperArms=[leftArm,rightArm];
       root.userData.isEnemyCharacter=true;return root;
     }
     function kwgEnemySlotSpawn(block,index,count){
@@ -11609,7 +11724,28 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const id=block.id,props=kwgEnemyPropsOf(block);
         let entry=kwgEnemySpawners.get(id);
         if(!entry){entry={block,slots:[]};kwgEnemySpawners.set(id,entry);}
-        if(entry.block&&kwgEnemyCharacter(entry.block.enemyCharacter)!==props.enemyCharacter){for(const slot of entry.slots)kwgDestroyEnemySlot(slot);}
+        // Compare the actual spawned character, not entry.block: editor changes
+        // blockData in place, so comparing two block references misses changes.
+        if(entry.character!==undefined&&entry.character!==props.enemyCharacter){
+          for(const slot of entry.slots){
+            const wasVisible=!!slot.mesh;
+            const previousPosition=wasVisible?slot.mesh.position.clone():null;
+            kwgDestroyEnemySlot(slot);
+            slot.deadUntil=0;slot.squishUntil=0;slot.path=[];slot.pathAt=0;
+            slot.spawnedOnce=false;slot.nextShotAt=0;slot.weaponHealth=100;
+            slot.attackUntil=0;slot.muzzleUntil=0;slot.chaseStartedAt=0;
+            slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;slot.wasChasing=false;
+            // Replace an already visible NPC right here, even while the
+            // World Editor camera is active and the AI update is paused.
+            if(wasVisible){
+              slot.mesh=props.enemyCharacter==='sniper'?kwgSniperCatModel():kwgDevilModel();
+              slot.mesh.position.copy(previousPosition);
+              scene.add(slot.mesh);
+              slot.spawnedOnce=true;
+            }
+          }
+        }
+        entry.character=props.enemyCharacter;
         entry.block=block;
         while(entry.slots.length>props.enemyCount)kwgDestroyEnemySlot(entry.slots.pop());
         while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,squishUntil:0,walkTime:0,fallSpeed:0,jumpSpeed:0,isJumping:false,grounded:false,path:[],pathAt:0,noticeAt:0,stepAt:0,chaseStartedAt:0,exhaustedUntil:0,chaseCooldownUntil:0,chaseSoundAt:0});
@@ -11831,7 +11967,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         la.rotation.x=-1.45*punch;ra.rotation.x=-1.45*punch;
         la.rotation.z=-.32*punch;ra.rotation.z=.32*punch;
       }
-      if(npc.userData.sniperGun){npc.userData.sniperGun.rotation.x=now<(slot.attackUntil||0)?-.16:0;npc.userData.sniperMuzzle.visible=now<(slot.muzzleUntil||0);}
+      if(npc.userData.sniperGun){
+        // Hands actually hold the rifle. The gun is a child of the right paw.
+        // Avoid the generic monster-lunge pose while the cat is aiming.
+        const firing=now<(slot.attackUntil||0);
+        const arms=npc.userData.sniperArms;
+        arms[1].rotation.x=-.95+(firing?-.12:Math.sin(now*.003+index)*.035);
+        arms[1].rotation.z=-.12;
+        arms[0].rotation.x=-.66;arms[0].rotation.z=.62;
+        npc.userData.sniperGun.rotation.x=.95+(firing?.12:0);
+        npc.userData.sniperMuzzle.visible=now<(slot.muzzleUntil||0);
+      }
       const bubble=npc.userData.devilNotice;
       if(bubble){
         bubble.visible=!exhausted&&now<(slot.noticeBubbleUntil||0);
@@ -11916,8 +12062,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
     function kwgSniperFire(slot,player,props,blocks,now){
       if(!slot.mesh||now<(slot.nextShotAt||0)||isEditMode||kwgDeadUntil||kwgHealth<=0)return;
-      const muzzle=slot.mesh.position.clone().add(new THREE.Vector3(0,1.35,0));
       const target=player.position.clone().add(new THREE.Vector3(0,1.0,0));
+      // The muzzle must actually point at the target before a shot is allowed.
+      const aimX=target.x-slot.mesh.position.x,aimZ=target.z-slot.mesh.position.z;
+      const aimDistance=Math.hypot(aimX,aimZ);
+      if(aimDistance<.001)return;
+      const desiredYaw=Math.atan2(aimX,aimZ);
+      slot.mesh.rotation.y=desiredYaw;
+      slot.mesh.updateMatrixWorld(true);
+      const muzzleObj=slot.mesh.userData.sniperMuzzle;
+      const muzzle=muzzleObj?muzzleObj.getWorldPosition(new THREE.Vector3()):slot.mesh.position.clone().add(new THREE.Vector3(0,1.3,.5));
+      const facing=new THREE.Vector3(Math.sin(slot.mesh.rotation.y),0,Math.cos(slot.mesh.rotation.y));
+      if(facing.dot(new THREE.Vector3(aimX/aimDistance,0,aimZ/aimDistance))<.98)return;
       if(muzzle.distanceTo(target)>props.noticeRange||!kwgRayWorldClear(muzzle,target,blocks))return;
       slot.nextShotAt=now+1500;slot.muzzleUntil=now+125;slot.attackUntil=now+320;
       kwgShowShotTracer(muzzle,target,0xffae5c);
@@ -12021,10 +12177,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             if(distance<16&&now-slot.noticeAt>3000){kwgAudio.play('devil_notice');slot.noticeAt=now;}
           }
           slot.wasChasing=chasing;
-          if(chasing&&distance<19&&now-(slot.chaseSoundAt||0)>1650){
+          if(exhausted&&distance<16&&now-(slot.pantSoundAt||0)>1150){
+            kwgAudio.play('devil_pant');slot.pantSoundAt=now;
+          }
+          if(chasing&&props.enemyCharacter==='devil'&&distance<19&&now-(slot.chaseSoundAt||0)>1650){
             // Repeating 8-bit growls only while actively pursuing a living
             // player; per-enemy throttling prevents continuous audio spam.
             kwgAudio.play('devil_chase');slot.chaseSoundAt=now;
+          }
+          if(chasing&&distance>.01){
+            // Face players even while stationary, and before attack animations.
+            npc.rotation.y=Math.atan2(dx,dz);
           }
           if(props.enemyCharacter==='sniper'&&chasing&&distance<=props.noticeRange){
             kwgSniperFire(slot,player,props,blocks,now);
@@ -12117,7 +12280,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
                !kwgEnemyCrowded(nx,nz,slot)){
               const moved=kwgEnemyMoveSolid(slot,nx,nz,blocks);
               if(moved>.0001&&moved<=travel+.07){
-                npc.rotation.y=Math.atan2(vx,vz);
+                if(!chasing)npc.rotation.y=Math.atan2(vx,vz);
                 slot.walkTime+=dt*speed*6;
                 walking=true;
                 if(chasing&&distance<12&&now-slot.stepAt>450){
@@ -12209,6 +12372,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const isContact=bodyOverlaps&&contactDistance<=.89;
           if(bodyOverlaps)kwgResolvePlayerDevilOverlap(player,npc,blocks);
           if(isContact&&props.enemyCharacter!=='sniper'&&kwgEnemyHitPlayer(props.enemyDamage,npc.position)){
+            if(distance>.01)npc.rotation.y=Math.atan2(dx,dz);
             slot.attackUntil=now+480;
             kwgAudio.play('devil_attack');
             return;
@@ -13045,7 +13209,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         ragdollX:kwgDeadUntil||kwgKnockedUntil?player.userData.kwgStompPivot?.rotation.x||0:0,
         ragdollY:kwgDeadUntil||kwgKnockedUntil?player.userData.kwgStompPivot?.rotation.y||0:0,
         ragdollZ:kwgDeadUntil||kwgKnockedUntil?player.userData.kwgStompPivot?.rotation.z||0:0,
-        health:kwgHealth
+        health:kwgHealth,equippedTool:kwgDeadUntil?null:kwgEquippedTool
       });
     }
 
@@ -13299,6 +13463,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(kwgFireHeld&&kwgEquippedTool)kwgFireTool();
         kwgAnimateStomp(kwgEnemyClock());
       }
+      kwgSyncHeldTool();
       kwgUpdateEnemyRangeIndicator();
       if(!kwgFreeCamera.active) updateGizmoScreenScale();
       else updateWorldThumbnailCamera(delta);
