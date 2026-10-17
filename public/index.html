@@ -8439,6 +8439,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
       updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
       kwgSyncRemoteHeldTool(p.mesh,pData.equippedTool);
+      if(pData.equippedTool)kwgAnimateHeldWeapon(p.mesh,pData.equippedTool,performance.now(),false);
       // Other visitors see the front flip too, without rotating the physics root.
       const ragdoll=Number(pData.ragdollPose)||0;
       if(ragdoll>0){
@@ -9477,6 +9478,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         for(const [key,id] of Object.entries({noticeRange:'range',enemySpeed:'speed',enemyCount:'count',enemyRespawn:'respawn',enemyDamage:'damage'}))
           document.getElementById('kwg-enemy-'+id).value=enemy[key];
         document.getElementById('kwg-enemy-killable').checked=enemy.enemyKillable;
+        kwgSyncHopsStompCheckbox('kwg-enemy-');
         document.getElementById('kwg-heal-amount').value=kwgEnemyNumber(block.healAmount,1,100,25,true);
         document.getElementById('kwg-tool-kind').value=kwgToolKind(block.toolKind);
         document.getElementById('kwg-enemy-character').value=enemy.enemyCharacter;
@@ -9773,7 +9775,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         noticeRange:kwgEnemyNumber(document.getElementById(prefix+'range').value,2,100,18),
         enemySpeed:kwgEnemyNumber(document.getElementById(prefix+'speed').value,.5,15,3),
         enemyCount:kwgEnemyNumber(document.getElementById(prefix+'count').value,1,12,1,true),
-        enemyKillable:document.getElementById(prefix+'killable').checked,
+        enemyKillable:kwgEnemyCharacter(document.getElementById(prefix+'character').value)==='hops'?false:document.getElementById(prefix+'killable').checked,
         enemyRespawn:kwgEnemyNumber(document.getElementById(prefix+'respawn').value,0,300,5),
         enemyDamage:kwgEnemyNumber(document.getElementById(prefix+'damage').value,1,100,25,true),
         enemyCharacter:kwgEnemyCharacter(document.getElementById(prefix+'character').value)
@@ -9784,13 +9786,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         noticeRange:kwgEnemyNumber(block.noticeRange,2,100,18),
         enemySpeed:kwgEnemyNumber(block.enemySpeed,.5,15,3),
         enemyCount:kwgEnemyNumber(block.enemyCount,1,12,1,true),
-        enemyKillable:block.enemyKillable!==false,
+        enemyKillable:kwgEnemyCharacter(block.enemyCharacter)!=='hops'&&block.enemyKillable!==false,
         enemyRespawn:kwgEnemyNumber(block.enemyRespawn,0,300,5),
         enemyDamage:kwgEnemyNumber(block.enemyDamage,1,100,25,true),
         enemyCharacter:kwgEnemyCharacter(block.enemyCharacter)
       };
     }
+    // V29: Hops is NEVER stompable, including old worlds that saved true.
+    // Keep the checkbox visible but disabled so the rule is clear in the editor.
+    function kwgSyncHopsStompCheckbox(prefix){
+      const character=document.getElementById(prefix+'character');
+      const checkbox=document.getElementById(prefix+'killable');
+      if(!character||!checkbox)return;
+      const isHops=kwgEnemyCharacter(character.value)==='hops';
+      checkbox.disabled=isHops;
+      if(isHops)checkbox.checked=false;
+      checkbox.title=isHops?'Hops is too big to stomp. Weapons still work.':'';
+    }
     function kwgToggleEnemyFields(){
+      kwgSyncHopsStompCheckbox('kwg-place-enemy-');
+      kwgSyncHopsStompCheckbox('kwg-enemy-');
       const place=document.getElementById('kwg-place-enemy-properties');
       const selected=document.getElementById('kwg-enemy-properties');
       if(place)place.style.display=document.getElementById('kwg-place-type').value==='enemy_spawner'?'block':'none';
@@ -11356,6 +11371,36 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgHitPixels.length=0;
       document.getElementById('kwg-damage-flash')?.classList.remove('kwg-pulse');
     }
+    // V29: soft blocky dust puffs for stomps and Hops' heavy landing.
+    const kwgDustPuffs=[];
+    function kwgStompDust(position,heavy=false){
+      if(!position||!currentWorldName)return;
+      const now=performance.now(),count=heavy?19:12;
+      for(let i=0;i<count;i++){
+        const angle=Math.PI*2*i/count+Math.random()*.3;
+        const r=(heavy?.55:.32)+Math.random()*(heavy?.65:.45);
+        const size=(heavy?.15:.095)+Math.random()*(heavy?.17:.12);
+        const material=new THREE.MeshBasicMaterial({color:[0xe2d3b5,0xbda88a,0xf6e8ce,0xd7c4a2][i%4],transparent:true,opacity:.85,depthWrite:false});
+        const mesh=new THREE.Mesh(new THREE.BoxGeometry(size,size,size),material);
+        mesh.position.copy(position).add(new THREE.Vector3(Math.cos(angle)*r*.45,.08+Math.random()*.15,Math.sin(angle)*r*.45));
+        scene.add(mesh);
+        kwgDustPuffs.push({mesh,velocity:new THREE.Vector3(Math.cos(angle)*(heavy?3.4:2.4)*(.65+Math.random()),.5+Math.random()*(heavy?2.4:1.6),Math.sin(angle)*(heavy?3.4:2.4)*(.65+Math.random())),until:now+440+Math.random()*270,created:now});
+      }
+    }
+    function kwgUpdateDust(dt){
+      const now=performance.now();
+      for(let i=kwgDustPuffs.length-1;i>=0;i--){
+        const p=kwgDustPuffs[i];
+        if(now>=p.until){scene.remove(p.mesh);p.mesh.geometry.dispose();p.mesh.material.dispose();kwgDustPuffs.splice(i,1);continue;}
+        p.velocity.y-=5*dt;p.mesh.position.addScaledVector(p.velocity,dt);
+        p.mesh.material.opacity=.83*Math.max(0,(p.until-now)/(p.until-p.created));
+        p.mesh.rotation.y+=dt*2;
+      }
+    }
+    function kwgClearDust(){
+      for(const p of kwgDustPuffs){scene.remove(p.mesh);p.mesh.geometry.dispose();p.mesh.material.dispose();}
+      kwgDustPuffs.length=0;
+    }
     const kwgShotTracers=[];
     function kwgShowShotTracer(start,end,color=0xffd67a){
       const geom=new THREE.BufferGeometry().setFromPoints([start,end]);
@@ -11401,15 +11446,25 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const piece=(w,h,d,x,y,z,mat)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);group.add(m);return m;};
       if(kind==='minigun'){
         piece(.30,.24,.47,0,.01,.22,dark);
-        for(const x of [-.10,0,.10])for(const y of [-.06,.06])piece(.055,.055,.55,x,y,.62,steel);
+        const barrels=new THREE.Group();barrels.position.set(0,0,.55);group.add(barrels);
+        for(const x of [-.10,0,.10])for(const y of [-.06,.06]){
+          const barrel=new THREE.Mesh(new THREE.BoxGeometry(.055,.055,.55),steel);
+          barrel.position.set(x,y,.07);barrels.add(barrel);
+        }
         piece(.29,.18,.18,0,0,.87,accent);
         piece(.14,.25,.16,0,-.21,-.03,dark);
+        group.userData.barrels=barrels;
       }else{
         piece(.23,.18,.45,0,.02,.23,dark);
         piece(.12,.11,.25,0,.025,.57,steel);
         piece(.14,.28,.13,0,-.22,-.02,dark);
         piece(.18,.08,.16,0,.16,.09,accent);
       }
+      const flash=new THREE.Group();
+      const sparkMat=new THREE.MeshBasicMaterial({color:0xffec83,depthWrite:false});
+      const spark=new THREE.Mesh(new THREE.OctahedronGeometry(kind==='minigun'?.17:.23,0),sparkMat);
+      flash.add(spark);flash.position.set(0,0,kind==='minigun'?1.02:.74);
+      flash.visible=false;group.add(flash);group.userData.flash=flash;
       group.position.set(-.03,-.72,.28);group.rotation.x=.72;
       return group;
     }
@@ -11434,6 +11489,47 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgRemoveHeldTool();
       kwgHeldToolVisual=kwgMakeHeldTool(kind);kwgHeldToolVisual.userData.kind=kind;
       arm.add(kwgHeldToolVisual);kwgHeldToolOwner=arm;
+    }
+    // V29: tools aim with the avatar's arms and animate their own recoil,
+    // muzzle flash and (for minigun) spinning barrel cluster.
+    function kwgAnimateHeldWeapon(avatar,kind,now,local=false){
+      const limbs=avatar?.userData?.limbs;
+      if(!limbs||!kind)return;
+      const gun=local?kwgHeldToolVisual:avatar.userData.kwgRemoteTool;
+      if(!gun||gun.userData.kind!==kind)return;
+      const right=limbs.rightArm,left=limbs.leftArm;
+      const recoilAge=local?now-kwgLastShot:Infinity;
+      const recoil=local&&recoilAge>=0&&recoilAge<(kind==='pistol'?245:135)?
+        Math.exp(-recoilAge/(kind==='pistol'?115:68)):0;
+      // Aim toward the pointer ray, without rotating the whole moving avatar.
+      let yaw=0,pitch=0;
+      if(local){
+        const ray=new THREE.Raycaster();ray.setFromCamera(kwgAimNdc,camera);
+        const target=ray.ray.origin.clone().addScaledVector(ray.ray.direction,25);
+        const dx=target.x-avatar.position.x,dz=target.z-avatar.position.z;
+        const relative=Math.atan2(dx,dz)-avatar.rotation.y;
+        yaw=Math.atan2(Math.sin(relative),Math.cos(relative));
+        yaw=Math.max(-1.25,Math.min(1.25,yaw));
+        const horizontal=Math.max(1,Math.hypot(dx,dz));
+        pitch=Math.max(-.48,Math.min(.40,Math.atan2(target.y-avatar.position.y-1.4,horizontal)));
+      }
+      const ease=.23;
+      right.rotation.x+=(-1.07-pitch-recoil*.31-right.rotation.x)*ease;
+      right.rotation.y+=(yaw-right.rotation.y)*ease;
+      right.rotation.z+=(-.10-right.rotation.z)*ease;
+      left.rotation.x+=((kind==='minigun'?-1.04:-.46)-pitch*.5-left.rotation.x)*ease;
+      left.rotation.y+=(yaw*.60-left.rotation.y)*ease;
+      left.rotation.z+=((kind==='minigun'?.40:-.10)-left.rotation.z)*ease;
+      gun.position.z=.28-recoil*(kind==='pistol'?.15:.065);
+      gun.rotation.x=.72+recoil*(kind==='pistol'?.34:.15);
+      const flash=gun.userData.flash;
+      if(flash){
+        flash.visible=local&&recoilAge>=0&&recoilAge<(kind==='pistol'?85:55);
+        if(flash.visible)flash.rotation.z=now*.04;
+      }
+      if(gun.userData.barrels){
+        gun.userData.barrels.rotation.z+=local&&kwgFireHeld?.52:.065;
+      }
     }
     function kwgEquipTool(kind){kwgEquippedTool=kwgTools.includes(kind)?kind:null;kwgRenderTools();kwgSyncHeldTool();}
     function kwgClearTools(){
@@ -11464,6 +11560,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(now-kwgLastShot<kwgToolCooldown[kind])return;
       kwgLastShot=now;
       kwgAudio.play(kind);
+      kwgAnimateHeldWeapon(localPlayerAvatar,kind,now,true);
       // Mouse-position aiming lets players target enemies anywhere in the
       // third-person view; the reticle follows the cursor over the canvas.
       const ray=new THREE.Raycaster();ray.setFromCamera(kwgAimNdc,camera);
@@ -11491,11 +11588,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const tracerEnd=ray.ray.origin.clone().addScaledVector(ray.ray.direction,maxDistance);
       kwgShowShotTracer(localPlayerAvatar.position.clone().add(new THREE.Vector3(0,1.35,0)),tracerEnd,kind==='minigun'?0xffe9a3:0xffc665);
       if(best?.kind==='enemy'){
-        if(best.entry.block.enemyKillable===false)return;
+        // Can Be Stomped controls stomp immunity, not weapon damage.
+        // Hops is immune to stomps but must remain defeatable by tools.
         best.slot.weaponHealth=(best.slot.weaponHealth??100)-kwgToolDamage[kind];
         kwgBlockyHitSplash(tracerEnd,kind==='minigun'?7:13);
         kwgAudio.play('hit_enemy');
-        if(best.slot.weaponHealth<=0)kwgDefeatEnemy(best.id,best.index,true);
+        kwgShowEnemyHealth(best.slot,best.entry.block.enemyCharacter);
+        best.slot.hitUntil=now+370;best.slot.hitSide=Math.random()<.5?-1:1;
+        if(best.slot.weaponHealth<=0){best.slot.defeatMethod='weapon';kwgDefeatEnemy(best.id,best.index,true);}
       }else if(best?.kind==='player'&&socket?.connected){
         kwgBlockyHitSplash(tracerEnd,kind==='minigun'?6:11);
         const start=ray.ray.origin,dir=ray.ray.direction;
@@ -11766,6 +11866,33 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       root.userData.isEnemyCharacter=true;
       return root;
     }
+    // Enemy HP is local to the current game client. The bar is only shown
+    // after damage; the same value drives the weapon defeat threshold.
+    function kwgEnemyMaxWeaponHealth(kind){return kind==='hops'?160:100;}
+    function kwgShowEnemyHealth(slot,kind){
+      const npc=slot?.mesh;if(!npc)return;
+      const max=kwgEnemyMaxWeaponHealth(kind);
+      const hp=Math.max(0,Math.min(max,Number(slot.weaponHealth??max)));
+      let sprite=npc.userData.kwgEnemyHealth;
+      if(!sprite){
+        const canvas=document.createElement('canvas');canvas.width=256;canvas.height=52;
+        const texture=new THREE.CanvasTexture(canvas);texture.minFilter=THREE.NearestFilter;
+        sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:false}));
+        sprite.name='kwg-enemy-health';sprite.position.set(0,kind==='hops'?3.65:2.40,0);
+        sprite.scale.set(1.62,.34,1);npc.add(sprite);
+        npc.userData.kwgEnemyHealth=sprite;sprite.userData.canvas=canvas;sprite.userData.lastHp=-1;
+      }
+      sprite.visible=hp<max&&hp>0;
+      if(!sprite.visible||sprite.userData.lastHp===hp)return;
+      sprite.userData.lastHp=hp;
+      const ctx=sprite.userData.canvas.getContext('2d');ctx.clearRect(0,0,256,52);
+      ctx.fillStyle='#242735';ctx.fillRect(3,7,250,38);
+      ctx.fillStyle='#ffffff';ctx.fillRect(9,13,238,26);
+      ctx.fillStyle='#52343a';ctx.fillRect(13,17,230,18);
+      ctx.fillStyle=hp/max>.55?'#6ee58c':hp/max>.26?'#f5cb67':'#f66c77';
+      ctx.fillRect(13,17,Math.round(230*hp/max),18);
+      sprite.material.map.needsUpdate=true;
+    }
     function kwgCreateEnemyModel(kind){
       return kind==='sniper'?kwgSniperCatModel():kind==='hops'?kwgHopsBunnyModel():kwgDevilModel();
     }
@@ -11840,6 +11967,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgResetStompAnimation(true);
       kwgClearTools();
       kwgClearHitPixels();
+      kwgClearDust();
       kwgClearCarrots();
     }
     function kwgDefeatEnemy(spawnerId,index,notify=true){
@@ -11850,9 +11978,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       // Keep the flattened model on screen before despawning; respawn delay starts after it.
       slot.squishUntil=now+480;
       slot.deadUntil=slot.squishUntil+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
-      slot.path=[];slot.pathAt=0;slot.jumpSpeed=0;slot.isJumping=false;
+      slot.path=[];slot.pathAt=0;slot.jumpSpeed=0;slot.isJumping=false;slot.hopsImpactPending=false;
       if(notify)kwgAudio.play('devil_stomp');
-      if(notify&&socket?.connected)socket.emit('enemy_stomped',{worldName:currentWorldName,spawnerId,index});
+      if(notify&&socket?.connected)socket.emit('enemy_stomped',{worldName:currentWorldName,spawnerId,index,method:slot.defeatMethod||'stomp'});
+      slot.defeatMethod=null;
     }
     socket.on('enemy_stomped',({worldName,spawnerId,index}={})=>{
       if(worldName===currentWorldName)kwgDefeatEnemy(spawnerId,index,false);
@@ -11883,8 +12012,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             const previousPosition=wasVisible?slot.mesh.position.clone():null;
             kwgDestroyEnemySlot(slot);
             slot.deadUntil=0;slot.squishUntil=0;slot.path=[];slot.pathAt=0;
-            slot.spawnedOnce=false;slot.nextShotAt=0;slot.weaponHealth=props.enemyCharacter==='hops'?160:100;
-            slot.attackUntil=0;slot.muzzleUntil=0;slot.hopsImpactAt=0;slot.hopsLeapUntil=0;slot.nextHopAt=0;slot.chaseStartedAt=0;
+            slot.spawnedOnce=false;slot.nextShotAt=0;slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);
+            slot.attackUntil=0;slot.muzzleUntil=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;slot.nextHopAt=0;slot.chaseStartedAt=0;
             slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;slot.wasChasing=false;
             // Replace an already visible NPC right here, even while the
             // World Editor camera is active and the AI update is paused.
@@ -11892,6 +12021,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               slot.mesh=kwgCreateEnemyModel(props.enemyCharacter);
               slot.mesh.position.copy(previousPosition);
               scene.add(slot.mesh);
+              kwgShowEnemyHealth(slot,props.enemyCharacter);
               slot.spawnedOnce=true;
             }
           }
@@ -12149,6 +12279,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         tiredBubble.visible=exhausted;
         if(exhausted)tiredBubble.position.y=2.65+Math.sin(now*.009+index)*.08;
       }
+      // A quick recoil when shot: body jerks sideways, arms flinch, then
+      // spring back. This applies to Devil, Sniper and Hops alike.
+      if(now<(slot.hitUntil||0)){
+        const p=Math.max(0,Math.min(1,(slot.hitUntil-now)/370));
+        const kick=Math.sin((1-p)*Math.PI)*p;
+        rig.rotation.z+=(slot.hitSide||1)*kick*.32;
+        rig.rotation.x+=kick*.25;
+        rig.position.y+=kick*.10;
+        la.rotation.x-=kick*.75;ra.rotation.x-=kick*.65;
+        la.rotation.z-=kick*.26;ra.rotation.z+=kick*.26;
+      }
+      if(npc.userData.kwgEnemyHealth?.visible){
+        if(bubble?.visible)bubble.position.y=(npc.userData.hopsEars?4.28:3.02)+Math.sin(now*.016)*.08;
+        if(tiredBubble?.visible)tiredBubble.position.y=(npc.userData.hopsEars?4.28:3.02)+Math.sin(now*.009)*.08;
+      }
       // Cartoon hop: knees tuck on the way up; arms flare as the devil falls.
       if(!slot.grounded){
         const rising=slot.fallSpeed>0;
@@ -12282,10 +12427,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.spawnIndex=index;slot.walkTime=0;slot.path=[];slot.pathAt=0;
             slot.roamTarget=null;slot.roamUntil=0;slot.attackUntil=0;slot.noticeBubbleUntil=0;
             slot.chaseStartedAt=0;slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;
-            slot.weaponHealth=props.enemyCharacter==='hops'?160:100;slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
-            slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.nextShotAt=0;slot.nextHopAt=0;slot.hopsImpactAt=0;slot.hopsLeapUntil=0;
+            slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
+            slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.nextShotAt=0;slot.nextHopAt=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;
             if(slot.spawnedOnce&&spawnDistance<15)kwgAudio.play('devil_respawn');
             slot.spawnedOnce=true;
+            kwgShowEnemyHealth(slot,props.enemyCharacter);
           }
           const npc=slot.mesh;
           const enemyBefore={x:npc.position.x,z:npc.position.z};
@@ -12361,19 +12507,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           }else if(props.enemyCharacter==='hops'&&chasing){
             if(hopsMelee&&now>=(slot.nextHopAt||0)&&slot.grounded){
               // Start a physical hop; damage occurs at impact, not on takeoff.
-              slot.nextHopAt=now+2700;slot.attackUntil=now+650;
-              slot.hopsLeapUntil=now+680;
-              slot.hopsLeapTarget={x:player.position.x,z:player.position.z};
-              slot.hopsImpactAt=now+270;
-              slot.fallSpeed=8.3;slot.grounded=false;slot.isJumping=true;
+              slot.nextHopAt=now+3250;slot.attackUntil=now+900;
+              slot.hopsLeapStartedAt=now;slot.hopsLeapUntil=now+1350;
+              // Target a spot slightly BEYOND the player so Hops visibly
+              // clears their head rather than hopping in place beside them.
+              const forwardX=dx/Math.max(.001,distance),forwardZ=dz/Math.max(.001,distance);
+              slot.hopsLeapTarget={x:player.position.x+forwardX*1.0,z:player.position.z+forwardZ*1.0};
+              slot.hopsImpactPending=true;
+              slot.fallSpeed=10.2;slot.grounded=false;slot.isJumping=true;
               kwgAudio.play('hops_leap');
             }else if(distance>=3.1){kwgHopsThrow(slot,player,props,blocks,now);}
-          }
-          if(slot.hopsImpactAt&&now>=slot.hopsImpactAt){
-            slot.hopsImpactAt=0;
-            if(playerAlive&&!isEditMode&&distance<2.9&&
-               kwgRayWorldClear(npc.position.clone().add(new THREE.Vector3(0,1.8,0)),player.position.clone().add(new THREE.Vector3(0,1.0,0)),blocks)&&
-               kwgEnemyHitPlayer(kwgMaxHealth,npc.position))kwgAudio.play('hops_hit');
           }
           let tx=targetX,tz=targetZ;
           if(!exhausted&&now>=slot.pathAt&&pathBudget>0){
@@ -12444,7 +12587,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           }
           let walking=false;
           if(!exhausted&&d>.13&&(chasing||hopsLeaping||!!slot.roamTarget||homeDist>.15)){
-            const speed=props.enemySpeed*(hopsLeaping?1.65:chasing?1:.65);
+            const speed=hopsLeaping?Math.max(5.8,props.enemySpeed*2.35):props.enemySpeed*(chasing?1:.65);
             const travel=Math.min(d,speed*dt);
             const oldX=npc.position.x,oldZ=npc.position.z;
             const nx=oldX+vx/d*travel,nz=oldZ+vz/d*travel;
@@ -12511,6 +12654,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               npc.position.y=landingY;slot.fallSpeed=0;slot.isJumping=false;slot.grounded=true;
             }else{npc.position.y=proposedY;slot.grounded=false;}
           }
+          // Hops' stomp happens at actual ground contact, not while ascending.
+          if(props.enemyCharacter==='hops'&&slot.hopsImpactPending&&slot.grounded&&
+             now-(slot.hopsLeapStartedAt||now)>320){
+            slot.hopsImpactPending=false;slot.hopsLeapUntil=0;
+            slot.hopsLeapTarget=null;
+            kwgStompDust(npc.position.clone().add(new THREE.Vector3(0,.12,0)),true);
+            const impactDistance=Math.hypot(player.position.x-npc.position.x,player.position.z-npc.position.z);
+            if(playerAlive&&!isEditMode&&impactDistance<2.05&&
+               Math.abs(player.position.y-npc.position.y)<2.0&&
+               kwgRayWorldClear(npc.position.clone().add(new THREE.Vector3(0,1.8,0)),player.position.clone().add(new THREE.Vector3(0,1.0,0)),blocks)&&
+               kwgEnemyHitPlayer(kwgMaxHealth,npc.position))kwgAudio.play('hops_hit');
+          }
           if(npc.position.y<origin.y-30){
             npc.position.set(origin.x,origin.y,origin.z);
             slot.fallSpeed=0;slot.path=[];slot.grounded=false;
@@ -12531,6 +12686,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             isGrounded=false;
             const wasStomp=kwgDoubleJumpStomp&&props.enemyKillable&&props.enemyCharacter!=='hops';
             if(wasStomp){
+              kwgStompDust(npc.position.clone().add(new THREE.Vector3(0,top-npc.position.y-.10,0)));
               kwgDefeatEnemy(id,index,true);
             }else{
               kwgAudio.play('devil_bounce');
@@ -13645,12 +13801,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgUpdateEnemies(delta);
         kwgUpdateShotTracers();
         kwgUpdateHitPixels(delta);
+        kwgUpdateDust(delta);
         kwgUpdateCarrots(delta);
         if(!isEditMode&&currentWorldData?.blocks)kwgTouchToolDispensers(Object.values(currentWorldData.blocks),localPlayerAvatar);
         if(kwgFireHeld&&kwgEquippedTool)kwgFireTool();
         kwgAnimateStomp(kwgEnemyClock());
       }
       kwgSyncHeldTool();
+      if(!kwgFreeCamera.active&&!isEditMode&&!kwgDeadUntil&&kwgEquippedTool)
+        kwgAnimateHeldWeapon(localPlayerAvatar,kwgEquippedTool,performance.now(),true);
       kwgUpdateEnemyRangeIndicator();
       if(!kwgFreeCamera.active) updateGizmoScreenScale();
       else updateWorldThumbnailCamera(delta);
