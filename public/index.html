@@ -3260,7 +3260,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             <input type="checkbox" id="block-collidable-checkbox" checked>
           </div>
           <div id="kwg-enemy-properties" class="kwg-enemy-properties" style="display:none">
-            <div class="kwg-enemy-props-title">DEVIL ENEMY SETTINGS</div>
+            <div class="kwg-enemy-props-title">ENEMY SETTINGS</div>
             <label class="kwg-recolor-field"><span>Notice Range (studs)</span><input id="kwg-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
             <label class="kwg-recolor-field"><span>Enemy Speed (studs / second)</span><input id="kwg-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
             <label class="kwg-recolor-field"><span>Number of Enemies</span><input id="kwg-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
@@ -3564,7 +3564,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         death:[[560,.11,'square',.18,390],[390,.12,'square',.17,260],[260,.16,'sawtooth',.13,120],[125,.19,'triangle',.16,55]],
         chat:[[760,.05,'sine',.18,930]],
         capture:[[210,.025,'square',.14,145],[860,.045,'triangle',.13,990]],
-        toggle:[[450,.04,'square',.09,560]]
+        toggle:[[450,.04,'square',.09,560]],
+        devil_notice:[[330,.07,'sawtooth',.08,480],[420,.09,'square',.08,290]],
+        devil_step:[[150,.042,'triangle',.075,110]],
+        devil_bounce:[[360,.08,'sine',.18,690],[660,.07,'triangle',.12,870]],
+        devil_stomp:[[190,.11,'sawtooth',.2,90],[115,.14,'square',.12,65],[560,.08,'triangle',.08,270]],
+        devil_respawn:[[270,.065,'triangle',.09,450],[420,.08,'square',.08,610]],
+        devil_attack:[[240,.095,'sawtooth',.13,120],[110,.13,'square',.12,70]],
+        double_jump:[[450,.06,'triangle',.11,700],[700,.08,'sine',.13,970]]
       };
       function play(name){
         if(!settings.enabled||settings.volume<=0||document.hidden)return;
@@ -8260,6 +8267,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       p.mesh.rotation.y = pData.rotationY;
 
       updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
+      // Other visitors see the front flip too, without rotating the physics root.
+      const flip=Number(pData.stompAngle)||0;
+      if(Math.abs(flip)>.02){
+        kwgBuildStompPivot(p.mesh).rotation.x=Math.max(-8,Math.min(8,flip));
+      }else if(p.mesh.userData.kwgStompPivot){
+        const pivot=p.mesh.userData.kwgStompPivot;
+        pivot.rotation.x*=.65;
+        if(Math.abs(pivot.rotation.x)<.015)pivot.rotation.x=0;
+      }
     });
 
     socket.on('player_left', (id) => {
@@ -11026,16 +11042,46 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // Spawner configuration IS saved as a normal world block. Each client renders
     // the devils; stomp events are broadcast so defeats appear to all visitors.
     const kwgEnemySpawners=new Map();
+    // Editor-only notice-radius ring; it is never a world block and is never saved.
+    const kwgEnemyRangeIndicator=new THREE.Group();
+    kwgEnemyRangeIndicator.visible=false;
+    kwgEnemyRangeIndicator.name='kwg-editor-enemy-notice-range';
+    scene.add(kwgEnemyRangeIndicator);
+    let kwgEnemyRangeRadius=-1;
+    function kwgUpdateEnemyRangeIndicator(){
+      const block=isEditMode&&selectedBlockId&&currentWorldData?.blocks?.[selectedBlockId];
+      const show=!!block&&block.actionType==='enemy_spawner'&&!kwgFreeCamera.active;
+      kwgEnemyRangeIndicator.visible=show;
+      if(!show)return;
+      const radius=kwgEnemyPropsOf(block).noticeRange;
+      if(radius!==kwgEnemyRangeRadius){
+        for(const child of [...kwgEnemyRangeIndicator.children]){
+          kwgEnemyRangeIndicator.remove(child);
+          child.geometry?.dispose();child.material?.dispose();
+        }
+        const material=new THREE.MeshBasicMaterial({color:0x58bfff,side:THREE.DoubleSide,transparent:true,opacity:.68,depthWrite:false,depthTest:false});
+        const ring=new THREE.Mesh(new THREE.RingGeometry(Math.max(.1,radius-.09),radius+.09,128),material);
+        ring.rotation.x=-Math.PI/2;ring.renderOrder=995;
+        kwgEnemyRangeIndicator.add(ring);
+        const fill=new THREE.Mesh(new THREE.CircleGeometry(radius,128),new THREE.MeshBasicMaterial({color:0x4bb8ff,side:THREE.DoubleSide,transparent:true,opacity:.065,depthWrite:false,depthTest:false}));
+        fill.rotation.x=-Math.PI/2;fill.position.y=-.015;fill.renderOrder=994;
+        kwgEnemyRangeIndicator.add(fill);
+        kwgEnemyRangeRadius=radius;
+      }
+      const bounds=getBlockAABB(block);
+      kwgEnemyRangeIndicator.position.set(Number(block.x)||0,bounds.maxY+.11,Number(block.z)||0);
+    }
     let kwgAirJumps=0,kwgDoubleJumpStomp=false;
     let kwgEnemyLastAttack=0;
     const kwgEnemyClock=()=>performance.now();
     function kwgDevilModel(){
       const root=new THREE.Group();
+      const rig=new THREE.Group();root.add(rig);
       const red=new THREE.MeshLambertMaterial({color:0xd94860});
       const dark=new THREE.MeshLambertMaterial({color:0x521f35});
       const eye=new THREE.MeshBasicMaterial({color:0xffffff});
       const pupil=new THREE.MeshBasicMaterial({color:0x1c1724});
-      const part=(w,h,d,x,y,z,mat,parent=root)=>{
+      const part=(w,h,d,x,y,z,mat,parent=rig)=>{
         const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
         mesh.position.set(x,y,z);parent.add(mesh);return mesh;
       };
@@ -11050,16 +11096,22 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       part(.35,.09,.065,0,1.18,.36,dark);
       const leftArm=new THREE.Group(),rightArm=new THREE.Group();
       leftArm.position.set(-.52,1.04,0);rightArm.position.set(.52,1.04,0);
-      root.add(leftArm,rightArm);
+      rig.add(leftArm,rightArm);
       part(.23,.57,.24,0,-.25,0,red,leftArm);
       part(.23,.57,.24,0,-.25,0,red,rightArm);
       const leftLeg=new THREE.Group(),rightLeg=new THREE.Group();
       leftLeg.position.set(-.22,.49,0);rightLeg.position.set(.22,.49,0);
-      root.add(leftLeg,rightLeg);
+      rig.add(leftLeg,rightLeg);
       part(.25,.47,.28,0,-.24,0,dark,leftLeg);
       part(.25,.47,.28,0,-.24,0,dark,rightLeg);
+      // A tilted head, eyebrows, and a little tail make the silhouette playful.
+      const tail=new THREE.Group();tail.position.set(0,.75,-.33);rig.add(tail);
+      part(.13,.13,.55,0,.02,-.27,dark,tail);
+      part(.26,.22,.17,0,.14,-.56,red,tail);
+      root.userData.devilTail=tail;
+      root.userData.devilRig=rig;
       root.userData.devilLimbs=[leftArm,rightArm,leftLeg,rightLeg];
-      root.userData.devilBody=root.children[0];
+      root.userData.devilBody=rig.children[0];
       root.userData.isEnemyCharacter=true;
       return root;
     }
@@ -11084,13 +11136,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgEnemySpawners.clear();
       kwgLastEnemySync=0;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
+      kwgEnemyRangeIndicator.visible=false;
+      kwgResetStompAnimation(true);
     }
     function kwgDefeatEnemy(spawnerId,index,notify=true){
       const entry=kwgEnemySpawners.get(spawnerId);
       if(!entry||!entry.slots[index]||entry.slots[index].deadUntil>kwgEnemyClock())return;
       const slot=entry.slots[index];
-      slot.deadUntil=kwgEnemyClock()+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
-      kwgDestroyEnemySlot(slot);
+      const now=kwgEnemyClock();
+      // Keep the flattened model on screen before despawning; respawn delay starts after it.
+      slot.squishUntil=now+480;
+      slot.deadUntil=slot.squishUntil+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
+      slot.path=[];slot.pathAt=0;
+      if(notify)kwgAudio.play('devil_stomp');
       if(notify&&socket?.connected)socket.emit('enemy_stomped',{worldName:currentWorldName,spawnerId,index});
     }
     socket.on('enemy_stomped',({worldName,spawnerId,index}={})=>{
@@ -11116,7 +11174,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(!entry){entry={block,slots:[]};kwgEnemySpawners.set(id,entry);}
         entry.block=block;
         while(entry.slots.length>props.enemyCount)kwgDestroyEnemySlot(entry.slots.pop());
-        while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,walkTime:0,fallSpeed:0});
+        while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,squishUntil:0,walkTime:0,fallSpeed:0,path:[],pathAt:0,noticeAt:0,stepAt:0});
       }
     }
     function kwgEnemyGroundY(x,y,z,blocks){
@@ -11132,17 +11190,157 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       return top;
     }
+    // Obstacle-aware navigation. The grid samples walkable world surfaces and
+    // checks a devil-sized body against the same collidable world parts as players.
+    // Search is bounded so complex worlds cannot stall the frame.
+    const kwgEnemyBodyRadius=.38,kwgEnemyBodyHeight=1.84;
+    function kwgEnemyWalkable(x,z,feetY,blocks){
+      const ground=kwgEnemyGroundY(x,feetY+.55,z,blocks);
+      if(!Number.isFinite(ground)||ground>feetY+.66||ground<feetY-1.45)return null;
+      for(const b of blocks){
+        if(b.canCollide===false)continue;
+        const a=b._kwgNavBounds||getBlockAABB(b);
+        // Floors under the feet are allowed, walls through the body are not.
+        if(a.maxY<=ground+.09||a.minY>=ground+kwgEnemyBodyHeight-.12)continue;
+        // The same sloped/curved surface the enemy is standing on is a floor,
+        // not a wall. This permits ramps and rounded platforms.
+        const standingSurface=getPartSurfaceYFromData(b,x,z,ground+.75);
+        if(standingSurface!==null&&Math.abs(standingSurface-ground)<.14)continue;
+        const nearestX=Math.max(a.minX,Math.min(x,a.maxX));
+        const nearestZ=Math.max(a.minZ,Math.min(z,a.maxZ));
+        if((x-nearestX)**2+(z-nearestZ)**2<kwgEnemyBodyRadius**2)return null;
+      }
+      return ground;
+    }
+    function kwgEnemyDirectPath(x,z,y,tx,tz,blocks){
+      const d=Math.hypot(tx-x,tz-z);
+      let lastY=y;
+      for(let i=1,n=Math.ceil(d/.48);i<=n;i++){
+        const t=i/n;
+        const nextY=kwgEnemyWalkable(x+(tx-x)*t,z+(tz-z)*t,lastY,blocks);
+        if(nextY===null)return false;
+        lastY=nextY;
+      }
+      return true;
+    }
+    function kwgEnemyFindPath(fromX,fromY,fromZ,toX,toZ,blocks){
+      const cell=1.25,limit=19;
+      const originX=fromX,originZ=fromZ;
+      const goalX=Math.round((toX-originX)/cell),goalZ=Math.round((toZ-originZ)/cell);
+      const key=(x,z)=>x+','+z;
+      const start={x:0,z:0,y:fromY,g:0,h:Math.hypot(goalX,goalZ),parent:null};
+      const open=[start],best=new Map([[key(0,0),start]]),closed=new Set();
+      let nearest=start,iterations=0;
+      while(open.length&&iterations++<850){
+        let pick=0;
+        for(let i=1;i<open.length;i++)if(open[i].g+open[i].h<open[pick].g+open[pick].h)pick=i;
+        const node=open.splice(pick,1)[0],id=key(node.x,node.z);
+        if(closed.has(id))continue;
+        closed.add(id);
+        if(node.h<nearest.h)nearest=node;
+        if(node.h<=.75){nearest=node;break;}
+        for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
+          const nx=node.x+dx,nz=node.z+dz;
+          if(Math.abs(nx)>limit||Math.abs(nz)>limit||closed.has(key(nx,nz)))continue;
+          const x=originX+nx*cell,z=originZ+nz*cell;
+          const height=kwgEnemyWalkable(x,z,node.y,blocks);
+          if(height===null)continue;
+          if(dx&&dz){
+            if(kwgEnemyWalkable(originX+(node.x+dx)*cell,originZ+node.z*cell,node.y,blocks)===null||
+               kwgEnemyWalkable(originX+node.x*cell,originZ+(node.z+dz)*cell,node.y,blocks)===null)continue;
+          }
+          const g=node.g+Math.hypot(dx,dz)+Math.abs(height-node.y)*.65;
+          const nk=key(nx,nz),old=best.get(nk);
+          if(old&&old.g<=g)continue;
+          const next={x:nx,z:nz,y:height,g,h:Math.hypot(goalX-nx,goalZ-nz),parent:node};
+          best.set(nk,next);open.push(next);
+        }
+      }
+      const result=[];
+      for(let node=nearest;node?.parent;node=node.parent)result.push({x:originX+node.x*cell,z:originZ+node.z*cell});
+      result.reverse();
+      return result;
+    }
+    function kwgEnemyAnimate(slot,now,walking,speed,index){
+      const npc=slot.mesh;if(!npc)return;
+      const rig=npc.userData.devilRig;
+      const [la,ra,ll,rl]=npc.userData.devilLimbs;
+      const phase=slot.walkTime+index*.3;
+      const idle=Math.sin(now*.004+index*1.7);
+      const stride=Math.sin(phase),bounce=walking?Math.abs(Math.sin(phase)):.5+.5*idle;
+      rig.position.y=walking?.075+.14*bounce:.035+.075*bounce;
+      rig.rotation.z=walking?Math.sin(phase*.5)*.105:idle*.09;
+      rig.rotation.x=walking?-.08+Math.sin(phase)*.055:Math.sin(now*.0025+index)*.045;
+      rig.scale.set(1+(walking?.045:0)*bounce,1-(walking?.07:.025)*bounce,1+(walking?.045:0)*bounce);
+      la.rotation.x=walking?stride*.85:idle*.2;
+      ra.rotation.x=walking?-stride*.85:-idle*.2;
+      ll.rotation.x=walking?-stride*.8:Math.sin(now*.003+index)*.08;
+      rl.rotation.x=walking?stride*.8:-Math.sin(now*.003+index)*.08;
+      la.rotation.z=walking?-.15:-.18+idle*.09;
+      ra.rotation.z=walking?.15:.18-idle*.09;
+      npc.userData.devilTail.rotation.x=Math.sin(now*.007+index)*.35;
+      npc.userData.devilBody.rotation.z=Math.sin(now*.005+index)*.04;
+    }
+    // Stomp flips the VISUAL avatar around its center, never the collision root.
+    let kwgStompAvatar=null,kwgStompPivot=null,kwgStompStarted=0,kwgStompLandingAt=0;
+    function kwgBuildStompPivot(avatar){
+      if(avatar.userData.kwgStompPivot)return avatar.userData.kwgStompPivot;
+      const pivot=new THREE.Group(),contents=new THREE.Group();
+      pivot.position.y=1.05;contents.position.y=-1.05;
+      for(const child of [...avatar.children]){
+        if(child.name!=='kwg-name-tag')contents.add(child);
+      }
+      pivot.add(contents);avatar.add(pivot);
+      avatar.userData.kwgStompPivot=pivot;
+      return pivot;
+    }
+    function kwgEnsureStompRig(avatar){
+      if(kwgStompAvatar===avatar&&kwgStompPivot)return;
+      kwgStompAvatar=avatar;
+      kwgStompPivot=kwgBuildStompPivot(avatar);
+    }
+    function kwgResetStompAnimation(immediate=false){
+      kwgStompStarted=0;kwgStompLandingAt=0;
+      if(kwgStompPivot&&immediate)kwgStompPivot.rotation.x=0;
+    }
+    function kwgAnimateStomp(now){
+      if(!localPlayerAvatar||kwgStompAvatar!==localPlayerAvatar||!kwgStompPivot)return;
+      if(kwgStompStarted){
+        const t=Math.min(1,(now-kwgStompStarted)/530);
+        const eased=t*t*(3-2*t);
+        // One full front flip, followed by a face-down belly-flop pose.
+        kwgStompPivot.rotation.x=-Math.PI*2*eased-(t>=.88?Math.PI*.43*Math.min(1,(t-.88)/.12):0);
+        if(t>=1&&!kwgStompLandingAt)kwgStompLandingAt=now;
+      }else if(kwgStompLandingAt){
+        kwgStompPivot.rotation.x+=(0-kwgStompPivot.rotation.x)*.2;
+        if(Math.abs(kwgStompPivot.rotation.x)<.015){kwgStompPivot.rotation.x=0;kwgStompLandingAt=0;}
+      }
+    }
+    function kwgFinishStompPose(){
+      if(kwgStompStarted){kwgStompStarted=0;kwgStompLandingAt=kwgEnemyClock();}
+    }
     function kwgUpdateEnemies(delta){
       if(!currentWorldName||!localPlayerAvatar||kwgFreeCamera.active)return;
       kwgSyncEnemySpawners();
       const player=localPlayerAvatar,now=kwgEnemyClock();
       const blocks=Object.values(currentWorldData.blocks||{});
       const dt=Math.min(delta,.05);
-      let visibleDevils=0;
+      let visibleDevils=0,pathBudget=2;
       for(const [id,entry] of kwgEnemySpawners){
         const props=kwgEnemyPropsOf(entry.block);
         for(let index=0;index<entry.slots.length;index++){
           const slot=entry.slots[index];
+          // A defeated enemy stays visibly flattened for 480ms, then vanishes.
+          if(now<slot.squishUntil){
+            if(slot.mesh){
+              const progress=Math.min(1,1-(slot.squishUntil-now)/480);
+              slot.mesh.scale.y=Math.max(.09,1-progress*1.15);
+              slot.mesh.scale.x=1+progress*.3;slot.mesh.scale.z=1+progress*.25;
+              slot.mesh.userData.devilRig.rotation.z=Math.sin(progress*Math.PI*2)*.12;
+            }
+            continue;
+          }
+          if(slot.squishUntil){kwgDestroyEnemySlot(slot);slot.squishUntil=0;}
           if(now<slot.deadUntil)continue;
           const origin=kwgEnemySlotSpawn(entry.block,index,entry.slots.length);
           const spawnDistance=Math.hypot(player.position.x-origin.x,player.position.z-origin.z);
@@ -11154,25 +11352,67 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           if(!slot.mesh){
             slot.mesh=kwgDevilModel();scene.add(slot.mesh);
             slot.mesh.position.set(origin.x,origin.y,origin.z);
-            slot.fallSpeed=0;slot.walkTime=0;
+            slot.fallSpeed=0;slot.walkTime=0;slot.path=[];slot.pathAt=0;
+            if(slot.spawnedOnce&&spawnDistance<15)kwgAudio.play('devil_respawn');
+            slot.spawnedOnce=true;
           }
           const npc=slot.mesh;
           const dx=player.position.x-npc.position.x,dz=player.position.z-npc.position.z;
           const distance=Math.hypot(dx,dz);
           const withinRange=Math.hypot(player.position.x-origin.x,player.position.z-origin.z)<=props.noticeRange&&Math.abs(player.position.y-origin.y)<props.noticeRange;
+          const chasing=!isEditMode&&withinRange;
           const homeDist=Math.hypot(npc.position.x-origin.x,npc.position.z-origin.z);
-          let targetX=origin.x,targetZ=origin.z;
-          if(!isEditMode&&withinRange){targetX=player.position.x;targetZ=player.position.z;}
-          let tx=targetX-npc.position.x,tz=targetZ-npc.position.z;
-          const distanceToTarget=Math.hypot(tx,tz);
-          const walking=distanceToTarget>.15&&(!isEditMode||homeDist>.15);
-          if(walking){
-            const speed=props.enemySpeed*(withinRange&&!isEditMode?1:.65);
-            const travel=Math.min(distanceToTarget,speed*dt);
-            npc.position.x+=tx/distanceToTarget*travel;
-            npc.position.z+=tz/distanceToTarget*travel;
-            npc.rotation.y=Math.atan2(tx,tz);
-            slot.walkTime+=dt*speed*4;
+          const targetX=chasing?player.position.x:origin.x,targetZ=chasing?player.position.z:origin.z;
+          if(chasing&&!slot.wasChasing&&distance<16&&now-slot.noticeAt>3000){
+            kwgAudio.play('devil_notice');slot.noticeAt=now;
+          }
+          slot.wasChasing=chasing;
+          let tx=targetX,tz=targetZ;
+          if(now>=slot.pathAt&&pathBudget>0){
+            pathBudget--;
+            // Pre-filter distant parts once per route; full-world A* checks
+            // would become expensive in a 1400-block level.
+            const pathBlocks=blocks.filter(b=>{
+              if(b.canCollide===false)return false;
+              const a=getBlockAABB(b);
+              if(a.maxX<npc.position.x-26||a.minX>npc.position.x+26||
+                 a.maxZ<npc.position.z-26||a.minZ>npc.position.z+26||
+                 a.maxY<npc.position.y-4||a.minY>npc.position.y+5)return false;
+              return true;
+            }).map(b=>({...b,_kwgNavBounds:getBlockAABB(b)}));
+            const straight=kwgEnemyDirectPath(npc.position.x,npc.position.z,npc.position.y,targetX,targetZ,pathBlocks);
+            slot.path=straight?[]:kwgEnemyFindPath(npc.position.x,npc.position.y,npc.position.z,targetX,targetZ,pathBlocks);
+            slot.pathAt=now+650+index*47;
+          }
+          if(slot.path?.length){
+            while(slot.path.length>1&&Math.hypot(slot.path[0].x-npc.position.x,slot.path[0].z-npc.position.z)<.55)slot.path.shift();
+            if(slot.path.length&&Math.hypot(slot.path[0].x-npc.position.x,slot.path[0].z-npc.position.z)<.4)slot.path.shift();
+            if(slot.path.length){tx=slot.path[0].x;tz=slot.path[0].z;}
+          }
+          const vx=tx-npc.position.x,vz=tz-npc.position.z;
+          const d=Math.hypot(vx,vz);
+          let walking=false;
+          if(d>.13&&(chasing||homeDist>.15)){
+            const speed=props.enemySpeed*(chasing?1:.65);
+            const travel=Math.min(d,speed*dt);
+            const oldX=npc.position.x,oldZ=npc.position.z;
+            const nx=oldX+vx/d*travel,nz=oldZ+vz/d*travel;
+            const ground=kwgEnemyWalkable(nx,nz,npc.position.y,blocks);
+            if(ground!==null){
+              // The shared player collision resolver handles rotated/curved parts.
+              const proposed={x:nx,y:Math.max(npc.position.y,ground),z:nz};
+              resolveHorizontalCollisionsMP(proposed,blocks,oldX,oldZ);
+              const moved=Math.hypot(proposed.x-oldX,proposed.z-oldZ);
+              if(moved<=travel+.07&&moved>.0001&&kwgEnemyWalkable(proposed.x,proposed.z,npc.position.y,blocks)!==null){
+                npc.position.x=proposed.x;npc.position.z=proposed.z;
+                npc.rotation.y=Math.atan2(vx,vz);
+                slot.walkTime+=dt*speed*6;
+                walking=true;
+                if(chasing&&distance<12&&now-slot.stepAt>450){
+                  kwgAudio.play('devil_step');slot.stepAt=now;
+                }
+              }else slot.pathAt=0;
+            }else slot.pathAt=0;
           }
           const ground=kwgEnemyGroundY(npc.position.x,npc.position.y,npc.position.z,blocks);
           if(ground!==-Infinity&&npc.position.y<=ground+.65){
@@ -11181,15 +11421,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           }else{
             slot.fallSpeed=Math.max(-10,slot.fallSpeed-20*dt);
             npc.position.y+=slot.fallSpeed*dt;
-            if(npc.position.y<origin.y-30){npc.position.set(origin.x,origin.y,origin.z);slot.fallSpeed=0;}
+            if(npc.position.y<origin.y-30){npc.position.set(origin.x,origin.y,origin.z);slot.fallSpeed=0;slot.path=[];}
           }
-          const [la,ra,ll,rl]=npc.userData.devilLimbs;
-          const sway=walking?Math.sin(slot.walkTime)*.52:Math.sin(now*.002+index)*.06;
-          la.rotation.x=sway;ra.rotation.x=-sway;
-          ll.rotation.x=-sway;rl.rotation.x=sway;
-          npc.userData.devilBody.rotation.z=Math.sin(now*.003+index)*.035;
-          // A stomp requires the avatar's feet to CROSS the enemy's head.
-          // Ordinary jumps bounce; a double-jump deals the finishing stomp.
+          kwgEnemyAnimate(slot,now,walking,props.enemySpeed,index);
+          // Landing from above bounces. A double-jump flip gives a finishing stomp.
           if(isEditMode||!withinRange||distance>.72)continue;
           const top=npc.position.y+1.79;
           const feet=player.position.y;
@@ -11200,18 +11435,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             isGrounded=false;
             if(kwgDoubleJumpStomp&&props.enemyKillable){
               kwgDefeatEnemy(id,index,true);
-              showToast('DEVIL SMUSHED!');
-            }else if(!props.enemyKillable&&kwgDoubleJumpStomp){
-              showToast('This devil cannot be defeated!');
+            }else{
+              kwgAudio.play('devil_bounce');
             }
+            kwgFinishStompPose();
             kwgDoubleJumpStomp=false;
             kwgEnemyPreviousFeet=player.position.y;
             continue;
           }
-          // Touching from the side damages the player, with a short grace period.
           if(distance<.64&&feet<npc.position.y+1.4&&feet+2.1>npc.position.y+.25&&now-kwgEnemyLastAttack>1250){
             kwgEnemyLastAttack=now;
-            kwgAudio.play('death');showToast('A devil caught you!');respawnPlayer();
+            kwgAudio.play('devil_attack');respawnPlayer();
             return;
           }
         }
@@ -11225,6 +11459,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
       if(!isGrounded&&kwgAirJumps===1){
         kwgAirJumps=2;kwgDoubleJumpStomp=true;
+        kwgEnsureStompRig(localPlayerAvatar);
+        kwgStompStarted=kwgEnemyClock();kwgStompLandingAt=0;
+        kwgAudio.play('double_jump');
         velocityY=Math.max(velocityY,jumpStrength*.78);
         e.preventDefault();
       }
@@ -11860,6 +12097,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
     function respawnPlayer() {
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
+      kwgResetStompAnimation(true);
       if (localPlayerAvatar) {
         // Keep earned checkpoints; otherwise choose a fresh random Spawn part.
         // If a checkpoint was deleted, fall back to the Spawn parts instead.
@@ -12064,6 +12302,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           velocityY=0;
           isGrounded=true;
           kwgAirJumps=0;kwgDoubleJumpStomp=false;
+          kwgFinishStompPose();
         } else if (velocityY<=0) {
           isGrounded=false;
         }
@@ -12120,7 +12359,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           rotationY:player.rotation.y,
           walkClock:player.userData.walkClock,
           verticalVelocity:velocityY,
-          isMoving,isGrounded
+          isMoving,isGrounded,
+          stompAngle:kwgStompAvatar===player&&kwgStompPivot?kwgStompPivot.rotation.x:0
         });
       }
     }
@@ -12142,7 +12382,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgEnemyPreviousFeet=localPlayerAvatar?.position.y??-Infinity;
         updatePlayerPhysics(delta);
         kwgUpdateEnemies(delta);
+        kwgAnimateStomp(kwgEnemyClock());
       }
+      kwgUpdateEnemyRangeIndicator();
       if(!kwgFreeCamera.active) updateGizmoScreenScale();
       else updateWorldThumbnailCamera(delta);
 
