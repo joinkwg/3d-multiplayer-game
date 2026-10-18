@@ -2092,6 +2092,12 @@ body.kwg-editing .tool-row .kwg-rgb-control input[type="text"]{
   box-sizing:border-box;
 }
 #store-pane .kwg-store-tile .kwg-store-tile-label{display:none!important}
+#store-pane .kwg-store-owned{display:none!important}
+#store-pane .kwg-store-showcase{grid-template-columns:minmax(0,1fr) minmax(205px,.4fr)!important}
+#store-pane #store-items-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+#store-pane .kwg-store-feature{grid-column:2!important}
+#create-pane .kwg-create-actions .submit-btn{width:auto!important;min-width:190px;padding:10px 14px!important}
+
 /* The inventory remains four square thumbnails; size them to fit the column. */
 #store-pane .kwg-store-owned-grid{
   flex:1 1 0;min-height:0;
@@ -2769,6 +2775,53 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 .kwg-world-card-dates{display:block;margin-top:5px;color:#a8c4d7;font-size:11px;line-height:1.5;letter-spacing:.01em}
 .kwg-leaderstats-reset{margin-top:8px!important;background:#56313f!important;border-color:#b36b81!important;color:#ffe5ea!important}
 .kwg-leaderstats-reset:hover{background:#774054!important}
+
+/* KWG V45 — Worlds-first, player creations, searchable avatar catalog */
+#worlds-pane .kwg-worlds-action-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;flex:none}
+#worlds-pane .kwg-worlds-action-row .home-toolbar{margin:0!important}
+#worlds-pane #open-create-world-btn{margin:0!important;width:auto!important;min-width:185px;padding:10px 15px!important;flex:none}
+#worlds-pane #room-list{flex:1 1 auto!important;min-height:150px!important;overflow-y:auto!important}
+#worlds-pane .kwg-world-card-actions .kwg-world-bump-button{color:#f7d178!important}
+#kwg-create-worlds[hidden],#kwg-create-items[hidden]{display:none!important}
+#create-pane{overflow-y:auto!important;padding-bottom:20px}
+#create-pane .kwg-create-switch{display:flex;gap:7px;margin:10px 0 16px}
+#create-pane button,#create-pane select,#create-pane input{font-family:'Chakra Petch',sans-serif}
+#create-pane .kwg-create-switch button{background:#253b51;color:#c9dbe9;border:2px solid #59778d;padding:9px 18px;font-weight:bold;cursor:pointer}
+#create-pane .kwg-create-switch button.active{background:#267962;border-color:#a4e88c;color:white}
+#create-pane .kwg-create-actions{display:flex;gap:10px;margin-bottom:14px}
+#create-pane .kwg-create-list{display:grid;gap:8px}
+#create-pane .kwg-create-row{background:#1b2d40;border:2px solid #536d82;padding:11px;display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+#create-pane .kwg-create-row strong{font-size:13px;color:#e4f2ff}
+#create-pane .kwg-create-thumb{width:58px;height:58px;object-fit:contain;background:#0c1c2c;border:1px solid #66839c;flex:none}
+#create-pane .kwg-create-row-actions{display:flex;gap:6px}
+#create-pane .kwg-create-row button{padding:7px 10px;background:#294d65;border:1px solid #7aadc6;color:white;cursor:pointer}
+#create-pane .kwg-create-item-row{display:grid;grid-template-columns:minmax(130px,1.5fr) minmax(100px,1fr) 90px 80px 75px}
+#create-pane .kwg-create-item-row input:not([type=checkbox]){min-width:0;width:100%;box-sizing:border-box;background:#0e1b2a;color:white;border:1px solid #6689a4;padding:8px}
+#create-pane .kwg-create-visible{font-size:11px;white-space:nowrap}
+#create-pane .kwg-create-quick{background:#162a3e;border:2px solid #557b93;padding:13px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 16px}
+#create-pane .kwg-create-form-title{grid-column:1/-1;font-family:'Silkscreen',monospace;font-size:10px;color:#cce9f2}
+#create-pane .kwg-create-quick label{display:grid;gap:5px;font-size:11px;font-weight:bold;color:#c2d9ea}
+#create-pane .kwg-create-quick input,#create-pane .kwg-create-quick select{width:100%;box-sizing:border-box;background:#0d1c2a;color:#e8f7ff;border:1px solid #60829d;padding:8px}
+#create-pane #kwg-create-item-submit{grid-column:1/-1;justify-self:start}
+#store-pane .kwg-store-search-row{display:flex;gap:6px;margin:8px 0 11px}
+#store-pane #kwg-store-search{flex:1;min-width:0;padding:11px;background:#0e1d2b;border:2px solid #6889a2;color:#e7f6ff;font:14px 'Chakra Petch',sans-serif}
+#store-pane #kwg-store-clear{padding:0 15px;background:#2a4157;border:2px solid #6688a0;color:white;cursor:pointer}
+#store-pane .kwg-store-showcase{grid-template-columns:minmax(115px,.65fr) minmax(310px,2.7fr) minmax(190px,1fr)!important;min-height:530px!important}
+#store-pane #store-items-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;grid-template-rows:repeat(3,minmax(0,1fr))!important;height:435px!important;flex-basis:435px!important;gap:8px!important}
+#store-pane .kwg-store-tile{display:flex!important;flex-direction:column!important;justify-content:flex-start!important;gap:4px!important;align-items:stretch!important;padding:5px!important;min-height:0!important;overflow:hidden}
+#store-pane .kwg-v45-store-image{display:flex;align-items:center;justify-content:center;width:100%;min-height:0;flex:1;overflow:hidden}
+#store-pane .kwg-v45-store-image img,#store-pane .kwg-v45-store-image canvas{max-height:100%!important;max-width:100%!important;object-fit:contain}
+#store-pane .kwg-v45-store-name{font:700 11px 'Chakra Petch',sans-serif;color:#f4f9ff;text-align:left;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;flex:none}
+#store-pane .kwg-v45-store-creator{font:10px 'Chakra Petch',sans-serif;color:#9fbad2;text-align:left;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;flex:none}
+#store-pane .kwg-store-tile .kwg-store-tile-label{display:none!important}
+#store-pane .kwg-store-owned{display:none!important}
+#store-pane .kwg-store-showcase{grid-template-columns:minmax(0,1fr) minmax(205px,.4fr)!important}
+#store-pane #store-items-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+#store-pane .kwg-store-feature{grid-column:2!important}
+#create-pane .kwg-create-actions .submit-btn{width:auto!important;min-width:190px;padding:10px 14px!important}
+
+@media(max-width:900px){#store-pane .kwg-store-showcase{grid-template-columns:minmax(0,1fr) minmax(180px,.5fr)!important}#store-pane .kwg-store-feature{grid-column:2!important}#create-pane .kwg-create-quick{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:570px){#store-pane .kwg-store-showcase{grid-template-columns:minmax(0,1fr)!important}#store-pane .kwg-store-catalog,#store-pane .kwg-store-feature{grid-column:1!important}#store-pane #store-items-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}#store-pane #store-items-grid{height:370px!important;flex-basis:370px!important}#create-pane .kwg-create-quick{grid-template-columns:1fr}#create-pane .kwg-create-item-row{grid-template-columns:1fr 1fr}#create-pane .kwg-create-item-row strong{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -2842,7 +2895,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       <div class="kwg-dashboard-header">
         <div class="kwg-brand-block"><h2>KWG 3D Online</h2><div class="kwg-userline">Logged in as <span id="logged-user-display">User</span></div></div>
         <div class="kwg-account-tools">
-          <button type="button" id="kwg-coin-store-shortcut" class="coin-badge kwg-coin-pill" title="Open Store" aria-label="Open Store — 100 coins"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="home-coin-count">100</span></button>
+          <button type="button" id="kwg-coin-store-shortcut" class="coin-badge kwg-coin-pill" title="Open Store" aria-label="Open Store — 100 coins"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="home-coin-count">950</span></button>
           <button id="logout-btn" class="logout-btn kwg-icon-tool" title="Log out" aria-label="Log out" type="button"><span class="kwg-logout-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M10 4H5v16h5M13 7l5 5-5 5M8 12h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"/></svg></span><span class="kwg-logout-text">LOG OUT</span></button>
         </div>
       </div>
@@ -2853,6 +2906,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         <button class="home-tab" data-home-tab="friends" title="Friends" aria-label="Friends"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.8 20c.4-4.2 2.5-6.4 6.2-6.4s5.8 2.2 6.2 6.4z"/><path d="M14 14.5c4.2-.7 6.6 1.1 7.1 5.5h-4.4c-.2-2.2-1.1-4-2.7-5.5z"/></svg></span><span class="nav-label">Friends</span><span id="friend-request-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
         <button class="home-tab" data-home-tab="avatar" title="Avatar Editor" aria-label="Avatar Editor"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.5"/><path d="M7 11.5h10l1.5 9H5.5z"/><path d="M8 14 4 17M16 14l4 3"/></svg></span><span class="nav-label">Avatar</span></button>
         <button class="home-tab" data-home-tab="store" title="Store" aria-label="Store"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 9h14l-1 11H6z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></svg></span><span class="nav-label">Store</span></button>
+        <button class="home-tab" data-home-tab="create" title="Create" aria-label="Create"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M4 20h16"/></svg></span><span class="nav-label">Create</span></button>
         <button class="home-tab admin-home-tab" data-home-tab="admin" title="Admin" aria-label="Admin" style="display:none"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14 5.1l2.9-.3.7 2.8 2.5 1.5-1.1 2.7 1.1 2.7-2.5 1.5-.7 2.8-2.9-.3L12 21l-2-2.1-2.9.3-.7-2.8-2.5-1.5L5 12.2 3.9 9.5 6.4 8l.7-2.8 2.9.3z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="nav-label">Admin</span></button>
       </div>
       <form id="kwg-global-search" class="kwg-global-search" role="search" autocomplete="off">
@@ -2992,21 +3046,42 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         </div>
       </div>
       <div id="worlds-pane" class="home-pane active">
-        <div class="home-toolbar"><strong>SORT:</strong><select id="world-sort"><option value="recent">Most Recent</option><option value="liked">Most Liked</option></select></div>
+        <div class="kwg-worlds-action-row"><div class="home-toolbar"><strong>SORT:</strong><select id="world-sort"><option value="bumped">Recently Bumped</option><option value="recent">Most Recent</option><option value="liked">Most Liked</option></select></div><button id="open-create-world-btn" class="submit-btn secondary">+ CREATE WORLD · 750 🪙</button></div>
         <div id="room-list" class="room-list-container"></div>
-        <button id="open-create-world-btn" class="submit-btn secondary">+ Create New World</button>
         <button id="open-store-btn" class="submit-btn" style="display:none;">STORE</button>
         <button id="open-admin-btn" style="display:none;"></button>
         <div id="home-error-msg" class="error-msg"></div>
       </div>
+      <div id="create-pane" class="home-pane">
+        <div class="kwg-page-heading"><div><div class="profile-kicker">YOUR CREATIONS</div><h2>CREATE</h2></div></div>
+        <div class="kwg-create-switch"><button class="active" type="button" data-create-tab="worlds">WORLDS</button><button type="button" data-create-tab="items">AVATAR ITEMS</button></div>
+        <section id="kwg-create-worlds" class="kwg-create-section">
+          <div class="kwg-create-actions"><button type="button" id="kwg-create-world-shortcut" class="submit-btn">+ NEW WORLD · 750 🪙</button></div>
+          <div id="kwg-create-world-list" class="kwg-create-list"></div>
+        </section>
+        <section id="kwg-create-items" class="kwg-create-section" hidden>
+          <div class="kwg-create-actions"><button type="button" id="kwg-create-studio" class="submit-btn">✦ OPEN 3D / 2D ITEM STUDIO</button></div>
+          <form id="kwg-create-quick" class="kwg-create-quick" autocomplete="off">
+            <div class="kwg-create-form-title">QUICK PUBLISH</div>
+            <label>TYPE<select id="kwg-create-category"><option value="hats">Hat (3D GLB)</option><option value="hair">Hair (3D GLB)</option><option value="heads">Head (3D GLB)</option><option value="eyes">Eyes (PNG / JPG / WebP)</option><option value="mouth">Mouth (PNG / JPG / WebP)</option></select></label>
+            <label>ITEM NAME<input id="kwg-create-item-name" maxlength="40" required placeholder="My item"></label>
+            <label>PRICE · COINS<input id="kwg-create-item-price" type="number" min="0" max="1000000" value="50" required></label>
+            <label>FILE<input id="kwg-create-item-file" type="file" accept=".glb,model/gltf-binary" required></label>
+            <button id="kwg-create-item-submit" class="submit-btn" type="submit">PUBLISH ITEM</button>
+          </form>
+          <div id="kwg-create-item-status" class="error-msg" role="status"></div>
+          <div id="kwg-create-item-list" class="kwg-create-list"></div>
+        </section>
+      </div>
       <div id="store-pane" class="home-pane">
-        <div class="kwg-page-heading store-topbar"><div><div class="profile-kicker">AVATAR CUSTOMIZATION</div><h2>STORE</h2><p>Make your look your own.</p></div><span class="coin-badge kwg-store-balance"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="store-coin-count">100</span></span></div>
+        <div class="kwg-page-heading store-topbar"><div><div class="profile-kicker">AVATAR CUSTOMIZATION</div><h2>STORE</h2><p>Make your look your own.</p></div><span class="coin-badge kwg-store-balance"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="store-coin-count">950</span></span></div>
         <div class="kwg-shop-switch" role="tablist" aria-label="Store department">
           <button type="button" class="kwg-shop-switch-btn active" data-shop="avatar" role="tab" aria-selected="true">AVATAR STORE</button>
           <!-- Pets temporarily shelved; purchases remain stored. -->
         </div>
+        <div class="kwg-store-search-row"><input type="search" id="kwg-store-search" placeholder="Search avatar items or creators..." maxlength="80" aria-label="Search avatar items" autocomplete="off"><button id="kwg-store-clear" type="button" aria-label="Clear store search">✕</button></div>
         <div id="kwg-avatar-shop" class="kwg-shop-categories">
-          <div class="store-tabs" role="tablist" aria-label="Avatar item categories"><button class="store-tab active" data-store-category="hair">HAIR</button><button class="store-tab " data-store-category="hats">HATS</button><button class="store-tab " data-store-category="heads">HEADS</button><button class="store-tab " data-store-category="eyes">EYES</button><button class="store-tab " data-store-category="mouth">MOUTH</button><button class="store-tab " data-store-category="skin">SKIN</button><button class="store-tab " data-store-category="tops">TOPS</button><button class="store-tab " data-store-category="bottoms">BOTTOMS</button><button class="store-tab " data-store-category="shoes">SHOES</button></div>
+          <div class="store-tabs" role="tablist" aria-label="Avatar item categories"><button class="store-tab active" data-store-category="hair">HAIR</button><button class="store-tab" data-store-category="hats">HATS</button><button class="store-tab" data-store-category="heads">HEADS</button><button class="store-tab" data-store-category="eyes">EYES</button><button class="store-tab" data-store-category="mouth">MOUTH</button></div>
         </div>
         <div id="kwg-pets-shop" class="kwg-shop-categories" style="display:none">
           <div id="kwg-pet-categories" class="kwg-store-species-tabs" role="tablist" aria-label="Pet categories"></div>
@@ -3153,7 +3228,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       <input type="text" id="new-world-name" placeholder="World name" maxlength="20" autocomplete="off" />
       <label class="kwg-create-world-label" for="new-world-description">DESCRIPTION</label>
       <textarea id="new-world-description" maxlength="300" rows="3" placeholder="What's your world about?"></textarea>
-      <button id="confirm-create-world-btn" class="submit-btn">Build & Launch</button>
+      <button id="confirm-create-world-btn" class="submit-btn">CREATE FOR 750 COINS</button>
       <div id="create-world-error" class="error-msg"></div>
     </div>
   </div>
@@ -3229,7 +3304,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         <div id="admin-worlds-list"><div class="admin-search-note">Type a world name or owner to search.</div></div>
       </div>
       <div class="admin-section">
-        <div style="font-weight:bold;color:#5bc0de;margin-bottom:8px;">ITEM CREATOR</div><button id="kwgc-launch" class="submit-btn" type="button" style="margin:8px 0 18px">✦ OPEN ITEM CREATOR 3D / 2D STUDIO</button><div id="admin-store-items-list"></div>
+        <div id="admin-store-items-list" style="display:none"></div>
       </div>
       <div id="admin-error" class="error-msg"></div>
     </div>
@@ -3964,7 +4039,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     let isAdmin = false;
     let canEditCurrentWorld = false;
     let chatMessagesLoaded = false;
-    let coinBalance = 100;
+    let coinBalance = 950;
     let storeItems = [];
     let ownedStoreItems = [];
     let activeStoreCategory = 'hair';
@@ -4144,10 +4219,11 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if(kwgStoreDepartment==='pets')return kwgPetCatalog.filter(p=>(isAdmin||p.isVisible!==false)&&
         !kwgOwnedPets.has(p.petKey)&&(kwgStoreSpecies==='all'||p.petKey.startsWith(kwgStoreSpecies+'_')));
       const ownedIds=ownedStoreIdSet();
-      const colorFirst=['bottoms','tops','shoes','skin'].includes(activeStoreCategory);
+      const search=(document.getElementById('kwg-store-search')?.value||'').trim().toLowerCase();
+      const colorFirst=false;
       const seen=new Set();
       return storeItems.filter(item=>{
-        if(item.category!==activeStoreCategory||ownedIds.has(Number(item.id))||item.isVisible===false||!['procedural','image','glb','builtin'].includes(item.assetKind))return false;
+        if((!search&&item.category!==activeStoreCategory)||(search&&!`${item.name} ${item.creatorUsername||''} ${item.category}`.toLowerCase().includes(search))||item.isVisible===false||!['procedural','image','glb','builtin'].includes(item.assetKind))return false;
         const key=item.assetKind==='procedural'?`${item.category}|${item.metadata?.style||''}|${String(item.metadata?.color||'').toLowerCase()}`:null;
         if(key&&seen.has(key))return false;
         if(key)seen.add(key);
@@ -4271,7 +4347,10 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         const btn=document.createElement('button');btn.type='button';btn.className='kwg-store-tile';
         btn.setAttribute('aria-label','Preview '+item.name);
         if(selected&&kwgStoreIdentity(selected)===kwgStoreIdentity(item))btn.classList.add('selected');
-        kwgStoreThumb(btn,item);
+        const picture=document.createElement('div');picture.className='kwg-v45-store-image';kwgStoreThumb(picture,item);btn.append(picture);
+        const itemName=document.createElement('span');itemName.className='kwg-v45-store-name';itemName.textContent=item.name;
+        const creator=document.createElement('span');creator.className='kwg-v45-store-creator';creator.textContent='By '+(item.creatorUsername||'KWG');
+        btn.append(itemName,creator);
         if(isAdmin&&item.isVisible===false){const hidden=document.createElement('span');hidden.className='kwg-store-tile-hidden';hidden.textContent='HIDDEN';btn.append(hidden);}
         btn.onclick=()=>kwgStoreSelect(item);
         grid.append(btn);
@@ -4283,7 +4362,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       document.getElementById('kwg-store-page-label').textContent=`PAGE ${kwgStorePage+1} / ${total}`;
       document.getElementById('kwg-store-page-prev').disabled=kwgStorePage===0;
       document.getElementById('kwg-store-page-next').disabled=kwgStorePage>=total-1;
-      document.getElementById('kwg-store-browse-label').textContent=kwgStoreDepartment==='pets'?(kwgStoreSpecies==='all'?'ALL PETS':kwgStoreSpecies.toUpperCase()+'S'):storeCategoryLabel(activeStoreCategory).toUpperCase();
+      document.getElementById('kwg-store-browse-label').textContent=kwgStoreDepartment==='pets'?(kwgStoreSpecies==='all'?'ALL PETS':kwgStoreSpecies.toUpperCase()+'S'):(document.getElementById('kwg-store-search')?.value?.trim()?'SEARCH RESULTS':storeCategoryLabel(activeStoreCategory).toUpperCase());
     }
     function kwgStoreRenderCheckout(){
       const item=kwgStoreCurrentItem();
@@ -4291,7 +4370,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       const price=document.getElementById('kwg-store-selected-price');
       const button=document.getElementById('kwg-store-action');
       const admin=document.getElementById('kwg-store-selected-admin');
-      name.textContent=item?item.name:'SELECT AN ITEM';
+      name.textContent=item?item.name+' · by '+(item.creatorUsername||'KWG'):'SELECT AN ITEM';
       document.getElementById('kwg-store-preview-3d').setAttribute('aria-label',item?'3D preview of '+item.name:'3D item preview');
       price.textContent=item?(Number(item.price)===0?'FREE':`${Number(item.price).toLocaleString()} COINS`):'-- COINS';
       button.onclick=null;button.disabled=true;button.textContent='SELECT';admin.replaceChildren();
@@ -4797,13 +4876,14 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         button.disabled=false;
         if(err||!res?.success){status.textContent=res?.message||'Save timed out. Please retry.';return;}
         kwgCloseWorldEdit();
-        showToast('World updated!');renderRoomList();renderHomeOverview();
+        showToast('World updated!');renderRoomList();renderHomeOverview();if(document.getElementById('create-pane')?.classList.contains('active'))kwgLoadCreations();
       });
     });
     function kwgWorldCardIcon(kind){
       const paths={
         heart:'<path d="M20.8 4.8a5.4 5.4 0 0 0-7.6 0L12 6l-1.2-1.2a5.4 5.4 0 0 0-7.6 7.6L12 21l8.8-8.6a5.4 5.4 0 0 0 0-7.6z"/>',
         paint:'<path d="M14 6 18 2l4 4-4 4M13 7l4 4-8.9 8.9c-1.6 1.6-4.2 2-6.1 2 0-1.9.4-4.5 2-6.1z"/>',
+        bump:'<path d="M12 19V4m0 0L5 11m7-7 7 7M4 20h16"/>',
         delete:'<path d="M5 5 19 19M19 5 5 19"/>',
         play:'<path d="m8 5 11 7-11 7z"/>'
       };
@@ -4833,6 +4913,18 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         const edit=document.createElement('button');edit.className='kwg-world-edit-button';edit.innerHTML=kwgWorldCardIcon('paint');edit.title='Edit world name and description';edit.setAttribute('aria-label','Edit world');
         edit.onclick=()=>kwgOpenWorldEdit(w);
         actions.insertBefore(edit,actions.querySelector('.join-btn'));
+        const bump=document.createElement('button');bump.className='kwg-world-bump-button';bump.innerHTML=kwgWorldCardIcon('bump');
+        bump.title='Bump world for 75 coins';bump.setAttribute('aria-label','Bump world for 75 coins');
+        bump.onclick=async()=>{
+          if(!await kwgConfirm('Bump "'+(w.displayName||w.name)+'" to the top of Recently Bumped for 75 coins?',{title:'BUMP WORLD',okLabel:'BUMP · 75 COINS'}))return;
+          bump.disabled=true;
+          socket.emit('bump_world',{worldName:w.name},res=>{
+            bump.disabled=false;
+            if(!res?.success){kwgAlert(res?.message||'Could not bump world.',{title:'BUMP FAILED'});return;}
+            coinBalance=Number(res.coins??coinBalance);updateCoinDisplays();renderRoomList();showToast('World bumped!');
+          });
+        };
+        actions.insertBefore(bump,actions.querySelector('.join-btn'));
         const del=document.createElement('button'); del.className='admin-delete'; del.innerHTML=kwgWorldCardIcon('delete');del.setAttribute('aria-label','Delete world');
         del.title='Delete your world permanently';
         del.onclick=async()=>{
@@ -4849,7 +4941,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     }
 
     function renderRoomList() {
-      const sort = document.getElementById('world-sort')?.value || 'recent';
+      const sort = document.getElementById('world-sort')?.value || 'bumped';
       socket.emit('get_worlds', {sort}, (res) => {
         if (!res.success) return;
         const listElem = document.getElementById('room-list'); listElem.innerHTML = '';
@@ -5009,6 +5101,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     document.getElementById('kwg-feed-refresh').onclick=renderHomeOverview;
 
     document.getElementById('world-sort').addEventListener('change', renderRoomList);
+    document.getElementById('kwg-store-search')?.addEventListener('input',()=>{kwgStorePage=0;kwgStoreRender();});
+    document.getElementById('kwg-store-clear')?.addEventListener('click',()=>{document.getElementById('kwg-store-search').value='';kwgStorePage=0;kwgStoreRender();});
     document.querySelectorAll('[data-go-tab]').forEach(b=>b.addEventListener('click',()=>switchHomeTab(b.dataset.goTab)));
 
     function kwgConfirmBlockedWorld(count){
@@ -5116,6 +5210,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       socket.timeout(20000).emit('create_world',{name,description},(err,res)=>{
         button.disabled=false;
         if(err||!res?.success){error.textContent=res?.message||'Could not create world. Please retry.';return;}
+        coinBalance=Number(res.coins??coinBalance);updateCoinDisplays();
         createModal.style.display='none';
         joinSelectedWorld(res.worldName||name);
       });
@@ -6094,6 +6189,28 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       });
     }
 
+    function addCurvedFaceCosmetic(parent,item,width,height,y,shape='sphere'){
+      if(!item||item.assetKind!=='image'||!item.assetUrl)return;
+      loadCosmeticTexture(item.assetUrl,texture=>{
+        const verts=[],uvs=[],indices=[],cols=22,rows=10;
+        for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){
+          const u=i/cols,v=j/rows,x=(u-.5)*width,yy=y+(v-.5)*height;
+          let z=.329;
+          if(shape==='sphere')z=Math.sqrt(Math.max(.001,.37*.37-x*x-(yy-2.04)**2))+.009;
+          else if(shape==='cylinder')z=Math.sqrt(Math.max(.001,.35*.35-x*x))+.009;
+          verts.push(x,yy,z);uvs.push(u,v);
+        }
+        for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+          const k=j*(cols+1)+i;indices.push(k,k+1,k+cols+1,k+1,k+cols+2,k+cols+1);
+        }
+        const geometry=new THREE.BufferGeometry();
+        geometry.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+        geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geometry.setIndex(indices);geometry.computeVertexNormals();
+        const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,alphaTest:.025,depthWrite:false,side:THREE.DoubleSide});
+        const mesh=new THREE.Mesh(geometry,material);mesh.renderOrder=5;parent.add(mesh);
+      });
+    }
+
     function loadGLBScene(url, onLoad) {
       if (!url || !THREE.GLTFLoader) return;
       const cached = cosmeticGLBCache.get(url);
@@ -6795,7 +6912,11 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       }
 
       if(hasHead){
-        // Facial features removed from avatar rendering.
+        // Eyes and mouths are optional. New accounts start with a blank face.
+        if(cosmetics.eyes?.assetKind==='image')addCurvedFaceCosmetic(group,cosmetics.eyes,.45,.19,2.115,headShape);
+        if(cosmetics.mouth?.assetKind==='image')addCurvedFaceCosmetic(group,cosmetics.mouth,.32,.14,1.935,headShape);
+        if(!cosmetics.mouth&&app.builtinMouth&&app.builtinMouth!=='none')
+          addBuiltinFace(group,{...app,builtinEyes:'none'},true,true,false);
       }
       if(cosmetics.hat){
         const hatAnchor=new THREE.Group(); hatAnchor.position.set(0,2.38,0); group.add(hatAnchor); attachNormalizedGLB(hatAnchor,cosmetics.hat,0.9);
@@ -6841,7 +6962,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         const decalRoot=new THREE.Group();
         decalRoot.name='kwg-face-decal-eyes';
         group.add(decalRoot);
-        const faceStyle=app.builtinEyes==='none'?'none':(app.builtinEyes||'friendly');
+        const faceStyle=app.builtinEyes||'none';
         if(faceStyle!=='none')addBuiltinFace(decalRoot,{...app,builtinEyes:faceStyle,builtinMouth:'none'},true,false,false);
         if(!app.kwgCreatorPreview)group.userData.kwgEyeRoot=decalRoot;
       }
@@ -11031,11 +11152,77 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     let editorScene, editorCamera, editorRenderer, editorMesh;
     let editorDragging = false, editorLastX = 0, editorTargetRotation = 0;
 
+    // V45 — one Create page for worlds and community avatar items.
+    function kwgLoadCreations(){
+      socket.emit('get_my_creations',res=>{
+        const worldList=document.getElementById('kwg-create-world-list'),itemList=document.getElementById('kwg-create-item-list');
+        if(!res?.success){worldList.textContent=res?.message||'Could not load worlds.';itemList.textContent='';return;}
+        worldList.replaceChildren();itemList.replaceChildren();
+        for(const w of res.worlds){
+          const row=document.createElement('div');row.className='kwg-create-row';
+          const title=document.createElement('strong');title.textContent=w.displayName||w.name;
+          if(w.thumbnailUrl&&/^https:\/\//i.test(w.thumbnailUrl)){const thumb=document.createElement('img');thumb.className='kwg-create-thumb';thumb.src=w.thumbnailUrl;thumb.alt='';row.append(thumb);}
+          const actions=document.createElement('div');actions.className='kwg-create-row-actions';
+          const edit=document.createElement('button');edit.textContent='EDIT DETAILS';edit.onclick=()=>kwgOpenWorldEdit(w);
+          const enter=document.createElement('button');enter.textContent='OPEN WORLD';enter.onclick=()=>joinSelectedWorld(w.name);
+          actions.append(edit,enter);row.append(title,actions);worldList.append(row);
+        }
+        if(!res.worlds.length)worldList.textContent='No worlds yet.';
+        for(const item of res.items){
+          const row=document.createElement('div');row.className='kwg-create-row kwg-create-item-row';
+          const title=document.createElement('strong');title.textContent=item.name+' · '+item.category.toUpperCase();
+          if(item.assetKind==='image'&&/^https:\/\//i.test(item.assetUrl||'')){const thumb=document.createElement('img');thumb.className='kwg-create-thumb';thumb.src=item.assetUrl;thumb.alt='';row.append(thumb);}
+          const price=document.createElement('input');price.type='number';price.min=0;price.max=1000000;price.value=item.price;price.setAttribute('aria-label','Item price');
+          const name=document.createElement('input');name.value=item.name;name.maxLength=40;name.setAttribute('aria-label','Item name');
+          const visible=document.createElement('label');visible.className='kwg-create-visible';
+          const check=document.createElement('input');check.type='checkbox';check.checked=item.isVisible;visible.append(check,document.createTextNode(' LISTED'));
+          const save=document.createElement('button');save.textContent='SAVE';save.onclick=()=>{
+            save.disabled=true;
+            socket.emit('update_my_avatar_item',{itemId:item.id,name:name.value,price:Number(price.value),isVisible:check.checked},r=>{
+              save.disabled=false;if(!r?.success){kwgAlert(r?.message||'Could not save item.');return;}
+              showToast('Item updated!');kwgLoadCreations();refreshStoreData();
+            });
+          };
+          row.append(title,name,price,visible,save);itemList.append(row);
+        }
+        if(!res.items.length)itemList.textContent='No avatar items yet.';
+      });
+    }
+    document.querySelectorAll('[data-create-tab]').forEach(button=>button.addEventListener('click',()=>{
+      const items=button.dataset.createTab==='items';
+      document.getElementById('kwg-create-worlds').hidden=items;
+      document.getElementById('kwg-create-items').hidden=!items;
+      document.querySelectorAll('[data-create-tab]').forEach(b=>b.classList.toggle('active',b===button));
+    }));
+    document.getElementById('kwg-create-world-shortcut').onclick=()=>document.getElementById('open-create-world-btn').click();
+    document.getElementById('kwg-create-studio').onclick=()=>window.kwgOpenItemCreator?.();
+    const kwgQuickCategory=document.getElementById('kwg-create-category');
+    kwgQuickCategory.onchange=()=>{const image=['eyes','mouth'].includes(kwgQuickCategory.value);document.getElementById('kwg-create-item-file').accept=image?'.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp':'.glb,model/gltf-binary';};
+    document.getElementById('kwg-create-quick').onsubmit=async e=>{
+      e.preventDefault();const button=document.getElementById('kwg-create-item-submit'),status=document.getElementById('kwg-create-item-status');
+      const file=document.getElementById('kwg-create-item-file').files[0];
+      const cat=kwgQuickCategory.value,image=['eyes','mouth'].includes(cat);
+      if(!file||file.size>(image?1500000:8000000)){status.textContent='Choose a file within the size limit.';return;}
+      button.disabled=true;status.textContent='Publishing...';
+      try{
+        const bytes=new Uint8Array(await file.arrayBuffer());
+        socket.timeout(45000).emit('create_avatar_item',{
+          category:cat,name:document.getElementById('kwg-create-item-name').value.trim(),price:Number(document.getElementById('kwg-create-item-price').value),
+          fileName:file.name,mimeType:file.type|| (image?'image/png':'model/gltf-binary'),fileData:bytes
+        },(err,res)=>{
+          button.disabled=false;
+          if(err||!res?.success){status.textContent=res?.message||'Upload failed. Please retry.';return;}
+          status.textContent='Published!';document.getElementById('kwg-create-quick').reset();kwgQuickCategory.onchange();
+          kwgLoadCreations();refreshStoreData();
+        });
+      }catch(err){button.disabled=false;status.textContent=err.message||'Could not read file.';}
+    };
+
     function switchHomeTab(name) {
       if(name==='home')name='worlds'; // V42: the Worlds directory is KWG's landing page.
       const pageName=({home:'HOME',worlds:'WORLDS',store:'STORE',avatar:'AVATAR',
         friends:'FRIENDS',profile:'PROFILE',notifications:'NOTIFICATIONS',
-        admin:'ADMIN'})[name]||String(name).toUpperCase();
+        admin:'ADMIN',create:'CREATE'})[name]||String(name).toUpperCase();
       const pageLoading=beginKWGLoading('OPENING '+pageName,{
         description:'Preparing page',priority:20,immediate:true
       });
@@ -11049,6 +11236,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if (name === 'store') { setStoreMessage('Loading...'); kwgStoreUpdateHeadshot(); refreshStoreData(() => { setStoreMessage(''); if(kwgStoreDepartment==='pets')kwgRefreshPets(); else renderStoreItems(); }); }
       if (name === 'avatar') openAvatarEditor();
       if (name === 'worlds') renderRoomList();
+      if (name === 'create') kwgLoadCreations();
       if (name === 'home') renderHomeOverview();
       if (name === 'profile') loadProfile(loggedInUsername);
       if (name === 'friends') loadFriends();
@@ -11587,7 +11775,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       const host=document.getElementById('avatar-native-options');
       const grid=document.getElementById('avatar-inventory-grid');
       const cat=avatarEditorCategory;
-      const native=['skin','shirts','pants','shoes'].includes(cat);
+      const native=['skin','tops','bottoms','shoes'].includes(cat);
       host.style.display=native?'grid':'none';grid.style.display=native?'none':'grid';host.innerHTML='';
       if(!native)return false;
       const option=(label,active,modify)=>{
@@ -11608,8 +11796,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       // Every mandatory clothing/skin category has an explicit default item.
       const defaultConfig={
         skin:['Default Skin',a=>{a.skinColor='#ffe4ad';a.headColor='#ffe4ad';a.armColor='#ffe4ad';a.legColor='#ffe4ad';}],
-        shirts:['Default Shirt',a=>{a.shirtStyle='short';a.shirtColor='#3b82d0';a.torsoColor='#3b82d0';}],
-        pants:['Default Bottoms',a=>{a.bottomStyle='pants';a.pantsColor='#263447';}],
+        tops:['Default Shirt',a=>{a.shirtStyle='short';a.shirtColor='#3b82d0';a.torsoColor='#3b82d0';}],
+        bottoms:['Default Bottoms',a=>{a.bottomStyle='pants';a.pantsColor='#263447';}],
         shoes:['Default Shoes',a=>{a.shoeStyle='shoes';a.shoesColor='#15191f';}]
       };
       if(defaultConfig[cat]){
@@ -11617,7 +11805,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         option(label,false,apply);
       }
       if(cat==='skin')picker('SKIN COLOR','skinColor',avatarDraft.headColor||'#d9a679',true);
-      if(cat==='shirts'){
+      if(cat==='tops'){
         for(const [style,label] of [['short','Short Sleeve'],['long','Long Sleeve']])option(label,(avatarDraft.shirtStyle||'short')===style,a=>a.shirtStyle=style);
         picker('SHIRT COLOR','shirtColor','#3b82d0',true);
         const designTitle=document.createElement('div');designTitle.className='kwg-shirt-design-heading';designTitle.textContent='SHIRT DESIGN';host.appendChild(designTitle);
@@ -11632,7 +11820,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           card.onclick=()=>{setDraftInventoryItem(item);};designs.appendChild(card);
         });
       }
-      if(cat==='pants'){
+      if(cat==='bottoms'){
         for(const [style,label] of [['pants','Pants'],['shorts','Shorts'],['skirt','Skirt']])option(label,(avatarDraft.bottomStyle||'pants')===style,a=>a.bottomStyle=style);
         picker('PANTS COLOR','pantsColor','#263447',true);
       }
@@ -11644,6 +11832,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     }
     function renderAvatarInventory() {
       const grid=document.getElementById('avatar-inventory-grid'); if(!grid)return; grid.innerHTML=''; document.getElementById('avatar-native-options').style.display='none';grid.style.display='grid';
+      if(renderNativeAvatarOptions())return;
       let items=[];
       if(KWG_NEW_CATEGORIES.includes(avatarEditorCategory)){
         items=ownedStoreItems.filter(i=>i.category===avatarEditorCategory);
@@ -11652,8 +11841,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
             hair:[{id:'builtin-hair-classic',category:'hair',name:'Default Hair',assetKind:'builtin',builtinValue:'classic'}],
             hats:[],
             heads:[{id:'builtin-heads-default',category:'heads',name:'Default Head',assetKind:'builtin',builtinValue:'sphere'}],
-            eyes:BUILTIN_EYES.filter(i=>i.builtinValue!=='none'),
-            mouth:BUILTIN_MOUTHS.filter(i=>i.builtinValue!=='none')
+            eyes:[],
+            mouth:[]
           };
           items=[makeNoneInventoryItem(avatarEditorCategory),...(builtinDefaults[avatarEditorCategory]||[]),...items];
         }
@@ -14512,9 +14701,9 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           const landing=descending&&kwgEnemyPreviousFeet>=top-.12&&feet<=top+.16&&feet>=top-.55;
           if(landing&&contactDistance<=.82&&!kwgKnockedUntil&&props.enemyCharacter!=='hops'){
             player.position.y=top+.12;
-            velocityY=kwgDoubleJumpStomp?jumpStrength*.8:jumpStrength*.68;
+            velocityY=jumpStrength*.68;
             isGrounded=false;
-            const wasStomp=kwgDoubleJumpStomp&&props.enemyKillable&&props.enemyCharacter!=='hops';
+            const wasStomp=false; // V45: no double-jump stomp
             if(wasStomp){
               kwgStompDust(npc.position.clone().add(new THREE.Vector3(0,top-npc.position.y-.10,0)),true);
               kwgStompImpactAt=now;
@@ -14610,15 +14799,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         if(nearLanding){isGrounded=true;kwgAirJumps=0;kwgDoubleJumpStomp=false;}
         return;
       }
-      if(kwgAirJumps===1&&now-kwgLastGroundJumpAt>165){
-        kwgJumpPressedAt=0;
-        kwgAirJumps=2;kwgDoubleJumpStomp=true;
-        kwgEnsureStompRig(localPlayerAvatar);
-        kwgStompStarted=kwgEnemyClock();kwgStompLandingAt=0;kwgFlipKind='stomp';
-        kwgAudio.play('double_jump');
-        velocityY=Math.max(velocityY,jumpStrength*.78);
-        e.preventDefault();
-      }
+      // Midair jump and belly-flop have been removed. Ground jumps only.
     });
     let velocityY = 0;
     const gravity = -0.001375;
@@ -15876,7 +16057,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 </style>
 <div id="kwg-creator" role="dialog" aria-modal="true" aria-label="Item Creator">
  <div class="kwg-creator-shell">
-  <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hat">Hat</option><option value="head_shape">Head Shape</option><option value="hair">Hair</option><option value="hats">Hats</option><option value="heads">Heads</option><option value="tops">Shirts / Tops</option><option value="bottoms">Pants / Bottoms</option><option value="shoes">Shoes</option><option value="eyes">Eyes (2D Decal)</option><option value="mouth">Mouth (2D Decal)</option><option value="skin">Skin (2D)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
+  <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hats">Hats</option><option value="hair">Hair</option><option value="heads">Heads</option><option value="eyes">Eyes (2D Decal)</option><option value="mouth">Mouth (2D Decal)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
   <style>
 #kwgc-modebar{display:flex;gap:5px;flex-wrap:wrap;padding:8px;background:#17273a;border-bottom:1px solid #3c5671}
 #kwgc-modebar button,#kwgc-views button{background:#21354b;color:#dceaff;border:1px solid #48617b;padding:7px;cursor:pointer}
@@ -15889,7 +16070,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 <div id="kwgc-modebar"><button data-mode="select" class="active">↖ Select</button><button data-mode="move">✥ Move</button><button data-mode="scale">⤢ Scale</button><button data-mode="rotate">⟳ Rotate</button><button data-mode="recolor">◉ Recolor</button><button data-mode="insert">＋ Insert</button><label style="margin-left:10px;color:#cdeaff"><input id="kwgc-mirror" type="checkbox" style="min-height:0"> Mirror X</label><button id="kwgc-zoom-in">＋ Zoom</button><button id="kwgc-zoom-out">－ Zoom</button></div><div class="kwg-creator-main">
    <div class="kwg-creator-side"><h3>BUILD & PAINT</h3><div id="kwgc-3dtools"><div class="kwg-tool-grid"><button data-shape="box">+ Box</button><button data-shape="sphere">+ Sphere</button><button data-shape="cylinder">+ Cylinder</button><button data-shape="cone">+ Cone</button></div><label>Parts <div id="kwg-creator-parts"></div></label><button id="kwgc-delete-part">Remove selected part</button><p>Drag the viewport to rotate. Change each selected primitive with the transforms at right. Overlap rounded shapes to sculpt a silhouette.</p></div><div id="kwgc-2dtools" style="display:none"><div class="kwg-tool-grid"><button data-paint="brush">Brush</button><button data-paint="eraser">Eraser</button><button data-paint="fill">Fill</button><button data-paint="checker">Checker</button><button data-paint="stripes">Stripes</button><button id="kwgc-clear-paint">Clear</button></div><label>Brush size<input id="kwgc-brush" type="range" min="1" max="32" value="8"></label><p>Paint directly on the 2D texture canvas. Patterns fill the canvas; use the 3D category editor for solid meshes.</p></div><h3>MY DRAFTS</h3><button id="kwgc-refresh-drafts">Refresh drafts</button><div id="kwg-creator-drafts"></div></div>
    <div class="kwg-creator-stage"><canvas id="kwg-creator-viewport"></canvas><div id="kwgc-views"><button data-view="top">TOP</button><button data-view="front">FRONT</button><button data-view="right">RIGHT</button><button data-view="left">LEFT</button><button data-view="back">BACK</button><button data-view="bottom">BOTTOM</button></div><div id="kwgc-mode-hint">Select a part · drag empty space to orbit · scroll to zoom</div><canvas id="kwg-creator-paint" width="512" height="512"></canvas></div>
-   <div class="kwg-creator-side"><h3>ITEM PROPERTIES</h3><label>Name<input id="kwgc-name" maxlength="40" value="New Creation"></label><label>Price (coins)<input id="kwgc-price" type="number" value="50" min="0" max="1000000"></label><label>Destination<select id="kwgc-distribution"><option value="store">Store (for sale)</option><option value="starter">Starter inventory (free)</option></select></label><label>Color<input type="color" id="kwgc-color" value="#7954aa"></label><div id="kwgc-transforms"><h3>SELECTED PART</h3><label>X<input id="kwgc-x" type="number" step="0.05" value="0"></label><label>Y<input id="kwgc-y" type="number" step="0.05" value="2.35"></label><label>Z<input id="kwgc-z" type="number" step="0.05" value="0"></label><label>Rotate X (degrees)<input id="kwgc-rx" type="number" step="5" value="0"></label><label>Rotate Y (degrees)<input id="kwgc-r" type="number" step="5" value="0"></label><label>Rotate Z (degrees)<input id="kwgc-rz" type="number" step="5" value="0"></label><label>Scale X<input id="kwgc-sx" type="number" min="0.02" max="5" step="0.05" value="1"></label><label>Scale Y<input id="kwgc-sy" type="number" min="0.02" max="5" step="0.05" value="1"></label><label>Scale Z<input id="kwgc-sz" type="number" min="0.02" max="5" step="0.05" value="1"></label></div><button id="kwgc-save" style="width:100%">Save editable draft</button><button id="kwgc-publish" class="kwg-creator-primary" style="width:100%;margin-top:7px">Publish item</button><p>Publishing uses your server's configured Supabase Storage. 3D meshes export to GLB; paintings export to PNG.</p></div>
+   <div class="kwg-creator-side"><h3>ITEM PROPERTIES</h3><label>Name<input id="kwgc-name" maxlength="40" value="New Creation"></label><label>Price (coins)<input id="kwgc-price" type="number" value="50" min="0" max="1000000"></label><label style="display:none!important">Destination<input id="kwgc-distribution" type="hidden" value="store"></label><label>Color<input type="color" id="kwgc-color" value="#7954aa"></label><div id="kwgc-transforms"><h3>SELECTED PART</h3><label>X<input id="kwgc-x" type="number" step="0.05" value="0"></label><label>Y<input id="kwgc-y" type="number" step="0.05" value="2.35"></label><label>Z<input id="kwgc-z" type="number" step="0.05" value="0"></label><label>Rotate X (degrees)<input id="kwgc-rx" type="number" step="5" value="0"></label><label>Rotate Y (degrees)<input id="kwgc-r" type="number" step="5" value="0"></label><label>Rotate Z (degrees)<input id="kwgc-rz" type="number" step="5" value="0"></label><label>Scale X<input id="kwgc-sx" type="number" min="0.02" max="5" step="0.05" value="1"></label><label>Scale Y<input id="kwgc-sy" type="number" min="0.02" max="5" step="0.05" value="1"></label><label>Scale Z<input id="kwgc-sz" type="number" min="0.02" max="5" step="0.05" value="1"></label></div><button id="kwgc-save" style="width:100%">Save editable draft</button><button id="kwgc-publish" class="kwg-creator-primary" style="width:100%;margin-top:7px">Publish item</button></div>
   </div><div class="kwg-creator-status" id="kwgc-status">Create a shape or select a 2D category to begin.</div>
  </div>
 </div>
@@ -16685,7 +16866,7 @@ body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-score-hud{di
  // Use the same avatar builder as the rest of KWG, rather than a placeholder mannequin.
  avatar=window.kwgCreatorBuildAvatar?window.kwgCreatorBuildAvatar(defaultAvatarAppearance):new T.Group();scene.add(avatar);
  // Friendly default eyes on the editor's fitting model (not exported with items).
- previewEyeGroup=new T.Group();previewEyeGroup.name='kwgc-default-eyes';avatar.add(previewEyeGroup);
+ previewEyeGroup=new T.Group();previewEyeGroup.name='kwgc-optional-eyes';avatar.add(previewEyeGroup);
  const eyeWhite=new T.MeshStandardMaterial({color:'#ffffff',roughness:.44});
  const irisMat=new T.MeshStandardMaterial({color:'#40bbf7',roughness:.3});
  const pupilMat=new T.MeshStandardMaterial({color:'#0b1d35',roughness:.2});
@@ -16785,10 +16966,10 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
  canvas.addEventListener('wheel',e=>{e.preventDefault();if(selected>=0&&root?.children[selected]){root.children[selected].updateMatrixWorld(true);const b=new T.Box3().setFromObject(root.children[selected]);if(!b.isEmpty())cameraTarget.lerp(b.getCenter(new T.Vector3()),.55);}else targetCreatedItem();distance=Math.max(.55,Math.min(16,distance*Math.exp(e.deltaY*.001)));},{passive:false});
 
  }
- const paint=$('kwg-creator-paint'),ctx=paint.getContext('2d',{willReadFrequently:true});function clearPainting(){ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);paintDirty=false;}clearPainting();
+ const paint=$('kwg-creator-paint'),ctx=paint.getContext('2d',{willReadFrequently:true});function clearPainting(){ctx.clearRect(0,0,512,512);paintDirty=false;}clearPainting();
  document.querySelectorAll('#kwgc-2dtools [data-paint]').forEach(b=>b.onclick=()=>{paintMode=b.dataset.paint;status('Paint tool: '+paintMode);if(paintMode==='checker'||paintMode==='stripes'){remember();const size=32;ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);ctx.fillStyle=$('kwgc-color').value;for(let y=0;y<512;y+=size)for(let x=0;x<512;x+=size)if(paintMode==='stripes'||((x+y)/size)%2===0)ctx.fillRect(x,y,size,size);paintDirty=true;}});
  $('kwgc-clear-paint').onclick=()=>{remember();clearPainting();status('Texture cleared.');};
- function paintAt(e){const b=paint.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*512,y=(e.clientY-b.top)/b.height*512,r=Number($('kwgc-brush').value);ctx.beginPath();ctx.fillStyle=paintMode==='eraser'?'#e6ba93':$('kwgc-color').value;ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();paintDirty=true;}
+ function paintAt(e){const b=paint.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*512,y=(e.clientY-b.top)/b.height*512,r=Number($('kwgc-brush').value);ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(paintMode==='eraser'){ctx.save();ctx.globalCompositeOperation='destination-out';ctx.fill();ctx.restore();}else{ctx.fillStyle=$('kwgc-color').value;ctx.fill();}paintDirty=true;}
  paint.addEventListener('pointerdown',e=>{remember();painting=true;paint.setPointerCapture(e.pointerId);if(paintMode==='fill'){ctx.fillStyle=$('kwgc-color').value;ctx.fillRect(0,0,512,512);paintDirty=true;}else paintAt(e)});paint.addEventListener('pointermove',e=>{if(painting&&paintMode!=='fill')paintAt(e)});paint.addEventListener('pointerup',()=>painting=false);paint.addEventListener('pointercancel',()=>painting=false);
  // Only expose the base body pieces relevant to fitting the chosen item.
  // Mesh visibility is local to the editor; exported GLBs contain ONLY root parts.
@@ -16947,7 +17128,7 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
  });
 
  async function exportGlb(){return new Promise((resolve,reject)=>{const T=get(),exp=new T.GLTFExporter(),g=new T.Group();parts.filter(p=>!p.negative).forEach(p=>g.add(partMesh(p)));try{exp.parse(g,data=>{if(!(data instanceof ArrayBuffer))return reject(new Error('Binary GLB export failed'));resolve(new Uint8Array(data));},{binary:true,onlyVisible:true});}catch(e){reject(e);}});}
- $('kwgc-publish').onclick=async()=>{const name=$('kwgc-name').value.trim(),price=Number($('kwgc-price').value),cat=category(),dist=$('kwgc-distribution').value;if(!name||!Number.isSafeInteger(price)||price<0||price>1000000)return status('Enter a valid name and price.');if(!is2d()&&!parts.length)return status('Add a shape before publishing.');status('Exporting item...');try{let bytes,fileName,mimeType;if(is2d()){const bin=atob(paint.toDataURL('image/png').split(',')[1]);bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);fileName='item.png';mimeType='image/png';}else{bytes=await exportGlb();fileName='item.glb';mimeType='model/gltf-binary';}status('Uploading to store...');const r=await sock('admin_store_create',{category:cat,name,price,distribution:dist,fileName,mimeType,fileData:bytes,metadata:{size:1,offsetX:0,offsetY:0,offsetZ:0},isVisible:dist==='store'});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.success?'Published '+name+' (#'+r.item.id+') to '+(dist==='starter'?'STARTER INVENTORY (not listed for sale)':'STORE → '+cat.toUpperCase())+'. Note: purchased items move into My Stuff and are hidden from the for-sale list.':(r.message||'Publish failed'));}catch(e){console.error(e);status(e.message||'Export failed.');}};
+ $('kwgc-publish').onclick=async()=>{const name=$('kwgc-name').value.trim(),price=Number($('kwgc-price').value),cat=category(),dist=$('kwgc-distribution').value;if(!name||!Number.isSafeInteger(price)||price<0||price>1000000)return status('Enter a valid name and price.');if(!is2d()&&!parts.length)return status('Add a shape before publishing.');status('Exporting item...');try{let bytes,fileName,mimeType;if(is2d()){const bin=atob(paint.toDataURL('image/png').split(',')[1]);bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);fileName='item.png';mimeType='image/png';}else{bytes=await exportGlb();fileName='item.glb';mimeType='model/gltf-binary';}status('Uploading to store...');const r=await sock('create_avatar_item',{category:cat,name,price,distribution:dist,fileName,mimeType,fileData:bytes,metadata:{size:1,offsetX:0,offsetY:0,offsetZ:0},isVisible:dist==='store'});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.success?'Published '+name+' (#'+r.item.id+') to '+(dist==='starter'?'STARTER INVENTORY (not listed for sale)':'STORE → '+cat.toUpperCase())+'. Note: purchased items move into My Stuff and are hidden from the for-sale list.':(r.message||'Publish failed'));}catch(e){console.error(e);status(e.message||'Export failed.');}};
  // Existing application-scoped socket is assigned to this bridge from its own scope below.
 })();
 </script>
