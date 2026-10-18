@@ -2984,6 +2984,18 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
               </div>
             </section>
           </div>
+          <section class="profile-panel kwg-xp-panel" id="kwg-xp-profile-panel">
+            <div class="kwg-xp-top">
+              <div><div class="profile-panel-title">PLAYER RANK</div><div class="kwg-xp-rank" id="kwg-xp-rank">ROOKIE · LEVEL 1</div></div>
+              <div class="kwg-xp-total" id="kwg-xp-total">0 XP</div>
+            </div>
+            <div class="kwg-xp-bar"><div id="kwg-xp-fill"></div></div>
+            <div class="kwg-xp-caption" id="kwg-xp-caption">0 / 100 XP</div>
+            <div class="kwg-xp-columns">
+              <div><div class="profile-panel-title">ACHIEVEMENTS</div><div id="kwg-xp-achievements" class="kwg-xp-achievements"></div></div>
+              <div><div class="profile-panel-title">GLOBAL RANKINGS</div><div id="kwg-xp-rankings" class="kwg-xp-rankings"></div></div>
+            </div>
+          </section>
           <section class="profile-panel kwg-profile-board">
             <div class="profile-panel-title">MESSAGE BOARD</div>
             <div id="profile-message-list" class="kwg-profile-message-list"></div>
@@ -3226,6 +3238,33 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     .kwg-image-live-status{font-size:9px;color:#ffd7a2}
     .kwg-image-help{margin:5px 0 0!important;font-size:9px!important;color:#92acc5!important;line-height:1.3!important}
     @media(max-width:620px){.kwg-image-row{grid-template-columns:minmax(0,1fr) 22px 22px;gap:2px}.kwg-image-side{grid-column:1/-1;font-size:9px}.kwg-image-file{font-size:8px}.kwg-editor-image-card{padding:5px!important}body.kwg-editing .kwg-editor-image-card .kwg-image-action{width:22px!important;min-width:22px!important;height:22px!important}}
+
+    /* V49 account progression: compact, readable and consistent with the KWG profile. */
+    .kwg-xp-panel{min-height:0!important}
+    .kwg-xp-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    .kwg-xp-top .profile-panel-title{margin:0 0 4px!important;border:0!important;padding:0!important}
+    .kwg-xp-rank{font-family:'Silkscreen',monospace;font-size:17px;color:#a5e9ff;line-height:1.4}
+    .kwg-xp-total{font-size:12px;font-weight:900;color:#ffdf87}
+    .kwg-xp-bar{height:12px;background:#0a1523;border:2px solid #536d89;margin-top:10px;overflow:hidden}
+    .kwg-xp-bar>div{height:100%;width:0;background:#63d99b;transition:width .35s ease}
+    .kwg-xp-caption{text-align:right;color:#9bb7cd;font-size:10px;margin:4px 0 14px}
+    .kwg-xp-columns{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(210px,1fr);gap:16px}
+    .kwg-xp-achievements{display:grid;gap:6px}
+    .kwg-xp-achievement{border:1px solid #36526d;background:#122335;padding:9px;min-width:0}
+    .kwg-xp-achievement-head{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px}
+    .kwg-xp-achievement-head span,.kwg-xp-achievement-detail{font-size:10px;color:#a4b9ca}
+    .kwg-xp-achievement-detail{margin:3px 0 8px}
+    .kwg-xp-tiers{display:flex;flex-wrap:wrap;gap:4px}
+    .kwg-xp-tier{font-size:9px;padding:3px 5px;border:1px solid #38536c;color:#829bb0;background:#0a1726}
+    .kwg-xp-tier.unlocked{border-color:#81cda7;color:#b9f5d1;background:#1b453b}
+    .kwg-xp-rankings{display:grid;gap:5px}
+    .kwg-xp-ranking{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:6px;border:1px solid #334d65;padding:7px 6px;background:#122335;font-size:10px}
+    .kwg-xp-ranking.viewed{border-color:#8ce4b3;background:#1b3a36}
+    .kwg-xp-position{color:#9ed6f4;font-weight:900}
+    .kwg-xp-ranking button{background:transparent;border:0;color:#d8ebff;font:inherit;font-weight:800;text-align:left;overflow:hidden;text-overflow:ellipsis;cursor:pointer;padding:0;min-width:0}
+    .kwg-xp-ranking button:disabled{color:#8b9cad;cursor:default}
+    .kwg-xp-ranking>span:last-child{color:#ffdf87;white-space:nowrap}
+    @media(max-width:700px){.kwg-xp-columns{grid-template-columns:minmax(0,1fr)}.kwg-xp-rank{font-size:13px}.kwg-xp-ranking{font-size:9px}}
   </style>
   <!-- Create World Modal -->
   <div id="create-world-modal" class="modal">
@@ -5662,6 +5701,14 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       box.appendChild(row);while(box.children.length>100)box.firstChild.remove();
       box.scrollTop=box.scrollHeight;
     }
+    socket.on('kwg_progress_updated',data=>{
+      if(!data||!data.gained)return;
+      const labels=(data.unlocked||[]).map(a=>a.title+' '+a.tier);
+      const earned=labels.slice(0,2).join(', ')+(labels.length>2?' +'+(labels.length-2)+' more':'');
+      showToast('+'+data.gained+' XP · '+earned+' · LEVEL '+data.level);
+      if(viewedProfile?.isOwnProfile&&loggedInUsername&&document.getElementById('profile-pane')?.classList.contains('active'))
+        loadProfile(loggedInUsername);
+    });
     socket.on('world_system_message',data=>{
       if(data?.worldName===currentWorldName)kwgSystemChat(data.message);
     });
@@ -11487,8 +11534,45 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       document.getElementById('profile-message-compose').style.display=loggedInUsername?'grid':'none';
     }
 
+    function kwgRenderProgress(profile){
+      const data=profile.progression;
+      if(!data)return;
+      document.getElementById('kwg-xp-rank').textContent=data.rank.toUpperCase()+' · LEVEL '+data.level;
+      document.getElementById('kwg-xp-total').textContent=Number(data.totalXP).toLocaleString()+' XP · #'+profile.globalRank;
+      const earned=Math.max(0,data.totalXP-data.levelStartXP);
+      const needed=Math.max(1,data.nextLevelXP-data.levelStartXP);
+      document.getElementById('kwg-xp-fill').style.width=Math.min(100,100*earned/needed)+'%';
+      document.getElementById('kwg-xp-caption').textContent=earned.toLocaleString()+' / '+needed.toLocaleString()+' XP TO LEVEL '+(data.level+1);
+      const achievements=document.getElementById('kwg-xp-achievements');achievements.replaceChildren();
+      for(const a of data.achievements||[]){
+        const card=document.createElement('div');card.className='kwg-xp-achievement';
+        const heading=document.createElement('div');heading.className='kwg-xp-achievement-head';
+        const name=document.createElement('strong');name.textContent=a.title;
+        const progress=document.createElement('span');progress.textContent=a.progress+' / '+a.tiers[a.tiers.length-1].goal;
+        heading.append(name,progress);
+        const detail=document.createElement('div');detail.className='kwg-xp-achievement-detail';detail.textContent=a.description;
+        const tiers=document.createElement('div');tiers.className='kwg-xp-tiers';
+        for(const tier of a.tiers){
+          const pill=document.createElement('span');pill.className='kwg-xp-tier'+(tier.unlocked?' unlocked':'');
+          pill.textContent=tier.name+' · '+tier.goal+' · +'+tier.xp+' XP';
+          tiers.append(pill);
+        }
+        card.append(heading,detail,tiers);achievements.append(card);
+      }
+      const rankings=document.getElementById('kwg-xp-rankings');rankings.replaceChildren();
+      for(const r of profile.rankings||[]){
+        const row=document.createElement('div');row.className='kwg-xp-ranking'+(r.isViewed?' viewed':'');
+        const position=document.createElement('span');position.className='kwg-xp-position';position.textContent='#'+r.position;
+        const username=document.createElement('button');username.type='button';username.textContent=r.username;
+        username.disabled=!!r.hidden;username.addEventListener('click',()=>openPlayerProfile(r.username));
+        const score=document.createElement('span');score.textContent='LV '+r.level+' · '+Number(r.totalXP).toLocaleString()+' XP';
+        row.append(position,username,score);rankings.append(row);
+      }
+    }
+
     function renderProfile(profile) {
       viewedProfile=profile;
+      kwgRenderProgress(profile);
       document.getElementById('profile-username').textContent=filterKWGUserText(profile.username);
       document.getElementById('profile-joined').textContent='JOINED '+formatProfileDate(profile.createdAt).toUpperCase();
 
