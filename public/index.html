@@ -2823,6 +2823,15 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 @media(max-width:900px){#store-pane .kwg-store-showcase{grid-template-columns:minmax(0,1fr) minmax(180px,.5fr)!important}#store-pane .kwg-store-feature{grid-column:2!important}#create-pane .kwg-create-quick{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:570px){#store-pane .kwg-store-showcase{grid-template-columns:minmax(0,1fr)!important}#store-pane .kwg-store-catalog,#store-pane .kwg-store-feature{grid-column:1!important}#store-pane #store-items-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}#store-pane #store-items-grid{height:370px!important;flex-basis:370px!important}#create-pane .kwg-create-quick{grid-template-columns:1fr}#create-pane .kwg-create-item-row{grid-template-columns:1fr 1fr}#create-pane .kwg-create-item-row strong{grid-column:1/-1}}
 </style>
+<style>
+/* V47: world-only Create, no Store. Legacy catalog DOM is retained only for old script bindings. */
+#store-pane,#kwg-create-items,#kwg-create-studio-host,#kwg-creator{display:none!important}
+#kwg-coin-store-shortcut{cursor:default!important;opacity:1!important}
+#avatar-editor-pane .kwg-avatar-tabs{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+#avatar-editor-pane .kwg-native-card{min-width:0}
+#avatar-editor-pane .kwg-native-color{grid-column:1/-1}
+@media(max-width:600px){#avatar-editor-pane .kwg-avatar-tabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+</style>
 </head>
 <body>
   <div id="kwg-loading-overlay" role="status" aria-live="polite" aria-atomic="true" aria-label="Loading" aria-hidden="true">
@@ -2895,7 +2904,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       <div class="kwg-dashboard-header">
         <div class="kwg-brand-block"><h2>KWG 3D Online</h2><div class="kwg-userline">Logged in as <span id="logged-user-display">User</span></div></div>
         <div class="kwg-account-tools">
-          <button type="button" id="kwg-coin-store-shortcut" class="coin-badge kwg-coin-pill" title="Open Store" aria-label="Open Store — 100 coins"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="home-coin-count">950</span></button>
+          <button type="button" id="kwg-coin-store-shortcut" class="coin-badge kwg-coin-pill" disabled title="Your coins" aria-label="Your coin balance"><span class="kwg-tool-icon kwg-coin-icon" aria-hidden="true"><svg viewBox="0 0 28 28" focusable="false"><circle cx="14" cy="14" r="12" fill="#a96b18" stroke="#55370e" stroke-width="2"/><circle cx="13" cy="12.5" r="10" fill="#ffd84c" stroke="#fff0a0" stroke-width="1.5"/><circle cx="13" cy="12.5" r="7" fill="none" stroke="#c18a22" stroke-width="1.6"/><path d="M16.5 9.4h-4.3c-2 0-3 1.6-3 3.1s1 3.1 3 3.1h4.3" fill="none" stroke="#7c4b0d" stroke-width="2.8" stroke-linecap="square"/><path d="M6.5 6.5h3M7.5 5.5v3" stroke="#fff6c5" stroke-width="1.5" stroke-linecap="square"/></svg></span><span id="home-coin-count">950</span></button>
           <button id="logout-btn" class="logout-btn kwg-icon-tool" title="Log out" aria-label="Log out" type="button"><span class="kwg-logout-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M10 4H5v16h5M13 7l5 5-5 5M8 12h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter"/></svg></span><span class="kwg-logout-text">LOG OUT</span></button>
         </div>
       </div>
@@ -2905,7 +2914,6 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         <button id="notifications-btn" class="home-tab notifications-tab" data-home-tab="notifications" type="button" title="Notifications" aria-label="Notifications"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 17h12l-1.5-2.2V10a4.5 4.5 0 0 0-9 0v4.8z"/><path d="M10 19.5a2.2 2.2 0 0 0 4 0"/></svg></span><span class="nav-label">Notifications</span><span id="notification-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
         <button class="home-tab" data-home-tab="friends" title="Friends" aria-label="Friends"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.8 20c.4-4.2 2.5-6.4 6.2-6.4s5.8 2.2 6.2 6.4z"/><path d="M14 14.5c4.2-.7 6.6 1.1 7.1 5.5h-4.4c-.2-2.2-1.1-4-2.7-5.5z"/></svg></span><span class="nav-label">Friends</span><span id="friend-request-badge" class="friend-badge nav-badge" style="display:none">0</span></button>
         <button class="home-tab" data-home-tab="avatar" title="Avatar Editor" aria-label="Avatar Editor"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.5"/><path d="M7 11.5h10l1.5 9H5.5z"/><path d="M8 14 4 17M16 14l4 3"/></svg></span><span class="nav-label">Avatar</span></button>
-        <button class="home-tab" data-home-tab="store" title="Store" aria-label="Store"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 9h14l-1 11H6z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></svg></span><span class="nav-label">Store</span></button>
         <button class="home-tab" data-home-tab="create" title="Create" aria-label="Create"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M4 20h16"/></svg></span><span class="nav-label">Create</span></button>
         <button class="home-tab admin-home-tab" data-home-tab="admin" title="Admin" aria-label="Admin" style="display:none"><span class="nav-glyph nav-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 14 5.1l2.9-.3.7 2.8 2.5 1.5-1.1 2.7 1.1 2.7-2.5 1.5-.7 2.8-2.9-.3L12 21l-2-2.1-2.9.3-.7-2.8-2.5-1.5L5 12.2 3.9 9.5 6.4 8l.7-2.8 2.9.3z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="nav-label">Admin</span></button>
       </div>
@@ -3054,7 +3062,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       </div>
       <div id="create-pane" class="home-pane">
         <div class="kwg-page-heading"><div><div class="profile-kicker">YOUR CREATIONS</div><h2>CREATE</h2></div></div>
-        <div class="kwg-create-switch"><button class="active" type="button" data-create-tab="worlds">WORLDS</button><button type="button" data-create-tab="items">AVATAR ITEMS</button></div>
+        
         <section id="kwg-create-worlds" class="kwg-create-section">
           <div class="kwg-create-actions"><button type="button" id="kwg-create-world-shortcut" class="submit-btn">+ NEW WORLD · 750 🪙</button></div>
           <div id="kwg-create-world-list" class="kwg-create-list"></div>
@@ -3111,7 +3119,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         <div id="store-message" class="error-msg" role="status" aria-live="polite"></div>
       </div>
       <div id="avatar-editor-pane" class="home-pane">
-        <div class="kwg-page-heading"><div><div class="profile-kicker">CUSTOMIZE</div><h2>AVATAR EDITOR</h2><p>Equip owned 3D cosmetics. Buy more colors and styles in the store.</p></div></div>
+        <div class="kwg-page-heading"><div><div class="profile-kicker">CUSTOMIZE</div><h2>AVATAR EDITOR</h2></div></div>
         <div class="avatar-editor-layout">
           <div><div id="avatar-editor-preview" class="avatar-preview-large"><div class="preview-hint">Drag to rotate • releases back to front</div></div><button id="save-avatar-editor-btn" class="submit-btn">SAVE APPEARANCE</button></div>
           <div class="inventory-panel">
@@ -3119,7 +3127,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
             <div class="kwg-style-group"><div class="kwg-style-title">SHIRT TYPE</div><div class="kwg-style-buttons"><button type="button" class="kwg-style-btn" data-shirt-style="short">SHORT SLEEVE</button><button type="button" class="kwg-style-btn" data-shirt-style="long">LONG SLEEVE</button></div></div>
             <div class="kwg-style-group"><div class="kwg-style-title">BOTTOM TYPE</div><div class="kwg-style-buttons"><button type="button" class="kwg-style-btn" data-bottom-style="pants">PANTS</button><button type="button" class="kwg-style-btn" data-bottom-style="shorts">SHORTS</button><button type="button" class="kwg-style-btn" data-bottom-style="skirt">SKIRT</button></div></div>
           </div>
-          <div class="inventory-tabs kwg-avatar-tabs"><button class="inventory-tab active" data-inv-category="hair">HAIR</button><button class="inventory-tab " data-inv-category="hats">HATS</button><button class="inventory-tab " data-inv-category="heads">HEADS</button><button class="inventory-tab " data-inv-category="eyes">EYES</button><button class="inventory-tab " data-inv-category="mouth">MOUTH</button><button class="inventory-tab " data-inv-category="skin">SKIN</button><button class="inventory-tab " data-inv-category="tops">TOPS</button><button class="inventory-tab " data-inv-category="bottoms">BOTTOMS</button><button class="inventory-tab " data-inv-category="shoes">SHOES</button></div><div id="avatar-native-options" class="avatar-native-options" style="display:none"></div><div id="avatar-inventory-grid"></div>
+          <div class="inventory-tabs kwg-avatar-tabs"><button class="inventory-tab active" data-inv-category="hair">HAIR</button><button class="inventory-tab " data-inv-category="skin">SKIN</button><button class="inventory-tab " data-inv-category="tops">TOPS</button><button class="inventory-tab " data-inv-category="bottoms">BOTTOMS</button><button class="inventory-tab " data-inv-category="shoes">SHOES</button></div><div id="avatar-native-options" class="avatar-native-options" style="display:none"></div><div id="avatar-inventory-grid"></div>
           <div class="color-grid kwg-avatar-colors" style="display:none">
 <label><span>SKIN</span><input type="color" id="av-skin-color"></label>
 <label><span>SHIRT</span><input type="color" id="av-shirt-color"></label>
@@ -4096,17 +4104,9 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     }
 
     function cosmeticsForAppearance(app = {}) {
-      const result = {};
-      const slots = [
-        ['eyesItemId','eyes'], ['mouthItemId','mouth'], ['torsoDecalItemId','torso_decal'],
-        ['hatItemId','hat'], ['headShapeItemId','head_shape'],
-        ...KWG_NEW_CATEGORIES.map(cat=>[kwgProceduralSlot(cat),cat])
-      ];
-      for (const [slot, category] of slots) {
-        const item = itemById(app[slot]);
-        if (item && item.category === category) result[category] = item;
-      }
-      return result;
+      // V47: old marketplace purchases remain in the database, but none are
+      // wearable while the simplified avatar system is active.
+      return {};
     }
 
     function setStoreMessage(message, isError = false) {
@@ -6292,102 +6292,149 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if(!customEyes)add('eyes',app.builtinEyes||'none',.45,.19,2.115);
       if(!customMouth)add('mouth',app.builtinMouth||'none',.31,.13,1.94);
     }
-    // Round 3: soft sculpted native hairstyles. Geometry only; inventory/store logic untouched.
-    function addBuiltinHair(group,app,headShape,customHead){
+    // V47 — sculpted low-poly hairstyles, built from continuous surfaces and tapered
+    // ribbon meshes rather than primitive spheres, boxes or cone stacks.
+    const KWG_HAIR_STYLES=['none','short','shaggy','straight','wavy'];
+    function kwgHairStyle(value){
+      const v=String(value||'none').toLowerCase();
+      if(KWG_HAIR_STYLES.includes(v))return v;
+      return ({classic:'short',sidepart:'shaggy',spiky:'short',bob:'shaggy',ponytail:'straight',flattop:'short',mohawk:'short'})[v]||'none';
+    }
+    function addBuiltinHair(avatar,app,headShape,customHead){
       if(customHead||headShape==='headless')return;
-      const style=app.hairStyle||'classic';
+      const style=kwgHairStyle(app.hairStyle);
       if(style==='none')return;
-      const mat=new THREE.MeshLambertMaterial({color:app.hairColor||'#3a261b',side:THREE.DoubleSide});
-      const add=(geometry,x=0,y=0,z=0,rx=0,ry=0,rz=0)=>{
-        const mesh=new THREE.Mesh(geometry,mat);
-        mesh.position.set(x,y,z);mesh.rotation.set(rx,ry,rz);group.add(mesh);return mesh;
-      };
-      const oval=(x,y,z,sx,sy,sz,rz=0,ry=0)=>{
-        const mesh=add(new THREE.SphereGeometry(1,20,14),x,y,z,0,ry,rz);
-        mesh.scale.set(sx,sy,sz);return mesh;
-      };
-      // The rounded foundation follows the avatar's ~0.37-radius head rather than a boxy helmet.
-      const cap=(height=.34,wide=1)=>{
-        const mesh=add(new THREE.SphereGeometry(1,32,20,0,Math.PI*2,0,Math.PI*.52),0,2.038,0);
-        mesh.scale.set(.383*wide,height,.383*wide);
-        return mesh;
-      };
-      // Smooth tube with varying radius: softly tapered clumps, rather than cones or hard cylinders.
-      const strand=(coords,radii,sides=9)=>{
-        const curve=new THREE.CatmullRomCurve3(coords.map(p=>new THREE.Vector3(...p)));
-        const count=Math.max(14,coords.length*8),vertices=[],normals=[],indices=[];
-        for(let i=0;i<=count;i++){
-          const t=i/count,p=curve.getPoint(t),tangent=curve.getTangent(t).normalize();
-          let guide=new THREE.Vector3(0,0,1);
-          if(Math.abs(tangent.dot(guide))>.94)guide.set(1,0,0);
-          const a=new THREE.Vector3().crossVectors(tangent,guide).normalize();
-          const b=new THREE.Vector3().crossVectors(tangent,a).normalize();
-          const u=t*(radii.length-1),j=Math.min(radii.length-2,Math.floor(u)),f=u-j;
-          const radius=THREE.MathUtils.lerp(radii[j],radii[j+1],f);
-          for(let k=0;k<=sides;k++){
-            const angle=k/sides*Math.PI*2;
-            const direction=a.clone().multiplyScalar(Math.cos(angle)).addScaledVector(b,Math.sin(angle));
-            const v=p.clone().addScaledVector(direction,radius);
-            vertices.push(v.x,v.y,v.z);normals.push(direction.x,direction.y,direction.z);
+      const color=new THREE.Color(app.hairColor||'#3a261b');
+      const hairRoot=new THREE.Group();hairRoot.name='kwg-sculpted-hair';avatar.add(hairRoot);
+      const material=(shade=0)=>new THREE.MeshStandardMaterial({color:color.clone().multiplyScalar(1+shade),roughness:.91,metalness:0,side:THREE.DoubleSide,flatShading:true});
+      const mats=[material(0),material(.085),material(-.075),material(.14)];
+      // Fitted scalp surface: radial rings with an uneven, shaped hairline.
+      function scalp(long=false){
+        const radial=32,rings=9,positions=[],indices=[];
+        for(let j=0;j<=rings;j++){
+          const t=j/rings;
+          for(let i=0;i<=radial;i++){
+            const a=i/radial*Math.PI*2;
+            const frontness=(Math.cos(a)+1)*.5;
+            const end=(long?2.06:1.94)*(1-frontness)+1.18*frontness;
+            const theta=.003+(end-.003)*t;
+            const taper=1+.025*Math.cos(a*5)+.014*Math.sin(a*9);
+            const r=Math.sin(theta),x=Math.sin(a)*.391*r*taper,z=Math.cos(a)*.384*r*taper;
+            const crown=.018*Math.sin(a*3+1)*Math.pow(1-t,2);
+            const y=2.04+.389*Math.cos(theta)+crown;
+            positions.push(x,y,z);
           }
         }
-        for(let i=0;i<count;i++)for(let k=0;k<sides;k++){
-          const a=i*(sides+1)+k,b=a+sides+1;indices.push(a,b,a+1,b,b+1,a+1);
+        for(let j=0;j<rings;j++)for(let i=0;i<radial;i++){
+          const a=j*(radial+1)+i,b=a+radial+1;
+          indices.push(a,b,a+1,b,b+1,a+1);
         }
-        const g=new THREE.BufferGeometry();
-        g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
-        g.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));g.setIndex(indices);
-        add(g);
-      };
-      if(style==='classic'){
-        cap(.385);
-        oval(-.12,2.339,.15,.23,.080,.20,-.10);
-        oval(.155,2.336,.12,.21,.067,.19,.11);
-      }else if(style==='sidepart'){
-        cap(.357);
-        oval(-.15,2.355,.075,.235,.100,.27,-.16);
-        strand([[-.22,2.34,.20],[-.08,2.406,.29],[.15,2.366,.30],[.30,2.29,.20]],[.105,.127,.085,.018]);
-        strand([[-.19,2.33,.11],[-.07,2.40,.12],[.13,2.365,.11]],[.070,.086,.016]);
-      }else if(style==='spiky'){
-        cap(.348);
-        const spikes=[
-          [[-.29,2.31,.17],[-.33,2.43,.18],[-.39,2.50,.17]],
-          [[-.17,2.35,.21],[-.16,2.50,.26],[-.21,2.59,.28]],
-          [[-.015,2.36,.19],[.035,2.52,.27],[.065,2.60,.30]],
-          [[.17,2.34,.18],[.20,2.47,.22],[.28,2.53,.25]],
-          [[.28,2.28,.06],[.31,2.41,.10],[.37,2.47,.10]],
-          [[-.15,2.39,-.06],[-.20,2.53,-.09],[-.23,2.57,-.14]],
-          [[.09,2.39,-.11],[.14,2.54,-.15],[.17,2.59,-.20]]
-        ];
-        spikes.forEach((points,i)=>strand(points,[.105+(i%3)*.008,.071,.002]));
-      }else if(style==='bob'){
-        cap(.36,1.03);
-        oval(-.293,2.12,.015,.119,.285,.307,-.07);
-        oval(.293,2.12,.015,.119,.285,.307,.07);
-        oval(0,2.37,.115,.30,.105,.29);
-        strand([[-.22,2.35,.22],[-.06,2.36,.34],[.13,2.32,.33],[.26,2.26,.25]],[.10,.115,.08,.008]);
-      }else if(style==='mohawk'){
-        cap(.315);
-        const centers=[.28,.13,-.04,-.20,-.31];
-        centers.forEach((z,i)=>{
-          const h=[.25,.33,.37,.30,.23][i];
-          strand([[0,2.34,z],[.01,2.34+h*.65,z-.02],[.028,2.34+h,z-.085]],[.113,.095,.003]);
-        });
-      }else if(style==='flattop'){
-        cap(.335);
-        // Rounded, tidy upright volume with a subtly flattened crown.
-        const g=new THREE.CylinderGeometry(.292,.332,.24,32,3);
-        const m=add(g,0,2.418,0);m.scale.z=.94;
-        oval(0,2.535,0,.29,.033,.27);
-        oval(-.238,2.402,.09,.085,.09,.195);
-        oval(.238,2.402,.09,.085,.09,.195);
-      }else if(style==='ponytail'){
-        cap(.37);
-        oval(0,2.33,-.23,.25,.11,.17);
-        oval(0,2.31,-.36,.115,.13,.12);
-        strand([[0,2.31,-.41],[.02,2.20,-.48],[.025,2.04,-.48],[0,1.94,-.44]],[.112,.124,.10,.045]);
-        strand([[-.075,2.27,-.47],[-.10,2.13,-.53],[-.075,1.98,-.47]],[.053,.066,.008]);
-        oval(-.09,2.35,.20,.21,.065,.17,-.1);
+        const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();
+        hairRoot.add(new THREE.Mesh(g,mats[0]));
+      }
+      // A tapered swept sculptural lock, custom mesh with elliptical sections,
+      // subtle thickness, and a clean pointed end. Its geometry follows a spline.
+      function lock(parent,pts,width=.09,thickness=.046,shade=0){
+        const curve=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p)),false,'centripetal');
+        const sections=18,around=7,vertices=[],indices=[];
+        for(let i=0;i<=sections;i++){
+          const t=i/sections,p=curve.getPoint(t),tangent=curve.getTangent(t).normalize();
+          let across=new THREE.Vector3(0,0,1);
+          if(Math.abs(tangent.dot(across))>.88)across.set(1,0,0);
+          const side=new THREE.Vector3().crossVectors(tangent,across).normalize();
+          const depth=new THREE.Vector3().crossVectors(tangent,side).normalize();
+          const profile=Math.pow(Math.sin(Math.PI*(.08+.90*t)),.42)*(1-.89*Math.pow(t,4));
+          const w=Math.max(.002,width*profile),d=Math.max(.002,thickness*profile);
+          for(let k=0;k<around;k++){
+            const a=k/around*Math.PI*2;
+            const v=p.clone().addScaledVector(side,Math.cos(a)*w).addScaledVector(depth,Math.sin(a)*d);
+            vertices.push(v.x,v.y,v.z);
+          }
+        }
+        for(let i=0;i<sections;i++)for(let k=0;k<around;k++){
+          const a=i*around+k,b=i*around+(k+1)%around,c=a+around,d=b+around;
+          indices.push(a,c,b,b,c,d);
+        }
+        const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geo.setIndex(indices);geo.computeVertexNormals();
+        const mesh=new THREE.Mesh(geo,mats[(shade%4+4)%4]);parent.add(mesh);return mesh;
+      }
+      // Dynamic strands are pivoted at the root so they sway without detaching.
+      const dynamics=[];
+      function movingLock(points,width,thickness,shade,phase,flex=1){
+        const origin=points[0];const pivot=new THREE.Group();pivot.position.set(...origin);hairRoot.add(pivot);
+        lock(pivot,points.map(p=>[p[0]-origin[0],p[1]-origin[1],p[2]-origin[2]]),width,thickness,shade);
+        dynamics.push({pivot,phase,flex,angleX:0,angleZ:0,velX:0,velZ:0});
+      }
+      scalp(style==='straight'||style==='wavy');
+      // Front fringe is always integrated into the crown silhouette.
+      const bangs=style==='short'?8:style==='shaggy'?11:style==='straight'?8:10;
+      for(let i=0;i<bangs;i++){
+        const f=i/(bangs-1),x=-.29+.58*f;
+        const side=style==='straight'?(f<.5?-1:1):1;
+        const sweep=style==='short'?.035:style==='shaggy'?.07:style==='straight'?.055:.045;
+        const endY=style==='short'?2.285-.034*Math.sin(f*9):style==='shaggy'?2.20-.068*Math.sin(f*13):2.235-.052*Math.sin(f*11);
+        lock(hairRoot,[[x*.8,2.407,.16],[x,2.414,.292],[x+sweep*side,2.34,.36],[x+sweep*side*1.5,endY,.366]],.062+(i%3)*.009,.038,i);
+      }
+      if(style==='short'){
+        // Close-cropped sculpted texture, small sweeping crown panels and temples.
+        for(let i=0;i<12;i++){
+          const a=i/12*Math.PI*2,x=Math.sin(a)*.27,z=Math.cos(a)*.26;
+          lock(hairRoot,[[x*.75,2.417,z*.75],[x,2.436,z],[x*1.17,2.35,z*1.14],[x*1.19,2.25,z*1.18]],.066,.040,i);
+        }
+        for(const side of [-1,1])lock(hairRoot,[[side*.31,2.30,.18],[side*.375,2.22,.16],[side*.374,2.135,.16]],.071,.04,2);
+      }else if(style==='shaggy'){
+        // Layered medium shag: overlapping feathered side and nape pieces.
+        for(let side of [-1,1])for(let i=0;i<7;i++){
+          const z=-.29+i*.095,x=side*(.25+.06*Math.sin(i*.9));
+          lock(hairRoot,[[x*.87,2.37,z],[x*1.25,2.27,z+.02],[x*1.31,2.12,z+.07],[x*1.19,1.97-.08*(i%3),z+.10]],.097,.058,i+1);
+        }
+        for(let i=0;i<10;i++){
+          const x=-.29+i*.064;
+          lock(hairRoot,[[x,2.37,-.20],[x*1.05,2.26,-.36],[x*1.1,2.08,-.39],[x*1.16,1.92-.09*Math.sin(i*2.3),-.34]],.090,.05,i);
+        }
+      }else{
+        // Long silhouettes have articulated locks, layered behind shoulders and
+        // framing the face. Straight is sleek; wavy has sculpted S-curves.
+        const wavy=style==='wavy';
+        for(let i=0;i<16;i++){
+          const f=i/15,x=-.33+f*.66;
+          const yEnd=1.22+.10*Math.cos(f*8)+(wavy?.06*Math.sin(i*1.4):0);
+          const wave=(t)=>wavy?.065*Math.sin(t*Math.PI*3.6+i*.63):.018*Math.sin(t*Math.PI+i*.31);
+          const points=[[x*.83,2.365,-.22],[x,2.19,-.38],[x+wave(.4),1.93,-.43],[x+wave(.7),1.60,-.42],[x+wave(1),yEnd,-.38]];
+          movingLock(points,wavy?.102:.086,wavy?.076:.053,i,i*.57,.7+(i%4)*.12);
+        }
+        for(const side of [-1,1])for(let i=0;i<7;i++){
+          const z=-.26+i*.083,x=side*(.30+.035*Math.sin(i*.9));
+          const end=1.25+.10*Math.cos(i*1.8);
+          const amp=wavy?.090:.024;
+          movingLock([[x*.83,2.37,z],[x*1.19,2.16,z+.03],[x*1.27+side*amp,1.91,z+.06],[x*1.20-side*amp,1.59,z+.09],[x*1.21+side*amp,end,z+.10]],wavy?.102:.086,wavy?.075:.051,i+1,i*.9+side,.82);
+        }
+        if(wavy)for(let side of [-1,1])for(let i=0;i<3;i++){
+          const x=side*(.29+i*.027);
+          movingLock([[x,2.34,.14],[x*1.22,2.13,.24],[x*1.16,1.91,.32],[x*1.28,1.66,.28],[x*1.20,1.43,.33]],.104,.078,i+1,i*.8,1.05);
+        }
+      }
+      avatar.userData.kwgHairDynamics=dynamics;
+      avatar.userData.kwgHairStyle=style;
+    }
+    function kwgAnimateHair(avatar,isMoving,isGrounded,delta,verticalVelocity){
+      const locks=avatar?.userData?.kwgHairDynamics;
+      if(!locks?.length)return;
+      const dt=Math.min(.045,Math.max(.005,Number(delta)||.016));
+      const clock=avatar.userData.walkClock||0;
+      const falling=!isGrounded&&verticalVelocity<-.008;
+      const rising=!isGrounded&&verticalVelocity>.008;
+      for(const strand of locks){
+        const stride=isMoving&&isGrounded?Math.sin(clock*1.2+strand.phase)*.11:0;
+        const air=falling?-.19:rising?.14:0;
+        const targetX=(stride+air)*strand.flex;
+        const targetZ=(isMoving?Math.cos(clock*.83+strand.phase)*.065:0)*strand.flex;
+        strand.velX+=(targetX-strand.angleX)*38*dt;
+        strand.velZ+=(targetZ-strand.angleZ)*32*dt;
+        const damp=Math.exp(-9*dt);strand.velX*=damp;strand.velZ*=damp;
+        strand.angleX+=strand.velX*dt;strand.angleZ+=strand.velZ*dt;
+        strand.pivot.rotation.x=strand.angleX;
+        strand.pivot.rotation.z=strand.angleZ;
       }
     }
 
@@ -6828,6 +6875,9 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     function kwgUpdateBlink(mesh,time){const root=mesh?.userData?.kwgEyeRoot;if(!root)return;const phase=(time/1000+((mesh.id*13)%19))%4.7;root.scale.y=phase>4.49&&phase<4.64?.10:1;}
 
     function buildBlockyAvatar(app, cosmetics = {}) {
+      // V47: all avatars use the classic head and blank face, no store cosmetics.
+      app={...app,headShape:'sphere',hat:'none',builtinEyes:'none',builtinMouth:'none'};
+      cosmetics={};
       const group = new THREE.Group();
 
       // V3.21 semantic colors. Legacy fields remain fallback-compatible with existing saved accounts/server schema.
@@ -6908,7 +6958,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         else headGeo=new THREE.BoxGeometry(0.63,0.63,0.63);
         const head=new THREE.Mesh(headGeo,skinMat); head.userData.kwgBodyPart='head'; head.position.set(0,2.04,0); group.add(head);
 
-        // Hair removed from avatar rendering.
+        addBuiltinHair(group,app,headShape,false);
       }
 
       if(hasHead){
@@ -7137,6 +7187,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         }
         limbs.leftLeg.rotation.x=smooth(limbs.leftLeg.rotation.x,legTarget,0.18);
         limbs.rightLeg.rotation.x=smooth(limbs.rightLeg.rotation.x,-legTarget*0.45,0.18);
+        kwgAnimateHair(avatarMesh,isMoving,isGrounded,delta,verticalVelocity);
         return;
       }
 
@@ -7152,6 +7203,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       } else {
         animateLimbs(avatarMesh, isMoving);
       }
+      kwgAnimateHair(avatarMesh,isMoving,isGrounded,delta,verticalVelocity);
     }
 
     // Rebuild a remote name tag when either player blocks/unblocks the other.
@@ -11211,7 +11263,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     window.addEventListener('kwg-item-catalog-updated',()=>{kwgLoadCreations();refreshStoreData();});
 
     function switchHomeTab(name) {
-      if(name==='home')name='worlds'; // V42: the Worlds directory is KWG's landing page.
+      if(name==='home'||name==='store')name='worlds'; // V47: Store retired.
       const pageName=({home:'HOME',worlds:'WORLDS',store:'STORE',avatar:'AVATAR',
         friends:'FRIENDS',profile:'PROFILE',notifications:'NOTIFICATIONS',
         admin:'ADMIN',create:'CREATE'})[name]||String(name).toUpperCase();
@@ -11236,7 +11288,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if (name === 'admin' && isAdmin) { const pane=document.getElementById('admin-pane'); const card=document.getElementById('admin-card'); if(card && card.parentElement!==pane) pane.appendChild(card); refreshAdminPanel(); }
     }
     document.querySelectorAll('.home-tab').forEach(b => b.addEventListener('click', () => switchHomeTab(b.dataset.homeTab)));
-    document.getElementById('kwg-coin-store-shortcut')?.addEventListener('click',()=>switchHomeTab('store'));
+    // V47: coin balance is informational; no store navigation.
 
 
     let viewedProfile = null;
@@ -11767,7 +11819,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       const host=document.getElementById('avatar-native-options');
       const grid=document.getElementById('avatar-inventory-grid');
       const cat=avatarEditorCategory;
-      const native=['skin','tops','bottoms','shoes'].includes(cat);
+      const native=['hair','skin','tops','bottoms','shoes'].includes(cat);
       host.style.display=native?'grid':'none';grid.style.display=native?'none':'grid';host.innerHTML='';
       if(!native)return false;
       const option=(label,active,modify)=>{
@@ -11795,6 +11847,12 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if(defaultConfig[cat]){
         const [label,apply]=defaultConfig[cat];
         option(label,false,apply);
+      }
+      if(cat==='hair'){
+        for(const [value,label] of [['none','No Hair'],['short','Very Short'],['shaggy','Shaggy Medium'],['straight','Long Straight'],['wavy','Long Wavy']]){
+          option(label,kwgHairStyle(avatarDraft.hairStyle)===value,a=>{a.hairStyle=value;});
+        }
+        picker('HAIR COLOR','hairColor','#3a261b',false);
       }
       if(cat==='skin')picker('SKIN COLOR','skinColor',avatarDraft.headColor||'#d9a679',true);
       if(cat==='tops'){
@@ -11873,7 +11931,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     function mirrorSemanticColors(app){normalizeSemanticAppearance(app);app.headColor=app.skinColor;app.torsoColor=app.shirtColor;app.leftArmColor=app.skinColor;app.rightArmColor=app.skinColor;app.leftLegColor=app.pantsColor;app.rightLegColor=app.pantsColor;return app;}
     function syncEditorColors(){normalizeSemanticAppearance(avatarDraft);[['av-skin-color','skinColor'],['av-shirt-color','shirtColor'],['av-pants-color','pantsColor'],['av-shoes-color','shoesColor'],['av-hair-color','hairColor']].forEach(([id,k])=>{document.getElementById(id).value=avatarDraft[k];kwgSyncRGBField(id);});}
     function syncBodyStyleButtons(){if(!avatarDraft)return;avatarDraft.shirtStyle=avatarDraft.shirtStyle||'short';avatarDraft.bottomStyle=avatarDraft.bottomStyle||'pants';document.querySelectorAll('[data-shirt-style]').forEach(b=>b.classList.toggle('active',b.dataset.shirtStyle===avatarDraft.shirtStyle));document.querySelectorAll('[data-bottom-style]').forEach(b=>b.classList.toggle('active',b.dataset.bottomStyle===avatarDraft.bottomStyle));}
-    function openAvatarEditor(){refreshStoreData(()=>{avatarDraft=JSON.parse(JSON.stringify(playerAppearance));initEditorPreview();syncEditorColors();syncBodyStyleButtons();renderAvatarInventory();updateEditorAvatar();});}
+    function openAvatarEditor(){avatarDraft=JSON.parse(JSON.stringify(playerAppearance));initEditorPreview();syncEditorColors();syncBodyStyleButtons();renderAvatarInventory();updateEditorAvatar();}
     document.querySelectorAll('[data-shirt-style]').forEach(b=>b.addEventListener('click',()=>{if(!avatarDraft)return;avatarDraft.shirtStyle=b.dataset.shirtStyle;syncBodyStyleButtons();updateEditorAvatar();}));
     document.querySelectorAll('[data-bottom-style]').forEach(b=>b.addEventListener('click',()=>{if(!avatarDraft)return;avatarDraft.bottomStyle=b.dataset.bottomStyle;syncBodyStyleButtons();updateEditorAvatar();}));
     [['av-skin-color','skinColor'],['av-shirt-color','shirtColor'],['av-pants-color','pantsColor'],['av-shoes-color','shoesColor'],['av-hair-color','hairColor']].forEach(([id,k])=>document.getElementById(id).addEventListener('input',e=>{if(!avatarDraft)return;avatarDraft[k]=e.target.value;mirrorSemanticColors(avatarDraft);updateEditorAvatar();}));
