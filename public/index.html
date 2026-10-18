@@ -2762,6 +2762,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 }
 /* Keep card actions uniform even when only Like and Enter are present. */
 #home-pane .kwg-top-worlds-list .kwg-world-card-actions{align-self:end!important;}
+/* V43: edit mode has its own controls; gameplay buttons must not be clickable. */
+body.kwg-editing #hud #respawn-btn,
+body.kwg-editing #hud #restart-btn,
+body.kwg-editing #hud #leave-world-btn{display:none!important}
+.kwg-world-card-dates{display:block;margin-top:5px;color:#a8c4d7;font-size:11px;line-height:1.5;letter-spacing:.01em}
+.kwg-leaderstats-reset{margin-top:8px!important;background:#56313f!important;border-color:#b36b81!important;color:#ffe5ea!important}
+.kwg-leaderstats-reset:hover{background:#774054!important}
 </style>
 </head>
 <body>
@@ -4818,6 +4825,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       card.querySelector('.room-title').textContent = filterKWGUserText(w.displayName || w.name);
       card.querySelector('.room-description').textContent = filterKWGUserText(w.description || 'Explore this world');
       card.querySelector('.room-meta').textContent = `By ${filterKWGUserText(w.ownerUsername || 'Unknown')} • ${w.onlineCount} online • ♥ ${w.likes || 0} • ▶ ${Number(w.plays || 0).toLocaleString()} plays`;
+      // Database timestamps, not client-side guesses. Show both dates even when equal.
+      const dates=document.createElement('span');dates.className='kwg-world-card-dates';
+      const fmt=date=>{const d=new Date(date);return Number.isFinite(d.getTime())?d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'Unknown';};
+      dates.textContent=`Created ${fmt(w.createdAt)}  ·  Updated ${fmt(w.updatedAt)}`;
+      dates.title=`Created: ${w.createdAt||'Unknown'}\nLast updated: ${w.updatedAt||'Unknown'}`;
+      card.querySelector('.room-info').appendChild(dates);
       if (w.thumbnailUrl && /^https:\/\//i.test(w.thumbnailUrl)) {
         const img=document.createElement('img');img.src=w.thumbnailUrl;img.alt=`Preview of ${filterKWGUserText(w.displayName||w.name)}`;img.loading='lazy';
         card.querySelector('.kwg-world-card-thumb').replaceChildren(img);
@@ -5021,10 +5034,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       });
     }
     function joinSelectedWorld(roomName, visitUsername = null, confirmBlocked = false, thumbnailAction = null) {
-      isEditMode = false;
-      buildSubTool = null;
-      document.body.classList.remove('kwg-editing');
-      updateEditorCursor();
+      // A previous world may have been left while Studio Camera was active.
+      // Reset both the camera state AND editor UI; changing isEditMode alone
+      // leaves the camera flying and the new avatar hidden.
+      kwgResetEditorForWorldTransition();
       currentCheckpoint = null;
       canEditCurrentWorld = false;
 
@@ -5165,6 +5178,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     socket.on('world_info_updated', info=>{
       if(!info || info.worldName!==currentWorldName)return;
       if(currentWorldData)Object.assign(currentWorldData,{displayName:info.displayName,description:info.description,levelType:info.levelType||currentWorldData?.levelType||'casual',thumbnailUrl:info.thumbnailUrl,thumbnailAuto:info.thumbnailAuto===true});
+      if(Number.isFinite(info.runStartedAt)&&info.runStartedAt>0){
+        kwgRunStartedAt=info.runStartedAt;kwgRunFrozenMs=null;kwgSessionWins=0;kwgPersonalBest=null;kwgUpdateScoreHud();
+      }
       document.getElementById('current-room-text').textContent=filterKWGUserText(info.displayName||currentWorldName);
       if(!isEditMode)resetWorldInfoEditor(currentWorldData,currentWorldName);
       kwgRefreshLeaderboard();
@@ -5224,7 +5240,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,levelType:res.levelType||'casual',thumbnailUrl:res.thumbnailUrl,thumbnailAuto:res.thumbnailAuto===true});
               kwgInfoOriginal={displayName:res.displayName,description:res.description,levelType:res.levelType||'casual',thumbnailUrl:res.thumbnailUrl};
               kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
+              kwgInfoLevelTypeResetConfirmed=false;
               document.getElementById('current-room-text').textContent=filterKWGUserText(res.displayName);
+              if(res.leaderstatsReset){kwgPersonalBest=null;kwgRefreshPersonalScore();kwgRefreshLeaderboard();}
               refreshWorldInfoThumbnail();
             }
             if(edit.callback)edit.callback(res);
@@ -5278,6 +5296,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     function performLeaveWorld() {
+      kwgResetEditorForWorldTransition();
       kwgClearEnemySpawners();
       kwgResetLifeState();
       kwgClearWorldPets();
@@ -5351,7 +5370,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgClearTools();
       if(socket?.connected)socket.emit('kwg_tools_lost',{worldName:currentWorldName});
       kwgSessionWins=0;
-      respawnPlayer();
+      // Separate server event: a checkpoint respawn must never reset a speed run.
+      if(socket?.connected)socket.emit('world_restart',{worldName:currentWorldName});
+      respawnPlayer({resetRun:true});
       showToast('Run restarted from the beginning!');
     });
 
@@ -9269,7 +9290,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const editorSettingsWindow = document.createElement('div');
     editorSettingsWindow.id = 'kwg-settings-window';
     editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label" for="kwg-info-level-type">LEVEL TYPE</label><select id="kwg-info-level-type"><option value="casual">Casual — no leaderboard</option><option value="speed">Speed — fastest finish</option><option value="survival">Survival — longest survival</option><option value="wins">Wins — most finishes</option></select><div class="kwg-info-hint">Finish blocks complete runs. Scores are shared with visitors.</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><button id="kwg-info-auto-btn" type="button" class="kwg-info-camera-button">GENERATE SPAWN PREVIEW</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save with Save & Exit.</div></div>';
+    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label" for="kwg-info-level-type">LEVEL TYPE</label><select id="kwg-info-level-type"><option value="casual">Casual — no leaderboard</option><option value="speed">Speed — fastest finish</option><option value="survival">Survival — longest survival</option><option value="wins">Wins — most finishes</option></select><div class="kwg-info-hint">Finish blocks complete runs. Scores are shared with visitors. Changing level type resets ALL world scores.</div><button type="button" id="kwg-info-reset-leaderstats" class="kwg-info-camera-button kwg-leaderstats-reset">RESET LEADERSTATS</button><div class="kwg-info-hint">Permanently clear every leaderboard score for this world (all level types).</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><button id="kwg-info-auto-btn" type="button" class="kwg-info-camera-button">GENERATE SPAWN PREVIEW</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save with Save & Exit.</div></div>';
     document.body.appendChild(editorSettingsWindow);
     const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
     if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
@@ -9286,11 +9307,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // ===== V3.28: World Info editor and free-camera thumbnails =====
     let kwgInfoOriginal={displayName:'',description:'',thumbnailUrl:'',levelType:'casual'};
     let kwgInfoDraft={displayName:'',description:'',thumbnailUrl:'',levelType:'casual',thumbnailData:null};
+    let kwgInfoLevelTypeResetConfirmed=false;
     const kwgInfoTitle=document.getElementById('kwg-info-title');
     const kwgInfoDescription=document.getElementById('kwg-info-description');
     function resetWorldInfoEditor(world,worldId){
       kwgInfoOriginal={displayName:String(world?.displayName||worldId||''),description:String(world?.description||''),thumbnailUrl:String(world?.thumbnailUrl||''),levelType:['casual','speed','survival','wins'].includes(world?.levelType)?world.levelType:'casual'};
       kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
+      kwgInfoLevelTypeResetConfirmed=false;
       kwgInfoTitle.value=kwgInfoDraft.displayName;
       kwgInfoDescription.value=kwgInfoDraft.description;
       document.getElementById('kwg-info-level-type').value=kwgInfoDraft.levelType;
@@ -9306,7 +9329,43 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       document.getElementById('kwg-info-camera-btn').textContent=src?'RETAKE THUMBNAIL':'SET THUMBNAIL';
     }
     kwgInfoTitle.addEventListener('input',()=>{kwgInfoDraft.displayName=kwgInfoTitle.value;});
-    document.getElementById('kwg-info-level-type').addEventListener('change',e=>{kwgInfoDraft.levelType=e.target.value;});
+    const kwgInfoLevelSelect=document.getElementById('kwg-info-level-type');
+    kwgInfoLevelSelect.addEventListener('change',async e=>{
+      const requested=e.target.value,previous=kwgInfoDraft.levelType;
+      if(requested===previous)return;
+      // Only changing the saved mode is destructive; switching back to the
+      // saved mode cancels a previously staged mode change.
+      if(requested===kwgInfoOriginal.levelType){
+        kwgInfoDraft.levelType=requested;kwgInfoLevelTypeResetConfirmed=false;return;
+      }
+      kwgInfoLevelSelect.disabled=true;
+      const confirmed=await kwgConfirm(
+        `Change this world to ${requested.toUpperCase()}?\n\nWARNING: Saving this change will permanently DELETE ALL leaderboard records for this world, including scores from other level types. This cannot be undone.`,
+        {title:'RESET WORLD LEADERSTATS?',okLabel:'CHANGE & RESET',danger:true}
+      );
+      kwgInfoLevelSelect.disabled=false;
+      if(!confirmed){kwgInfoLevelSelect.value=previous;return;}
+      kwgInfoDraft.levelType=requested;kwgInfoLevelTypeResetConfirmed=true;
+      kwgInfoLevelSelect.value=requested;
+      showToast('Level type change staged. Leaderstats reset when you Save & Exit.');
+    });
+    document.getElementById('kwg-info-reset-leaderstats').addEventListener('click',async()=>{
+      if(!currentWorldName||!canEditCurrentWorld||worldCommitInProgress)return;
+      const worldName=currentWorldName;
+      const confirmed=await kwgConfirm(
+        'Permanently delete ALL leaderboard scores for this world? This includes every player and every level type. The scores cannot be restored.',
+        {title:'RESET LEADERSTATS?',okLabel:'RESET ALL SCORES',danger:true}
+      );
+      if(!confirmed||currentWorldName!==worldName)return;
+      const button=document.getElementById('kwg-info-reset-leaderstats');button.disabled=true;
+      socket.emit('reset_world_leaderstats',{worldName},res=>{
+        button.disabled=false;
+        if(currentWorldName!==worldName)return;
+        if(!res?.success){showToast(res?.message||'Could not reset leaderstats.');return;}
+        kwgPersonalBest=null;kwgUpdateScoreHud();kwgRefreshLeaderboard();
+        showToast('All world leaderstats reset.');
+      });
+    });
     kwgInfoDescription.addEventListener('input',()=>{
       kwgInfoDraft.description=kwgInfoDescription.value;
       document.getElementById('kwg-info-char-count').textContent=`${kwgInfoDraft.description.length} / 300`;
@@ -9319,7 +9378,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const idx=stagedWorldEdits.findIndex(x=>x.eventName==='world_info_update');
       if(!changed){if(idx>=0)stagedWorldEdits.splice(idx,1);return true;}
       if(!title){showToast('World name cannot be empty');return false;}
-      const payload={worldName:currentWorldName,displayName:title,description,levelType:kwgInfoDraft.levelType};
+      const payload={worldName:currentWorldName,displayName:title,description,levelType:kwgInfoDraft.levelType,
+        confirmLeaderboardReset:kwgInfoDraft.levelType!==kwgInfoOriginal.levelType&&kwgInfoLevelTypeResetConfirmed};
       if(kwgInfoDraft.thumbnailData)payload.thumbnailData=kwgInfoDraft.thumbnailData;
       const item={eventName:'world_info_update',payload};
       if(idx>=0)stagedWorldEdits[idx]=item;else stagedWorldEdits.push(item);
@@ -9636,6 +9696,32 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgStudioStop(){
       const c=kwgStudioCam;c.active=false;c.dragging=false;c.keys.clear();kwgStudioHelp.style.display='none';
       if(c.saved){camera.position.copy(c.saved.position);camera.quaternion.copy(c.saved.quaternion);c.saved=null;}
+    }
+    function kwgResetEditorForWorldTransition(){
+      // Explicit teardown is required when leaving without clicking Save & Exit
+      // (idle timeout, disconnect, world change, etc.).
+      if(kwgStudioCam.active)kwgStudioStop();
+      if(kwgFreeCamera.active)stopWorldThumbnailCamera();
+      isEditMode=false;buildSubTool=null;
+      document.body.classList.remove('kwg-editing','kwg-studio-dragging','kwg-drag-cols','kwg-drag-rows');
+      document.getElementById('build-toolbar').style.display='none';
+      document.getElementById('kwg-properties-window').style.display='none';
+      document.getElementById('kwg-settings-window').classList.remove('kwg-open');
+      const toggle=document.getElementById('toggle-edit-btn');
+      toggle.classList.remove('active');toggle.title='Enable Edit Mode';toggle.setAttribute('aria-label','Enable Edit Mode');
+      document.getElementById('kwg-edit-mode-label').textContent='EDIT';
+      for(const tool of ['select','place','move','scale','recolor','delete'])document.getElementById(`tool-${tool}-btn`)?.classList.remove('active');
+      for(const id of ['kwg-recolor-panel','kwg-place-panel']){const el=document.getElementById(id);if(el)el.style.display='none';}
+      if(previewMesh)previewMesh.visible=false;
+      if(localPlayerAvatar)localPlayerAvatar.visible=true;
+      for(const p of Object.values(otherPlayers))if(p.mesh)p.mesh.visible=true;
+      for(const pet of kwgWorldPets.values())if(pet.mesh)pet.mesh.visible=true;
+      for(const entry of kwgEnemySpawners.values())for(const slot of entry.slots){
+        if(slot.mesh)slot.mesh.visible=true;
+        if(slot.parkedUfo)slot.parkedUfo.visible=true;
+        for(const robot of slot.robots||[])if(robot.mesh)robot.mesh.visible=true;
+      }
+      updateEditorCursor();
     }
     function kwgStudioFocus(){
       if(!kwgStudioCam.active||!selectedBlockId)return;
@@ -12428,7 +12514,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgDiePlayer(reason='hazard'){
       if(kwgDeadUntil||!localPlayerAvatar)return;
       const now=performance.now();
-      kwgRunFrozenMs=Math.max(0,Date.now()-kwgRunStartedAt);
+      // Death ends a Survival attempt, but not a Speed attempt with checkpoints.
+      kwgRunFrozenMs=kwgLevelMode()==='survival'?Math.max(0,Date.now()-kwgRunStartedAt):null;
       kwgHealth=0;kwgDeadUntil=now+2000;kwgKnockedUntil=0;kwgDeathCause=reason;
       kwgInvulnerableUntil=kwgDeadUntil+1100;kwgRagdollStarted=now;
       kwgRagdollSide=Math.random()<.5?-1:1;
@@ -13473,7 +13560,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         }
         const next=dead.reduce((a,b)=>a.deadUntil<b.deadUntil?a:b);
         const seconds=Math.max(0,(next.deadUntil-now)/1000);
-        const respawnStart=next.squishUntil||next.deadUntil;
+        // squishUntil is cleared when the flattened enemy mesh disappears.
+        // Keep a separate immutable start timestamp for the whole countdown.
+        const respawnStart=next.respawnStartedAt||next.squishUntil||next.deadUntil;
         const respawnDuration=Math.max(1,next.deadUntil-respawnStart);
         const progress=Math.max(0,Math.min(1,(now-respawnStart)/respawnDuration));
         if(!entry.respawnIndicator){
@@ -13546,6 +13635,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const now=kwgEnemyClock();
       // Keep the flattened model on screen before despawning; respawn delay starts after it.
       slot.squishUntil=now+480;
+      slot.respawnStartedAt=slot.squishUntil;
       slot.deadUntil=slot.squishUntil+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
       slot.path=[];slot.pathAt=0;slot.jumpSpeed=0;slot.isJumping=false;slot.hopsImpactPending=false;
       if(slot.alienBeam)slot.alienBeam.visible=false;
@@ -13583,7 +13673,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             const wasVisible=!!slot.mesh;
             const previousPosition=wasVisible?slot.mesh.position.clone():null;
             kwgDestroyEnemySlot(slot);
-            slot.deadUntil=0;slot.squishUntil=0;slot.path=[];slot.pathAt=0;
+            slot.deadUntil=0;slot.squishUntil=0;slot.respawnStartedAt=0;slot.path=[];slot.pathAt=0;
             slot.spawnedOnce=false;slot.nextShotAt=0;slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);
             slot.attackUntil=0;slot.muzzleUntil=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;slot.nextHopAt=0;slot.chaseStartedAt=0;
             slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;slot.wasChasing=false;
@@ -13602,7 +13692,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         entry.character=props.enemyCharacter;
         entry.block=block;
         while(entry.slots.length>props.enemyCount)kwgDestroyEnemySlot(entry.slots.pop());
-        while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,squishUntil:0,walkTime:0,fallSpeed:0,jumpSpeed:0,isJumping:false,grounded:false,path:[],pathAt:0,noticeAt:0,stepAt:0,chaseStartedAt:0,exhaustedUntil:0,chaseCooldownUntil:0,chaseSoundAt:0});
+        while(entry.slots.length<props.enemyCount)entry.slots.push({mesh:null,deadUntil:0,squishUntil:0,respawnStartedAt:0,walkTime:0,fallSpeed:0,jumpSpeed:0,isJumping:false,grounded:false,path:[],pathAt:0,noticeAt:0,stepAt:0,chaseStartedAt:0,exhaustedUntil:0,chaseCooldownUntil:0,chaseSoundAt:0});
       }
     }
     // V21: Navigation has *vertical* transitions. A path can hop onto a low
@@ -15274,8 +15364,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       return false;
     }
-    function respawnPlayer() {
-      kwgRunStartedAt=Date.now();kwgRunFrozenMs=null;
+    function respawnPlayer({resetRun=false}={}) {
+      // Speed attempts continue through deaths/checkpoints. Restart and Finish
+      // explicitly begin a new attempt; Survival restarts after every death.
+      if(resetRun||kwgLevelMode()!=='speed')kwgRunStartedAt=Date.now();
+      kwgRunFrozenMs=null;
       kwgResetLifeState();
       if(socket?.connected&&currentWorldName)socket.emit('player_respawned',{worldName:currentWorldName});
       kwgInvulnerableUntil=performance.now()+1600; // Brief spawn protection.
@@ -15318,7 +15411,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         currentCheckpoint=null;
         if(res.mode==='wins')kwgSessionWins++;
         if(res.bestScore!==undefined&&res.bestScore!==null)kwgPersonalBest=Number(res.bestScore);
-        respawnPlayer();
+        respawnPlayer({resetRun:true});
         kwgRefreshPersonalScore();
         kwgSetSideWindow('leaderboard');
       });
