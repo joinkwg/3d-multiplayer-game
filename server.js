@@ -2121,7 +2121,7 @@ io.on('connection', (socket) => {
   });
 
   // V34: server-owned image reviews. Pending/rejected images are NEVER public.
-  socket.on('kwg_image_submit',async ({worldName,kind,blockId,side,mimeType,bytes:raw}={},cb)=>{
+  socket.on('kwg_image_submit',async ({worldName,kind,blockId,side,mimeType,fileName,bytes:raw}={},cb)=>{
     if(!requireAuth(socket,cb))return;
     const key=cleanWorldName(worldName);
     if(socket.data.worldName!==key)return cb?.({success:false,message:'Join the world before uploading.'});
@@ -2129,6 +2129,8 @@ io.on('connection', (socket) => {
     const bytes=fileBufferFromSocket(raw);
     if(!kwgValidImageBytes(bytes,mimeType))return cb?.({success:false,message:'Use PNG, JPEG, or WebP under 1.5 MB.'});
     if(!KWG_IMAGE_MODERATION_KEY||!SUPABASE_URL||!SUPABASE_SERVICE_ROLE_KEY)return cb?.({success:false,message:'Image moderation/storage not configured: set OPENAI_API_KEY and Supabase storage environment variables.'});
+    // Display-only name; never used as a storage path or an approval signal.
+    const safeFileName=String(fileName||'Image').replace(/[\x00-\x1f\x7f<>]/g,'').replace(/[\/\\]/g,'_').trim().slice(0,80)||'Image';
     const token=crypto.randomUUID();let worldId;
     try{
       await queueWorldSave(key,async()=>{
@@ -2136,7 +2138,7 @@ io.on('connection', (socket) => {
         if(!world||!canEditWorld(socket,world))throw new Error('Not allowed to upload to this world.');
         worldId=world.id;
         if(kind==='decal'&&!world.data.blocks?.[blockId])throw new Error('Select a saved part first.');
-        const review={status:'pending',token};
+        const review={status:'pending',token,fileName:safeFileName};
         if(kind==='sky')world.data.skyImageReview=review;
         else{const block=world.data.blocks[blockId];block.decals=block.decals||{};block.decals[side]=review;}
         await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(world.data),world.id]);
@@ -2155,7 +2157,7 @@ io.on('connection', (socket) => {
         const world=await getWorldByName(key);if(!world)return;
         const record=kind==='sky'?world.data.skyImageReview:world.data.blocks?.[blockId]?.decals?.[side];
         if(record?.token!==token||record.status!=='pending')return;
-        const review={status:failed?'error':approved?'approved':'rejected',token};
+        const review={status:failed?'error':approved?'approved':'rejected',token,fileName:record.fileName||'Image'};
         if(url)review.url=url;
         if(kind==='sky')world.data.skyImageReview=review;
         else world.data.blocks[blockId].decals[side]=review;
