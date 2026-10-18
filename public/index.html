@@ -4058,6 +4058,9 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     const kwgWorldPets = new Map();
     
     const otherPlayers = {};
+    let kwgPlayerSyncEpoch = 0;
+    let kwgRosterPending = false;
+    let kwgLastRosterRequestAt = 0;
 
     let isRightClicking = false;
     let camOrbitAngleX = 0; 
@@ -5123,6 +5126,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       // Reset both the camera state AND editor UI; changing isEditMode alone
       // leaves the camera flying and the new avatar hidden.
       kwgResetEditorForWorldTransition();
+      kwgPlayerSyncEpoch++;
       currentCheckpoint = null;
       canEditCurrentWorld = false;
 
@@ -5153,6 +5157,10 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         editBtn.title = canEditCurrentWorld ? 'Edit this world' : 'Only the world owner or an admin can edit this world';
 
         loadWorldData(res.worldData, res.players, res.selfId, res.selfSpawn);
+        // The initial roster can be stale if someone joins while this world loads.
+        kwgRefreshWorldPlayers(true);
+        const syncEpoch=kwgPlayerSyncEpoch;
+        setTimeout(()=>{if(kwgPlayerSyncEpoch===syncEpoch&&currentWorldName===roomName)kwgRefreshWorldPlayers(true);},1200);
         kwgRunStartedAt=Number(res.runStartedAt)||Date.now();
         kwgRunFrozenMs=null;kwgPersonalBest=null;kwgSessionWins=0;
         kwgUpdateScoreHud();kwgRefreshPersonalScore();
@@ -5382,6 +5390,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     }
 
     function performLeaveWorld() {
+      kwgPlayerSyncEpoch++;
+      kwgRosterPending=false;
       kwgResetEditorForWorldTransition();
       kwgClearEnemySpawners();
       kwgResetLifeState();
@@ -8914,16 +8924,72 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     });
 
     // --- MULTIPLAYER PLAYER SYNC ---
+    // V48: Build/update a remote player from either join events or an
+    // authoritative roster. This prevents asymmetric invisibility when a join
+    // packet arrives while the older player's world is still loading.
+    function kwgUpsertRemotePlayer(pData){
+      if(!pData || !pData.id || pData.id===socket.id || !currentWorldName)return;
+      let p=otherPlayers[pData.id];
+      if(!p){
+        const mesh=buildBlockyAvatar(pData.appearance || {},pData.cosmetics || {});
+        mesh.add(createNameTagSprite(pData.username || 'Player'));
+        kwgAttachOverheadHealth(mesh,pData.health??100);
+        kwgSyncRemoteHeldTool(mesh,pData.equippedTool);
+        mesh.position.set(Number(pData.x)||0,Number(pData.y)||0,Number(pData.z)||0);
+        mesh.rotation.y=Number(pData.rotationY)||0;
+        mesh.visible=!kwgStudioCam.active;
+        scene.add(mesh);
+        p=otherPlayers[pData.id]={mesh,username:pData.username,hidden:!!pData.hidden};
+        kwgSetWorldPet(pData.id,pData.petKey);
+      }else if(p.username!==pData.username || p.hidden!==!!pData.hidden){
+        // Refresh the overhead name when block/privacy state changes.
+        const mesh=p.mesh;
+        // Existing name tags are sprites without a tag marker in older builds.
+        // Rebuild only for changed identities to avoid stacking name tags.
+        const position=mesh.position.clone(),rotation=mesh.rotation.y;
+        scene.remove(mesh);
+        const updated=buildBlockyAvatar(pData.appearance || {},pData.cosmetics || {});
+        updated.add(createNameTagSprite(pData.username || 'Player'));
+        kwgAttachOverheadHealth(updated,pData.health??100);
+        kwgSyncRemoteHeldTool(updated,pData.equippedTool);
+        updated.position.copy(position);updated.rotation.y=rotation;
+        updated.visible=!kwgStudioCam.active;
+        scene.add(updated);
+        p.mesh=updated;p.username=pData.username;p.hidden=!!pData.hidden;
+      }
+      return p;
+    }
+    function kwgRefreshWorldPlayers(force=false){
+      if(!currentWorldName || !socket.connected || kwgRosterPending)return;
+      const now=Date.now();
+      if(!force && now-kwgLastRosterRequestAt<2500)return;
+      kwgLastRosterRequestAt=now;
+      kwgRosterPending=true;
+      const worldName=currentWorldName,epoch=kwgPlayerSyncEpoch;
+      socket.timeout(5000).emit('get_world_players',{worldName},(err,res)=>{
+        // Never let an old callback add players to a different world.
+        if(epoch!==kwgPlayerSyncEpoch || currentWorldName!==worldName)return;
+        kwgRosterPending=false;
+        if(err||!res?.success||res.worldName!==worldName||!res.players)return;
+        const present=new Set();
+        for(const [id,pData] of Object.entries(res.players)){
+          if(id===socket.id)continue;
+          present.add(id);
+          kwgUpsertRemotePlayer({...pData,id});
+        }
+        for(const id of Object.keys(otherPlayers)){
+          if(present.has(id))continue;
+          scene.remove(otherPlayers[id].mesh);
+          delete otherPlayers[id];
+          kwgSetWorldPet(id,null);
+        }
+      });
+    }
+    // Reconcile periodically even if everybody is standing still. Join/leave
+    // events remain the fast path, while this repairs missed/racing events.
+    setInterval(()=>{if(currentWorldName)kwgRefreshWorldPlayers();},7000);
     socket.on('player_joined', (pData) => {
-      if (pData.id === socket.id) return;
-      const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
-      mesh.add(createNameTagSprite(pData.username || 'Player'));
-      kwgAttachOverheadHealth(mesh,pData.health??100);
-      kwgSyncRemoteHeldTool(mesh,pData.equippedTool);
-      mesh.position.set(pData.x, pData.y, pData.z);
-      scene.add(mesh);
-      otherPlayers[pData.id] = { mesh, username: pData.username };
-      kwgSetWorldPet(pData.id,pData.petKey);
+      kwgUpsertRemotePlayer(pData);
     });
 
     socket.on('player_appearance_updated', (pData) => {
@@ -8945,7 +9011,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 
     socket.on('player_moved', (pData) => {
       const p = otherPlayers[pData.id];
-      if (!p) return;
+      if (!p) {kwgRefreshWorldPlayers();return;}
       p.mesh.position.set(pData.x, pData.y, pData.z);
       p.mesh.rotation.y = pData.rotationY;
       kwgAttachOverheadHealth(p.mesh,pData.health??100);
@@ -9295,17 +9361,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       kwgInvulnerableUntil=performance.now()+1200;
       scene.add(localPlayerAvatar);
 
-      for (const pId in initialPlayers) {
-        if (pId !== selfId) {
-          const pData = initialPlayers[pId];
-          const mesh = buildBlockyAvatar(pData.appearance || {}, pData.cosmetics || {});
-          kwgSyncRemoteHeldTool(mesh,pData.equippedTool);
-          mesh.add(createNameTagSprite(pData.username || 'Player'));
-      kwgAttachOverheadHealth(mesh,pData.health??100);
-          mesh.position.set(pData.x, pData.y, pData.z);
-          scene.add(mesh);
-          otherPlayers[pId] = { mesh, username: pData.username };
-        }
+      for(const [pId,pData] of Object.entries(initialPlayers||{})){
+        if(pId!==selfId)kwgUpsertRemotePlayer({...pData,id:pId});
       }
 
       for (const bId in world.blocks) {
