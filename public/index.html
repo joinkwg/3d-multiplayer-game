@@ -3467,7 +3467,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           </div>
         </div>
         <input class="kwg-image-file-input" type="file" id="kwg-sky-image-upload" accept="image/png,image/jpeg,image/webp" aria-label="Choose a skybox face image">
-        <p class="kwg-image-help">Each side is moderated separately. Pending images stay hidden. Missing faces use the sky color.</p>
+        <p class="kwg-image-help">Roblox-compatible skybox faces (SkyboxUp/Dn/Ft/Bk/Lf/Rt). Upload matching square images; pending images stay hidden. Missing faces use the sky color.</p>
       </section>
       <div class="tool-row"><label for="kwg-env-brightness">Brightness:</label><input type="number" id="kwg-env-brightness" min="0.4" max="2" step="0.05" value="1" inputmode="decimal"></div>
       <div class="tool-row"><label for="kwg-env-saturation">Saturation:</label><input type="number" id="kwg-env-saturation" min="0" max="2" step="0.05" value="1" inputmode="decimal"></div>
@@ -5754,8 +5754,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
 
     // V36: independently moderated cube skybox faces. Never load pending URLs.
-    // Three.js CubeTexture face order: right, left, top, bottom, front, back.
-    const kwgSkyCubeOrder=['right','left','top','bottom','front','back'];
+    // Roblox-compatible SkyboxRt/Lf/Up/Dn/Ft/Bk inputs. Three.js CubeTexture
+    // internally flips X for background sampling, so its +X slot receives
+    // Roblox Left, its -X slot receives Roblox Right. Roblox Front is -Z.
+    // These swaps make a six-image Roblox skybox usable WITHOUT re-exporting.
+    const kwgSkyCubeOrder=['left','right','top','bottom','back','front'];
     let kwgSkyLoadToken=0,kwgSkyTexture=null;
     function kwgApplySkyImage(world){
       const token=++kwgSkyLoadToken;
@@ -5785,6 +5788,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const images=urls.map(()=>makeFallback());
       const texture=new THREE.CubeTexture(images);
       texture.colorSpace=THREE.SRGBColorSpace;
+      // Do not introduce mipmap bleeding at cubemap seams. Face pixels stay
+      // unchanged: users can upload standard square Roblox skybox images.
+      texture.generateMipmaps=false;
+      texture.minFilter=THREE.LinearFilter;
+      texture.magFilter=THREE.LinearFilter;
       texture.needsUpdate=true;
       kwgSkyTexture=texture;scene.background=texture;
       urls.forEach((url,index)=>{
@@ -5792,10 +5800,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const image=new Image();image.crossOrigin='anonymous';
         image.onload=()=>{
           if(token!==kwgSkyLoadToken)return;
-          // Canvas faces keep a consistent square orientation even if the
-          // owner uploaded rectangular artwork.
+          // Preserve source orientation, without rotating or mirroring.
+          // Roblox cubemap assets are square; non-square art is letterboxed
+          // rather than stretched into distorted edges.
           const face=document.createElement('canvas');face.width=face.height=512;
-          const ctx=face.getContext('2d');ctx.drawImage(image,0,0,512,512);
+          const ctx=face.getContext('2d');
+          ctx.fillStyle=fallback;ctx.fillRect(0,0,512,512);
+          const scale=Math.min(512/image.width,512/image.height);
+          const w=image.width*scale,h=image.height*scale;
+          ctx.drawImage(image,(512-w)/2,(512-h)/2,w,h);
           images[index]=face;texture.images=images;texture.needsUpdate=true;
         };
         image.onerror=()=>{if(token===kwgSkyLoadToken)console.warn('Could not load approved skybox face',kwgSkyCubeOrder[index]);};
@@ -12074,7 +12087,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(kwgHealth===0)kwgDiePlayer('tool');
       else{kwgAudio.play('devil_knockout');kwgUpdateHealthHud();}
     });
-    let kwgAirJumps=0,kwgDoubleJumpStomp=false;
+    let kwgAirJumps=0,kwgDoubleJumpStomp=false,kwgJumpPressedAt=0,kwgLastGroundJumpAt=0;
     const kwgMaxHealth=100;
     let kwgHealth=kwgMaxHealth,kwgInvulnerableUntil=0,kwgKnockedUntil=0,kwgDeadUntil=0;
     let kwgKnockX=0,kwgKnockZ=0,kwgLastSafeFeet=null,kwgRagdollStarted=0,kwgDeathCause=null;
@@ -12112,11 +12125,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgRagdollPitch=-(.25+Math.random()*.85);
       kwgRagdollYaw=(Math.random()-.5)*1.5;
       kwgRagdollPhase=Math.random()*Math.PI*2;
-      kwgAirJumps=0;kwgDoubleJumpStomp=false;velocityY=reason==='enemy'?.06:0;isGrounded=false;
+      kwgAirJumps=0;kwgDoubleJumpStomp=false;kwgJumpPressedAt=0;velocityY=reason==='enemy'?.06:0;isGrounded=false;
       kwgResetStompAnimation(true);
       kwgEnsureStompRig(localPlayerAvatar);
-      // If the player fell into the void, display the ragdoll on their last safe ledge.
-      if(reason==='fall'&&kwgLastSafeFeet)localPlayerAvatar.position.copy(kwgLastSafeFeet);
+      // A fall death happens in the void, not on the last safe platform.
+      // Only respawnPlayer() is allowed to move a dead avatar to a spawn.
+      if(reason==='fall')velocityY=Math.min(velocityY,-.055);
       kwgPulseDamageScreen();kwgAudio.play('death');kwgUpdateHealthHud();
     }
     function kwgEnemyHitPlayer(amount,enemyPosition){
@@ -12692,13 +12706,27 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(now<(slot.nextWebAt||0))return;
       if(!slot.webChargeAt){slot.webChargeAt=now;kwgAudio.play('spider_warning');return;}
       if(now-slot.webChargeAt<1000)return; // red eyes glow for at least one second
-      slot.webChargeAt=0;slot.nextWebAt=now+1050+Math.random()*350;slot.attackUntil=now+450;
-      // The web lands at the location the player occupied WHEN it was fired.
-      const floor=kwgEnemyGroundY(player.position.x,player.position.y+.65,player.position.z,blocks,3.5);
-      const to=new THREE.Vector3(player.position.x,Number.isFinite(floor)?floor:player.position.y,player.position.z);
+      slot.webChargeAt=0;slot.nextWebAt=now+180+Math.random()*190;slot.attackUntil=now+450;
+      // Predict the player's landing position from recent movement. The web
+      // still lands on the WORLD, not on a character, and cannot cross walls.
+      const prev=kwgSpiderPrevPlayerPos;
+      const frameSeconds=Math.max(.016,Math.min(.09,kwgSpiderFrameDt||.016));
+      const velX=prev?(player.position.x-prev.x)/frameSeconds:0;
+      const velZ=prev?(player.position.z-prev.z)/frameSeconds:0;
+      const flightSeconds=Math.max(.19,Math.min(.45,dist*.035));
+      const leadX=Math.max(-3.5,Math.min(3.5,velX*flightSeconds*.92));
+      const leadZ=Math.max(-3.5,Math.min(3.5,velZ*flightSeconds*.92));
+      let aimX=player.position.x+leadX,aimZ=player.position.z+leadZ;
+      const predicted=new THREE.Vector3(aimX,player.position.y+.9,aimZ);
+      if(!kwgRayWorldClear(from,predicted,blocks)){
+        // Don't throw webs through walls; fallback to the visible player.
+        aimX=player.position.x;aimZ=player.position.z;
+      }
+      const floor=kwgEnemyGroundY(aimX,player.position.y+.65,aimZ,blocks,3.5);
+      const to=new THREE.Vector3(aimX,Number.isFinite(floor)?floor:player.position.y,aimZ);
       const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.25,0),new THREE.MeshBasicMaterial({color:0xe6f8ff,transparent:true,opacity:.9}));
       mesh.position.copy(from);scene.add(mesh);
-      kwgWebProjectiles.push({mesh,from,to,start:now,duration:Math.max(280,Math.min(750,dist*48))});
+      kwgWebProjectiles.push({mesh,from,to,start:now,duration:Math.max(180,Math.min(420,dist*33))});
       kwgAudio.play('spider_spit');
     }
     // The beam stops at the FIRST solid world object; roofs protect players.
@@ -13111,6 +13139,43 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       result.reverse();
       return result;
     }
+    function kwgEnemyDropExit(slot,blocks,tx,tz,centerX,centerZ,range){
+      const npc=slot.mesh,feet=npc.position.y;
+      if(!slot.grounded||slot.isJumping)return null;
+      const dx=tx-npc.position.x,dz=tz-npc.position.z;
+      const direction=Math.atan2(dz,dx);
+      let best=null,bestScore=-Infinity;
+      for(const turn of [0,.45,-.45,.9,-.9,1.45,-1.45,Math.PI]){
+        for(const distance of [1.25,1.75,2.3,2.85]){
+          const a=direction+turn;
+          const x=npc.position.x+Math.cos(a)*distance,z=npc.position.z+Math.sin(a)*distance;
+          if(Math.hypot(x-centerX,z-centerZ)>range-.48)continue;
+          const ground=kwgEnemyGroundY(x,feet+.40,z,blocks,kwgEnemyMaxDrop+.4);
+          if(!Number.isFinite(ground)||ground>feet-.52||ground<feet-kwgEnemyMaxDrop)continue;
+          if(!kwgEnemyBodyClear(x,z,ground,blocks))continue;
+          // Verify the horizontal lip is clear at the CURRENT height; we
+          // descend after the body clears the edge, not inside the platform.
+          let clear=true;
+          for(let j=1;j<=6;j++){
+            const f=j/6,px=npc.position.x+(x-npc.position.x)*f,pz=npc.position.z+(z-npc.position.z)*f;
+            if(!kwgEnemyBodyClear(px,pz,feet,blocks)){clear=false;break;}
+          }
+          if(!clear)continue;
+          const score=-Math.hypot(x-tx,z-tz)-Math.abs(turn)*.55-distance*.07;
+          if(score>bestScore){best={x,z,y:ground};bestScore=score;}
+        }
+      }
+      return best;
+    }
+    function kwgEnemyDropMovementOK(slot,x,z,feet,blocks){
+      if(kwgEnemyWalkable(x,z,feet,blocks)!==null)return true;
+      const goal=slot.dropGoal;
+      if(!goal||kwgEnemyClock()>slot.dropCommitUntil)return false;
+      // A tiny air gap at a ledge is permitted only while moving toward an
+      // already verified landing within 4.25 studs below this platform.
+      return Math.hypot(x-goal.x,z-goal.z)<3.3&&
+        kwgEnemyBodyClear(x,z,feet,blocks);
+    }
     function kwgEnemyCrowded(x,z,slot){
       for(const entry of kwgEnemySpawners.values())for(const other of entry.slots){
         if(other===slot||!other.mesh||other.deadUntil>kwgEnemyClock())continue;
@@ -13151,12 +13216,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const stepX=dx/steps,stepZ=dz/steps;
       for(let i=0;i<steps;i++){
         const targetX=x+stepX,targetZ=z+stepZ;
-        if(kwgEnemyWalkable(targetX,targetZ,feet,blocks)!==null&&
+        if(kwgEnemyDropMovementOK(slot,targetX,targetZ,feet,blocks)&&
            kwgEnemyBodyClear(targetX,targetZ,feet,blocks)&&!kwgEnemyCrowded(targetX,targetZ,slot)){
           x=targetX;z=targetZ;continue;
         }
-        if(kwgEnemyWalkable(targetX,z,feet,blocks)!==null&&kwgEnemyBodyClear(targetX,z,feet,blocks)&&!kwgEnemyCrowded(targetX,z,slot))x=targetX;
-        else if(kwgEnemyWalkable(x,targetZ,feet,blocks)!==null&&kwgEnemyBodyClear(x,targetZ,feet,blocks)&&!kwgEnemyCrowded(x,targetZ,slot))z=targetZ;
+        if(kwgEnemyDropMovementOK(slot,targetX,z,feet,blocks)&&kwgEnemyBodyClear(targetX,z,feet,blocks)&&!kwgEnemyCrowded(targetX,z,slot))x=targetX;
+        else if(kwgEnemyDropMovementOK(slot,x,targetZ,feet,blocks)&&kwgEnemyBodyClear(x,targetZ,feet,blocks)&&!kwgEnemyCrowded(x,targetZ,slot))z=targetZ;
         else break;
       }
       npc.position.x=x;npc.position.z=z;
@@ -13280,7 +13345,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(tiredBubble?.visible)tiredBubble.position.y=(npc.userData.hopsEars?4.28:3.02)+Math.sin(now*.009)*.08;
       }
       // Cartoon hop: knees tuck on the way up; arms flare as the devil falls.
-      if(!slot.grounded){
+      // Eight-legged spiders do not use the airborne biped hop pose.
+      if(!slot.grounded&&!npc.userData.spiderEyes){
         const rising=slot.fallSpeed>0;
         la.rotation.x=rising?-1.05:.55;ra.rotation.x=rising?-1.05:.55;
         ll.rotation.x=rising?.85:-.30;rl.rotation.x=rising?.85:-.30;
@@ -13289,7 +13355,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     }
     // Stomp flips the VISUAL avatar around its center, never the collision root.
-    let kwgStompAvatar=null,kwgStompPivot=null,kwgStompStarted=0,kwgStompLandingAt=0,kwgFlipKind='bounce';
+    let kwgStompAvatar=null,kwgStompPivot=null,kwgStompStarted=0,kwgStompLandingAt=0,kwgFlipKind='bounce',kwgStompImpactAt=0;
     function kwgBuildStompPivot(avatar){
       if(avatar.userData.kwgStompPivot)return avatar.userData.kwgStompPivot;
       const pivot=new THREE.Group(),contents=new THREE.Group();
@@ -13307,31 +13373,52 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgStompPivot=kwgBuildStompPivot(avatar);
     }
     function kwgResetStompAnimation(immediate=false){
-      kwgStompStarted=0;kwgStompLandingAt=0;kwgFlipKind='bounce';
-      if(kwgStompPivot&&immediate)kwgStompPivot.rotation.x=0;
+      kwgStompStarted=0;kwgStompLandingAt=0;kwgStompImpactAt=0;kwgFlipKind='bounce';
+      if(kwgStompPivot&&immediate){kwgStompPivot.rotation.x=0;kwgStompPivot.position.y=1.05;}
     }
     function kwgAnimateStomp(now){
       if(!localPlayerAvatar||kwgStompAvatar!==localPlayerAvatar||!kwgStompPivot)return;
       if(kwgStompStarted){
-        const duration=kwgFlipKind==='stomp'?560:490;
+        const duration=kwgFlipKind==='stomp'?690:490;
         const t=Math.min(1,(now-kwgStompStarted)/duration);
         const eased=t*t*(3-2*t);
         if(kwgFlipKind==='stomp'){
-          // Full front flip, then dive into a belly-down finishing pose.
-          const flop=Math.max(0,Math.min(1,(t-.72)/.28));
-          kwgStompPivot.rotation.x=-Math.PI*2*eased+Math.PI*.5*flop;
+          // One continuous FORWARD 360 + 90 degree dive. The old expression
+          // reversed direction at 72%, making the belly pose look pasted on.
+          // Front-facing (+Z) goes DOWN at +PI/2 about X.
+          const dive=Math.max(0,Math.min(1,(t-.69)/.31));
+          const diveEase=dive*dive*(3-2*dive);
+          const somersault=Math.min(1,t/.76);
+          const somersaultEase=somersault*somersault*(3-2*somersault);
+          kwgStompPivot.rotation.x=Math.PI*2*somersaultEase+Math.PI*.5*diveEase;
           kwgStompPivot.rotation.z=0;
-          if(t>=1)kwgStompPivot.rotation.x=Math.PI*.5;
-          // Hold the belly flop until contact, or release safely if no enemy is hit.
-          if(t>=1&&now-kwgStompStarted>1050){kwgStompStarted=0;kwgStompLandingAt=now;}
+          kwgStompPivot.position.y=1.05-.16*diveEase;
+          const limbs=localPlayerAvatar.userData.limbs;
+          if(limbs){
+            limbs.leftArm.rotation.x=-1.3*diveEase;
+            limbs.rightArm.rotation.x=-1.3*diveEase;
+            limbs.leftLeg.rotation.x=.55*diveEase;
+            limbs.rightLeg.rotation.x=.55*diveEase;
+          }
+          // Hold the diving pose while falling, not a gentle recovery in air.
+          if(t>=1&&now-kwgStompStarted>1250){
+            kwgStompPivot.rotation.x=Math.atan2(Math.sin(kwgStompPivot.rotation.x),Math.cos(kwgStompPivot.rotation.x));
+            kwgStompStarted=0;kwgStompLandingAt=now;
+          }
         }else{
           // Bounce is only a clean 360-degree flip, never a belly flop.
           kwgStompPivot.rotation.x=-Math.PI*2*eased;
+          kwgStompPivot.position.y=1.05;
           if(t>=1){kwgStompStarted=0;kwgStompLandingAt=now;kwgStompPivot.rotation.x=0;}
         }
       }else if(kwgStompLandingAt){
-        kwgStompPivot.rotation.x+=(0-kwgStompPivot.rotation.x)*.23;
-        if(Math.abs(kwgStompPivot.rotation.x)<.015){kwgStompPivot.rotation.x=0;kwgStompLandingAt=0;}
+        const impact=kwgStompImpactAt&&now-kwgStompImpactAt<220;
+        kwgStompPivot.rotation.x+=(0-kwgStompPivot.rotation.x)*(impact?.40:.25);
+        kwgStompPivot.position.y+=(1.05-kwgStompPivot.position.y)*(impact?.42:.26);
+        if(Math.abs(kwgStompPivot.rotation.x)<.015&&Math.abs(kwgStompPivot.position.y-1.05)<.015){
+          kwgStompPivot.rotation.x=0;kwgStompPivot.position.y=1.05;
+          kwgStompLandingAt=0;kwgStompImpactAt=0;
+        }
       }
     }
     function kwgFinishStompPose(){
@@ -13372,9 +13459,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgAudio.play('sniper_shot');
       kwgEnemyHitPlayer(props.enemyDamage,slot.mesh.position);
     }
+    let kwgSpiderFrameDt=.016,kwgSpiderPrevPlayerPos=null;
     function kwgUpdateEnemies(delta){
       if(!currentWorldName||!localPlayerAvatar||kwgFreeCamera.active)return;
       kwgSyncEnemySpawners();
+      kwgSpiderFrameDt=Math.max(.016,Math.min(.09,delta));
       const player=localPlayerAvatar,now=kwgEnemyClock();
       const playerBefore=kwgEnemyPreviousPlayerPos||{x:player.position.x,y:player.position.y,z:player.position.z};
       kwgEnemyPreviousPlayerPos={x:player.position.x,y:player.position.y,z:player.position.z};
@@ -13413,7 +13502,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.roamTarget=null;slot.roamUntil=0;slot.attackUntil=0;slot.noticeBubbleUntil=0;
             slot.chaseStartedAt=0;slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;
             slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
-            slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.nextShotAt=0;slot.nextHopAt=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;
+            slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.dropGoal=null;slot.dropCommitUntil=0;slot.nextShotAt=0;slot.nextHopAt=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;
             slot.alienMode='flight';slot.alienChargeAt=0;slot.alienHiddenAt=0;slot.alienNextZap=0;slot.webChargeAt=0;slot.nextWebAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
             if(props.enemyCharacter==='alien')slot.mesh.position.y=origin.y+5.8;
             if(slot.spawnedOnce&&spawnDistance<15)kwgAudio.play('devil_respawn');
@@ -13529,7 +13618,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             }else if(distance>=3.1){kwgHopsThrow(slot,player,props,blocks,now);}
           }
           let tx=targetX,tz=targetZ;
-          if(!exhausted&&now>=slot.pathAt&&pathBudget>0){
+          if(slot.dropGoal){
+            if(now>=slot.dropCommitUntil||Math.hypot(npc.position.x-slot.dropGoal.x,npc.position.z-slot.dropGoal.z)<.30){
+              slot.dropGoal=null;slot.dropCommitUntil=0;slot.pathAt=0;
+            }else{
+              tx=slot.dropGoal.x;tz=slot.dropGoal.z;
+            }
+          }
+          if(!exhausted&&!slot.dropGoal&&now>=slot.pathAt&&pathBudget>0){
             pathBudget--;
             // Pre-filter distant parts once per route; full-world A* checks
             // would become expensive in a 1400-block level.
@@ -13546,7 +13642,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.pathAt=now+(slot.stuckSince?240:900+index*53);
             // Keep stuck state until the NPC actually makes progress.
           }
-          if(!exhausted&&slot.path?.length){
+          if(!exhausted&&!slot.dropGoal&&slot.path?.length){
             // Do not consume a jump waypoint until we have landed on its level.
             while(slot.path.length){
               const point=slot.path[0];
@@ -13559,7 +13655,20 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           // V26: stuck recovery. The original chase could repeatedly try to
           // walk into the side of a wall while its 9s exhaustion timer ran.
           // Force fresh A* and temporarily steer around the blocking edge.
-          if(chasing&&slot.stuckSince&&now-slot.stuckSince>360){
+          if(chasing&&!slot.dropGoal&&slot.stuckSince&&now-slot.stuckSince>360){
+            // If the target is BELOW a raised spawner, deliberately step
+            // beyond the ledge toward a VERIFIED lower platform.
+            if(player.position.y<npc.position.y-.6){
+              const exit=kwgEnemyDropExit(slot,blocks,targetX,targetZ,centerX,centerZ,props.noticeRange);
+              if(exit){
+                slot.dropGoal=exit;slot.dropCommitUntil=now+1600;
+                slot.path=[];slot.pathAt=now+1200;
+                slot.stuckSince=0;slot.lastProgressAt=now;
+                tx=exit.x;tz=exit.z;
+              }
+            }
+          }
+          if(chasing&&!slot.dropGoal&&slot.stuckSince&&now-slot.stuckSince>360){
             if(now>(slot.escapeUntil||0)){
               slot.escapeUntil=now+750;
               slot.escapeSide=-(slot.escapeSide||1);
@@ -13603,7 +13712,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const ledgeY=d>.01?kwgEnemyWalkable(ledgeX,ledgeZ,npc.position.y,blocks):null;
           const waypointRise=waypoint&&d<2.2?waypoint.y-npc.position.y:0;
           const ledgeRise=ledgeY===null?0:ledgeY-npc.position.y;
-          const needsJump=!exhausted&&d>.18&&slot.grounded&&
+          const needsJump=!exhausted&&!slot.dropGoal&&d>.18&&slot.grounded&&
             ((waypointRise>.46&&waypointRise<=kwgEnemyJumpRise+.03)||
              (ledgeRise>.46&&ledgeRise<=kwgEnemyJumpRise+.03));
           if(needsJump&&kwgEnemyBodyClear(npc.position.x,npc.position.z,npc.position.y+.35,blocks)){
@@ -13622,13 +13731,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             const outsideTerritory=Math.hypot(nx-centerX,nz-centerZ)>props.noticeRange-.38;
             if(outsideTerritory){slot.pathAt=now+190;if(!chasing)slot.roamTarget=null;}
             const nextGround=kwgEnemyWalkable(nx,nz,npc.position.y,blocks);
+            const committedDrop=!!slot.dropGoal&&now<slot.dropCommitUntil&&
+              kwgEnemyDropMovementOK(slot,nx,nz,npc.position.y,blocks);
             // A missing ground sample means VOID, not a safe route. Allow
             // supported downward steps while preventing all NPCs from walking
             // off the edge of the map (including during a chase).
             const canStep=nextGround!==null&&nextGround<=npc.position.y+.48&&
               nextGround>=npc.position.y-kwgEnemyMaxDrop;
             const airborne=!slot.grounded||slot.fallSpeed>0;
-            if(!outsideTerritory&&nextGround!==null&&(airborne||canStep)&&
+            if(!outsideTerritory&&(committedDrop||(nextGround!==null&&(airborne||canStep)))&&
                kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)&&
                !kwgEnemyCrowded(nx,nz,slot)){
               const moved=kwgEnemyMoveSolid(slot,nx,nz,blocks);
@@ -13642,7 +13753,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               }else slot.pathAt=now+190;
             }else slot.pathAt=now+190;
           }
-          if(chasing&&d>.65){
+          if(chasing&&!sniperHolding&&!spiderHolding&&!alienFootHolding&&!hopsMelee&&(distance>1.25||player.position.y<npc.position.y-.6)&&!slot.dropGoal){
             const progress=Math.hypot(npc.position.x-(slot.lastProgressX??npc.position.x),npc.position.z-(slot.lastProgressZ??npc.position.z));
             if(progress>.30){slot.lastProgressAt=now;slot.lastProgressX=npc.position.x;slot.lastProgressZ=npc.position.z;slot.stuckSince=0;}
             else if(now-(slot.lastProgressAt||now)>450&&!slot.stuckSince){slot.stuckSince=now;slot.pathAt=0;}
@@ -13713,7 +13824,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             isGrounded=false;
             const wasStomp=kwgDoubleJumpStomp&&props.enemyKillable&&props.enemyCharacter!=='hops';
             if(wasStomp){
-              kwgStompDust(npc.position.clone().add(new THREE.Vector3(0,top-npc.position.y-.10,0)));
+              kwgStompDust(npc.position.clone().add(new THREE.Vector3(0,top-npc.position.y-.10,0)),true);
+              kwgStompImpactAt=now;
               kwgDefeatEnemy(id,index,true);
             }else{
               kwgAudio.play('devil_bounce');
@@ -13788,12 +13900,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         break;
       }
     }
-    // Second discrete Space press in mid-air enables a stomp. Holding Space
-    // cannot accidentally count as a double-jump.
+    // Only fresh key presses count. A press just before touching the floor is
+    // a buffered FIRST jump, never a phantom midair double jump.
     window.addEventListener('keydown',e=>{
       if(e.code!=='Space'||e.repeat||isEditMode||kwgFreeCamera.active||!currentWorldName||kwgKnockedUntil||kwgDeadUntil)return;
       if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
-      if(!isGrounded&&kwgAirJumps===1){
+      const now=performance.now();
+      const p=localPlayerAvatar?.position;
+      if(!p)return;
+      const ground=getGroundSurfaceUnderPlayerMP(p.x,p.y,p.z,Object.values(currentWorldData?.blocks||{}));
+      const nearLanding=Number.isFinite(ground.floorY)&&
+        p.y>=ground.floorY-.06&&p.y-ground.floorY<.28&&velocityY<=.018;
+      if(isGrounded||nearLanding){
+        // A new press at the end of a landing takes priority over the stale
+        // kwgAirJumps flag from the previous frame.
+        kwgJumpPressedAt=now;
+        if(nearLanding){isGrounded=true;kwgAirJumps=0;kwgDoubleJumpStomp=false;}
+        return;
+      }
+      if(kwgAirJumps===1&&now-kwgLastGroundJumpAt>165){
+        kwgJumpPressedAt=0;
         kwgAirJumps=2;kwgDoubleJumpStomp=true;
         kwgEnsureStompRig(localPlayerAvatar);
         kwgStompStarted=kwgEnemyClock();kwgStompLandingAt=0;kwgFlipKind='stomp';
@@ -14485,9 +14611,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             p.y=ground.floorY;velocityY=0;
           }
           if(p.y < -30){
-            if(kwgLastSafeFeet)p.copy(kwgLastSafeFeet);
-            kwgKnockX=kwgKnockZ=0;velocityY=0;kwgDeathCause='fall';
+            // Preserve the actual death location. Don't teleport a corpse
+            // onto a platform just because a knockback sent it into the void.
+            kwgKnockX=kwgKnockZ=0;kwgDeathCause='fall';
           }
+        }
+        if(kwgDeathCause==='fall'){
+          // Continue falling while the ragdoll plays; cap depth for numerical
+          // stability. The 2-second respawn is the ONLY teleport.
+          const p=localPlayerAvatar.position;
+          velocityY=Math.max(-.26,velocityY+gravity);
+          p.y=Math.max(-90,p.y+velocityY);
         }
         kwgAnimatePlayerRagdoll(now,true);
         kwgSendPlayerMovement(localPlayerAvatar,false);
@@ -14758,11 +14892,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         resolveHorizontalCollisionsMP(player.position,blocks,stepStartX,stepStartZ);
       }
 
-      if (keys[' ']&&isGrounded) {
+      // Consume a short press buffer once. Holding Space no longer causes
+      // automatic repeated jumps on landing (and fake double-jump flips).
+      if (isGrounded&&kwgJumpPressedAt&&performance.now()-kwgJumpPressedAt<210) {
+        kwgJumpPressedAt=0;kwgLastGroundJumpAt=performance.now();
         velocityY=jumpStrength;
         isGrounded=false;
         targetStepY=0;
         kwgAirJumps=1;kwgDoubleJumpStomp=false;
+      }else if(kwgJumpPressedAt&&performance.now()-kwgJumpPressedAt>=210){
+        kwgJumpPressedAt=0;
       }
 
       const oldFeetY = player.position.y;
