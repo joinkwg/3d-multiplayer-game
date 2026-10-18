@@ -3427,15 +3427,47 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       </div>
 
       <section class="kwg-image-review-box kwg-editor-image-card" id="kwg-sky-image-panel" aria-label="Sky image">
-        <div class="kwg-image-card-heading"><span aria-hidden="true">▧</span> SKY IMAGE <small>PANORAMA</small></div>
-        <div class="kwg-image-row kwg-sky-image-row">
-          <span class="kwg-image-side">Sky</span>
-          <span class="kwg-image-file" id="kwg-sky-image-status" role="status" title="No file">No file</span>
-          <button type="button" class="kwg-image-action kwg-image-add" id="kwg-sky-image-add" aria-label="Upload sky image" title="Upload or replace sky image">+</button>
-          <button type="button" class="kwg-image-action kwg-image-remove" id="kwg-sky-image-clear" aria-label="Remove sky image" title="Remove sky image" disabled>×</button>
+        <div class="kwg-image-card-heading"><span aria-hidden="true">▧</span> SKYBOX <small>SIX FACES</small></div>
+        <div class="kwg-image-rows" id="kwg-skybox-rows">
+          <div class="kwg-image-row" data-kwg-sky-side="top">
+            <span class="kwg-image-side">Top</span>
+            <span class="kwg-image-file" data-kwg-sky-file="top" title="No file">No file</span>
+            <button type="button" class="kwg-image-action kwg-image-add" data-kwg-sky-add="top" aria-label="Upload top sky texture" title="Upload or replace top sky texture">+</button>
+            <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-sky-remove="top" aria-label="Remove top sky texture" title="Remove top sky texture" disabled>×</button>
+          </div>
+          <div class="kwg-image-row" data-kwg-sky-side="bottom">
+            <span class="kwg-image-side">Bottom</span>
+            <span class="kwg-image-file" data-kwg-sky-file="bottom" title="No file">No file</span>
+            <button type="button" class="kwg-image-action kwg-image-add" data-kwg-sky-add="bottom" aria-label="Upload bottom sky texture" title="Upload or replace bottom sky texture">+</button>
+            <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-sky-remove="bottom" aria-label="Remove bottom sky texture" title="Remove bottom sky texture" disabled>×</button>
+          </div>
+          <div class="kwg-image-row" data-kwg-sky-side="front">
+            <span class="kwg-image-side">Front</span>
+            <span class="kwg-image-file" data-kwg-sky-file="front" title="No file">No file</span>
+            <button type="button" class="kwg-image-action kwg-image-add" data-kwg-sky-add="front" aria-label="Upload front sky texture" title="Upload or replace front sky texture">+</button>
+            <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-sky-remove="front" aria-label="Remove front sky texture" title="Remove front sky texture" disabled>×</button>
+          </div>
+          <div class="kwg-image-row" data-kwg-sky-side="back">
+            <span class="kwg-image-side">Back</span>
+            <span class="kwg-image-file" data-kwg-sky-file="back" title="No file">No file</span>
+            <button type="button" class="kwg-image-action kwg-image-add" data-kwg-sky-add="back" aria-label="Upload back sky texture" title="Upload or replace back sky texture">+</button>
+            <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-sky-remove="back" aria-label="Remove back sky texture" title="Remove back sky texture" disabled>×</button>
+          </div>
+          <div class="kwg-image-row" data-kwg-sky-side="left">
+            <span class="kwg-image-side">Left</span>
+            <span class="kwg-image-file" data-kwg-sky-file="left" title="No file">No file</span>
+            <button type="button" class="kwg-image-action kwg-image-add" data-kwg-sky-add="left" aria-label="Upload left sky texture" title="Upload or replace left sky texture">+</button>
+            <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-sky-remove="left" aria-label="Remove left sky texture" title="Remove left sky texture" disabled>×</button>
+          </div>
+          <div class="kwg-image-row" data-kwg-sky-side="right">
+            <span class="kwg-image-side">Right</span>
+            <span class="kwg-image-file" data-kwg-sky-file="right" title="No file">No file</span>
+            <button type="button" class="kwg-image-action kwg-image-add" data-kwg-sky-add="right" aria-label="Upload right sky texture" title="Upload or replace right sky texture">+</button>
+            <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-sky-remove="right" aria-label="Remove right sky texture" title="Remove right sky texture" disabled>×</button>
+          </div>
         </div>
-        <input class="kwg-image-file-input" type="file" id="kwg-sky-image-upload" accept="image/png,image/jpeg,image/webp" aria-label="Choose a sky image">
-        <p class="kwg-image-help">Only approved images appear in your world.</p>
+        <input class="kwg-image-file-input" type="file" id="kwg-sky-image-upload" accept="image/png,image/jpeg,image/webp" aria-label="Choose a skybox face image">
+        <p class="kwg-image-help">Each side is moderated separately. Pending images stay hidden. Missing faces use the sky color.</p>
       </section>
       <div class="tool-row"><label for="kwg-env-brightness">Brightness:</label><input type="number" id="kwg-env-brightness" min="0.4" max="2" step="0.05" value="1" inputmode="decimal"></div>
       <div class="tool-row"><label for="kwg-env-saturation">Saturation:</label><input type="number" id="kwg-env-saturation" min="0" max="2" step="0.05" value="1" inputmode="decimal"></div>
@@ -5721,22 +5753,54 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       resizeWorldViewport();
     }
 
-    // V34: Moderated sky images. A pending/rejected upload never becomes a texture.
-    let kwgSkyLoadToken=0;
+    // V36: independently moderated cube skybox faces. Never load pending URLs.
+    // Three.js CubeTexture face order: right, left, top, bottom, front, back.
+    const kwgSkyCubeOrder=['right','left','top','bottom','front','back'];
+    let kwgSkyLoadToken=0,kwgSkyTexture=null;
     function kwgApplySkyImage(world){
       const token=++kwgSkyLoadToken;
-      const review=world?.skyImageReview;
-      const url=kwgApprovedImageURL(review);
-      scene.background=new THREE.Color(world?.skyColor||'#1e1e7b');
-      const status=document.getElementById('kwg-sky-image-status');
+      const reviews=world?.skyboxFaces||{};
+      const urls=kwgSkyCubeOrder.map(side=>kwgApprovedImageURL(reviews[side]));
+      const fallback=world?.skyColor||'#1e1e7b';
       kwgRefreshSkyImageStatus();
-      if(!url)return;
-      new THREE.TextureLoader().load(url,texture=>{
-        if(token!==kwgSkyLoadToken||currentWorldData?.skyImageReview?.url!==url)return;
-        texture.mapping=THREE.EquirectangularReflectionMapping;
-        texture.colorSpace=THREE.SRGBColorSpace;
-        scene.background=texture;
-      },undefined,()=>{if(status)status.textContent='Approved image could not be loaded.';});
+      if(kwgSkyTexture){if(scene.background===kwgSkyTexture)scene.background=null;kwgSkyTexture.dispose();kwgSkyTexture=null;}
+      scene.background=new THREE.Color(fallback);
+      if(!urls.some(Boolean)){
+        // Worlds from V34/V35 still display their original panorama until
+        // the owner uploads a new six-sided skybox.
+        const legacy=kwgApprovedImageURL(world?.skyImageReview);
+        if(legacy)new THREE.TextureLoader().load(legacy,texture=>{
+          if(token!==kwgSkyLoadToken){texture.dispose();return;}
+          texture.mapping=THREE.EquirectangularReflectionMapping;
+          texture.colorSpace=THREE.SRGBColorSpace;
+          kwgSkyTexture=texture;scene.background=texture;
+        });
+        return;
+      }
+      const makeFallback=()=>{
+        const canvas=document.createElement('canvas');canvas.width=canvas.height=512;
+        const ctx=canvas.getContext('2d');ctx.fillStyle=fallback;ctx.fillRect(0,0,512,512);
+        return canvas;
+      };
+      const images=urls.map(()=>makeFallback());
+      const texture=new THREE.CubeTexture(images);
+      texture.colorSpace=THREE.SRGBColorSpace;
+      texture.needsUpdate=true;
+      kwgSkyTexture=texture;scene.background=texture;
+      urls.forEach((url,index)=>{
+        if(!url)return;
+        const image=new Image();image.crossOrigin='anonymous';
+        image.onload=()=>{
+          if(token!==kwgSkyLoadToken)return;
+          // Canvas faces keep a consistent square orientation even if the
+          // owner uploaded rectangular artwork.
+          const face=document.createElement('canvas');face.width=face.height=512;
+          const ctx=face.getContext('2d');ctx.drawImage(image,0,0,512,512);
+          images[index]=face;texture.images=images;texture.needsUpdate=true;
+        };
+        image.onerror=()=>{if(token===kwgSkyLoadToken)console.warn('Could not load approved skybox face',kwgSkyCubeOrder[index]);};
+        image.src=url;
+      });
     }
     const spawnMarkerGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.1, 16);
     const spawnMarkerMat = new THREE.MeshBasicMaterial({ color: 0x8e44ad, wireframe: true });
@@ -9672,14 +9736,27 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     }
     function kwgRefreshSkyImageStatus(){
-      const review=currentWorldData?.skyImageReview;
-      const status=document.getElementById('kwg-sky-image-status');
-      if(!status)return;
-      const label=kwgImageTransient.get('sky')||kwgImageFileLabel(review);
-      status.textContent=label;status.title=label;
-      status.dataset.reviewStatus=review?.status||'empty';
-      document.getElementById('kwg-sky-image-clear').disabled=!review;
+      for(const side of kwgDecalSides){
+        const row=document.querySelector(`[data-kwg-sky-side="${side}"]`);
+        if(!row)continue;
+        const review=currentWorldData?.skyboxFaces?.[side];
+        const label=row.querySelector('.kwg-image-file');
+        const text=kwgImageTransient.get('sky:'+side)||kwgImageFileLabel(review);
+        label.textContent=text;label.title=text;
+        label.dataset.reviewStatus=review?.status||'empty';
+        row.querySelector('.kwg-image-remove').disabled=!review;
+      }
     }
+    let kwgPendingSkySide=null;
+    document.querySelectorAll('[data-kwg-sky-add]').forEach(button=>{
+      button.addEventListener('click',()=>{
+        kwgPendingSkySide={side:button.dataset.kwgSkyAdd,worldName:currentWorldName};
+        document.getElementById('kwg-sky-image-upload').click();
+      });
+    });
+    document.querySelectorAll('[data-kwg-sky-remove]').forEach(button=>{
+      button.addEventListener('click',()=>kwgClearWorldImage('sky',button.dataset.kwgSkyRemove));
+    });
     document.querySelectorAll('[data-kwg-decal-add]').forEach(button=>{
       button.addEventListener('click',()=>{
         if(!selectedBlockId||!currentWorldData?.blocks?.[selectedBlockId])return;
@@ -9690,14 +9767,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.querySelectorAll('[data-kwg-decal-remove]').forEach(button=>{
       button.addEventListener('click',()=>kwgClearWorldImage('decal',button.dataset.kwgDecalRemove));
     });
-    document.getElementById('kwg-sky-image-add').addEventListener('click',()=>document.getElementById('kwg-sky-image-upload').click());
     async function kwgSubmitWorldImage(file,kind,side,expectedBlockId,expectedWorldName){
       if(!canEditCurrentWorld||!currentWorldName){showToast('Open your world in edit mode first.');return;}
       if(!file||!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>1500000){showToast('Use PNG, JPG, or WebP, up to 1.5 MB.');return;}
       const worldName=expectedWorldName||currentWorldName;
       const blockId=kind==='decal'?expectedBlockId:null;
-      if(worldName!==currentWorldName||kind==='decal'&&!currentWorldData?.blocks?.[blockId])return;
-      const key=kind==='sky'?'sky':blockId+':'+side;
+      if(worldName!==currentWorldName||kind==='decal'&&!currentWorldData?.blocks?.[blockId]||kind==='sky'&&!kwgDecalSides.includes(side))return;
+      const key=kind==='sky'?'sky:'+side:blockId+':'+side;
       kwgImageTransient.set(key,file.name+' · Uploading…');
       if(kind==='sky')kwgRefreshSkyImageStatus();else kwgRefreshDecalStatus();
       try{
@@ -9715,7 +9791,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     }
     document.getElementById('kwg-sky-image-upload').addEventListener('change',e=>{
-      const file=e.target.files?.[0];if(file)kwgSubmitWorldImage(file,'sky');e.target.value='';
+      const file=e.target.files?.[0],target=kwgPendingSkySide;
+      if(file&&target)kwgSubmitWorldImage(file,'sky',target.side,null,target.worldName);
+      kwgPendingSkySide=null;e.target.value='';
     });
     document.getElementById('kwg-decal-upload').addEventListener('change',e=>{
       const file=e.target.files?.[0],target=kwgPendingDecalSide;
@@ -9725,19 +9803,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgClearWorldImage(kind,side){
       if(!canEditCurrentWorld||!currentWorldName)return;
       const blockId=kind==='decal'?selectedBlockId:null;
-      if(kind==='decal'&&(!kwgDecalSides.includes(side)||!currentWorldData?.blocks?.[blockId]))return;
-      const key=kind==='sky'?'sky':blockId+':'+side;
+      if(!kwgDecalSides.includes(side)||kind==='decal'&&!currentWorldData?.blocks?.[blockId])return;
+      const key=kind==='sky'?'sky:'+side:blockId+':'+side;
       kwgImageTransient.delete(key);
       socket.emit('kwg_image_clear',{worldName:currentWorldName,kind,blockId,side},r=>{
         if(!r?.success)showToast(r?.message||'Could not remove image.');
       });
     }
-    document.getElementById('kwg-sky-image-clear').addEventListener('click',()=>kwgClearWorldImage('sky'));
     socket.on('kwg_image_review_updated',({kind,blockId,side,review}={})=>{
       if(!currentWorldData)return;
-      if(kind==='sky'){
-        kwgImageTransient.delete('sky');
-        if(review)currentWorldData.skyImageReview=review;else delete currentWorldData.skyImageReview;
+      if(kind==='sky'&&kwgDecalSides.includes(side)){
+        kwgImageTransient.delete('sky:'+side);
+        currentWorldData.skyboxFaces=currentWorldData.skyboxFaces||{};
+        if(review)currentWorldData.skyboxFaces[side]=review;else delete currentWorldData.skyboxFaces[side];
         kwgApplySkyImage(currentWorldData);
         kwgRefreshSkyImageStatus();
       }else if(kind==='decal'){
@@ -10095,7 +10173,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     });
     document.getElementById('sky-color-input').addEventListener('input', (e) => {
       const color = e.target.value;
-      if(!currentWorldData?.skyImageReview?.url||currentWorldData.skyImageReview.status!=='approved')scene.background=new THREE.Color(color);
+      if(currentWorldData){currentWorldData.skyColor=color;kwgApplySkyImage(currentWorldData);}
        if (currentWorldName) {
         stageWorldSettings({ skyColor: color });
       }
@@ -11521,7 +11599,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // on leaving a world. Hotbar order is stable; keys 1-9 toggle slots.
     const kwgTools=[];let kwgEquippedTool=null,kwgLastShot=0,kwgFireHeld=false;
     const kwgToolCooldown={pistol:390,minigun:95,laser:245,ufo:1300};
-    const kwgToolDamage={pistol:32,minigun:9,laser:4,ufo:48};
+    const kwgToolDamage={pistol:32,minigun:9,laser:4,ufo:100};
     let kwgLaserLockAt=0,kwgLaserTargetKey=null,kwgLaserLastTick=0;
     const kwgAimNdc=new THREE.Vector2(0,0);
     const kwgToolPickupCooldowns=new Map();
@@ -11859,7 +11937,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       else ray.setFromCamera(kwgAimNdc,camera);
       ray.far=115;
       const solids=Object.values(worldBlocks).filter(mesh=>{
-        const b=currentWorldData?.blocks?.[mesh.userData.blockId];return b&&b.canCollide!==false;
+        const b=currentWorldData?.blocks?.[mesh.userData.blockId];
+        return b&&b.canCollide!==false&&b.actionType!=='enemy_spawner'&&b.actionType!=='tool_dispenser';
       });
       const obstruction=ray.intersectObjects(solids,true)[0];
       let maxDistance=obstruction?obstruction.distance:115;
@@ -11897,15 +11976,18 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         // Keep roof/terrain occlusion and allow targets within the beam width.
         const origin=ray.ray.origin;
         const beamReach=obstruction?obstruction.distance:115;
-        const radius=2.35;
+        const radius=2.85;
         best=null;maxDistance=beamReach;
         const consider=(candidate,x,y,z,top)=>{
           const horizontal=Math.hypot(x-origin.x,z-origin.z);
-          const downward=origin.y-(y+Math.min(.8,top*.4));
-          if(horizontal>radius||downward<-.1||downward>beamReach+.1)return;
+          // The cylinder overlaps the enemy's actual body, not just its
+          // feet; this matters when the saucer is flying low.
+          const hitY=Math.min(origin.y-.1,y+Math.min(top*.5,1.35));
+          const downward=origin.y-hitY;
+          if(horizontal>radius||origin.y<y+.05||downward>beamReach+.15)return;
           // Check the actual diagonal from the saucer to the target, so a roof
           // beside the beam center cannot be shot through.
-          const targetPoint=new THREE.Vector3(x,y+Math.min(.8,top*.4),z);
+          const targetPoint=new THREE.Vector3(x,hitY,z);
           const toward=targetPoint.clone().sub(origin);
           const rayLength=toward.length();
           if(rayLength>.05){
@@ -11931,6 +12013,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         }
       }
       const tracerEnd=ray.ray.origin.clone().addScaledVector(ray.ray.direction,maxDistance);
+      if(kind==='ufo'&&best)kwgStompDust(tracerEnd.clone(),false);
       if(kind==='laser'){
         const key=best?`${best.kind}:${best.id}:${best.index??''}:${best.robot?.mesh?.uuid||''}`:null;
         if(!key||key!==kwgLaserTargetKey){kwgLaserLockAt=now;kwgLaserTargetKey=key;}
@@ -12609,7 +12692,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(now<(slot.nextWebAt||0))return;
       if(!slot.webChargeAt){slot.webChargeAt=now;kwgAudio.play('spider_warning');return;}
       if(now-slot.webChargeAt<1000)return; // red eyes glow for at least one second
-      slot.webChargeAt=0;slot.nextWebAt=now+3500;slot.attackUntil=now+450;
+      slot.webChargeAt=0;slot.nextWebAt=now+1050+Math.random()*350;slot.attackUntil=now+450;
       // The web lands at the location the player occupied WHEN it was fired.
       const floor=kwgEnemyGroundY(player.position.x,player.position.y+.65,player.position.z,blocks,3.5);
       const to=new THREE.Vector3(player.position.x,Number.isFinite(floor)?floor:player.position.y,player.position.z);
@@ -13047,7 +13130,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const ux=d>.0001?dx/d:Math.cos(angle),uz=d>.0001?dz/d:Math.sin(angle);
         const push=Math.min(.18,(min-d)*.55);
         const nx=npc.position.x+ux*push,nz=npc.position.z+uz*push;
-        if(kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)){
+        if(kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)&&
+           kwgEnemyWalkable(nx,nz,npc.position.y,blocks)!==null){
           npc.position.x=nx;npc.position.z=nz;
         }
       }
@@ -13067,11 +13151,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const stepX=dx/steps,stepZ=dz/steps;
       for(let i=0;i<steps;i++){
         const targetX=x+stepX,targetZ=z+stepZ;
-        if(kwgEnemyBodyClear(targetX,targetZ,feet,blocks)&&!kwgEnemyCrowded(targetX,targetZ,slot)){
+        if(kwgEnemyWalkable(targetX,targetZ,feet,blocks)!==null&&
+           kwgEnemyBodyClear(targetX,targetZ,feet,blocks)&&!kwgEnemyCrowded(targetX,targetZ,slot)){
           x=targetX;z=targetZ;continue;
         }
-        if(kwgEnemyBodyClear(targetX,z,feet,blocks)&&!kwgEnemyCrowded(targetX,z,slot))x=targetX;
-        else if(kwgEnemyBodyClear(x,targetZ,feet,blocks)&&!kwgEnemyCrowded(x,targetZ,slot))z=targetZ;
+        if(kwgEnemyWalkable(targetX,z,feet,blocks)!==null&&kwgEnemyBodyClear(targetX,z,feet,blocks)&&!kwgEnemyCrowded(targetX,z,slot))x=targetX;
+        else if(kwgEnemyWalkable(x,targetZ,feet,blocks)!==null&&kwgEnemyBodyClear(x,targetZ,feet,blocks)&&!kwgEnemyCrowded(x,targetZ,slot))z=targetZ;
         else break;
       }
       npc.position.x=x;npc.position.z=z;
@@ -13137,13 +13222,19 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         }
       }
       if(npc.userData.spiderEyes){
+        // Spiders crawl on eight legs instead of bobbing like bipedal devils.
+        rig.position.y=.005+(walking?.012*Math.abs(Math.sin(phase*1.2)):0);
+        rig.rotation.x=walking?Math.sin(phase*.5)*.022:0;
+        rig.rotation.z=walking?Math.sin(phase*.6)*.025:0;
+        rig.scale.set(1,1,1);
+        la.rotation.x=ra.rotation.x=ll.rotation.x=rl.rotation.x=0;
         const charging=!!slot.webChargeAt&&now-slot.webChargeAt>=0;
         for(const eye of npc.userData.spiderEyes){
           eye.material.color.setHex(charging?(Math.floor(now/95)%2?0xff263b:0xff7780):0x231928);
         }
         for(const leg of npc.userData.spiderLegs){
-          leg.pivot.rotation.x=(walking?Math.sin(phase+leg.index*Math.PI/2)*.38:Math.sin(now*.003+leg.index)*.08);
-          leg.pivot.rotation.z=leg.side*(.09+Math.sin(phase+leg.index)*.08);
+          leg.pivot.rotation.x=(walking?Math.sin(phase+leg.index*Math.PI/2)*.24:Math.sin(now*.002+leg.index)*.025);
+          leg.pivot.rotation.z=leg.side*(.08+Math.sin(phase+leg.index)*.045);
         }
         if(charging){rig.rotation.x-=.12;rig.position.y-=.10;}
       }
@@ -13228,9 +13319,9 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(kwgFlipKind==='stomp'){
           // Full front flip, then dive into a belly-down finishing pose.
           const flop=Math.max(0,Math.min(1,(t-.72)/.28));
-          kwgStompPivot.rotation.x=-Math.PI*2*eased-Math.PI*.5*flop;
+          kwgStompPivot.rotation.x=-Math.PI*2*eased+Math.PI*.5*flop;
           kwgStompPivot.rotation.z=0;
-          if(t>=1)kwgStompPivot.rotation.x=-Math.PI*.5;
+          if(t>=1)kwgStompPivot.rotation.x=Math.PI*.5;
           // Hold the belly flop until contact, or release safely if no enemy is hit.
           if(t>=1&&now-kwgStompStarted>1050){kwgStompStarted=0;kwgStompLandingAt=now;}
         }else{
@@ -13370,7 +13461,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             const radius=Math.max(.7,props.noticeRange-1.25);
             const angle=Math.random()*Math.PI*2;
             const dist=Math.sqrt(Math.random())*radius*.78;
-            slot.roamTarget={x:centerX+Math.cos(angle)*dist,z:centerZ+Math.sin(angle)*dist};
+            const candidateX=centerX+Math.cos(angle)*dist,candidateZ=centerZ+Math.sin(angle)*dist;
+            const ground=kwgEnemyWalkable(candidateX,candidateZ,npc.position.y,blocks);
+            // Never select a patrol destination beyond the last supported part.
+            slot.roamTarget=ground===null?{x:origin.x,z:origin.z}:{x:candidateX,z:candidateZ};
             slot.roamUntil=now+2400+Math.random()*3600;
             slot.pathAt=0;
           }
@@ -13467,15 +13561,32 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           // Force fresh A* and temporarily steer around the blocking edge.
           if(chasing&&slot.stuckSince&&now-slot.stuckSince>360){
             if(now>(slot.escapeUntil||0)){
-              slot.escapeUntil=now+820;
+              slot.escapeUntil=now+750;
               slot.escapeSide=-(slot.escapeSide||1);
+              slot.pathAt=0;
             }
-            if(!slot.path.length){
+            // When A* can't find a complete route, choose a genuinely open
+            // nearby direction rather than repeatedly steering into the wall.
+            // Probe the enemy's full collision body AND the ground below it.
+            if(!slot.path?.length||now-slot.stuckSince>850){
               const towardX=targetX-npc.position.x,towardZ=targetZ-npc.position.z;
-              const magnitude=Math.max(.01,Math.hypot(towardX,towardZ));
-              const sideX=-towardZ/magnitude*slot.escapeSide,sideZ=towardX/magnitude*slot.escapeSide;
-              tx=npc.position.x+sideX*1.6+ towardX/magnitude*.25;
-              tz=npc.position.z+sideZ*1.6+ towardZ/magnitude*.25;
+              const heading=Math.atan2(towardZ,towardX);
+              const offsets=[.7,-.7,1.3,-1.3,2.05,-2.05,Math.PI];
+              let bestEscape=null,bestScore=-Infinity;
+              for(const angleOffset of offsets){
+                const angle=heading+angleOffset*slot.escapeSide;
+                const ex=npc.position.x+Math.cos(angle)*1.1;
+                const ez=npc.position.z+Math.sin(angle)*1.1;
+                if(Math.hypot(ex-centerX,ez-centerZ)>props.noticeRange-.5)continue;
+                const ground=kwgEnemyWalkable(ex,ez,npc.position.y,blocks);
+                if(ground===null||!kwgEnemyBodyClear(ex,ez,npc.position.y,blocks))continue;
+                const stepX=npc.position.x+Math.cos(angle)*.35,stepZ=npc.position.z+Math.sin(angle)*.35;
+                if(kwgEnemyWalkable(stepX,stepZ,npc.position.y,blocks)===null||
+                   !kwgEnemyBodyClear(stepX,stepZ,npc.position.y,blocks))continue;
+                const score=-Math.hypot(targetX-ex,targetZ-ez)-Math.abs(angleOffset)*.28;
+                if(score>bestScore){bestScore=score;bestEscape={x:ex,z:ez};}
+              }
+              if(bestEscape){tx=bestEscape.x;tz=bestEscape.z;slot.path=[];slot.pathAt=now+350;}
             }
           }
           const vx=tx-npc.position.x,vz=tz-npc.position.z;
@@ -13511,13 +13622,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             const outsideTerritory=Math.hypot(nx-centerX,nz-centerZ)>props.noticeRange-.38;
             if(outsideTerritory){slot.pathAt=now+190;if(!chasing)slot.roamTarget=null;}
             const nextGround=kwgEnemyWalkable(nx,nz,npc.position.y,blocks);
-            // Airborne devils can move across a gap and descend onto a lower
-            // platform. Grounded devils may walk off a ledge, but cannot phase
-            // through a wall or instant-teleport up to a higher platform.
-            const highLedge=nextGround!==null&&nextGround>npc.position.y+.48;
-            const canStep=nextGround!==null&&nextGround>=npc.position.y-.52&&nextGround<=npc.position.y+.48;
+            // A missing ground sample means VOID, not a safe route. Allow
+            // supported downward steps while preventing all NPCs from walking
+            // off the edge of the map (including during a chase).
+            const canStep=nextGround!==null&&nextGround<=npc.position.y+.48&&
+              nextGround>=npc.position.y-kwgEnemyMaxDrop;
             const airborne=!slot.grounded||slot.fallSpeed>0;
-            if(!outsideTerritory&&(airborne||canStep||nextGround===null)&&
+            if(!outsideTerritory&&nextGround!==null&&(airborne||canStep)&&
                kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)&&
                !kwgEnemyCrowded(nx,nz,slot)){
               const moved=kwgEnemyMoveSolid(slot,nx,nz,blocks);
@@ -13655,7 +13766,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const remaining=Math.max(0,minDistance-Math.hypot(player.position.x-npc.position.x,player.position.z-npc.position.z));
       if(remaining>.01){
         const nx=npc.position.x-ux*(remaining+.02),nz=npc.position.z-uz*(remaining+.02);
-        if(kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)){
+        if(kwgEnemyBodyClear(nx,nz,npc.position.y,blocks)&&
+           kwgEnemyWalkable(nx,nz,npc.position.y,blocks)!==null){
           npc.position.x=nx;npc.position.z=nz;
         }
       }
@@ -14597,7 +14709,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             a.maxY>y-.7&&a.minY<y+1.0;
         });
         if(hullClear(nx,nz,oldY)){player.position.x=nx;player.position.z=nz;}
-        const newY=Math.max(2.2,Math.min(110,oldY+vertical*.14));
+        const newY=Math.max(3.8,Math.min(110,oldY+vertical*.14));
         if(hullClear(player.position.x,player.position.z,newY))player.position.y=newY;
         velocityY=0;isGrounded=false;kwgAirJumps=0;kwgDoubleJumpStomp=false;
         kwgUpdateBlink(player,performance.now());
