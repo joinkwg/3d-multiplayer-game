@@ -3074,6 +3074,65 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     .kwg-enemy-properties .kwg-recolor-field{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0;font-size:11px}
     .kwg-enemy-properties input[type=number]{width:82px;min-width:62px;background:#0c1a2c;border:1px solid #6c91b2;color:#fff;padding:6px}
     .kwg-enemy-properties input[type=checkbox]{width:17px;height:17px}
+    /* KWG V35 — compact studio controls and pixel-consistent image slots. */
+    body.kwg-editing #kwg-properties-window .tool-row,
+    body.kwg-editing #kwg-settings-window .tool-row{padding:3px 0!important;gap:5px!important;min-height:25px!important}
+    body.kwg-editing #kwg-properties-window .tool-row label,
+    body.kwg-editing #kwg-settings-window .tool-row label{font-size:10px!important;line-height:1.25!important}
+    body.kwg-editing #kwg-properties-window .tool-row select,
+    body.kwg-editing #kwg-properties-window .tool-row input[type=number],
+    body.kwg-editing #kwg-settings-window .tool-row select,
+    body.kwg-editing #kwg-settings-window .tool-row input[type=number]{font-size:10px!important;padding:3px 5px!important;min-height:25px!important;max-width:58%!important;box-sizing:border-box!important}
+    body.kwg-editing #kwg-properties-window .tool-row input[type=color],
+    body.kwg-editing #kwg-settings-window .tool-row input[type=color]{width:36px!important;height:24px!important;padding:2px!important}
+    body.kwg-editing #kwg-properties-window .tool-row input[type=checkbox],
+    body.kwg-editing #kwg-settings-window .tool-row input[type=checkbox]{width:15px!important;height:15px!important}
+    body.kwg-editing #kwg-properties-window .kwg-enemy-properties,
+    body.kwg-editing #build-toolbar .kwg-enemy-properties{margin:5px 0!important;padding:6px!important}
+    body.kwg-editing .kwg-enemy-properties .kwg-recolor-field{margin:4px 0!important;gap:5px!important;font-size:10px!important;line-height:1.2!important}
+    body.kwg-editing .kwg-enemy-properties input[type=number],
+    body.kwg-editing .kwg-enemy-properties select{min-height:25px!important;padding:3px 4px!important;font-size:10px!important;min-width:0!important;max-width:57%!important;box-sizing:border-box!important}
+    body.kwg-editing .kwg-enemy-props-title{margin-bottom:5px!important;font-size:9px!important}
+    body.kwg-editing #build-toolbar .kwg-recolor-panel{margin:4px 7px 6px!important;padding:6px 7px!important}
+    body.kwg-editing #build-toolbar .kwg-recolor-heading{margin-bottom:5px!important;font-size:9px!important}
+    body.kwg-editing #build-toolbar .kwg-recolor-field{margin:4px 0!important;font-size:10px!important;gap:5px!important}
+    body.kwg-editing #build-toolbar .kwg-recolor-field select,
+    body.kwg-editing #build-toolbar .kwg-recolor-field input[type=number]{padding:3px 4px!important;min-height:25px!important;font-size:10px!important;max-width:56%!important;box-sizing:border-box!important}
+    body.kwg-editing #build-toolbar .kwg-recolor-help,
+    body.kwg-editing #kwg-properties-window .kwg-recolor-help,
+    body.kwg-editing #kwg-settings-window .kwg-recolor-help{font-size:9px!important;line-height:1.3!important;margin:5px 0!important}
+    body.kwg-editing #kwg-properties-window .kwg-panel-title,
+    body.kwg-editing #kwg-settings-window .kwg-panel-title{padding-bottom:6px!important;margin-bottom:5px!important}
+    body.kwg-editing #kwg-settings-window .kwg-settings-tabs{padding:5px 6px!important;gap:4px!important;margin-bottom:4px!important}
+    body.kwg-editing #kwg-settings-window .kwg-settings-tabs button{min-height:28px!important;height:28px!important;padding:3px!important;font-size:10px!important}
+    body.kwg-editing #kwg-settings-environment,body.kwg-editing #kwg-settings-info{padding:5px 8px 10px!important}
+    body.kwg-editing #kwg-settings-info{gap:4px!important}
+    body.kwg-editing #kwg-settings-info p{margin:3px 0!important;line-height:1.3!important}
+    body.kwg-editing #part-properties-container{padding:6px!important}
+    body.kwg-editing #kwg-properties-window .kwg-editor-shortcuts{margin:0 6px 5px!important}
+    body.kwg-editing #kwg-properties-window .kwg-editor-shortcuts summary{padding:4px 0!important}
+    /* Image cards share the World Editor's hard-edged, blue-gray pixel palette. */
+    body.kwg-editing .kwg-editor-image-card{display:block!important;margin:7px 0!important;padding:7px!important;background:#1b2b3d!important;border:2px solid #57758d!important;border-radius:0!important;box-shadow:2px 2px 0 #0a1420!important;color:#dcecf8!important}
+    .kwg-image-card-heading{display:flex;align-items:center;gap:5px;font-weight:900;font-size:10px;letter-spacing:.07em;color:#a8d8ff;margin-bottom:6px}
+    .kwg-image-card-heading small{margin-left:auto;color:#829eb6;font-size:8px;letter-spacing:0}
+    .kwg-image-rows{display:grid;gap:3px}
+    .kwg-image-row{display:grid;grid-template-columns:minmax(38px,auto) minmax(0,1fr) 25px 25px;align-items:center;gap:3px;min-width:0}
+    .kwg-image-side{font-size:10px;font-weight:750;color:#d1e4f3;white-space:nowrap}
+    .kwg-image-file{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;color:#8fa9bf;padding:4px 5px;background:#102030;border:1px solid #3c5870;min-height:23px;box-sizing:border-box}
+    .kwg-image-file[data-review-status=pending]{color:#ffe3a5}
+    .kwg-image-file[data-review-status=approved]{color:#9ce7b8}
+    .kwg-image-file[data-review-status=rejected],.kwg-image-file[data-review-status=error]{color:#ff9da3}
+    body.kwg-editing .kwg-editor-image-card .kwg-image-action{display:flex!important;align-items:center;justify-content:center;width:25px!important;height:25px!important;min-width:25px!important;padding:0!important;border:2px solid #6889a4!important;border-bottom:3px solid #344d65!important;border-radius:0!important;background:#294760!important;color:#f1faff!important;font-family:inherit!important;font-size:16px!important;font-weight:900!important;line-height:1!important;box-shadow:none!important;cursor:pointer}
+    body.kwg-editing .kwg-editor-image-card .kwg-image-add{background:#27634f!important;border-color:#87cda3!important;border-bottom-color:#1b4439!important}
+    body.kwg-editing .kwg-editor-image-card .kwg-image-remove{background:#743c4a!important;border-color:#d48994!important;border-bottom-color:#4b2934!important}
+    body.kwg-editing .kwg-editor-image-card .kwg-image-action:disabled{opacity:.32!important;cursor:not-allowed!important}
+    body.kwg-editing .kwg-editor-image-card .kwg-image-action:not(:disabled):hover{filter:brightness(1.17)}
+    body.kwg-editing .kwg-editor-image-card .kwg-image-action:focus-visible{outline:2px solid #fff;outline-offset:1px}
+    .kwg-image-file-input{display:none!important}
+    .kwg-image-live-status:empty{display:none}
+    .kwg-image-live-status{font-size:9px;color:#ffd7a2}
+    .kwg-image-help{margin:5px 0 0!important;font-size:9px!important;color:#92acc5!important;line-height:1.3!important}
+    @media(max-width:620px){.kwg-image-row{grid-template-columns:minmax(0,1fr) 22px 22px;gap:2px}.kwg-image-side{grid-column:1/-1;font-size:9px}.kwg-image-file{font-size:8px}.kwg-editor-image-card{padding:5px!important}body.kwg-editing .kwg-editor-image-card .kwg-image-action{width:22px!important;min-width:22px!important;height:22px!important}}
   </style>
   <!-- Create World Modal -->
   <div id="create-world-modal" class="modal">
@@ -3274,14 +3333,50 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             <input type="color" id="block-color-input" value="#888888">
           </div>
 
-           <div class="kwg-image-review-box" id="kwg-part-decal-panel">
-             <label for="kwg-decal-side">Decal — choose part side</label>
-             <select id="kwg-decal-side"><option value="front">Front</option><option value="back">Back</option><option value="left">Left</option><option value="right">Right</option><option value="top">Top</option><option value="bottom">Bottom</option></select>
-             <input type="file" id="kwg-decal-upload" accept="image/png,image/jpeg,image/webp">
-             <div id="kwg-decal-status" role="status">No decal on this side.</div>
-             <button type="button" id="kwg-decal-clear">Remove this side's decal</button>
-             <p class="kwg-recolor-help">Approved images appear on the chosen side. Pending images show Under Review instead. Best on box-shaped parts.</p>
-           </div>
+           <section class="kwg-image-review-box kwg-editor-image-card" id="kwg-part-decal-panel" aria-label="Part decals">
+             <div class="kwg-image-card-heading"><span aria-hidden="true">▧</span> DECALS <small>BY FACE</small></div>
+             <div class="kwg-image-rows" id="kwg-decal-rows">
+               <div class="kwg-image-row" data-kwg-decal-side="top">
+                 <span class="kwg-image-side">Top</span>
+                 <span class="kwg-image-file" data-kwg-decal-file="top" title="No file">No file</span>
+                 <button type="button" class="kwg-image-action kwg-image-add" data-kwg-decal-add="top" aria-label="Upload top decal" title="Upload or replace top decal">+</button>
+                 <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-decal-remove="top" aria-label="Remove top decal" title="Remove top decal" disabled>×</button>
+               </div>
+               <div class="kwg-image-row" data-kwg-decal-side="bottom">
+                 <span class="kwg-image-side">Bottom</span>
+                 <span class="kwg-image-file" data-kwg-decal-file="bottom" title="No file">No file</span>
+                 <button type="button" class="kwg-image-action kwg-image-add" data-kwg-decal-add="bottom" aria-label="Upload bottom decal" title="Upload or replace bottom decal">+</button>
+                 <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-decal-remove="bottom" aria-label="Remove bottom decal" title="Remove bottom decal" disabled>×</button>
+               </div>
+               <div class="kwg-image-row" data-kwg-decal-side="left">
+                 <span class="kwg-image-side">Left</span>
+                 <span class="kwg-image-file" data-kwg-decal-file="left" title="No file">No file</span>
+                 <button type="button" class="kwg-image-action kwg-image-add" data-kwg-decal-add="left" aria-label="Upload left decal" title="Upload or replace left decal">+</button>
+                 <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-decal-remove="left" aria-label="Remove left decal" title="Remove left decal" disabled>×</button>
+               </div>
+               <div class="kwg-image-row" data-kwg-decal-side="right">
+                 <span class="kwg-image-side">Right</span>
+                 <span class="kwg-image-file" data-kwg-decal-file="right" title="No file">No file</span>
+                 <button type="button" class="kwg-image-action kwg-image-add" data-kwg-decal-add="right" aria-label="Upload right decal" title="Upload or replace right decal">+</button>
+                 <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-decal-remove="right" aria-label="Remove right decal" title="Remove right decal" disabled>×</button>
+               </div>
+               <div class="kwg-image-row" data-kwg-decal-side="front">
+                 <span class="kwg-image-side">Front</span>
+                 <span class="kwg-image-file" data-kwg-decal-file="front" title="No file">No file</span>
+                 <button type="button" class="kwg-image-action kwg-image-add" data-kwg-decal-add="front" aria-label="Upload front decal" title="Upload or replace front decal">+</button>
+                 <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-decal-remove="front" aria-label="Remove front decal" title="Remove front decal" disabled>×</button>
+               </div>
+               <div class="kwg-image-row" data-kwg-decal-side="back">
+                 <span class="kwg-image-side">Back</span>
+                 <span class="kwg-image-file" data-kwg-decal-file="back" title="No file">No file</span>
+                 <button type="button" class="kwg-image-action kwg-image-add" data-kwg-decal-add="back" aria-label="Upload back decal" title="Upload or replace back decal">+</button>
+                 <button type="button" class="kwg-image-action kwg-image-remove" data-kwg-decal-remove="back" aria-label="Remove back decal" title="Remove back decal" disabled>×</button>
+               </div>
+             </div>
+             <input class="kwg-image-file-input" type="file" id="kwg-decal-upload" accept="image/png,image/jpeg,image/webp" aria-label="Choose a decal image">
+             <div id="kwg-decal-status" class="kwg-image-live-status" role="status" aria-live="polite"></div>
+             <p class="kwg-image-help">+ Upload · × Remove · Images appear after review. Best on box parts.</p>
+           </section>
            <div class="tool-row">
              <label>Transparency:</label>
             <input type="number" id="block-transparency-input" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Part transparency, 0 to 1">
@@ -3331,7 +3426,17 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         <input type="color" id="sky-color-input" value="#1e1e7b">
       </div>
 
-      <div class="kwg-image-review-box"><label for="kwg-sky-image-upload">Sky Image (panorama)</label><input type="file" id="kwg-sky-image-upload" accept="image/png,image/jpeg,image/webp"><div id="kwg-sky-image-status" role="status">No sky image. Sky color is in use.</div><button type="button" id="kwg-sky-image-clear">Remove sky image</button><p class="kwg-recolor-help">Images stay Under Review and are not shown publicly until AI moderation approves them. Requires image moderation and storage configured on the server.</p></div>
+      <section class="kwg-image-review-box kwg-editor-image-card" id="kwg-sky-image-panel" aria-label="Sky image">
+        <div class="kwg-image-card-heading"><span aria-hidden="true">▧</span> SKY IMAGE <small>PANORAMA</small></div>
+        <div class="kwg-image-row kwg-sky-image-row">
+          <span class="kwg-image-side">Sky</span>
+          <span class="kwg-image-file" id="kwg-sky-image-status" role="status" title="No file">No file</span>
+          <button type="button" class="kwg-image-action kwg-image-add" id="kwg-sky-image-add" aria-label="Upload sky image" title="Upload or replace sky image">+</button>
+          <button type="button" class="kwg-image-action kwg-image-remove" id="kwg-sky-image-clear" aria-label="Remove sky image" title="Remove sky image" disabled>×</button>
+        </div>
+        <input class="kwg-image-file-input" type="file" id="kwg-sky-image-upload" accept="image/png,image/jpeg,image/webp" aria-label="Choose a sky image">
+        <p class="kwg-image-help">Only approved images appear in your world.</p>
+      </section>
       <div class="tool-row"><label for="kwg-env-brightness">Brightness:</label><input type="number" id="kwg-env-brightness" min="0.4" max="2" step="0.05" value="1" inputmode="decimal"></div>
       <div class="tool-row"><label for="kwg-env-saturation">Saturation:</label><input type="number" id="kwg-env-saturation" min="0" max="2" step="0.05" value="1" inputmode="decimal"></div>
       <div class="tool-row"><label for="kwg-env-resolution">Resolution:</label><select id="kwg-env-resolution"><option value="120p">120p</option><option value="240p">240p</option><option value="480p">480p</option><option value="720p">720p</option><option value="1080p" selected>1080p</option></select></div>
@@ -5624,7 +5729,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const url=kwgApprovedImageURL(review);
       scene.background=new THREE.Color(world?.skyColor||'#1e1e7b');
       const status=document.getElementById('kwg-sky-image-status');
-      if(status)status.textContent=review?.status==='pending'?'Under Review — sky image is hidden until approved.':review?.status==='error'?'Review unavailable — upload again.':review?.status==='rejected'?'Rejected — please choose a different image.':url?'Approved — sky image is active.':'No sky image. Sky color is in use.';
+      kwgRefreshSkyImageStatus();
       if(!url)return;
       new THREE.TextureLoader().load(url,texture=>{
         if(token!==kwgSkyLoadToken||currentWorldData?.skyImageReview?.url!==url)return;
@@ -9467,11 +9572,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         for(const [key,id] of Object.entries({noticeRange:'range',enemySpeed:'speed',enemyCount:'count',enemyRespawn:'respawn',enemyDamage:'damage'}))
           document.getElementById('kwg-enemy-'+id).value=enemy[key];
         document.getElementById('kwg-enemy-killable').checked=enemy.enemyKillable;
+        document.getElementById('kwg-enemy-character').value=enemy.enemyCharacter;
         kwgSyncHopsStompCheckbox('kwg-enemy-');
         document.getElementById('kwg-heal-amount').value=kwgEnemyNumber(block.healAmount,1,100,25,true);
         document.getElementById('kwg-tool-kind').value=kwgToolKind(block.toolKind);
-         kwgRefreshDecalStatus();
-        document.getElementById('kwg-enemy-character').value=enemy.enemyCharacter;
+        kwgRefreshDecalStatus();
       } else {
         noSelMsg.style.display = 'block';
         partFields.style.display = 'none';
@@ -9535,46 +9640,109 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       elem.addEventListener('input', applySelectedPartPropertyChange);
     });
 
-    function kwgReviewLabel(review){
-      return review?.status==='pending'?'Under Review — not visible until approved.':review?.status==='error'?'Review unavailable — upload again.':review?.status==='rejected'?'Rejected by image moderation.':review?.status==='approved'?'Approved — visible in the world.':'No image uploaded.';
+    // V35: One moderated image slot per face. Selection and upload target are
+    // captured when the user clicks +, so switching parts cannot redirect it.
+    const kwgDecalSides=['top','bottom','left','right','front','back'];
+    let kwgPendingDecalSide=null;
+    const kwgImageTransient=new Map();
+    function kwgImageFileLabel(review){
+      if(!review)return 'No file';
+      const name=typeof review.fileName==='string'&&review.fileName.trim()?review.fileName.trim():'Image';
+      if(review.status==='pending')return name+' · Under Review';
+      if(review.status==='approved')return name+' · Approved';
+      if(review.status==='rejected')return name+' · Rejected';
+      if(review.status==='error')return name+' · Review failed';
+      return name;
     }
     function kwgRefreshDecalStatus(){
       const block=currentWorldData?.blocks?.[selectedBlockId];
-      const side=document.getElementById('kwg-decal-side').value;
-      document.getElementById('kwg-decal-status').textContent=kwgReviewLabel(block?.decals?.[side]);
+      for(const side of kwgDecalSides){
+        const row=document.querySelector(`[data-kwg-decal-side="${side}"]`);
+        if(!row)continue;
+        const review=block?.decals?.[side];
+        const label=row.querySelector('.kwg-image-file');
+        const remove=row.querySelector('.kwg-image-remove');
+        const key=selectedBlockId+':'+side;
+        const text=kwgImageTransient.get(key)||kwgImageFileLabel(review);
+        label.textContent=text;
+        label.title=text;
+        label.dataset.reviewStatus=review?.status||'empty';
+        remove.disabled=!block||!review;
+        row.querySelector('.kwg-image-add').disabled=!block;
+      }
     }
-    document.getElementById('kwg-decal-side').addEventListener('change',kwgRefreshDecalStatus);
-    async function kwgSubmitWorldImage(file,kind,side){
+    function kwgRefreshSkyImageStatus(){
+      const review=currentWorldData?.skyImageReview;
+      const status=document.getElementById('kwg-sky-image-status');
+      if(!status)return;
+      const label=kwgImageTransient.get('sky')||kwgImageFileLabel(review);
+      status.textContent=label;status.title=label;
+      status.dataset.reviewStatus=review?.status||'empty';
+      document.getElementById('kwg-sky-image-clear').disabled=!review;
+    }
+    document.querySelectorAll('[data-kwg-decal-add]').forEach(button=>{
+      button.addEventListener('click',()=>{
+        if(!selectedBlockId||!currentWorldData?.blocks?.[selectedBlockId])return;
+        kwgPendingDecalSide={side:button.dataset.kwgDecalAdd,blockId:selectedBlockId,worldName:currentWorldName};
+        document.getElementById('kwg-decal-upload').click();
+      });
+    });
+    document.querySelectorAll('[data-kwg-decal-remove]').forEach(button=>{
+      button.addEventListener('click',()=>kwgClearWorldImage('decal',button.dataset.kwgDecalRemove));
+    });
+    document.getElementById('kwg-sky-image-add').addEventListener('click',()=>document.getElementById('kwg-sky-image-upload').click());
+    async function kwgSubmitWorldImage(file,kind,side,expectedBlockId,expectedWorldName){
       if(!canEditCurrentWorld||!currentWorldName){showToast('Open your world in edit mode first.');return;}
       if(!file||!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>1500000){showToast('Use PNG, JPG, or WebP, up to 1.5 MB.');return;}
-      const blockId=kind==='decal'?selectedBlockId:null;
-      if(kind==='decal'&&!currentWorldData?.blocks?.[blockId])return;
-      const status=document.getElementById(kind==='sky'?'kwg-sky-image-status':'kwg-decal-status');
-      status.textContent='Uploading for AI review…';
-      const bytes=await file.arrayBuffer();
-      socket.emit('kwg_image_submit',{worldName:currentWorldName,kind,blockId,side,mimeType:file.type,bytes},response=>{
-        if(!response?.success){status.textContent=response?.message||'Upload failed.';showToast(status.textContent);return;}
-        status.textContent='Under Review — hidden until approved.';
-      });
+      const worldName=expectedWorldName||currentWorldName;
+      const blockId=kind==='decal'?expectedBlockId:null;
+      if(worldName!==currentWorldName||kind==='decal'&&!currentWorldData?.blocks?.[blockId])return;
+      const key=kind==='sky'?'sky':blockId+':'+side;
+      kwgImageTransient.set(key,file.name+' · Uploading…');
+      if(kind==='sky')kwgRefreshSkyImageStatus();else kwgRefreshDecalStatus();
+      try{
+        const bytes=await file.arrayBuffer();
+        socket.emit('kwg_image_submit',{worldName,kind,blockId,side,mimeType:file.type,fileName:file.name,bytes},response=>{
+          if(!response?.success){
+            kwgImageTransient.set(key,response?.message||'Upload failed.');
+            showToast(response?.message||'Upload failed.');
+          }else kwgImageTransient.delete(key);
+          if(kind==='sky')kwgRefreshSkyImageStatus();else kwgRefreshDecalStatus();
+        });
+      }catch(err){
+        kwgImageTransient.set(key,'Could not read image.');
+        if(kind==='sky')kwgRefreshSkyImageStatus();else kwgRefreshDecalStatus();
+      }
     }
-    document.getElementById('kwg-sky-image-upload').addEventListener('change',e=>{const f=e.target.files?.[0];if(f)kwgSubmitWorldImage(f,'sky');e.target.value='';});
-    document.getElementById('kwg-decal-upload').addEventListener('change',e=>{const f=e.target.files?.[0];if(f)kwgSubmitWorldImage(f,'decal',document.getElementById('kwg-decal-side').value);e.target.value='';});
-    function kwgClearWorldImage(kind){
+    document.getElementById('kwg-sky-image-upload').addEventListener('change',e=>{
+      const file=e.target.files?.[0];if(file)kwgSubmitWorldImage(file,'sky');e.target.value='';
+    });
+    document.getElementById('kwg-decal-upload').addEventListener('change',e=>{
+      const file=e.target.files?.[0],target=kwgPendingDecalSide;
+      if(file&&target)kwgSubmitWorldImage(file,'decal',target.side,target.blockId,target.worldName);
+      kwgPendingDecalSide=null;e.target.value='';
+    });
+    function kwgClearWorldImage(kind,side){
       if(!canEditCurrentWorld||!currentWorldName)return;
-      const side=kind==='decal'?document.getElementById('kwg-decal-side').value:null;
-      socket.emit('kwg_image_clear',{worldName:currentWorldName,kind,blockId:kind==='decal'?selectedBlockId:null,side},r=>{
+      const blockId=kind==='decal'?selectedBlockId:null;
+      if(kind==='decal'&&(!kwgDecalSides.includes(side)||!currentWorldData?.blocks?.[blockId]))return;
+      const key=kind==='sky'?'sky':blockId+':'+side;
+      kwgImageTransient.delete(key);
+      socket.emit('kwg_image_clear',{worldName:currentWorldName,kind,blockId,side},r=>{
         if(!r?.success)showToast(r?.message||'Could not remove image.');
       });
     }
     document.getElementById('kwg-sky-image-clear').addEventListener('click',()=>kwgClearWorldImage('sky'));
-    document.getElementById('kwg-decal-clear').addEventListener('click',()=>kwgClearWorldImage('decal'));
     socket.on('kwg_image_review_updated',({kind,blockId,side,review}={})=>{
       if(!currentWorldData)return;
       if(kind==='sky'){
+        kwgImageTransient.delete('sky');
         if(review)currentWorldData.skyImageReview=review;else delete currentWorldData.skyImageReview;
         kwgApplySkyImage(currentWorldData);
+        kwgRefreshSkyImageStatus();
       }else if(kind==='decal'){
         const block=currentWorldData.blocks?.[blockId];if(!block)return;
+        kwgImageTransient.delete(blockId+':'+side);
         block.decals=block.decals||{};
         if(review)block.decals[side]=review;else delete block.decals[side];
         if(worldBlocks[blockId]){
