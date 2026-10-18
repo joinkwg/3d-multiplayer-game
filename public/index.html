@@ -3266,7 +3266,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <label class="kwg-recolor-field"><span>Can Collide</span><input type="checkbox" id="kwg-place-collide" checked></label>
       <div id="kwg-place-enemy-properties" class="kwg-enemy-properties" style="display:none">
         <div class="kwg-enemy-props-title">ENEMY SPAWNER PRESET</div>
-        <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-place-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option><option value="bot_bus">Bot Bus</option></select></label>
+        <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-place-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option><option value="bot_bus">Bot Bus</option><option value="balloon_baboon">Balloon Baboon</option></select></label>
         <label class="kwg-recolor-field"><span>Notice Range</span><input id="kwg-place-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
         <label class="kwg-recolor-field"><span>Enemy Speed</span><input id="kwg-place-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
         <label class="kwg-recolor-field"><span>Enemy Count</span><input id="kwg-place-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
@@ -3276,7 +3276,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       </div>
       <div id="kwg-place-dispenser-properties" class="kwg-enemy-properties" style="display:none">
         <div class="kwg-enemy-props-title">TOOL DISPENSER PRESET</div>
-        <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-place-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option><option value="laser">Laser Gun</option><option value="ufo">UFO</option></select></label>
+        <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-place-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option><option value="laser">Laser Gun</option><option value="ufo">UFO</option><option value="balloon">Hot Air Balloon</option></select></label>
       </div>
       <div id="kwg-place-health-properties" class="kwg-enemy-properties" style="display:none">
         <div class="kwg-enemy-props-title">HEALTH BLOCK PRESET</div>
@@ -3388,7 +3388,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           </div>
           <div id="kwg-tool-dispenser-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">TOOL DISPENSER SETTINGS</div>
-            <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option><option value="laser">Laser Gun</option><option value="ufo">UFO</option></select></label>
+            <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option><option value="laser">Laser Gun</option><option value="ufo">UFO</option><option value="balloon">Hot Air Balloon</option></select></label>
             <p class="kwg-recolor-help">Touch to collect this tool. Press 1–9 to equip it and click to fire.</p>
           </div>
           <div id="kwg-health-properties" class="kwg-enemy-properties" style="display:none">
@@ -3398,7 +3398,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           </div>
           <div id="kwg-enemy-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">ENEMY SETTINGS</div>
-            <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option><option value="bot_bus">Bot Bus</option></select></label>
+            <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option><option value="bot_bus">Bot Bus</option><option value="balloon_baboon">Balloon Baboon</option></select></label>
             <label class="kwg-recolor-field"><span>Notice Range (studs)</span><input id="kwg-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
             <label class="kwg-recolor-field"><span>Enemy Speed (studs / second)</span><input id="kwg-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
             <label class="kwg-recolor-field"><span>Number of Enemies</span><input id="kwg-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
@@ -8997,6 +8997,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
     function loadWorldData(world, initialPlayers, selfId, selfSpawn) {
       kwgClearEnemySpawners();
+      kwgClearBlockPreviews();
       kwgClearWorldPets();
       currentWorldData = world;
       if (localPlayerAvatar) { scene.remove(localPlayerAvatar); localPlayerAvatar = null; }
@@ -9531,11 +9532,105 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       resizeWorldViewport();
     });
 
+
+    // V39 Studio camera. The avatar remains parked in edit mode; the viewport
+    // has its own free-fly camera. The thumbnail camera still works separately.
+    const kwgStudioCam={active:false,yaw:0,pitch:0,dragging:false,x:0,y:0,keys:new Set(),saved:null};
+    const kwgStudioHelp=document.createElement('div');
+    kwgStudioHelp.id='kwg-studio-camera-hint';
+    kwgStudioHelp.textContent='STUDIO CAMERA  ·  WASD FLY  ·  RIGHT DRAG LOOK  ·  SCROLL DOLLY  ·  F FOCUS  ·  Q/E DOWN/UP  ·  SHIFT FAST';
+    kwgStudioHelp.style.cssText='display:none;position:fixed;bottom:12px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 35px);padding:7px 10px;background:#102033ed;border:2px solid #6688a9;color:#e7f3ff;font:bold 10px monospace;text-align:center;pointer-events:none;z-index:80';
+    document.body.appendChild(kwgStudioHelp);
+    function kwgStudioLook(){
+      const c=kwgStudioCam;
+      return new THREE.Vector3(-Math.sin(c.yaw)*Math.cos(c.pitch),Math.sin(c.pitch),-Math.cos(c.yaw)*Math.cos(c.pitch));
+    }
+    function kwgStudioStart(){
+      const c=kwgStudioCam;
+      c.saved={position:camera.position.clone(),quaternion:camera.quaternion.clone()};
+      const dir=camera.getWorldDirection(new THREE.Vector3());
+      c.yaw=Math.atan2(-dir.x,-dir.z);c.pitch=Math.asin(THREE.MathUtils.clamp(dir.y,-.999,.999));
+      c.active=true;c.dragging=false;c.keys.clear();kwgStudioHelp.style.display='block';
+      isRightClicking=false;
+    }
+    function kwgStudioStop(){
+      const c=kwgStudioCam;c.active=false;c.dragging=false;c.keys.clear();kwgStudioHelp.style.display='none';
+      if(c.saved){camera.position.copy(c.saved.position);camera.quaternion.copy(c.saved.quaternion);c.saved=null;}
+    }
+    function kwgStudioFocus(){
+      if(!kwgStudioCam.active||!selectedBlockId)return;
+      const block=currentWorldData?.blocks?.[selectedBlockId];if(!block)return;
+      const center=new THREE.Vector3(Number(block.x)||0,Number(block.y)||0,Number(block.z)||0);
+      const span=Math.max(1,Math.abs(Number(block.scaleX)||1),Math.abs(Number(block.scaleY)||1),Math.abs(Number(block.scaleZ)||1));
+      const dir=kwgStudioLook();
+      camera.position.copy(center).addScaledVector(dir,-Math.max(4,span*2.2));
+      const look=center.clone().sub(camera.position).normalize();
+      kwgStudioCam.yaw=Math.atan2(-look.x,-look.z);
+      kwgStudioCam.pitch=Math.asin(THREE.MathUtils.clamp(look.y,-.999,.999));
+      camera.lookAt(center);
+    }
+    function kwgStudioTick(delta){
+      if(!kwgStudioCam.active||kwgFreeCamera.active)return;
+      const c=kwgStudioCam,dir=kwgStudioLook(),right=new THREE.Vector3(Math.cos(c.yaw),0,-Math.sin(c.yaw));
+      const v=new THREE.Vector3();
+      if(c.keys.has('w'))v.add(dir);
+      if(c.keys.has('s'))v.sub(dir);
+      if(c.keys.has('d'))v.add(right);
+      if(c.keys.has('a'))v.sub(right);
+      if(c.keys.has('e'))v.y+=1;
+      if(c.keys.has('q'))v.y-=1;
+      if(v.lengthSq())camera.position.addScaledVector(v.normalize(),Math.min(delta,.08)*(c.keys.has('shift')?33:12));
+      camera.lookAt(camera.position.clone().add(dir));
+    }
+    renderer.domElement.addEventListener('contextmenu',e=>{if(kwgStudioCam.active)e.preventDefault();});
+    renderer.domElement.addEventListener('pointerdown',e=>{
+      if(!kwgStudioCam.active||kwgFreeCamera.active||e.button!==2)return;
+      e.preventDefault();e.stopImmediatePropagation();
+      kwgStudioCam.dragging=true;kwgStudioCam.x=e.clientX;kwgStudioCam.y=e.clientY;
+    },true);
+    window.addEventListener('pointermove',e=>{
+      const c=kwgStudioCam;if(!c.active||!c.dragging)return;
+      if(!(e.buttons&2)){c.dragging=false;return;}
+      c.yaw-=(e.clientX-c.x)*.004;c.pitch=THREE.MathUtils.clamp(c.pitch-(e.clientY-c.y)*.004,-1.5,1.5);
+      c.x=e.clientX;c.y=e.clientY;
+    },true);
+    window.addEventListener('pointerup',()=>{kwgStudioCam.dragging=false;},true);
+    window.addEventListener('blur',()=>{kwgStudioCam.dragging=false;kwgStudioCam.keys.clear();});
+    renderer.domElement.addEventListener('wheel',e=>{
+      if(!kwgStudioCam.active||kwgFreeCamera.active)return;
+      e.preventDefault();e.stopImmediatePropagation();
+      camera.position.addScaledVector(kwgStudioLook(),-Math.sign(e.deltaY)*Math.max(.6,Math.min(8,Math.abs(e.deltaY)*.015)));
+    },{capture:true,passive:false});
+    window.addEventListener('keydown',e=>{
+      if(!kwgStudioCam.active||kwgFreeCamera.active)return;
+      if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName)||document.activeElement?.isContentEditable)return;
+      const k=e.key.toLowerCase();
+      if(k==='f'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();e.stopImmediatePropagation();kwgStudioFocus();return;}
+      if(['w','a','s','d','q','e','shift'].includes(k)&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
+        // Shift+D is reserved for duplicate, handled by the editor shortcut.
+        if(k==='d'&&e.shiftKey)return;
+        kwgStudioCam.keys.add(k);e.preventDefault();e.stopImmediatePropagation();
+      }
+    },true);
+    window.addEventListener('keyup',e=>{kwgStudioCam.keys.delete(e.key.toLowerCase());},true);
+    function kwgStudioHideActors(){
+      const hidden=kwgStudioCam.active;
+      if(localPlayerAvatar)localPlayerAvatar.visible=!hidden;
+      for(const p of Object.values(otherPlayers))if(p.mesh)p.mesh.visible=!hidden;
+      for(const pet of kwgWorldPets.values())if(pet.mesh)pet.mesh.visible=!hidden;
+      for(const entry of kwgEnemySpawners.values())for(const slot of entry.slots){
+        if(slot.mesh)slot.mesh.visible=!hidden;
+        if(slot.parkedUfo)slot.parkedUfo.visible=!hidden;
+        for(const robot of slot.robots||[])if(robot.mesh)robot.mesh.visible=!hidden;
+      }
+    }
+
     toggleEditBtn.addEventListener('click', async () => {
       if(worldCommitInProgress)return;
       if(isEditMode && !(await commitStagedWorldEdits()))return;
       if (!canEditCurrentWorld) { showToast('Only the world owner or an admin can edit this world.'); return; }
       isEditMode = !isEditMode;
+      if(isEditMode)kwgStudioStart();else kwgStudioStop();
       resetStudioDockSizes();
       toggleEditBtn.setAttribute('aria-label',isEditMode?'Save & Exit':'Enable Edit Mode');
       toggleEditBtn.title=isEditMode?'Save & Exit':'Enable Edit Mode';
@@ -10082,8 +10177,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const el=document.getElementById(id);
       el.value=String(kwgTransparencyValue(id));
     }
-    const kwgToolKind=value=>['pistol','minigun','laser','ufo'].includes(value)?value:'pistol';
-    const kwgEnemyCharacter=value=>['devil','sniper','hops','spider','alien','bot_bus'].includes(value)?value:'devil';
+    const kwgToolKind=value=>['pistol','minigun','laser','ufo','balloon'].includes(value)?value:'pistol';
+    const kwgEnemyCharacter=value=>['devil','sniper','hops','spider','alien','bot_bus','balloon_baboon'].includes(value)?value:'devil';
     const kwgEnemyDefaults={noticeRange:18,enemySpeed:3,enemyCount:1,enemyKillable:true,enemyRespawn:5,enemyDamage:25};
     function kwgEnemyNumber(value,min,max,fallback,integer=false){
       const v=Number(value);
@@ -10478,6 +10573,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if (!currentWorldName || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT' || e.target.closest('#customizer-modal')) return;
 
       if (e.button === 2) {
+        if(kwgStudioCam.active)return;
         isRightClicking = true;
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
@@ -11632,8 +11728,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // V26: session-only tools. Dispensers are persisted blocks; weapons reset
     // on leaving a world. Hotbar order is stable; keys 1-9 toggle slots.
     const kwgTools=[];let kwgEquippedTool=null,kwgLastShot=0,kwgFireHeld=false;
-    const kwgToolCooldown={pistol:390,minigun:95,laser:245,ufo:1300};
-    const kwgToolDamage={pistol:32,minigun:9,laser:4,ufo:100};
+    const kwgToolCooldown={pistol:390,minigun:95,laser:245,ufo:1300,balloon:1200};
+    const kwgToolDamage={pistol:32,minigun:9,laser:4,ufo:100,balloon:70};
     let kwgLaserLockAt=0,kwgLaserTargetKey=null,kwgLaserLastTick=0;
     const kwgAimNdc=new THREE.Vector2(0,0);
     const kwgToolPickupCooldowns=new Map();
@@ -11731,15 +11827,15 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const btn=document.createElement('button');btn.type='button';btn.className='kwg-tool-slot';
         btn.setAttribute('aria-pressed',String(kwgEquippedTool===kind));
         btn.title=`${kwgEquippedTool===kind?'Unequip':'Equip'} ${kind} (${index+1})`;
-        const glyph=document.createElement('span');glyph.className='kwg-tool-glyph';glyph.textContent=({minigun:'▤',laser:'⚡',ufo:'◉',pistol:'⌁'})[kind];
-        const label=document.createElement('span');label.textContent=`${index+1} ${({minigun:'MINIGUN',laser:'LASER GUN',ufo:'UFO',pistol:'PISTOL'})[kind]}`;
+        const glyph=document.createElement('span');glyph.className='kwg-tool-glyph';glyph.textContent=({minigun:'▤',laser:'⚡',ufo:'◉',balloon:'🎈',pistol:'⌁'})[kind];
+        const label=document.createElement('span');label.textContent=`${index+1} ${({minigun:'MINIGUN',laser:'LASER GUN',ufo:'UFO',balloon:'BALLOON',pistol:'PISTOL'})[kind]}`;
         btn.append(glyph,label);btn.addEventListener('click',()=>kwgToggleToolSlot(index));bar.appendChild(btn);
       });
       document.getElementById('kwg-tool-crosshair')?.classList.toggle('kwg-aiming',!!kwgEquippedTool&&kwgEquippedTool!=='ufo');
       let help=document.getElementById('kwg-ufo-help');
       if(!help){help=document.createElement('div');help.id='kwg-ufo-help';help.style.cssText='position:fixed;bottom:102px;left:50%;transform:translateX(-50%);padding:7px 11px;background:#162534e8;border:2px solid #91e9e3;border-radius:7px;color:#cffff6;font:bold 11px monospace;z-index:40;pointer-events:none;white-space:nowrap';document.body.appendChild(help);}
-      help.textContent='UFO: W/S FLY  •  A/D TURN  •  SPACE UP  •  SHIFT DOWN  •  CLICK ZAP';
-      help.style.display=kwgEquippedTool==='ufo'&&!!currentWorldName&&!isEditMode&&!kwgDeadUntil?'block':'none';
+      help.textContent=kwgEquippedTool==='balloon'?'BALLOON: W/S FLY  •  A/D TURN  •  SPACE UP  •  SHIFT DOWN  •  CLICK DROP BOMB':'UFO: W/S FLY  •  A/D TURN  •  SPACE UP  •  SHIFT DOWN  •  CLICK ZAP';
+      help.style.display=(kwgEquippedTool==='ufo'||kwgEquippedTool==='balloon')&&!!currentWorldName&&!isEditMode&&!kwgDeadUntil?'block':'none';
     }
     // V27: visible tool in the player's right hand. Kept on the arm pivot so
     // it follows walk/jump/stomp animations, never floats at the avatar origin.
@@ -11795,6 +11891,38 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
     // V33: the UFO is a rideable tool, not a rifle. It is attached below
     // the avatar's feet and follows the player's authoritative position.
+
+    // V39: Warm-colored hot-air balloon with basket and ropes, reused by
+    // the player tool, enemy and editor dispenser previews.
+    function kwgHotAirBalloonModel(){
+      const root=new THREE.Group();
+      const red=new THREE.MeshLambertMaterial({color:0xe85b5e});
+      const orange=new THREE.MeshLambertMaterial({color:0xffba60});
+      const gold=new THREE.MeshLambertMaterial({color:0xf5e2a0});
+      const rope=new THREE.MeshLambertMaterial({color:0x775844});
+      const basket=new THREE.MeshLambertMaterial({color:0xa06b3c});
+      const dark=new THREE.MeshLambertMaterial({color:0x513b33});
+      const add=(geo,mat,x,y,z)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);root.add(m);return m;};
+      const envelope=add(new THREE.SphereGeometry(1.6,16,12),red,0,4.20,0);
+      envelope.scale.y=1.15;
+      for(let i=0;i<8;i++){
+        const angle=i*Math.PI/4;
+        const panel=add(new THREE.SphereGeometry(1.607,4,12,angle,Math.PI/4,0,Math.PI),i%2?orange:gold,0,4.20,0);
+        panel.scale.y=1.15;
+      }
+      add(new THREE.CylinderGeometry(.60,.73,.75,8),basket,0,-.28,0);
+      add(new THREE.CylinderGeometry(.73,.73,.12,8),dark,0,-.64,0);
+      add(new THREE.CylinderGeometry(.73,.73,.11,8),gold,0,.10,0);
+      for(const x of [-.52,.52])for(const z of [-.52,.52]){
+        const start=new THREE.Vector3(x,.07,z),end=new THREE.Vector3(x*.98,3.22,z*.98);
+        const dir=end.clone().sub(start),c=add(new THREE.CylinderGeometry(.035,.035,dir.length(),6),rope,(start.x+end.x)/2,(start.y+end.y)/2,(start.z+end.z)/2);
+        c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize());
+      }
+      const burner=add(new THREE.ConeGeometry(.20,.38,7),new THREE.MeshBasicMaterial({color:0xffc35d}),0,.43,0);
+      burner.rotation.z=Math.PI;root.userData.burner=burner;
+      return root;
+    }
+
     function kwgMakePlayerUfo(){
       const ship=kwgAlienUfoModel();ship.name='kwg-player-ufo';
       ship.position.set(0,-.48,0);
@@ -11806,11 +11934,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgSyncUfoRide(avatar,kind){
       if(!avatar)return;
       let ship=avatar.userData.kwgPlayerUfo;
-      if(kind!=='ufo'){
+      if(kind!=='ufo'&&kind!=='balloon'){
         if(ship){avatar.remove(ship);ship.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});avatar.userData.kwgPlayerUfo=null;}
         return;
       }
-      if(!ship){ship=kwgMakePlayerUfo();avatar.add(ship);avatar.userData.kwgPlayerUfo=ship;}
+      if(ship&&ship.userData.kwgRideKind!==kind){avatar.remove(ship);ship.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});ship=null;avatar.userData.kwgPlayerUfo=null;}
+      if(!ship){ship=kind==='balloon'?kwgHotAirBalloonModel():kwgMakePlayerUfo();ship.userData.kwgRideKind=kind;avatar.add(ship);avatar.userData.kwgPlayerUfo=ship;}
     }
     function kwgUfoBeamVisual(avatar,blocks,now){
       const ship=avatar?.userData.kwgPlayerUfo;if(!ship)return;
@@ -11852,7 +11981,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const arm=localPlayerAvatar?.userData?.limbs?.rightArm;
       const kind=(!isEditMode&&!kwgDeadUntil&&currentWorldName)?kwgEquippedTool:null;
       kwgSyncUfoRide(localPlayerAvatar,kind);
-      if(!arm||!kind||kind==='ufo'){kwgRemoveHeldTool();return;}
+      if(!arm||!kind||kind==='ufo'||kind==='balloon'){kwgRemoveHeldTool();return;}
       if(kwgHeldToolOwner===arm&&kwgHeldToolVisual?.userData.kind===kind)return;
       kwgRemoveHeldTool();
       kwgHeldToolVisual=kwgMakeHeldTool(kind);kwgHeldToolVisual.userData.kind=kind;
@@ -11862,7 +11991,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // muzzle flash and (for minigun) spinning barrel cluster.
     function kwgAnimateHeldWeapon(avatar,kind,now,local=false){
       const limbs=avatar?.userData?.limbs;
-      if(!limbs||!kind||kind==='ufo')return;
+      if(!limbs||!kind||kind==='ufo'||kind==='balloon')return;
       const gun=local?kwgHeldToolVisual:avatar.userData.kwgRemoteTool;
       if(!gun||gun.userData.kind!==kind)return;
       const right=limbs.rightArm,left=limbs.leftArm;
@@ -11903,7 +12032,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const previous=kwgEquippedTool;
       kwgEquippedTool=kwgTools.includes(kind)?kind:null;
       if(previous!==kwgEquippedTool){
-        if(kwgEquippedTool==='ufo'&&localPlayerAvatar&&currentWorldData?.blocks){
+        if((kwgEquippedTool==='ufo'||kwgEquippedTool==='balloon')&&localPlayerAvatar&&currentWorldData?.blocks){
           const p=localPlayerAvatar.position;
           const blocks=Object.values(currentWorldData.blocks);
           // Take off gradually to the highest unobstructed level above the
@@ -11951,12 +12080,87 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(!socket?.connected)continue;
         const pickupWorld=currentWorldName;
         socket.emit('tool_pickup',{worldName:pickupWorld,blockId:block.id},response=>{
-          if(!response?.success||pickupWorld!==currentWorldName||response.kind!==kind||kwgTools.includes(kind))return;
+          if(kwgDeadUntil||!response?.success||pickupWorld!==currentWorldName||response.kind!==kind||kwgTools.includes(kind))return;
           kwgTools.push(kind);kwgEquippedTool=kind;kwgRenderTools();kwgSyncHeldTool();kwgAudio.play('tool_pickup');
-          showToast(`${({pistol:'Pistol',minigun:'Minigun',laser:'Laser Gun',ufo:'UFO'})[kind]} collected! Press ${kwgTools.length} to equip.`);
+          showToast(`${({pistol:'Pistol',minigun:'Minigun',laser:'Laser Gun',ufo:'UFO',balloon:'Hot Air Balloon'})[kind]} collected! Press ${kwgTools.length} to equip.`);
         });
       }
     }
+
+    const kwgBombs=[];
+    function kwgBombModel(){
+      const root=new THREE.Group();
+      const shell=new THREE.Mesh(new THREE.SphereGeometry(.28,10,8),new THREE.MeshLambertMaterial({color:0x303b49}));root.add(shell);
+      const fuse=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,.25,6),new THREE.MeshBasicMaterial({color:0xffbd62}));fuse.position.y=.33;root.add(fuse);
+      return root;
+    }
+    function kwgDropBomb(position,enemy=false,damage=70,remote=false){
+      if(!currentWorldName)return;
+      const mesh=kwgBombModel();mesh.position.copy(position);mesh.position.y-=enemy?.65:1.15;scene.add(mesh);
+      kwgBombs.push({mesh,vy:-1,enemy,damage,remote,origin:mesh.position.clone(),created:performance.now()});
+      if(!enemy&&!remote&&socket?.connected)socket.emit('kwg_balloon_drop',{worldName:currentWorldName,origin:{x:mesh.position.x,y:mesh.position.y,z:mesh.position.z}});
+    }
+    function kwgBombExplosion(position,enemy,damage,origin,remote=false){
+      kwgStompDust(position.clone(),true);
+      const ring=new THREE.Mesh(new THREE.SphereGeometry(1,12,8),new THREE.MeshBasicMaterial({color:0xffb34d,transparent:true,opacity:.37,depthWrite:false,side:THREE.DoubleSide}));
+      ring.position.copy(position);scene.add(ring);
+      kwgBombFlashes.push({mesh:ring,until:performance.now()+340,start:performance.now()});
+      const radius=4.2,blocks=Object.values(currentWorldData?.blocks||{});
+      if(enemy){
+        if(!isEditMode&&!kwgDeadUntil&&localPlayerAvatar){
+          const p=localPlayerAvatar.position.clone().add(new THREE.Vector3(0,1,0));
+          const distance=p.distanceTo(position);
+          if(distance<radius&&kwgRayWorldClear(position.clone().add(new THREE.Vector3(0,.15,0)),p,blocks))
+            kwgEnemyHitPlayer(Math.max(8,Math.round(damage*(1-distance/radius))),position);
+        }
+      }else if(!remote){
+        const now=performance.now();
+        for(const [id,entry] of kwgEnemySpawners)for(let index=0;index<entry.slots.length;index++){
+          const slot=entry.slots[index];if(!slot.mesh||slot.deadUntil>now||slot.squishUntil>now)continue;
+          const p=slot.mesh.position.clone().add(new THREE.Vector3(0,1,0));const dist=p.distanceTo(position);
+          if(dist>=radius||!kwgRayWorldClear(position.clone().add(new THREE.Vector3(0,.15,0)),p,blocks))continue;
+          slot.weaponHealth=(slot.weaponHealth??kwgEnemyMaxWeaponHealth(entry.block.enemyCharacter))-Math.max(8,Math.round(damage*(1-dist/radius)));
+          slot.hitUntil=now+350;kwgShowEnemyHealth(slot,entry.block.enemyCharacter);
+          if(slot.weaponHealth<=0){slot.defeatMethod='weapon';kwgDefeatEnemy(id,index,true);}
+        }
+        if(socket?.connected)socket.emit('kwg_balloon_blast',{worldName:currentWorldName,impact:{x:position.x,y:position.y,z:position.z},origin:{x:origin.x,y:origin.y,z:origin.z}});
+      }
+    }
+    const kwgBombFlashes=[];
+    function kwgUpdateBombs(delta){
+      const blocks=Object.values(currentWorldData?.blocks||{}),dt=Math.min(delta,.05);
+      for(let i=kwgBombs.length-1;i>=0;i--){
+        const b=kwgBombs[i],oldY=b.mesh.position.y;
+        b.vy-=18*dt;b.mesh.position.y+=b.vy*dt;b.mesh.rotation.z+=dt*3;
+        let surface=-Infinity;
+        for(const block of blocks){
+          if(block.canCollide===false||block.actionType==='enemy_spawner'||block.actionType==='tool_dispenser')continue;
+          const a=getBlockAABB(block);
+          if(b.mesh.position.x<a.minX||b.mesh.position.x>a.maxX||b.mesh.position.z<a.minZ||b.mesh.position.z>a.maxZ)continue;
+          if(a.maxY<=oldY+.25&&a.maxY>=b.mesh.position.y-.25)surface=Math.max(surface,a.maxY);
+        }
+        if(surface>-Infinity||b.mesh.position.y<-35){
+          const hit=surface>-Infinity;
+          if(hit)b.mesh.position.y=surface+.18;
+          if(hit)kwgBombExplosion(b.mesh.position.clone(),b.enemy,b.damage,b.origin,b.remote);
+          kwgPreviewDispose(b.mesh);kwgBombs.splice(i,1);
+        }
+      }
+      const now=performance.now();
+      for(let i=kwgBombFlashes.length-1;i>=0;i--){
+        const b=kwgBombFlashes[i];if(now>b.until){kwgPreviewDispose(b.mesh);kwgBombFlashes.splice(i,1);continue;}
+        const t=(now-b.start)/340;b.mesh.scale.setScalar(.2+t*4.2);b.mesh.material.opacity=.37*(1-t);
+      }
+    }
+    socket.on('kwg_balloon_dropped',({origin}={})=>{
+      if(!currentWorldName||isEditMode||!origin||!['x','y','z'].every(k=>Number.isFinite(origin[k])))return;
+      kwgDropBomb(new THREE.Vector3(origin.x,origin.y+1.15,origin.z),false,0,true);
+    });
+    function kwgClearBombs(){
+      for(const b of kwgBombs)kwgPreviewDispose(b.mesh);kwgBombs.length=0;
+      for(const b of kwgBombFlashes)kwgPreviewDispose(b.mesh);kwgBombFlashes.length=0;
+    }
+
     function kwgFireTool(){
       if(!currentWorldName||isEditMode||kwgFreeCamera.active||kwgDeadUntil||kwgKnockedUntil||!localPlayerAvatar||!kwgEquippedTool)return;
       const now=performance.now(),kind=kwgEquippedTool;
@@ -11967,6 +12171,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       // Mouse-position aiming lets players target enemies anywhere in the
       // third-person view; the reticle follows the cursor over the canvas.
       const ray=new THREE.Raycaster();
+      if(kind==='balloon'){kwgDropBomb(localPlayerAvatar.position.clone(),false,kwgToolDamage.balloon);return;}
       if(kind==='ufo'){ray.set(localPlayerAvatar.position.clone().add(new THREE.Vector3(0,-.65,0)),new THREE.Vector3(0,-1,0));}
       else ray.setFromCamera(kwgAimNdc,camera);
       ray.far=115;
@@ -12147,6 +12352,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgRagdollYaw=(Math.random()-.5)*1.5;
       kwgRagdollPhase=Math.random()*Math.PI*2;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;kwgJumpPressedAt=0;velocityY=reason==='enemy'?.06:0;isGrounded=false;
+      kwgClearTools();
+      if(socket?.connected)socket.emit('kwg_tools_lost',{worldName:currentWorldName});
       kwgResetStompAnimation(true);
       kwgEnsureStompRig(localPlayerAvatar);
       // A fall death happens in the void, not on the last safe platform.
@@ -12419,7 +12626,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
     // Enemy HP is local to the current game client. The bar is only shown
     // after damage; the same value drives the weapon defeat threshold.
-    function kwgEnemyMaxWeaponHealth(kind){return kind==='hops'?160:kind==='alien'?125:kind==='spider'?110:kind==='bot_bus'?230:100;}
+    function kwgEnemyMaxWeaponHealth(kind){return kind==='hops'?160:kind==='alien'?125:kind==='spider'?110:kind==='bot_bus'?230:kind==='balloon_baboon'?150:100;}
     function kwgShowEnemyHealth(slot,kind){
       const npc=slot?.mesh;if(!npc)return;
       const max=kwgEnemyMaxWeaponHealth(kind);
@@ -12429,7 +12636,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const canvas=document.createElement('canvas');canvas.width=256;canvas.height=52;
         const texture=new THREE.CanvasTexture(canvas);texture.minFilter=THREE.NearestFilter;
         sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:false}));
-        sprite.name='kwg-enemy-health';sprite.position.set(0,kind==='bot_bus'?3.55:kind==='hops'?3.65:kind==='alien'?2.9:kind==='spider'?2.25:2.40,0);
+        sprite.name='kwg-enemy-health';sprite.position.set(0,kind==='bot_bus'?3.55:kind==='hops'?3.65:kind==='alien'?2.9:kind==='balloon_baboon'?3.25:kind==='spider'?2.25:2.40,0);
         sprite.scale.set(1.62,.34,1);npc.add(sprite);
         npc.userData.kwgEnemyHealth=sprite;sprite.userData.canvas=canvas;sprite.userData.lastHp=-1;
       }
@@ -12665,8 +12872,174 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(npc.userData.devilNotice)npc.userData.devilNotice.visible=chasing&&now<(slot.noticeBubbleUntil||0);
     }
 
+
+    function kwgBalloonBaboonModel(){
+      const root=new THREE.Group(),rig=new THREE.Group();root.add(rig);
+      const fur=new THREE.MeshLambertMaterial({color:0x8e573b});
+      const face=new THREE.MeshLambertMaterial({color:0xc88e68});
+      const muzzle=new THREE.MeshLambertMaterial({color:0xd5a18a});
+      const dark=new THREE.MeshBasicMaterial({color:0x2b2630});
+      const box=(w,h,d,x,y,z,mat,parent=rig)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);parent.add(m);return m;};
+      box(.80,.90,.55,0,.95,0,fur);box(.75,.65,.61,0,1.62,.02,fur);
+      box(.49,.32,.19,0,1.43,.37,muzzle);
+      for(const s of [-1,1]){box(.20,.26,.11,s*.35,1.83,.10,face);box(.14,.17,.08,s*.18,1.67,.34,dark);}
+      box(.23,.10,.06,0,1.36,.49,dark);
+      const limbs=[];
+      for(const s of [-1,1]){
+        const arm=new THREE.Group();arm.position.set(s*.51,1.21,0);rig.add(arm);
+        box(.25,.73,.26,0,-.33,.08,fur,arm);limbs.push(arm);
+      }
+      for(const s of [-1,1]){
+        const leg=new THREE.Group();leg.position.set(s*.22,.58,0);rig.add(leg);
+        box(.28,.54,.29,0,-.26,0,fur,leg);limbs.push(leg);
+      }
+      const ship=kwgHotAirBalloonModel();ship.position.set(0,-.25,0);root.add(ship);
+      root.userData.baboonBalloon=ship;
+      root.userData.devilRig=rig;root.userData.devilLimbs=limbs;
+      root.userData.devilBody=rig.children[0];root.userData.isEnemyCharacter=true;
+      root.userData.devilNotice=kwgEnemySpeechBubble('!',3.25,root);
+      root.userData.devilTired=kwgEnemySpeechBubble('x_x',3.25,root);
+      return root;
+    }
+    const kwgBananas=[];
+    function kwgThrowBanana(slot,player,now){
+      if(now<(slot.bananaAt||0)||!slot.mesh||kwgDeadUntil)return;
+      slot.bananaAt=now+1700;
+      const start=slot.mesh.position.clone().add(new THREE.Vector3(0,1.4,0));
+      const aim=player.position.clone().add(new THREE.Vector3(0,.35,0));
+      const model=new THREE.Group();
+      const peel=new THREE.Mesh(new THREE.TorusGeometry(.22,.085,5,10,Math.PI*1.3),new THREE.MeshLambertMaterial({color:0xffd64d}));
+      peel.rotation.z=Math.PI/2;model.add(peel);model.position.copy(start);scene.add(model);
+      kwgBananas.push({mesh:model,start,aim,started:now,duration:Math.max(350,Math.min(820,start.distanceTo(aim)*55)),damage:Math.max(8,slot.bananaDamage||15)});
+    }
+    function kwgUpdateBananas(dt){
+      const now=performance.now();
+      for(let i=kwgBananas.length-1;i>=0;i--){
+        const b=kwgBananas[i],t=Math.min(1,(now-b.started)/b.duration);
+        b.mesh.position.copy(b.start).lerp(b.aim,t);b.mesh.position.y+=Math.sin(Math.PI*t)*1.5;
+        b.mesh.rotation.y+=dt*8;
+        if(t<1)continue;
+        if(!isEditMode&&!kwgDeadUntil&&localPlayerAvatar&&localPlayerAvatar.position.distanceTo(b.aim)<2.15){
+          if(kwgEnemyHitPlayer(b.damage,b.start)){
+            kwgKnockedUntil=Math.max(kwgKnockedUntil,now+1600);
+            kwgKnockX*=1.3;kwgKnockZ*=1.3;
+          }
+        }
+        kwgPreviewDispose(b.mesh);kwgBananas.splice(i,1);
+      }
+    }
+    function kwgBaboonStep(slot,player,props,blocks,now,dt,origin,chasing){
+      const npc=slot.mesh;if(!npc)return;
+      const p=npc.position,ship=npc.userData.baboonBalloon;
+      if(slot.baboonMode!=='foot'){
+        slot.baboonMode='flight';
+        const desired=player.position.clone().add(new THREE.Vector3(0,7.2,0));
+        const overhead=kwgRayWorldClear(player.position.clone().add(new THREE.Vector3(0,1.8,0)),desired,blocks);
+        const outOfReach=!chasing||!overhead||Math.hypot(p.x-player.position.x,p.z-player.position.z)>props.noticeRange*.95;
+        if(outOfReach){if(!slot.baboonLostAt)slot.baboonLostAt=now;}
+        else slot.baboonLostAt=0;
+        if(slot.baboonLostAt&&now-slot.baboonLostAt>3200){
+          const ground=kwgEnemyGroundY(p.x,p.y,p.z,blocks,30);
+          if(Number.isFinite(ground)){
+            slot.baboonMode='foot';slot.baboonFootUntil=now+5500;slot.baboonLostAt=0;
+            if(ship){npc.remove(ship);ship.position.copy(p).add(new THREE.Vector3(0,-.25,0));scene.add(ship);slot.parkedBalloon=ship;}
+            p.y=ground;slot.fallSpeed=0;slot.grounded=true;slot.pathAt=0;
+          }
+        }
+        if(slot.baboonMode==='flight'){
+          const speed=Math.max(2.8,props.enemySpeed*1.2)*dt;
+          const tx=chasing?desired.x:origin.x,ty=chasing?desired.y:origin.y+6,tz=chasing?desired.z:origin.z;
+          const dx=tx-p.x,dz=tz-p.z,d=Math.hypot(dx,dz);
+          if(d>.05){const nx=p.x+dx/d*Math.min(d,speed),nz=p.z+dz/d*Math.min(d,speed);
+            if(kwgEnemyBodyClear(nx,nz,p.y,blocks)){p.x=nx;p.z=nz;}}
+          p.y+=THREE.MathUtils.clamp(ty-p.y,-speed,speed);
+          npc.rotation.y=Math.atan2(player.position.x-p.x,player.position.z-p.z);
+          if(chasing&&overhead&&d<3.1&&now>=(slot.baboonBombAt||0)){
+            slot.baboonBombAt=now+1550;kwgDropBomb(p.clone(),true,props.enemyDamage*2.2);
+          }
+          kwgEnemyAnimate(slot,now,false,props.enemySpeed,slot.spawnIndex||0);
+          return true;
+        }
+      }
+      if(slot.baboonMode==='foot'){
+        const d=Math.hypot(p.x-player.position.x,p.z-player.position.z);
+        if(chasing&&d<12&&kwgRayWorldClear(p.clone().add(new THREE.Vector3(0,1.3,0)),player.position.clone().add(new THREE.Vector3(0,1,0)),blocks)){
+          slot.bananaDamage=props.enemyDamage*.7;kwgThrowBanana(slot,player,now);
+        }
+        if(chasing&&now>(slot.baboonFootUntil||0)&&d<props.noticeRange*.65){
+          const above=player.position.clone().add(new THREE.Vector3(0,8,0));
+          if(kwgRayWorldClear(player.position.clone().add(new THREE.Vector3(0,2,0)),above,blocks)){
+            slot.baboonMode='flight';slot.baboonBombAt=now+1000;
+            if(slot.parkedBalloon){slot.parkedBalloon.parent?.remove(slot.parkedBalloon);npc.add(slot.parkedBalloon);slot.parkedBalloon.position.set(0,-.25,0);npc.userData.baboonBalloon=slot.parkedBalloon;slot.parkedBalloon=null;}
+            p.y+=3.0;return true;
+          }
+        }
+      }
+      return false;
+    }
+
     function kwgCreateEnemyModel(kind){
-      return kind==='sniper'?kwgSniperCatModel():kind==='hops'?kwgHopsBunnyModel():kind==='spider'?kwgSpiderModel():kind==='alien'?kwgAlienModel():kind==='bot_bus'?kwgBotBusModel():kwgDevilModel();
+      return kind==='balloon_baboon'?kwgBalloonBaboonModel():kind==='sniper'?kwgSniperCatModel():kind==='hops'?kwgHopsBunnyModel():kind==='spider'?kwgSpiderModel():kind==='alien'?kwgAlienModel():kind==='bot_bus'?kwgBotBusModel():kwgDevilModel();
+    }
+
+
+    // V39: Each special block advertises its contents with a 1-stud preview.
+    const kwgBlockPreviews=new Map();let kwgPreviewLastSync=0;
+    function kwgPreviewDispose(object){
+      object.parent?.remove(object);
+      object.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material]){m.map?.dispose();m.dispose();}});
+    }
+    function kwgPreviewModel(block){
+      const type=block.actionType;
+      if(type==='tool_dispenser'){
+        const kind=kwgToolKind(block.toolKind);
+        if(kind==='ufo')return kwgMakePlayerUfo();
+        if(kind==='balloon')return kwgHotAirBalloonModel();
+        const gun=kwgMakeHeldTool(kind);gun.position.set(0,0,0);gun.rotation.set(0,0,0);return gun;
+      }
+      return kwgCreateEnemyModel(kwgEnemyCharacter(block.enemyCharacter));
+    }
+    function kwgUpdateBlockPreviews(now){
+      if(!currentWorldData?.blocks)return;
+      if(now-kwgPreviewLastSync>500){
+        kwgPreviewLastSync=now;
+        const desired=new Set();
+        for(const b of Object.values(currentWorldData.blocks)){
+          if(b.actionType!=='tool_dispenser'&&b.actionType!=='enemy_spawner')continue;
+          desired.add(b.id);
+          const type=b.actionType==='tool_dispenser'?kwgToolKind(b.toolKind):kwgEnemyCharacter(b.enemyCharacter);
+          const signature=b.actionType+':'+type;
+          let entry=kwgBlockPreviews.get(b.id);
+          if(entry?.signature!==signature){
+            if(entry)kwgPreviewDispose(entry.root);
+            const root=new THREE.Group(),model=kwgPreviewModel(b);
+            // Center using geometry bounds, not the model's origin.
+            model.updateMatrixWorld(true);
+            const bounds=new THREE.Box3().setFromObject(model);
+            const size=bounds.getSize(new THREE.Vector3());
+            const center=bounds.getCenter(new THREE.Vector3());
+            model.position.sub(center);
+            model.scale.multiplyScalar(.94/Math.max(.001,size.x,size.y,size.z));
+            // Center must also be scaled: group nesting preserves the fitted pivot.
+            model.position.copy(center).multiplyScalar(-.94/Math.max(.001,size.x,size.y,size.z));
+            root.add(model);scene.add(root);
+            entry={root,signature};kwgBlockPreviews.set(b.id,entry);
+          }
+        }
+        for(const [id,entry] of kwgBlockPreviews)if(!desired.has(id)){
+          kwgPreviewDispose(entry.root);kwgBlockPreviews.delete(id);
+        }
+      }
+      for(const [id,entry] of kwgBlockPreviews){
+        const b=currentWorldData.blocks[id];if(!b)continue;
+        const a=getBlockAABB(b);
+        entry.root.position.set(Number(b.x)||0,a.maxY+.85+Math.sin(now*.0025+id.length)*.13,Number(b.z)||0);
+        entry.root.rotation.y=now*.00065;
+      }
+    }
+    function kwgClearBlockPreviews(){
+      for(const entry of kwgBlockPreviews.values())kwgPreviewDispose(entry.root);
+      kwgBlockPreviews.clear();kwgPreviewLastSync=0;
     }
 
     // V31: Webs are world-anchored puddles. They NEVER attach to an avatar.
@@ -12955,6 +13328,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgClearBusRobots(slot);
       if(slot.alienBeam){scene.remove(slot.alienBeam);slot.alienBeam.geometry.dispose();slot.alienBeam.material.dispose();slot.alienBeam=null;}
       if(slot.parkedUfo){scene.remove(slot.parkedUfo);slot.parkedUfo.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});slot.parkedUfo=null;}
+      if(slot.parkedBalloon){kwgPreviewDispose(slot.parkedBalloon);slot.parkedBalloon=null;}
       if(!slot.mesh)return;
       scene.remove(slot.mesh);
       slot.mesh.traverse(obj=>{
@@ -12964,6 +13338,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       slot.mesh=null;
     }
     function kwgClearEnemySpawners(){
+      kwgClearBlockPreviews();
       for(const entry of kwgEnemySpawners.values())for(const slot of entry.slots)kwgDestroyEnemySlot(slot);
       kwgEnemySpawners.clear();
       kwgLastEnemySync=0;
@@ -12975,6 +13350,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgClearHitPixels();
       kwgClearDust();
       kwgClearCarrots();
+      kwgClearBombs();
+      for(const b of kwgBananas)kwgPreviewDispose(b.mesh);kwgBananas.length=0;
       kwgClearWebs();
     }
     function kwgDefeatEnemy(spawnerId,index,notify=true){
@@ -13024,7 +13401,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.spawnedOnce=false;slot.nextShotAt=0;slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);
             slot.attackUntil=0;slot.muzzleUntil=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;slot.nextHopAt=0;slot.chaseStartedAt=0;
             slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;slot.wasChasing=false;
-            slot.alienMode='flight';slot.alienChargeAt=0;slot.webChargeAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
+            slot.alienMode='flight';slot.baboonMode='flight';slot.baboonBombAt=0;slot.baboonLostAt=0;slot.bananaAt=0;slot.alienChargeAt=0;slot.webChargeAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
             // Replace an already visible NPC right here, even while the
             // World Editor camera is active and the AI update is paused.
             if(wasVisible){
@@ -13524,8 +13901,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.chaseStartedAt=0;slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;
             slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
             slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.dropGoal=null;slot.dropCommitUntil=0;slot.nextShotAt=0;slot.nextHopAt=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;
-            slot.alienMode='flight';slot.alienChargeAt=0;slot.alienHiddenAt=0;slot.alienNextZap=0;slot.webChargeAt=0;slot.nextWebAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
-            if(props.enemyCharacter==='alien')slot.mesh.position.y=origin.y+5.8;
+            slot.alienMode='flight';slot.baboonMode='flight';slot.baboonBombAt=0;slot.baboonLostAt=0;slot.bananaAt=0;slot.alienChargeAt=0;slot.alienHiddenAt=0;slot.alienNextZap=0;slot.webChargeAt=0;slot.nextWebAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
+            if(props.enemyCharacter==='alien'||props.enemyCharacter==='balloon_baboon')slot.mesh.position.y=origin.y+5.8;
             if(slot.spawnedOnce&&spawnDistance<15)kwgAudio.play('devil_respawn');
             slot.spawnedOnce=true;
             kwgShowEnemyHealth(slot,props.enemyCharacter);
@@ -13553,7 +13930,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           if(canNotice&&now>=slot.chaseCooldownUntil&&!slot.exhaustedUntil){
             if(!slot.chaseStartedAt)slot.chaseStartedAt=now;
             // Give up after ~9 seconds of sustained pursuit.
-            if(now-slot.chaseStartedAt>=9000&&props.enemyCharacter!=='alien'){
+            if(now-slot.chaseStartedAt>=9000&&props.enemyCharacter!=='alien'&&props.enemyCharacter!=='balloon_baboon'){
               slot.exhaustedUntil=now+3400;
               slot.chaseStartedAt=0;slot.pathAt=0;slot.path=[];
               slot.roamTarget=null;slot.roamUntil=0;
@@ -13585,6 +13962,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             kwgBotBusStep(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ,playerAlive);
             continue;
           }
+          if(props.enemyCharacter==='balloon_baboon'&&kwgBaboonStep(slot,player,props,blocks,now,dt,origin,chasing)){continue;}
           if(props.enemyCharacter==='alien'&&slot.alienMode!=='foot'){
             kwgAlienFlightOrLanding(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ);
             kwgEnemyAnimate(slot,now,false,props.enemySpeed,index);
@@ -13872,7 +14250,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           // Hops damage is resolved when its hop lands, not through passive touch.
           // The player's body is still separated from the bunny below.
           if(bodyOverlaps)kwgResolvePlayerDevilOverlap(player,npc,blocks);
-          if(isContact&&(props.enemyCharacter==='devil'||props.enemyCharacter==='spider')&&kwgEnemyHitPlayer(props.enemyDamage,npc.position)){
+          if(isContact&&(props.enemyCharacter==='devil'||props.enemyCharacter==='spider'||props.enemyCharacter==='balloon_baboon')&&kwgEnemyHitPlayer(props.enemyDamage,npc.position)){
             if(distance>.01)npc.rotation.y=Math.atan2(dx,dz);
             slot.attackUntil=now+480;
             kwgAudio.play(props.enemyCharacter==='spider'?'spider_bite':'devil_attack');
@@ -14845,7 +15223,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const player=localPlayerAvatar;
       const blocks=currentWorldData ? Object.values(currentWorldData.blocks) : [];
       if(kwgUpdateLifeMotion(delta,blocks))return;
-      if(!isEditMode&&kwgEquippedTool==='ufo'){
+      if(!isEditMode&&(kwgEquippedTool==='ufo'||kwgEquippedTool==='balloon')){
         // W/S fly forward/back, A/D steer, Space ascend, Shift descend.
         // The craft keeps the player above the local ground, never tunnels
         // through a roof, and can descend again after unequipping.
@@ -14870,7 +15248,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         kwgUpdateBlink(player,performance.now());
         updateAvatarAnimations(player,false,false,delta,undefined,0);
         kwgSendPlayerMovement(player,forward!==0||vertical!==0);
-        kwgUfoBeamVisual(player,blocks,performance.now());
+        if(kwgEquippedTool==='ufo')kwgUfoBeamVisual(player,blocks,performance.now());
         return;
       }
 
@@ -15013,26 +15391,33 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const delta = Math.min(clock.getDelta(), 0.1);
 
       if(!kwgFreeCamera.active){
-        kwgEnemyPreviousFeet=localPlayerAvatar?.position.y??-Infinity;
-        updatePlayerPhysics(delta);
-        kwgUpdateEnemies(delta);
+        if(!isEditMode){
+          kwgEnemyPreviousFeet=localPlayerAvatar?.position.y??-Infinity;
+          updatePlayerPhysics(delta);
+          kwgUpdateEnemies(delta);
+        }
         kwgUpdateShotTracers();
         kwgUpdateHitPixels(delta);
         kwgUpdateDust(delta);
         kwgUpdateCarrots(delta);
+        kwgUpdateBombs(delta);
+        kwgUpdateBananas(delta);
         kwgUpdateWebs(delta);
         if(!isEditMode&&currentWorldData?.blocks)kwgTouchToolDispensers(Object.values(currentWorldData.blocks),localPlayerAvatar);
         if(kwgFireHeld&&kwgEquippedTool)kwgFireTool();
         kwgAnimateStomp(kwgEnemyClock());
       }
       kwgSyncHeldTool();
+      kwgStudioHideActors();
+      kwgStudioTick(delta);
       if(!kwgFreeCamera.active&&!isEditMode&&!kwgDeadUntil&&kwgEquippedTool)
         kwgAnimateHeldWeapon(localPlayerAvatar,kwgEquippedTool,performance.now(),true);
       kwgUpdateEnemyRangeIndicator();
+      if(currentWorldName)kwgUpdateBlockPreviews(performance.now());
       if(!kwgFreeCamera.active) updateGizmoScreenScale();
       else updateWorldThumbnailCamera(delta);
 
-      if (localPlayerAvatar && !kwgFreeCamera.active) {
+      if (localPlayerAvatar && !kwgFreeCamera.active && !kwgStudioCam.active) {
         // Exact single-player camera: same distance, height, rotation, smoothing,
         // right-click orbit, and automatic re-lock behind the player.
         const player = localPlayerAvatar;
