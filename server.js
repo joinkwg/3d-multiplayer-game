@@ -162,22 +162,27 @@ function cleanStoreItemId(v) {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
+// V47: simple avatar appearance. Old purchased items remain owned but cannot be equipped.
+const KWG_HAIR_CHOICES = new Set(['none','short','shaggy','straight','wavy']);
 function sanitizeAppearance(a = {}) {
+  const hairLegacy={classic:'short',sidepart:'shaggy',spiky:'short',bob:'shaggy',ponytail:'straight',flattop:'short',mohawk:'short'};
+  const requestedHair=String(a.hairStyle||'none').toLowerCase();
+  const hairStyle=KWG_HAIR_CHOICES.has(requestedHair)?requestedHair:(hairLegacy[requestedHair]||'none');
+  const skinColor=validColor(a.skinColor)?a.skinColor:(validColor(a.headColor)?a.headColor:defaultAppearance.headColor);
+  const shirtColor=validColor(a.shirtColor)?a.shirtColor:(validColor(a.torsoColor)?a.torsoColor:defaultAppearance.torsoColor);
+  const pantsColor=validColor(a.pantsColor)?a.pantsColor:(validColor(a.leftLegColor)?a.leftLegColor:defaultAppearance.leftLegColor);
+  const shoesColor=validColor(a.shoesColor)?a.shoesColor:'#15191f';
   return {
-    ...Object.fromEntries(Object.values(PROCEDURAL_SLOTS).map(slot=>[slot,cleanStoreItemId(a[slot])])),
-    hat: ['none','black_tophat','blue_tophat','red_tophat','pink_tophat','pink_bow','blue_bow','white_bow','black_cat_ears','pink_cat_ears'].includes(a.hat) ? a.hat : defaultAppearance.hat,
-    headShape: ['sphere','cube','cylinder','headless'].includes(a.headShape) ? a.headShape : defaultAppearance.headShape,
-    headColor: validColor(a.headColor) ? a.headColor : defaultAppearance.headColor,
-    torsoColor: validColor(a.torsoColor) ? a.torsoColor : defaultAppearance.torsoColor,
-    leftArmColor: validColor(a.leftArmColor) ? a.leftArmColor : defaultAppearance.leftArmColor,
-    rightArmColor: validColor(a.rightArmColor) ? a.rightArmColor : defaultAppearance.rightArmColor,
-    leftLegColor: validColor(a.leftLegColor) ? a.leftLegColor : defaultAppearance.leftLegColor,
-    rightLegColor: validColor(a.rightLegColor) ? a.rightLegColor : defaultAppearance.rightLegColor,
-    eyesItemId: cleanStoreItemId(a.eyesItemId),
-    mouthItemId: cleanStoreItemId(a.mouthItemId),
-    torsoDecalItemId: cleanStoreItemId(a.torsoDecalItemId),
-    hatItemId: cleanStoreItemId(a.hatItemId),
-    headShapeItemId: cleanStoreItemId(a.headShapeItemId)
+    ...Object.fromEntries(Object.values(PROCEDURAL_SLOTS).map(slot=>[slot,null])),
+    hairStyle,hairColor:validColor(a.hairColor)?a.hairColor:'#3a261b',
+    hat:'none',headShape:'sphere',builtinEyes:'none',builtinMouth:'none',
+    skinColor,shirtColor,pantsColor,shoesColor,
+    shirtStyle:['short','long'].includes(a.shirtStyle)?a.shirtStyle:'short',
+    bottomStyle:['pants','shorts','skirt'].includes(a.bottomStyle)?a.bottomStyle:'pants',
+    shoeStyle:['shoes','sandals'].includes(a.shoeStyle)?a.shoeStyle:'shoes',
+    headColor:skinColor,torsoColor:shirtColor,leftArmColor:skinColor,rightArmColor:skinColor,
+    leftLegColor:pantsColor,rightLegColor:pantsColor,
+    eyesItemId:null,mouthItemId:null,torsoDecalItemId:null,hatItemId:null,headShapeItemId:null
   };
 }
 
@@ -203,7 +208,6 @@ async function ensureStarterFlightsuit(userId){
     ON CONFLICT DO NOTHING`,[userId]);
 }
 async function validateAppearanceForUser(userId, rawAppearance = {}) {
-  await ensureStarterFlightsuit(userId);
   const app = sanitizeAppearance(rawAppearance);
   const slots = [
     ['eyesItemId', 'eyes'],
@@ -2687,6 +2691,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('buy_store_item', async ({itemId}, cb) => {
+    if (typeof cb === 'function') cb({success:false,message:'Avatar marketplace is retired.'});
+    return;
     if (!requireAuth(socket, cb)) return;
     itemId = cleanStoreItemId(itemId);
     if (!itemId) return cb({success:false,message:'Invalid store item.'});
@@ -2885,6 +2891,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('create_avatar_item', async (payload = {}, cb) => {
+    if (typeof cb === 'function') cb({success:false,message:'Avatar marketplace is retired.'});
+    return;
     if (!requireAuth(socket, cb)) return;
     try {
       const category = String(payload.category || '').trim();
@@ -2959,6 +2967,8 @@ io.on('connection', (socket) => {
     }catch(e){console.error('Creations list:',e);cb({success:false,message:'Could not load creations.'});}
   });
   socket.on('update_my_avatar_item',async({itemId,name,price,isVisible}={},cb)=>{
+    if (typeof cb === 'function') cb({success:false,message:'Avatar marketplace is retired.'});
+    return;
     if(!requireAuth(socket,cb))return;
     const id=cleanStoreItemId(itemId),clean=filterKWGUserText(String(name||'').trim());
     const n=Number(price);
