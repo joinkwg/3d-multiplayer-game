@@ -459,6 +459,15 @@ async function migrate() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS world_level_scores (
+      world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      mode VARCHAR(10) NOT NULL CHECK(mode IN ('speed','survival','wins')),
+      best_score BIGINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(world_id,user_id,mode)
+    );
+    CREATE INDEX IF NOT EXISTS world_level_scores_ranking_idx ON world_level_scores(world_id,mode,best_score);
     CREATE TABLE IF NOT EXISTS chat_messages (
       id BIGSERIAL PRIMARY KEY,
       world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
@@ -909,6 +918,7 @@ io.on('connection', (socket) => {
         const p=playersBySocket.get(socket.id);
         if (p?.worldName) {
           socket.to(`world:${p.worldName}`).emit('player_left',socket.id);
+          kwgAnnounce(p.worldName,`${p.username} left the world.`,socket.user?.id);
           socket.leave(`world:${p.worldName}`);
         }
         playersBySocket.delete(socket.id);
@@ -1509,6 +1519,42 @@ io.on('connection', (socket) => {
     } catch(e){ console.error(e); cb({success:false,message:'Could not update like.'}); }
   });
 
+  // V40: server-timed per-world runs. Client submits only finish/death
+  // events; never a score. Finish requires proximity to a saved Finish part.
+  const kwgLevelType=data=>['casual','speed','survival','wins'].includes(data?.levelType)?data.levelType:'casual';
+  const kwgElapsed=p=>Math.max(0,Math.min(86400000,Date.now()-(p.runStartedAt||Date.now())));
+  async function kwgSaveLevelScore(world,userId,mode,score){
+    if(mode==='casual')return {score:null,newRecord:false};
+    const old=await pool.query('SELECT best_score FROM world_level_scores WHERE world_id=$1 AND user_id=$2 AND mode=$3',[world.id,userId,mode]);
+    const before=old.rows.length?Number(old.rows[0].best_score):null;
+    const next=mode==='wins'?(before||0)+1:mode==='speed'?(before===null?score:Math.min(before,score)):(before===null?score:Math.max(before,score));
+    const newRecord=before===null||mode==='wins'||(mode==='speed'?score<before:score>before);
+    await pool.query(`INSERT INTO world_level_scores(world_id,user_id,mode,best_score) VALUES($1,$2,$3,$4)
+      ON CONFLICT(world_id,user_id,mode) DO UPDATE SET best_score=EXCLUDED.best_score,updated_at=NOW()`,[world.id,userId,mode,next]);
+    io.to(`world:${world.name}`).emit('world_leaderboard_changed',{worldName:world.name});
+    return {score:mode==='wins'?next:score,newRecord};
+  }
+  async function kwgAnnounce(worldName,message,actorId=null){
+    const peers=worldPeers(worldName);
+    try{
+      const hidden=actorId?await blockedPeers(actorId,peers.map(x=>x.socket.user.id)):new Set();
+      for(const peer of peers){
+        const blocked=hidden.has(Number(peer.socket.user.id));
+        peer.socket.emit('world_system_message',{worldName,
+          message:blocked?'A player had a world event.':message});
+      }
+    }catch(err){console.error('World event announcement:',err);}
+  }
+  function kwgNearFinish(p,blocks){
+    return Object.values(blocks||{}).some(b=>{
+      if(b?.actionType!=='finish')return false;
+      const x=Number(b.x)||0,y=Number(b.y)||0,z=Number(b.z)||0;
+      const hx=Math.max(.5,Math.abs(Number(b.scaleX)||1)/2)+1.1;
+      const hy=Math.max(.5,Math.abs(Number(b.scaleY)||1)/2)+2.4;
+      const hz=Math.max(.5,Math.abs(Number(b.scaleZ)||1)/2)+1.1;
+      return Math.abs(p.x-x)<=hx&&Math.abs(p.y-y)<=hy&&Math.abs(p.z-z)<=hz;
+    });
+  }
   // V3.42: Server chooses the initial Spawn so the multiplayer position
   // broadcast and the joining client's avatar always agree.
   function chooseWorldSpawn(data){
@@ -1739,6 +1785,7 @@ io.on('connection', (socket) => {
       const previousWorld=playersBySocket.get(socket.id)?.worldName;
       if (previousWorld && previousWorld!==world.name) {
         socket.to(`world:${previousWorld}`).emit('player_left',socket.id);
+        kwgAnnounce(previousWorld,`${socket.user.username} left the world.`,socket.user.id);
       }
       if (socket.data.worldName) socket.leave(`world:${socket.data.worldName}`);
       socket.join(`world:${world.name}`);
@@ -1756,7 +1803,8 @@ io.on('connection', (socket) => {
         id: socket.id, username: socket.user.username,
         x:selfSpawn.x,y:selfSpawn.y,z:selfSpawn.z,
         rotationY: 0, walkClock: 0, isMoving:false, isGrounded:true,
-        appearance: app, cosmetics, petKey, worldName: world.name
+        appearance: app, cosmetics, petKey, worldName: world.name,
+        runStartedAt:Date.now(),lastFinishAt:0,lastDeathAt:0
       };
       playersBySocket.set(socket.id, p);
       refreshPrimarySocketForUser(userId);
@@ -1779,6 +1827,7 @@ io.on('connection', (socket) => {
         `,[socket.user.id,world.id]);
       } catch(visitError) {console.error('Could not record recent world visit:',visitError);}
       joinedSuccessfully=true;
+      kwgAnnounce(world.name,`${socket.user.username} joined the world.`,socket.user.id);
       cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics,selfPetKey:petKey});
     } catch (e) {
       console.error(e);
@@ -1800,6 +1849,7 @@ io.on('connection', (socket) => {
     const p = playersBySocket.get(socket.id);
     if (p?.worldName) {
       socket.to(`world:${p.worldName}`).emit('player_left', socket.id);
+      kwgAnnounce(p.worldName,`${p.username} left the world.`,socket.user?.id);
       socket.leave(`world:${p.worldName}`);
     }
     socket.data.worldName = null;
@@ -1973,6 +2023,62 @@ io.on('connection', (socket) => {
     }catch(err){console.warn('Enemy stomp validation:',err.message);}
   });
 
+  socket.on('get_world_leaderboard',async ({worldName}={},cb)=>{
+    if(!requireAuth(socket,cb)||typeof cb!=='function')return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key)return cb({success:false,message:'Join the world first.'});
+    try{
+      const world=await getWorldByName(key),mode=kwgLevelType(world?.data);
+      if(!world)return cb({success:false,message:'World not found.'});
+      if(mode==='casual')return cb({success:true,mode,entries:[]});
+      const order=mode==='speed'?'ASC':'DESC';
+      const result=await pool.query(`SELECT u.username,s.user_id,s.best_score AS score FROM world_level_scores s
+        JOIN users u ON u.id=s.user_id WHERE s.world_id=$1 AND s.mode=$2
+        ORDER BY s.best_score ${order},s.updated_at ASC LIMIT 50`,[world.id,mode]);
+      const hidden=await blockedPeers(socket.user.id,result.rows.map(r=>r.user_id));
+      cb({success:true,mode,entries:result.rows.map(r=>({username:hidden.has(Number(r.user_id))?'Hidden User':r.username,score:Number(r.score)}))});
+    }catch(e){console.error('Leaderboard:',e);cb({success:false,message:'Could not load leaderboard.'});}
+  });
+  socket.on('world_finish',async ({worldName}={},cb)=>{
+    if(!requireAuth(socket,cb)||typeof cb!=='function')return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName),now=Date.now();
+    if(!p||p.worldName!==key)return cb({success:false,message:'Join this world first.'});
+    if(now-(p.lastFinishAt||0)<2800)return cb({success:false,message:'Finish is on cooldown.'});
+    try{
+      const world=await getWorldByName(key);
+      if(!world||!kwgNearFinish(p,world.data.blocks))return cb({success:false,message:'Touch the Finish block to complete the run.'});
+      const mode=kwgLevelType(world.data),elapsed=kwgElapsed(p);
+      // A minimum duration avoids zero-time entries on maps with Finish at spawn.
+      const score=mode==='speed'?Math.max(250,elapsed):mode==='survival'?elapsed:1;
+      p.lastFinishAt=now;
+      const result=await kwgSaveLevelScore(world,socket.user.id,mode,score);
+      p.runStartedAt=now;
+      const scoreText=mode==='wins'?`${result.score} wins`:mode==='speed'?`${(score/1000).toFixed(2)}s`:mode==='survival'?`${Math.floor(score/1000)}s survived`:'';
+      kwgAnnounce(key,`${p.username} reached the finish${scoreText?' — '+scoreText:''}!${result.newRecord?' NEW HIGH SCORE!':''}`,socket.user.id);
+      cb({success:true,mode,score:result.score,newRecord:result.newRecord});
+    }catch(e){console.error('Finish:',e);cb({success:false,message:'Could not record finish.'});}
+  });
+  socket.on('player_died',async ({worldName}={})=>{
+    if(!requireAuth(socket))return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName),now=Date.now();
+    if(!p||p.worldName!==key||now-(p.lastDeathAt||0)<1800)return;
+    p.lastDeathAt=now;
+    kwgAnnounce(key,`${p.username} died.`,socket.user.id);
+    try{
+      const world=await getWorldByName(key);
+      if(world&&kwgLevelType(world.data)==='survival'){
+        const elapsed=kwgElapsed(p);
+        const result=await kwgSaveLevelScore(world,socket.user.id,'survival',elapsed);
+        if(result.newRecord)kwgAnnounce(key,`${p.username} set a NEW SURVIVAL HIGH SCORE — ${Math.floor(elapsed/1000)}s!`,socket.user.id);
+      }
+    }catch(e){console.error('Survival score:',e);}
+  });
+  socket.on('player_respawned',({worldName}={})=>{
+    if(!requireAuth(socket))return;
+    const p=playersBySocket.get(socket.id);
+    if(p&&p.worldName===cleanWorldName(worldName))p.runStartedAt=Date.now();
+  });
+
   socket.on('player_movement', (data) => {
     if (!requireAuth(socket)) return;
     const p = playersBySocket.get(socket.id);
@@ -2041,7 +2147,7 @@ io.on('connection', (socket) => {
                 const e=new Error('Part limit reached (1400/1400 parts).');e.clientMessage=e.message;throw e;
               }
               // Preserve standard and enemy spawner types, with validated enemy limits.
-              blockData.actionType=['normal','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(blockData.actionType)?blockData.actionType:'normal';
+              blockData.actionType=['normal','kill','checkpoint','finish','spawn','enemy_spawner','health','tool_dispenser'].includes(blockData.actionType)?blockData.actionType:'normal';
               blockData.material=['grid','brick','wood'].includes(blockData.material)?blockData.material:'grid';
               normalizeEnemySpawner(blockData);
               kwgPreserveApprovedDecals(blockData,data.blocks[blockData.id]);
@@ -2138,7 +2244,7 @@ io.on('connection', (socket) => {
           // Only supported block types and three current
           // materials may be saved by clients. Existing legacy worlds are
           // not rewritten on load; their old flags stay intact until edited.
-          blockData.actionType = ['normal','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(blockData.actionType) ? blockData.actionType : 'normal';
+          blockData.actionType = ['normal','kill','checkpoint','finish','spawn','enemy_spawner','health','tool_dispenser'].includes(blockData.actionType) ? blockData.actionType : 'normal';
           blockData.material = ['grid','brick','wood'].includes(blockData.material) ? blockData.material : 'grid';
           normalizeEnemySpawner(blockData);
           kwgPreserveApprovedDecals(blockData,data.blocks[blockData.id]);
@@ -2263,7 +2369,7 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb && cb({success:false,message:'Could not save world settings.'}); }
   });
 
-  socket.on('world_info_update', async ({worldName,displayName,description,thumbnailData} = {}, cb) => {
+  socket.on('world_info_update', async ({worldName,displayName,description,thumbnailData,levelType} = {}, cb) => {
     if (!requireAuth(socket,cb)) return;
     const key=cleanWorldName(worldName);
     if (socket.data.worldName!==key) return cb && cb({success:false,message:'Join this world before editing its info.'});
@@ -2284,10 +2390,11 @@ io.on('connection', (socket) => {
         }
         data.displayName=title;
         data.description=desc;
+        data.levelType=['casual','speed','survival','wins'].includes(levelType)?levelType:(data.levelType||'casual');
         data.thumbnailUrl=thumbnailUrl;
         await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
-        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true});
-        return {success:true,displayName:title,description:desc,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true};
+        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,levelType:data.levelType,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true});
+        return {success:true,displayName:title,description:desc,levelType:data.levelType,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true};
       });
       cb && cb(result);
     } catch(e){console.error('World info update:',e);cb && cb({success:false,message:e.clientMessage||'Could not save world info or thumbnail. Check thumbnail storage configuration.'});}
@@ -2909,7 +3016,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     const p = playersBySocket.get(socket.id);
-    if (p?.worldName) socket.to(`world:${p.worldName}`).emit('player_left', socket.id);
+    if (p?.worldName){socket.to(`world:${p.worldName}`).emit('player_left', socket.id);kwgAnnounce(p.worldName,`${p.username} left the world.`,socket.user?.id);}
     playersBySocket.delete(socket.id);
     if (socket.user) {
       const uid=socket.user.id;
