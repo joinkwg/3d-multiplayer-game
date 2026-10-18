@@ -3279,7 +3279,6 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 
     <section id="kwg-place-panel" class="kwg-recolor-panel kwg-place-panel" aria-label="Place tool preset properties" style="display:none">
       <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">+</span> PLACE PRESETS</div>
-      <p class="kwg-recolor-help" style="margin:0 0 10px">New parts use these properties automatically.</p>
       <label class="kwg-recolor-field"><span>Shape</span><select id="kwg-place-shape"><option value="box">Cube / Box</option><option value="wedge">Wedge</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option></select></label>
       <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option><option value="finish">Finish</option><option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option><option value="health">Health Block</option><option value="tool_dispenser">Tool Dispenser</option></select></label>
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-place-material"><option value="grid">Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
@@ -3290,10 +3289,10 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         <div class="kwg-enemy-props-title">ENEMY SPAWNER PRESET</div>
         <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-place-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option><option value="bot_bus">Bot Bus</option><option value="balloon_baboon">Balloon Baboon</option></select></label>
         <label class="kwg-recolor-field"><span>Notice Range</span><input id="kwg-place-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
-        <label class="kwg-recolor-field"><span>Enemy Speed</span><input id="kwg-place-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
-        <label class="kwg-recolor-field"><span>Enemy Count</span><input id="kwg-place-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
-        <label class="kwg-recolor-field"><span>Can Be Stomped</span><input id="kwg-place-enemy-killable" type="checkbox" checked></label>
-        <label class="kwg-recolor-field"><span>Contact Damage (HP)</span><input id="kwg-place-enemy-damage" type="number" min="1" max="100" step="1" value="25"></label>
+        <input hidden aria-hidden="true" tabindex="-1" id="kwg-place-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3">
+        <input hidden aria-hidden="true" tabindex="-1" id="kwg-place-enemy-count" type="number" min="1" max="12" step="1" value="1">
+        <input hidden aria-hidden="true" tabindex="-1" id="kwg-place-enemy-killable" type="checkbox" checked>
+        <input hidden aria-hidden="true" tabindex="-1" id="kwg-place-enemy-damage" type="number" min="1" max="100" step="1" value="25">
         <label class="kwg-recolor-field"><span>Respawn Delay</span><input id="kwg-place-enemy-respawn" type="number" min="0" max="300" step="0.5" value="5"></label>
       </div>
       <div id="kwg-place-dispenser-properties" class="kwg-enemy-properties" style="display:none">
@@ -3304,13 +3303,11 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         <div class="kwg-enemy-props-title">HEALTH BLOCK PRESET</div>
         <label class="kwg-recolor-field"><span>Healing per touch (HP)</span><input id="kwg-place-heal-amount" type="number" min="1" max="100" step="1" value="25"></label>
       </div>
-      <p class="kwg-recolor-help">Click a surface to place a part with these presets.</p>
     </section>
     <section id="kwg-recolor-panel" class="kwg-recolor-panel" aria-label="Recolor brush settings" style="display:none">
       <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">●</span> RECOLOR BRUSH</div>
       <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-recolor-color" value="#4b9cff" aria-label="Brush color"></span></label>
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-recolor-material" aria-label="Brush material"><option value="grid" selected>Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
-      <p class="kwg-recolor-help">Click any part in the 3D view to apply both.</p>
     </section>
     <details class="kwg-editor-shortcuts"><summary>Keyboard shortcuts</summary><div><kbd>R</kbd> Rotate 90° horizontally</div><div><kbd>T</kbd> Rotate 90° vertically</div><div><kbd>Ctrl</kbd> + <kbd>C</kbd> Copy part</div><div><kbd>Ctrl</kbd> + <kbd>V</kbd> Paste part</div><div><kbd>Shift</kbd> + <kbd>D</kbd> Duplicate part</div></details>
     <!-- Selected Part Properties UI -->
@@ -3398,7 +3395,6 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
              </div>
              <input class="kwg-image-file-input" type="file" id="kwg-decal-upload" accept="image/png,image/jpeg,image/webp" aria-label="Choose a decal image">
              <div id="kwg-decal-status" class="kwg-image-live-status" role="status" aria-live="polite"></div>
-             <p class="kwg-image-help">+ Upload · × Remove · Images appear after review. Best on box parts.</p>
            </section>
            <div class="tool-row">
              <label>Transparency:</label>
@@ -3412,23 +3408,20 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           <div id="kwg-tool-dispenser-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">TOOL DISPENSER SETTINGS</div>
             <label class="kwg-recolor-field"><span>Tool to Give</span><select id="kwg-tool-kind"><option value="pistol">Pistol</option><option value="minigun">Minigun</option><option value="laser">Laser Gun</option><option value="ufo">UFO</option><option value="balloon">Hot Air Balloon</option></select></label>
-            <p class="kwg-recolor-help">Touch to collect this tool. Press 1–9 to equip it and click to fire.</p>
           </div>
           <div id="kwg-health-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">HEALTH SETTINGS</div>
             <label class="kwg-recolor-field"><span>Restore Health (HP)</span><input id="kwg-heal-amount" type="number" min="1" max="100" step="1" value="25"></label>
-            <p class="kwg-recolor-help">Touch this block to heal. Can be used again after a short cooldown.</p>
           </div>
           <div id="kwg-enemy-properties" class="kwg-enemy-properties" style="display:none">
             <div class="kwg-enemy-props-title">ENEMY SETTINGS</div>
             <label class="kwg-recolor-field"><span>Enemy Character</span><select id="kwg-enemy-character"><option value="devil">Devil</option><option value="sniper">Sniper</option><option value="hops">Hops</option><option value="spider">Spider</option><option value="alien">Alien</option><option value="bot_bus">Bot Bus</option><option value="balloon_baboon">Balloon Baboon</option></select></label>
             <label class="kwg-recolor-field"><span>Notice Range (studs)</span><input id="kwg-enemy-range" type="number" min="2" max="100" step="1" value="18"></label>
-            <label class="kwg-recolor-field"><span>Enemy Speed (studs / second)</span><input id="kwg-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3"></label>
-            <label class="kwg-recolor-field"><span>Number of Enemies</span><input id="kwg-enemy-count" type="number" min="1" max="12" step="1" value="1"></label>
-            <label class="kwg-recolor-field"><span>Can Be Stomped</span><input id="kwg-enemy-killable" type="checkbox" checked></label>
-            <label class="kwg-recolor-field"><span>Contact Damage (HP)</span><input id="kwg-enemy-damage" type="number" min="1" max="100" step="1" value="25"></label>
+            <input hidden aria-hidden="true" tabindex="-1" id="kwg-enemy-speed" type="number" min="0.5" max="15" step="0.5" value="3">
+            <input hidden aria-hidden="true" tabindex="-1" id="kwg-enemy-count" type="number" min="1" max="12" step="1" value="1">
+            <input hidden aria-hidden="true" tabindex="-1" id="kwg-enemy-killable" type="checkbox" checked>
+            <input hidden aria-hidden="true" tabindex="-1" id="kwg-enemy-damage" type="number" min="1" max="100" step="1" value="25">
             <label class="kwg-recolor-field"><span>Respawn Delay (seconds)</span><input id="kwg-enemy-respawn" type="number" min="0" max="300" step="0.5" value="5"></label>
-            <p class="kwg-recolor-help">Jump on a devil to bounce. Double-jump before landing to squish it!</p>
           </div>
 
         </div>
@@ -3443,7 +3436,6 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         <label>Friendly Fire:</label>
         <input id="kwg-world-friendly-fire" type="checkbox" aria-label="Allow tools to damage other players">
       </div>
-      <p class="kwg-recolor-help">When enabled, player weapons can damage other players in this world.</p>
       <div class="tool-row">
         <label>Sky Color:</label>
         <input type="color" id="sky-color-input" value="#1e1e7b">
@@ -3490,7 +3482,6 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           </div>
         </div>
         <input class="kwg-image-file-input" type="file" id="kwg-sky-image-upload" accept="image/png,image/jpeg,image/webp" aria-label="Choose a skybox face image">
-        <p class="kwg-image-help">Roblox-compatible skybox faces (SkyboxUp/Dn/Ft/Bk/Lf/Rt). Upload matching square images; pending images stay hidden. Missing faces use the sky color.</p>
       </section>
       <div class="tool-row"><label for="kwg-env-brightness">Brightness:</label><input type="number" id="kwg-env-brightness" min="0.4" max="2" step="0.05" value="1" inputmode="decimal"></div>
       <div class="tool-row"><label for="kwg-env-saturation">Saturation:</label><input type="number" id="kwg-env-saturation" min="0" max="2" step="0.05" value="1" inputmode="decimal"></div>
@@ -9290,7 +9281,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     const editorSettingsWindow = document.createElement('div');
     editorSettingsWindow.id = 'kwg-settings-window';
     editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label" for="kwg-info-level-type">LEVEL TYPE</label><select id="kwg-info-level-type"><option value="casual">Casual — no leaderboard</option><option value="speed">Speed — fastest finish</option><option value="survival">Survival — longest survival</option><option value="wins">Wins — most finishes</option></select><div class="kwg-info-hint">Finish blocks complete runs. Scores are shared with visitors. Changing level type resets ALL world scores.</div><button type="button" id="kwg-info-reset-leaderstats" class="kwg-info-camera-button kwg-leaderstats-reset">RESET LEADERSTATS</button><div class="kwg-info-hint">Permanently clear every leaderboard score for this world (all level types).</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><button id="kwg-info-auto-btn" type="button" class="kwg-info-camera-button">GENERATE SPAWN PREVIEW</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save with Save & Exit.</div></div>';
+    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label" for="kwg-info-level-type">LEVEL TYPE</label><select id="kwg-info-level-type"><option value="casual">Casual — no leaderboard</option><option value="speed">Speed — fastest finish</option><option value="survival">Survival — longest survival</option><option value="wins">Wins — most finishes</option></select><button type="button" id="kwg-info-reset-leaderstats" class="kwg-info-camera-button kwg-leaderstats-reset">RESET LEADERSTATS</button><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><button id="kwg-info-auto-btn" type="button" class="kwg-info-camera-button">GENERATE SPAWN PREVIEW</button></div>';
     document.body.appendChild(editorSettingsWindow);
     const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
     if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
@@ -9388,7 +9379,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 
     const kwgCameraUI=document.createElement('div');
     kwgCameraUI.id='kwg-thumbnail-camera-ui';
-    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Hold right mouse button and drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong><div class="kwg-camera-help">W A S D move relative to view · Q / E down/up · Shift faster · Hold right-click to look · Scroll to zoom</div></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div><div class="kwg-info-hint">Your photo saves with Save & Exit.</div></div></div>`;
+    kwgCameraUI.innerHTML=`<div class="kwg-camera-dragzone" title="Hold right mouse button and drag to look around"></div><div class="kwg-camera-crosshair">+</div><div class="kwg-camera-top"><div><strong>THUMBNAIL CAMERA</strong></div><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-cancel">CANCEL</button><button type="button" id="kwg-camera-capture">CAPTURE</button></div></div><div id="kwg-camera-review"><div class="kwg-review-card"><h3>PREVIEW THUMBNAIL</h3><img id="kwg-camera-preview" alt="Captured world screenshot"><div class="kwg-camera-buttons"><button type="button" id="kwg-camera-retake">RETAKE</button><button type="button" id="kwg-camera-use">USE THIS PHOTO</button></div></div></div>`;
     document.body.appendChild(kwgCameraUI);
     const kwgCameraDragzone=kwgCameraUI.querySelector('.kwg-camera-dragzone');
     const kwgFreeCamera={active:false,reviewing:false,keys:new Set(),yaw:0,pitch:0,dragging:false,lastX:0,lastY:0,photo:null};
@@ -10383,7 +10374,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if(!character||!checkbox)return;
       const isHops=kwgEnemyCharacter(character.value)==='hops';
       checkbox.disabled=isHops;
-      if(isHops)checkbox.checked=false;
+      // Preserve the stored value for other enemy types; Hops immunity is enforced when reading settings.
       checkbox.title=isHops?'Hops is too big to stomp. Weapons still work.':'';
     }
     function kwgToggleEnemyFields(){
