@@ -1888,6 +1888,29 @@ io.on('connection', (socket) => {
     }
   });
 
+  // V48: Recover from lost/racing player_joined packets or late world loading.
+  // The roster is scoped to the caller's active world and respects existing
+  // two-way block privacy. No client can request a different world's roster.
+  socket.on('get_world_players', async ({worldName} = {}, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!requireAuth(socket,cb)) return;
+    const p=playersBySocket.get(socket.id);
+    const key=cleanWorldName(worldName);
+    if(!p || !p.worldName || p.worldName!==key || socket.data.worldName!==key)
+      return cb({success:false,message:'Join this world first.'});
+    try {
+      const peers=worldPeers(key,socket.id);
+      const hiddenIds=await blockedPeers(socket.user.id,peers.map(peer=>peer.socket.user.id));
+      // A peer may leave while the privacy query is in flight.
+      const players={};
+      for(const peer of peers){
+        if(!peer.socket.connected || playersBySocket.get(peer.sid)!==peer.p || peer.p.worldName!==key)continue;
+        players[peer.sid]=privatePlayer(peer.p,hiddenIds.has(Number(peer.socket.user.id)));
+      }
+      cb({success:true,worldName:key,players});
+    } catch(e){console.error('World player roster:',e);cb({success:false,message:'Could not sync players.'});}
+  });
+
   socket.on('leave_world', () => {
     kwgServerTools.clear();
     const p = playersBySocket.get(socket.id);
