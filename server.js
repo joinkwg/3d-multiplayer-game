@@ -191,7 +191,8 @@ function rowToStoreItem(row) {
     assetKind: row.asset_kind,
     metadata: row.metadata || {},
     isVisible: !!row.is_visible,
-    isUploaded: !!row.is_uploaded
+    isUploaded: !!row.is_uploaded,
+    creatorUsername: row.creator_username || (row.created_by ? 'Player' : 'KWG')
   };
 }
 
@@ -448,7 +449,7 @@ async function migrate() {
       password_hash TEXT NOT NULL,
       appearance JSONB NOT NULL DEFAULT '{}'::jsonb,
       is_admin BOOLEAN NOT NULL DEFAULT FALSE,
-      coins INTEGER NOT NULL DEFAULT 100,
+      coins INTEGER NOT NULL DEFAULT 950,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS worlds (
@@ -458,9 +459,12 @@ async function migrate() {
       data JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      plays BIGINT NOT NULL DEFAULT 0
+      plays BIGINT NOT NULL DEFAULT 0,
+      bumped_at TIMESTAMPTZ
     );
     ALTER TABLE worlds ADD COLUMN IF NOT EXISTS plays BIGINT NOT NULL DEFAULT 0;
+    ALTER TABLE worlds ADD COLUMN IF NOT EXISTS bumped_at TIMESTAMPTZ;
+    CREATE INDEX IF NOT EXISTS worlds_bumped_at_idx ON worlds(bumped_at DESC NULLS LAST, created_at DESC);
     CREATE TABLE IF NOT EXISTS world_level_scores (
       world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -479,7 +483,7 @@ async function migrate() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 100;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS coins INTEGER NOT NULL DEFAULT 950;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(300) NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS showcased_world_ids BIGINT[] NOT NULL DEFAULT '{}'::bigint[];
     CREATE TABLE IF NOT EXISTS friendships (
@@ -749,6 +753,7 @@ async function worldSummary(row) {
     ownerUsername: row.owner_username || null,
     likes: Number(row.like_count || 0),
     plays: Number(row.plays || 0),
+    bumpedAt: row.bumped_at || null,
     likedByMe: !!row.liked_by_me,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -1488,8 +1493,8 @@ io.on('connection', (socket) => {
     if (typeof payload === 'function') { cb = payload; payload = {}; }
     if (!requireAuth(socket, cb)) return;
     try {
-      const sort = payload?.sort === 'liked' ? 'liked' : 'recent';
-      const order = sort === 'liked' ? 'like_count DESC, w.created_at DESC' : 'w.created_at DESC';
+      const sort = ['liked','recent','bumped'].includes(payload?.sort) ? payload.sort : 'bumped';
+      const order = sort === 'liked' ? 'like_count DESC, w.created_at DESC' : sort === 'recent' ? 'w.created_at DESC' : 'COALESCE(w.bumped_at,w.created_at) DESC, w.created_at DESC';
       const r = await pool.query(`
         SELECT w.*, u.username AS owner_username,
           COUNT(wl.user_id)::int AS like_count,
@@ -1502,6 +1507,28 @@ io.on('connection', (socket) => {
       `,[socket.user.id]);
       cb({success:true,worlds:await Promise.all(r.rows.map(worldSummary))});
     } catch (e) { console.error(e); cb({success:false,message:'Could not load worlds.'}); }
+  });
+
+  // V45: World bumps are server-authoritative and paid atomically.
+  socket.on('bump_world',async ({worldName}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    if(typeof cb!=='function')return;
+    const client=await pool.connect();
+    try{
+      await client.query('BEGIN');
+      const r=await client.query('SELECT id,owner_user_id,bumped_at FROM worlds WHERE name=$1 FOR UPDATE',[cleanWorldName(worldName)]);
+      const world=r.rows[0];
+      if(!world||Number(world.owner_user_id)!==Number(socket.user.id)){
+        await client.query('ROLLBACK');return cb({success:false,message:'You can only bump worlds you own.'});
+      }
+      const paid=await client.query('UPDATE users SET coins=coins-75 WHERE id=$1 AND coins>=75 RETURNING coins',[socket.user.id]);
+      if(!paid.rowCount){await client.query('ROLLBACK');return cb({success:false,message:'You need 75 coins to bump this world.'});}
+      await client.query('UPDATE worlds SET bumped_at=NOW() WHERE id=$1',[world.id]);
+      await client.query('COMMIT');
+      socket.user.coins=Number(paid.rows[0].coins);
+      cb({success:true,coins:socket.user.coins,bumpedAt:new Date().toISOString()});
+    }catch(err){await client.query('ROLLBACK').catch(()=>{});console.error('World bump:',err);cb({success:false,message:'Could not bump world.'});}
+    finally{client.release();}
   });
 
   socket.on('toggle_world_like', async ({worldName}, cb) => {
@@ -1695,17 +1722,24 @@ io.on('connection', (socket) => {
         };
         const initialSpawn=makeDefaultSpawnBlock(data);
         data.blocks[initialSpawn.id]=initialSpawn;
+        const client=await pool.connect();
         try{
-          await pool.query('INSERT INTO worlds(name,owner_user_id,data) VALUES($1,$2,$3)',
-            [key,socket.user.id,JSON.stringify(data)]);
-          return cb({success:true,worldName:key,displayName:data.displayName,description:desc});
+          await client.query('BEGIN');
+          // Lock the account to prevent concurrent purchases from overdrawing coins.
+          const charged=await client.query('UPDATE users SET coins=coins-750 WHERE id=$1 AND coins>=750 RETURNING coins',[socket.user.id]);
+          if(!charged.rowCount){await client.query('ROLLBACK');return cb({success:false,message:'You need 750 coins to create a world.'});}
+          await client.query('INSERT INTO worlds(name,owner_user_id,data) VALUES($1,$2,$3)',[key,socket.user.id,JSON.stringify(data)]);
+          await client.query('COMMIT');
+          socket.user.coins=Number(charged.rows[0].coins);
+          return cb({success:true,worldName:key,displayName:data.displayName,description:desc,coins:socket.user.coins});
         }catch(err){
+          await client.query('ROLLBACK').catch(()=>{});
           if(err.code==='23505'){
             if(supplied)return cb({success:false,message:'That world already exists.'});
             continue;
           }
           throw err;
-        }
+        }finally{client.release();}
       }
       cb({success:false,message:'Could not find an available random world name. Please retry.'});
     } catch(e){console.error('Create world:',e);cb({success:false,message:'Could not create world.'});}
@@ -2618,8 +2652,9 @@ io.on('connection', (socket) => {
       const [visible, owned, user] = await Promise.all([
         pool.query(`
           SELECT id,category,name,price,asset_url,asset_kind,metadata,is_visible,
-                 (created_by IS NOT NULL) AS is_uploaded
-          FROM store_items WHERE ($1::boolean OR is_visible=true) AND (asset_kind <> 'avatar_glb' OR $1::boolean)
+                 (created_by IS NOT NULL) AS is_uploaded,
+                 COALESCE((SELECT username FROM users WHERE id=store_items.created_by),'KWG') AS creator_username
+          FROM store_items WHERE category IN ('hair','hats','heads','eyes','mouth','hat','head_shape') AND ($1::boolean OR is_visible=true) AND (asset_kind <> 'avatar_glb' OR $1::boolean)
           ORDER BY category ASC,
                    CASE WHEN asset_kind='procedural' THEN COALESCE((metadata->>'styleIndex')::int,0) ELSE 9999 END ASC,
                    CASE WHEN asset_kind='procedural' THEN COALESCE((metadata->>'colorIndex')::int,0) ELSE 9999 END ASC,
@@ -2627,7 +2662,8 @@ io.on('connection', (socket) => {
         `,[!!socket.user.isAdmin]),
         pool.query(`
           SELECT s.id,s.category,s.name,s.price,s.asset_url,s.asset_kind,s.metadata,s.is_visible,
-                 (s.created_by IS NOT NULL) AS is_uploaded
+                 (s.created_by IS NOT NULL) AS is_uploaded,
+                 COALESCE((SELECT username FROM users WHERE id=s.created_by),'KWG') AS creator_username
           FROM user_store_items o
           JOIN store_items s ON s.id=o.item_id
           WHERE o.user_id=$1
@@ -2848,22 +2884,43 @@ io.on('connection', (socket) => {
     cb({success:true,assetCleanupFailed});
   });
 
-  socket.on('admin_store_create', async (payload = {}, cb) => {
-    if (!requireAdmin(socket, cb)) return;
+  socket.on('create_avatar_item', async (payload = {}, cb) => {
+    if (!requireAuth(socket, cb)) return;
     try {
       const category = String(payload.category || '').trim();
-      const name = String(payload.name || '').trim().slice(0, 40);
+      const name = filterKWGUserText(String(payload.name || '').trim().slice(0, 40));
       const price = Number(payload.price);
-      if (!STORE_CATEGORIES.has(category)) return cb({success:false,message:'Choose a valid store category.'});
+      if (!['hair','hats','heads','eyes','mouth'].includes(category)) return cb({success:false,message:'Choose hats, hair, heads, eyes, or mouths.'});
       if (!name) return cb({success:false,message:'Item name is required.'});
       if (!Number.isInteger(price) || price < 0 || price > 100000000) return cb({success:false,message:'Price must be a whole number of coins.'});
+      if(socket.data.lastAvatarPublishAt&&Date.now()-socket.data.lastAvatarPublishAt<20000)
+        return cb({success:false,message:'Wait 20 seconds between item uploads.'});
+      socket.data.lastAvatarPublishAt=Date.now();
       const buffer = fileBufferFromSocket(payload.fileData);
       if (!buffer || !buffer.length) return cb({success:false,message:'Choose a file to upload.'});
       if (!storeStorageConfigured()) {
         return cb({success:false,message:'Store uploads need SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY configured on Render first.'});
       }
 
-      const metadata = {...cleanUploadMeta(category, payload.metadata || {}), distribution:payload.distribution==='starter'?'starter':'store', creatorVersion:1};
+      const metadata = {...cleanUploadMeta(category, payload.metadata || {}), distribution:'store', creatorVersion:2};
+      // Images are public only after the server has approved them.
+      if(['eyes','mouth'].includes(category)){
+        const mime=String(payload.mimeType||'').toLowerCase();
+        if(!kwgValidImageBytes(buffer,mime))return cb({success:false,message:'Invalid image or image is too large (1.5 MB max).'});
+        if(!await kwgModerateWorldImage(buffer,mime))return cb({success:false,message:'Image was not approved for the store.'});
+      }else{
+        // GLB v2 header, declared length, and bounded upload. Reject malformed binary.
+        if(buffer.length<20||buffer.length>8*1024*1024||buffer.toString('ascii',0,4)!=='glTF'||buffer.readUInt32LE(4)!==2||buffer.readUInt32LE(8)!==buffer.length)
+          return cb({success:false,message:'Invalid 3D model. Export a valid GLB (max 8 MB).'});
+        // Reject GLB files with external asset references; all geometry/textures must be self-contained.
+        const jsonSize=buffer.readUInt32LE(12),jsonType=buffer.toString('ascii',16,20);
+        if(jsonType!=='JSON'||jsonSize<2||jsonSize>buffer.length-20)return cb({success:false,message:'Invalid GLB JSON chunk.'});
+        let document;
+        try{document=JSON.parse(buffer.toString('utf8',20,20+jsonSize));}catch{return cb({success:false,message:'Invalid GLB model JSON.'});}
+        const external=[...(document.buffers||[]),...(document.images||[])].some(a=>a.uri&&!String(a.uri).startsWith('data:'));
+        if(external)return cb({success:false,message:'Models must contain their own textures and geometry.'});
+
+      }
       if (category === 'hat') {
         for (const key of ['size','offsetX','offsetY','offsetZ']) {
           if (!Number.isFinite(Number(payload.metadata?.[key]))) {
@@ -2882,13 +2939,34 @@ io.on('connection', (socket) => {
         INSERT INTO store_items(category,name,price,asset_url,asset_kind,metadata,is_visible,created_by)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8)
         RETURNING id,category,name,price,asset_url,asset_kind,metadata,is_visible
-      `, [category,name,price,assetUrl,assetKind,JSON.stringify(metadata),payload.distribution==='starter'?false:payload.isVisible !== false,socket.user.id]);
-      if(metadata.distribution==='starter') await pool.query('INSERT INTO user_store_items(user_id,item_id) SELECT id,$1 FROM users ON CONFLICT DO NOTHING',[r.rows[0].id]);
-      cb({success:true,item:rowToStoreItem(r.rows[0])});
+      `, [category,name,price,assetUrl,assetKind,JSON.stringify(metadata),true,socket.user.id]);
+      await pool.query('INSERT INTO user_store_items(user_id,item_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[socket.user.id,r.rows[0].id]);
+      cb({success:true,item:rowToStoreItem({...r.rows[0],creator_username:socket.user.username})});
     } catch (e) {
       console.error(e);
       cb({success:false,message:e.message || 'Could not create store item.'});
     }
+  });
+
+  socket.on('get_my_creations',async(cb)=>{
+    if(!requireAuth(socket,cb))return;
+    try{
+      const [worlds,items]=await Promise.all([
+        pool.query('SELECT id,name,data,created_at,updated_at FROM worlds WHERE owner_user_id=$1 ORDER BY updated_at DESC',[socket.user.id]),
+        pool.query("SELECT id,name,category,price,asset_url,asset_kind,metadata,is_visible,created_at,updated_at FROM store_items WHERE created_by=$1 AND category IN ('hair','hats','heads','eyes','mouth') ORDER BY updated_at DESC",[socket.user.id])
+      ]);
+      cb({success:true,worlds:worlds.rows.map(w=>({name:w.name,displayName:w.data?.displayName||w.name,description:w.data?.description||'',thumbnailUrl:w.data?.thumbnailUrl||''})),items:items.rows.map(rowToStoreItem)});
+    }catch(e){console.error('Creations list:',e);cb({success:false,message:'Could not load creations.'});}
+  });
+  socket.on('update_my_avatar_item',async({itemId,name,price,isVisible}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    const id=cleanStoreItemId(itemId),clean=filterKWGUserText(String(name||'').trim());
+    const n=Number(price);
+    if(!id||!clean||clean.length>40||!Number.isInteger(n)||n<0||n>1000000)return cb({success:false,message:'Enter a valid name and price.'});
+    try{
+      const r=await pool.query('UPDATE store_items SET name=$1,price=$2,is_visible=$3,updated_at=NOW() WHERE id=$4 AND created_by=$5 RETURNING id',[clean,n,isVisible!==false,id,socket.user.id]);
+      cb(r.rowCount?{success:true}:{success:false,message:'Item not found or not yours.'});
+    }catch(e){console.error('Update creation:',e);cb({success:false,message:'Could not update item.'});}
   });
 
   socket.on('get_world_chat', async ({worldName}, cb) => {
