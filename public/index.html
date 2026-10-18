@@ -2834,7 +2834,17 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 </style>
 <style>
 .kwg-profile-name-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.kwg-level-badge{display:inline-flex;align-items:center;white-space:nowrap;font:700 12px 'Silkscreen',monospace;color:#b5f7d3;border:2px solid #64b89c;background:#163b3a;padding:5px 9px}
+.kwg-level-badge{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;width:42px;height:46px;flex:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.4))}
+.kwg-level-badge svg{display:block;width:100%;height:100%;overflow:visible}
+.kwg-level-badge path{fill:#176b63;stroke:#a8ffe0;stroke-width:2.8;stroke-linejoin:round}
+.kwg-level-badge path:nth-of-type(2){fill:none;stroke:#d8fff2;stroke-width:2;opacity:.7}
+.kwg-level-badge text{fill:#f0fff8;font:900 15px 'Chakra Petch',sans-serif;text-anchor:middle;dominant-baseline:central;paint-order:stroke;stroke:#0b3b38;stroke-width:1.6}
+.kwg-shirt-group-option{display:flex;align-items:center;gap:8px;padding:8px 10px;border:2px solid #52758c;background:#1b3246;color:#d6f0ff;font:700 12px 'Chakra Petch',sans-serif;cursor:pointer;text-align:left}
+.kwg-shirt-group-option.selected{border-color:#80e6ae;background:#28554b}
+.kwg-shirt-group-option canvas{width:38px;height:38px;flex:none}
+.kwg-group-edit-panel[hidden]{display:none!important}
+.kwg-notification-actions{display:flex;gap:5px;flex-wrap:wrap;grid-column:3}
+@media(max-width:620px){.kwg-notification-actions{grid-column:2}}
 .kwg-xp-tier{display:inline-flex;align-items:center;gap:4px;font-size:11px!important;padding:6px 8px!important}
 .kwg-xp-tier[data-tier=bronze]{border-color:#a9734b;color:#d9a67c}
 .kwg-xp-tier[data-tier=silver]{border-color:#93a5b9;color:#bdcfdf}
@@ -3024,7 +3034,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
               <div id="profile-avatar-preview" class="profile-avatar-preview"><div class="profile-avatar-placeholder">HEADSHOT</div></div>
               <div class="profile-identity">
                 <div class="profile-kicker">PLAYER PROFILE</div>
-                <h1 class="kwg-profile-name-row"><span id="profile-username">PLAYER</span><span class="kwg-level-badge" id="kwg-profile-level">LV 1</span></h1>
+                <h1 class="kwg-profile-name-row"><span id="profile-username">PLAYER</span><span class="kwg-level-badge" id="kwg-profile-level" aria-label="Level 1"></span></h1>
                 <div id="profile-status" class="profile-status offline"><span class="profile-status-dot"></span><span>OFFLINE</span></div>
                 <div id="profile-joined" class="profile-joined"></div>
                 <div class="profile-action-row">
@@ -7223,10 +7233,16 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       while(ctx.measureText(label).width>355&&size>21);
       ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#f1f5e7';
       ctx.fillText(label,223,49);
-      ctx.fillStyle='#183c49';ctx.fillRect(410,19,84,58);
-      ctx.strokeStyle='#77e4ba';ctx.lineWidth=3;ctx.strokeRect(410,19,84,58);
-      ctx.font='700 25px "Chakra Petch", monospace';ctx.fillStyle='#baffd9';
-      ctx.fillText('LV '+Math.max(1,Math.floor(Number(level)||1)),452,49);
+      // Shield-shaped level insignia matches the profile badge.
+      ctx.beginPath();ctx.moveTo(452,13);ctx.lineTo(488,24);ctx.lineTo(485,59);
+      ctx.quadraticCurveTo(477,74,452,84);ctx.quadraticCurveTo(427,74,419,59);
+      ctx.lineTo(416,24);ctx.closePath();ctx.fillStyle='#176b63';ctx.fill();
+      ctx.strokeStyle='#b6ffe1';ctx.lineWidth=3;ctx.stroke();
+      ctx.beginPath();ctx.moveTo(428,31);ctx.lineTo(452,23);ctx.lineTo(476,31);
+      ctx.strokeStyle='#8ce7c5';ctx.lineWidth=2;ctx.stroke();
+      const badgeLevel=String(Math.max(1,Math.min(99999,Math.floor(Number(level)||1))));
+      ctx.font='900 '+(badgeLevel.length>3?20:29)+'px "Chakra Petch", monospace';ctx.fillStyle='#f3fff7';
+      ctx.textAlign='center';ctx.fillText(badgeLevel,452,51);
       const sprite=kwgSpriteFromCanvas(canvas,1.95,.365);
       sprite.name='kwg-name-tag';sprite.position.set(0,3.14,0);
       return sprite;
@@ -11554,7 +11570,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     }
     function kwgLoadGroups(){
       kwgGroupSelected=null;kwgGroupStatus.textContent='Loading groups...';
-      kwgGroupCall('kwg_group_list',{query:document.getElementById('kwg-group-search').value.trim()},res=>{kwgGroupCache=res.groups||[];kwgGroupRenderList();});
+      kwgGroupCall('kwg_group_list',{query:document.getElementById('kwg-group-search').value.trim()},res=>{kwgGroupCache=res.groups||[];if(!kwgGroupSelected)kwgGroupRenderList();});
     }
     document.getElementById('kwg-group-search').addEventListener('input',()=>kwgLoadGroups());
     document.querySelectorAll('[data-kwg-group-tab]').forEach(button=>button.addEventListener('click',()=>{
@@ -11592,12 +11608,13 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         if(g.invited)actions.append(kwgGroupButton('DECLINE INVITE',()=>kwgGroupAction('kwg_group_decline',{groupId:g.id})));
         if(g.joinPolicy!=='closed'&&(g.joinPolicy==='open'||g.invited))actions.append(kwgGroupButton('JOIN GROUP',()=>kwgGroupAction('kwg_group_join',{groupId:g.id})));
       }else{
-        actions.append(kwgGroupButton(g.badgeEquipped?'REMOVE SHIRT BADGE':'SHOW BADGE ON SHIRT',()=>kwgGroupAction('kwg_group_badge',{groupId:g.id,enabled:!g.badgeEquipped})));
         if(!owner)actions.append(kwgGroupButton('LEAVE GROUP',()=>kwgGroupAction('kwg_group_leave',{groupId:g.id},'Leave this group?')));
       }
       kwgGroupDetail.append(actions);
       if(owner){
-        const section=kwgGroupElement('section','kwg-group-section');section.append(kwgGroupElement('h4','','GROUP SETTINGS'));
+        const section=kwgGroupElement('section','kwg-group-section kwg-group-edit-panel');section.hidden=true;
+        const editButton=kwgGroupButton('EDIT',()=>{section.hidden=!section.hidden;editButton.textContent=section.hidden?'EDIT':'CLOSE EDIT';});
+        actions.append(editButton);
         const form=kwgGroupForm.cloneNode(true);form.removeAttribute('id');form.hidden=false;
         for(const [key,value] of Object.entries(g))if(form.elements.namedItem(key))form.elements.namedItem(key).value=value;
         form.querySelector('button[type=submit]').textContent='SAVE GROUP';
@@ -11848,11 +11865,18 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       }
     }
 
+    function kwgSetLevelBadge(element,rawLevel){
+      if(!element)return;
+      const level=Math.max(1,Math.min(99999,Math.floor(Number(rawLevel)||1)));
+      element.setAttribute('aria-label','Level '+level);
+      element.innerHTML='<svg viewBox="0 0 48 54" aria-hidden="true"><path d="M24 2 L44 11 L42 36 Q37 45 24 52 Q11 45 6 36 L4 11 Z"/><path d="M12 15 L24 10 L36 15" fill="none" stroke="#d8fff2" stroke-width="2" opacity=".7"/><text x="24" y="29" style="font-size:'+(level>=1000?'10':level>=100?'12':'15')+'px">'+level+'</text></svg>';
+    }
+
     function renderProfile(profile) {
       viewedProfile=profile;
       kwgRenderProgress(profile);
       document.getElementById('profile-username').textContent=filterKWGUserText(profile.username);
-      document.getElementById('kwg-profile-level').textContent='LV '+(profile.progression?.level||1);
+      kwgSetLevelBadge(document.getElementById('kwg-profile-level'),profile.progression?.level||1);
       document.getElementById('profile-joined').textContent='JOINED '+formatProfileDate(profile.createdAt).toUpperCase();
 
       const status=document.getElementById('profile-status');
@@ -11975,14 +11999,25 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         const msg=document.createElement('div');msg.className='notification-message';msg.textContent=filterKWGUserText(n.message);
         const tm=document.createElement('div');tm.className='notification-time';tm.textContent=timeAgo(n.createdAt);
         body.append(msg,tm);row.append(dot,body);
-        if(n.actorUsername){
-          const open=document.createElement('button');open.className='notification-open';open.textContent='PROFILE';
-          open.onclick=()=>{
-            if(!n.isRead) socket.emit('mark_notifications_read',{ids:[Number(n.id)]},()=>refreshNotifications());
-            openPlayerProfile(n.actorUsername);
-          };
-          row.append(open);
+        const actions=document.createElement('div');actions.className='kwg-notification-actions';
+        const markSeen=()=>{if(!n.isRead)socket.emit('mark_notifications_read',{ids:[Number(n.id)]},()=>refreshNotifications());};
+        const action=(label,handler)=>{const button=document.createElement('button');button.className='notification-open';button.type='button';button.textContent=label;button.onclick=handler;actions.append(button);};
+        if(n.relatedGroupId){
+          action('VIEW GROUP',()=>{markSeen();switchHomeTab('groups');kwgGroupOpen(n.relatedGroupId);});
+          if(n.type==='group_invite'&&n.isInvitePending){
+            action('ACCEPT',()=>socket.emit('kwg_group_join',{groupId:n.relatedGroupId},res=>{
+              if(!res?.success)return showToast(res?.message||'Could not join group.');
+              markSeen();refreshNotifications();kwgLoadGroups();showToast('Joined group!');
+            }));
+            action('DECLINE',()=>socket.emit('kwg_group_decline',{groupId:n.relatedGroupId},res=>{
+              if(!res?.success)return showToast(res?.message||'Could not decline invitation.');
+              markSeen();refreshNotifications();
+            }));
+          }
+        }else if(n.actorUsername){
+          action('PROFILE',()=>{markSeen();openPlayerProfile(n.actorUsername);});
         }
+        if(actions.childElementCount)row.append(actions);
         box.appendChild(row);
       });
     }
@@ -12022,6 +12057,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         console.warn('Notification refresh failed:',error);
       }
     }
+    socket.on('kwg_notification_new',()=>refreshNotifications());
     document.getElementById('notifications-read-btn').addEventListener('click',()=>{
       socket.emit('mark_notifications_read',{},res=>{if(res?.success)refreshNotifications();});
     });
@@ -12288,6 +12324,29 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           else thumb.textContent='NONE';
           const label=document.createElement('div');label.className='inventory-name';label.textContent=item.name||'None';card.append(thumb,label);
           card.onclick=()=>{setDraftInventoryItem(item);};designs.appendChild(card);
+        });
+        // Group emblems live in Shirt Design, not the Groups page.
+        // Only current memberships are returned; the server authorizes changes.
+        const groupChoices=document.createElement('div');groupChoices.className='kwg-shirt-design-grid';
+        groupChoices.style.gridColumn='1/-1';host.appendChild(groupChoices);
+        const addChoice=(label,badge)=>{
+          const button=document.createElement('button');button.type='button';
+          button.className='kwg-shirt-group-option'+((Number(avatarDraft.groupBadge?.id||0)===Number(badge?.id||0))?' selected':'');
+          if(badge){const icon=document.createElement('canvas');icon.width=128;icon.height=128;kwgDrawGroupIcon(icon,badge);button.append(icon);}
+          else{const icon=document.createElement('span');icon.textContent='✕';icon.style.fontSize='22px';icon.style.width='38px';icon.style.textAlign='center';button.append(icon);}
+          const text=document.createElement('span');text.textContent=label;button.append(text);
+          button.onclick=()=>{
+            socket.emit('kwg_group_badge',{groupId:badge?.id||null,enabled:!!badge},res=>{
+              if(!res?.success){showToast(res?.message||'Could not change shirt badge.');return;}
+              avatarDraft.groupBadge=res.badge||null;playerAppearance.groupBadge=res.badge||null;
+              updateEditorAvatar();renderNativeAvatarOptions();
+            });
+          };groupChoices.append(button);
+        };
+        addChoice('None',null);
+        socket.emit('kwg_group_my_badges',{},res=>{
+          if(!res?.success||avatarEditorCategory!=='tops'||!groupChoices.isConnected)return;
+          for(const badge of res.badges||[])addChoice(badge.name,badge);
         });
       }
       if(cat==='bottoms'){
