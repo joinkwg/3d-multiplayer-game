@@ -3060,13 +3060,13 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           <div id="kwg-create-world-list" class="kwg-create-list"></div>
         </section>
         <section id="kwg-create-items" class="kwg-create-section" hidden>
-          <div class="kwg-create-actions"><button type="button" id="kwg-create-studio" class="submit-btn">✦ OPEN 3D / 2D ITEM STUDIO</button></div>
           <form id="kwg-create-quick" class="kwg-create-quick" autocomplete="off">
             <div class="kwg-create-form-title">QUICK PUBLISH</div>
-            <label>TYPE<select id="kwg-create-category"><option value="hats">Hat (3D GLB)</option><option value="hair">Hair (3D GLB)</option><option value="heads">Head (3D GLB)</option><option value="eyes">Eyes (PNG / JPG / WebP)</option><option value="mouth">Mouth (PNG / JPG / WebP)</option></select></label>
+            <label>TYPE<select id="kwg-create-category"><option value="hats">Hat</option><option value="hair">Hair</option><option value="heads">Head</option><option value="eyes">Eyes</option><option value="mouth">Mouth</option></select></label>
             <label>ITEM NAME<input id="kwg-create-item-name" maxlength="40" required placeholder="My item"></label>
             <label>PRICE · COINS<input id="kwg-create-item-price" type="number" min="0" max="1000000" value="50" required></label>
-            <label>FILE<input id="kwg-create-item-file" type="file" accept=".glb,model/gltf-binary" required></label>
+            <div class="kwg-create-studio-heading">STUDIO VIEWPORT</div>
+            <div id="kwg-create-studio-host" aria-label="Avatar item studio viewport"></div>
             <button id="kwg-create-item-submit" class="submit-btn" type="submit">PUBLISH ITEM</button>
           </form>
           <div id="kwg-create-item-status" class="error-msg" role="status"></div>
@@ -11193,30 +11193,22 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       document.getElementById('kwg-create-worlds').hidden=items;
       document.getElementById('kwg-create-items').hidden=!items;
       document.querySelectorAll('[data-create-tab]').forEach(b=>b.classList.toggle('active',b===button));
+      if(items)window.kwgV46StudioShow?.();
     }));
     document.getElementById('kwg-create-world-shortcut').onclick=()=>document.getElementById('open-create-world-btn').click();
-    document.getElementById('kwg-create-studio').onclick=()=>window.kwgOpenItemCreator?.();
+    // V46: the Create form owns the studio's type, name, price and publish action.
+    // The studio is mounted inline after its runtime initializes at the end of body.
     const kwgQuickCategory=document.getElementById('kwg-create-category');
-    kwgQuickCategory.onchange=()=>{const image=['eyes','mouth'].includes(kwgQuickCategory.value);document.getElementById('kwg-create-item-file').accept=image?'.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp':'.glb,model/gltf-binary';};
-    document.getElementById('kwg-create-quick').onsubmit=async e=>{
-      e.preventDefault();const button=document.getElementById('kwg-create-item-submit'),status=document.getElementById('kwg-create-item-status');
-      const file=document.getElementById('kwg-create-item-file').files[0];
-      const cat=kwgQuickCategory.value,image=['eyes','mouth'].includes(cat);
-      if(!file||file.size>(image?1500000:8000000)){status.textContent='Choose a file within the size limit.';return;}
-      button.disabled=true;status.textContent='Publishing...';
-      try{
-        const bytes=new Uint8Array(await file.arrayBuffer());
-        socket.timeout(45000).emit('create_avatar_item',{
-          category:cat,name:document.getElementById('kwg-create-item-name').value.trim(),price:Number(document.getElementById('kwg-create-item-price').value),
-          fileName:file.name,mimeType:file.type|| (image?'image/png':'model/gltf-binary'),fileData:bytes
-        },(err,res)=>{
-          button.disabled=false;
-          if(err||!res?.success){status.textContent=res?.message||'Upload failed. Please retry.';return;}
-          status.textContent='Published!';document.getElementById('kwg-create-quick').reset();kwgQuickCategory.onchange();
-          kwgLoadCreations();refreshStoreData();
-        });
-      }catch(err){button.disabled=false;status.textContent=err.message||'Could not read file.';}
+    kwgQuickCategory.onchange=()=>window.kwgV46StudioCategory?.(kwgQuickCategory.value);
+    document.getElementById('kwg-create-quick').onsubmit=e=>{
+      e.preventDefault();
+      if(!e.currentTarget.reportValidity())return;
+      if(!window.kwgV46StudioPublish){document.getElementById('kwg-create-item-status').textContent='Studio is still loading.';return;}
+      window.kwgV46StudioPublish({category:kwgQuickCategory.value,
+        name:document.getElementById('kwg-create-item-name').value.trim(),
+        price:Number(document.getElementById('kwg-create-item-price').value)});
     };
+    window.addEventListener('kwg-item-catalog-updated',()=>{kwgLoadCreations();refreshStoreData();});
 
     function switchHomeTab(name) {
       if(name==='home')name='worlds'; // V42: the Worlds directory is KWG's landing page.
@@ -16055,7 +16047,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 #kwg-creator button{cursor:pointer}#kwg-creator button:hover{background:#29486a}#kwg-creator .kwg-creator-shell{width:min(1200px,96vw);height:min(800px,94vh);border:2px solid #789dc4;background:#101a28;display:flex;flex-direction:column;box-shadow:0 20px 70px #000}
 #kwg-creator .kwg-creator-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;border-bottom:1px solid #30445d}#kwg-creator .kwg-creator-main{display:grid;grid-template-columns:215px 1fr 260px;min-height:0;flex:1}#kwg-creator .kwg-creator-side{padding:12px;overflow:auto;background:#121f31}#kwg-creator .kwg-creator-side label{display:block;margin:9px 0;font-weight:650}#kwg-creator .kwg-creator-side input,#kwg-creator .kwg-creator-side select{display:block;width:100%;margin-top:5px}#kwg-creator .kwg-creator-stage{position:relative;min-height:0;background:#0b111a}#kwg-creator #kwg-creator-viewport{width:100%;height:100%;display:block}#kwg-creator #kwg-creator-paint{display:none;position:absolute;inset:20px;margin:auto;width:min(90%,500px);height:auto;aspect-ratio:1;image-rendering:pixelated;background:#eee;touch-action:none;border:3px solid #536c88;cursor:crosshair}#kwg-creator .kwg-creator-status{padding:8px 12px;color:#9ec3ed;border-top:1px solid #30445d}#kwg-creator .kwg-tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}#kwg-creator .kwg-creator-side h3{font-size:13px;margin:4px 0 12px}#kwg-creator .kwg-creator-side p{font-size:11px;color:#97aac0;line-height:1.5}#kwg-creator #kwg-creator-parts button,#kwg-creator #kwg-creator-drafts button{display:block;width:100%;text-align:left;margin:4px 0}#kwg-creator .kwg-creator-primary{background:#24644b!important;border-color:#41a77d!important}#kwg-creator .kwg-creator-danger{background:#702e3a!important}#kwg-creator #kwg-creator-reset-area{margin-top:20px;padding-top:13px;border-top:1px solid #566} @media(max-width:850px){#kwg-creator .kwg-creator-main{grid-template-columns:155px 1fr 175px}#kwg-creator .kwg-creator-side{padding:7px}}
 </style>
-<div id="kwg-creator" role="dialog" aria-modal="true" aria-label="Item Creator">
+<div id="kwg-creator" role="region" aria-label="Studio Viewport">
  <div class="kwg-creator-shell">
   <div class="kwg-creator-bar"><strong>✦ KWG ITEM CREATOR</strong><select id="kwgc-category"><option value="hats">Hats</option><option value="hair">Hair</option><option value="heads">Heads</option><option value="eyes">Eyes (2D Decal)</option><option value="mouth">Mouth (2D Decal)</option></select><button id="kwgc-mannequin">Mannequin: ON</button><button id="kwgc-new">New</button><span style="flex:1"></span><button id="kwgc-close">✕ Close</button></div>
   <style>
@@ -16068,8 +16060,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 #kwg-creator-parts button.active{background:#276b91!important;border-color:#8bd9ff!important}
 </style>
 <div id="kwgc-modebar"><button data-mode="select" class="active">↖ Select</button><button data-mode="move">✥ Move</button><button data-mode="scale">⤢ Scale</button><button data-mode="rotate">⟳ Rotate</button><button data-mode="recolor">◉ Recolor</button><button data-mode="insert">＋ Insert</button><label style="margin-left:10px;color:#cdeaff"><input id="kwgc-mirror" type="checkbox" style="min-height:0"> Mirror X</label><button id="kwgc-zoom-in">＋ Zoom</button><button id="kwgc-zoom-out">－ Zoom</button></div><div class="kwg-creator-main">
-   <div class="kwg-creator-side"><h3>BUILD & PAINT</h3><div id="kwgc-3dtools"><div class="kwg-tool-grid"><button data-shape="box">+ Box</button><button data-shape="sphere">+ Sphere</button><button data-shape="cylinder">+ Cylinder</button><button data-shape="cone">+ Cone</button></div><label>Parts <div id="kwg-creator-parts"></div></label><button id="kwgc-delete-part">Remove selected part</button><p>Drag the viewport to rotate. Change each selected primitive with the transforms at right. Overlap rounded shapes to sculpt a silhouette.</p></div><div id="kwgc-2dtools" style="display:none"><div class="kwg-tool-grid"><button data-paint="brush">Brush</button><button data-paint="eraser">Eraser</button><button data-paint="fill">Fill</button><button data-paint="checker">Checker</button><button data-paint="stripes">Stripes</button><button id="kwgc-clear-paint">Clear</button></div><label>Brush size<input id="kwgc-brush" type="range" min="1" max="32" value="8"></label><p>Paint directly on the 2D texture canvas. Patterns fill the canvas; use the 3D category editor for solid meshes.</p></div><h3>MY DRAFTS</h3><button id="kwgc-refresh-drafts">Refresh drafts</button><div id="kwg-creator-drafts"></div></div>
-   <div class="kwg-creator-stage"><canvas id="kwg-creator-viewport"></canvas><div id="kwgc-views"><button data-view="top">TOP</button><button data-view="front">FRONT</button><button data-view="right">RIGHT</button><button data-view="left">LEFT</button><button data-view="back">BACK</button><button data-view="bottom">BOTTOM</button></div><div id="kwgc-mode-hint">Select a part · drag empty space to orbit · scroll to zoom</div><canvas id="kwg-creator-paint" width="512" height="512"></canvas></div>
+   <div class="kwg-creator-side"><h3>BUILD & PAINT</h3><div id="kwgc-3dtools"><div class="kwg-tool-grid"><button data-shape="box">+ Box</button><button data-shape="sphere">+ Sphere</button><button data-shape="cylinder">+ Cylinder</button><button data-shape="cone">+ Cone</button></div><label>Parts <div id="kwg-creator-parts"></div></label><button id="kwgc-delete-part">Remove selected part</button><p>Drag the viewport to rotate. Change each selected primitive with the transforms at right. Overlap rounded shapes to sculpt a silhouette.</p></div><div id="kwgc-2dtools" style="display:none"><div class="kwg-tool-grid"><button data-paint="brush">Brush</button><button data-paint="eraser">Eraser</button><button data-paint="fill">Fill</button><button data-paint="checker">Checker</button><button data-paint="stripes">Stripes</button><button id="kwgc-clear-paint">Clear</button></div><label>Brush size<input id="kwgc-brush" type="range" min="1" max="32" value="8"></label></div><h3>MY DRAFTS</h3><button id="kwgc-refresh-drafts">Refresh drafts</button><div id="kwg-creator-drafts"></div></div>
+   <div class="kwg-creator-stage"><canvas id="kwg-creator-viewport"></canvas><div id="kwgc-views"><button data-view="top">TOP</button><button data-view="front">FRONT</button><button data-view="right">RIGHT</button><button data-view="left">LEFT</button><button data-view="back">BACK</button><button data-view="bottom">BOTTOM</button></div><div id="kwgc-mode-hint">Select a part · drag empty space to orbit · scroll to zoom</div><div id="kwgc-face-preview-wrap"><span>HEAD PREVIEW</span><canvas id="kwgc-face-preview" width="180" height="180" aria-label="Live avatar head preview"></canvas></div><canvas id="kwg-creator-paint" width="512" height="512"></canvas></div>
    <div class="kwg-creator-side"><h3>ITEM PROPERTIES</h3><label>Name<input id="kwgc-name" maxlength="40" value="New Creation"></label><label>Price (coins)<input id="kwgc-price" type="number" value="50" min="0" max="1000000"></label><label style="display:none!important">Destination<input id="kwgc-distribution" type="hidden" value="store"></label><label>Color<input type="color" id="kwgc-color" value="#7954aa"></label><div id="kwgc-transforms"><h3>SELECTED PART</h3><label>X<input id="kwgc-x" type="number" step="0.05" value="0"></label><label>Y<input id="kwgc-y" type="number" step="0.05" value="2.35"></label><label>Z<input id="kwgc-z" type="number" step="0.05" value="0"></label><label>Rotate X (degrees)<input id="kwgc-rx" type="number" step="5" value="0"></label><label>Rotate Y (degrees)<input id="kwgc-r" type="number" step="5" value="0"></label><label>Rotate Z (degrees)<input id="kwgc-rz" type="number" step="5" value="0"></label><label>Scale X<input id="kwgc-sx" type="number" min="0.02" max="5" step="0.05" value="1"></label><label>Scale Y<input id="kwgc-sy" type="number" min="0.02" max="5" step="0.05" value="1"></label><label>Scale Z<input id="kwgc-sz" type="number" min="0.02" max="5" step="0.05" value="1"></label></div><button id="kwgc-save" style="width:100%">Save editable draft</button><button id="kwgc-publish" class="kwg-creator-primary" style="width:100%;margin-top:7px">Publish item</button></div>
   </div><div class="kwg-creator-status" id="kwgc-status">Create a shape or select a 2D category to begin.</div>
  </div>
@@ -16159,7 +16151,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
  const settings=make('kwgc-settings','⚙','SETTINGS');
  const properties=make('kwgc-properties','☷','PROPERTIES');
  const explorer=make('kwgc-explorer-panel','▦','PARTS EXPLORER');
- const meshPanel=make('kwgc-mesh-edit','◈','MESH EDITING');
+ const meshPanel=make('kwgc-mesh-edit','◈','MESH EDITING');meshPanel.panel.hidden=true;
  const tool3d=creator.querySelector('#kwgc-3dtools'),tool2d=creator.querySelector('#kwgc-2dtools');
  const parts=creator.querySelector('#kwg-creator-parts');
  const oldList=parts?.closest('label');if(oldList)oldList.remove();
@@ -16217,7 +16209,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
  polygonBox.innerHTML='<label>POLYGON DETAIL <select id="kwgc-poly-detail"><option value="8">Low (8 segments)</option><option value="16">Medium (16 segments)</option><option value="24" selected>Standard (24 segments)</option><option value="40">High (40 segments)</option><option value="64">Ultra (64 segments)</option></select></label><small id="kwgc-triangle-count">Select a primitive to see its triangle count.</small><small>Changes primitive topology. Existing sculpted geometry stays unchanged.</small>';
  const partColorBox=document.createElement('div');partColorBox.className='kwgc-part-color-box';
  partColorBox.innerHTML='<label>SELECTED PART COLOR<input type="color" id="kwgc-part-color" value="#7954aa"></label><small>Edits only the selected part. The Recolor brush preset is separate.</small>';
- properties.body.append(partColorBox,polygonBox);
+ properties.body.append(partColorBox,polygonBox);polygonBox.hidden=true;
  
  const selectedHint=document.createElement('div');selectedHint.id='kwgc-selection-empty';selectedHint.className='kwgc-explorer-empty';selectedHint.textContent='No part selected';properties.body.append(selectedHint);
  if(transforms){transforms.style.display='none';properties.body.append(transforms);}
@@ -16227,7 +16219,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
  const remove=creator.querySelector('#kwgc-delete-part');if(remove){remove.textContent='▤ Delete selected part';explorer.body.append(remove);}
  const booleanActions=document.createElement('div');booleanActions.className='kwgc-boolean-actions';
  booleanActions.innerHTML='<button type="button" id="kwgc-union">UNION · U</button><button type="button" id="kwgc-negate">NEGATE · N</button><small>Ctrl+click to select several parts. Negated shapes subtract from positive shapes when unioned.</small>';
- explorer.body.append(booleanActions);
+ explorer.body.append(booleanActions);booleanActions.hidden=true;
  stack.append(toolbox.panel,settings.panel,properties.panel);
  left.replaceChildren(stack); right.className='kwg-creator-side kwgc-explorer';
  const rightStack=document.createElement('div');rightStack.className='kwgc-right-stack';
@@ -16268,7 +16260,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 #kwg-creator.kwgc-2d .kwgc-mesh-edit{display:none!important}
 #kwg-creator.kwgc-2d .kwgc-right-stack{display:none!important}
 #kwg-creator.kwgc-2d .kwgc-explorer{background:#14283a!important}
-#kwg-creator.kwgc-2d .kwgc-mirror-row,#kwg-creator.kwgc-2d #kwgc-mannequin{display:none!important}
+#kwg-creator.kwgc-2d #kwgc-mannequin{display:none!important}
 #kwg-creator.kwgc-2d .kwgc-explorer::before{content:'2D TEXTURE CANVAS\A Mesh and Explorer tools are hidden in Skin mode.';display:block;white-space:pre-line;margin:14px;padding:15px 10px;color:#bdd4e7;border:2px dashed #547990;font-size:12px}
 #kwg-creator.kwgc-2d #kwgc-mode-hint{display:none!important}
 #kwg-creator.kwgc-2d #kwgc-views{display:none!important}
@@ -16506,7 +16498,7 @@ body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-score-hud{di
  function snapshot(){return {parts:JSON.parse(JSON.stringify(parts)),selected,selection:[...selection],meshMode,meshSelection:meshSelection?JSON.parse(JSON.stringify(meshSelection)):null,paint:is2d()?paint.toDataURL('image/png'):null};}
  function remember(){if(!get())return;const snap=snapshot(),key=JSON.stringify(snap);if(key===lastHistoryKey)return;history.push(snap);if(history.length>maxHistory)history.shift();lastHistoryKey=key;future.length=0;}
  function restoreSnapshot(snap){parts=JSON.parse(JSON.stringify(snap.parts));selected=snap.selected;selection=new Set(snap.selection|| (selected>=0?[selected]:[]));meshMode=snap.meshMode;meshSelection=snap.meshSelection;activeDrag=null;clearEditorHover();document.querySelectorAll('#kwgc-mesh-modes [data-mesh-mode]').forEach(b=>b.classList.toggle('active',b.dataset.meshMode===meshMode));
-   if(snap.paint){const image=new Image();image.onload=()=>{ctx.clearRect(0,0,512,512);ctx.drawImage(image,0,0,512,512);paintDirty=true;};image.src=snap.paint;}
+   if(snap.paint){const image=new Image();image.onload=()=>{ctx.clearRect(0,0,512,512);ctx.drawImage(image,0,0,512,512);paintDirty=true;drawFacePreview(true);};image.src=snap.paint;}
    const p=parts[selected];if(p){coords.forEach(k=>{const el=$('kwgc-'+k);if(el)el.value=p[k]??0;});const color=$('kwgc-part-color');if(color)color.value=p.color;}redraw();setPropertyVisibility();}
  function undo(){if(!history.length)return status('Nothing to undo.');future.push(snapshot());restoreSnapshot(history.pop());lastHistoryKey='';status('Undo.');}
  function redo(){if(!future.length)return status('Nothing to redo.');history.push(snapshot());restoreSnapshot(future.pop());lastHistoryKey='';status('Redo.');}
@@ -16538,25 +16530,24 @@ body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-score-hud{di
    if(creatorAuthRestore)return creatorAuthRestore;
    creatorAuthRestore=(async()=>{
      const token=localStorage.getItem('kwg_session_token');
-     if(!token)return {success:false,message:'Please sign in as an admin again.'};
+     if(!token)return {success:false,message:'Please sign in again.'};
      if(!s.connected){
        try{await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{cleanup();reject(new Error('Connection timed out.'));},8000);function cleanup(){clearTimeout(timer);s.off('connect',connected);s.off('connect_error',failed);}function connected(){cleanup();resolve();}function failed(e){cleanup();reject(e);}s.once('connect',connected);s.once('connect_error',failed);s.connect();});}
        catch(e){return {success:false,message:'Server connection failed. Please check your internet connection.'};}
      }
      const result=await creatorEmit(s,'resume_session',{token});
      if(!result.success)return {success:false,message:'Your login session expired. Please sign in again.'};
-     if(!result.isAdmin)return {success:false,message:'An admin account is required to publish items.'};
-     return result;
+          return result;
    })();
    try{return await creatorAuthRestore;}finally{creatorAuthRestore=null;}
  }
  async function sock(event,payload){
    const s=window.kwgItemCreatorSocket;
-   if(!s)return {success:false,message:'Game connection unavailable. Reload and sign in as admin.'};
+   if(!s)return {success:false,message:'Game connection unavailable. Reload and sign in.'};
    if(!s.connected){const restored=await creatorRestoreSession(s);if(!restored.success)return restored;}
    let result=await creatorEmit(s,event,payload);
    if(result.message==='You must be logged in.'){
-     status('Restoring admin login...');
+     status('Restoring your login...');
      const restored=await creatorRestoreSession(s);
      if(!restored.success)return restored;
      result=await creatorEmit(s,event,payload);
@@ -16669,7 +16660,7 @@ body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-score-hud{di
    }
    return true;
  }
- function extrudeFace(){
+ function extrudeFace(){return status('Mesh editing is no longer available.');
    if(is2d()||meshMode!=='face'||selected<0||meshSelection?.faceIndex===undefined)return status('Choose Face mode, then click a face to extrude.');
    remember();const p=parts[selected],data=ensureMeshData(p),fi=meshSelection.faceIndex,tri=data.faces[fi];if(!tri)return;
    const T=get();
@@ -16754,9 +16745,9 @@ body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-score-hud{di
      g.dispose();obj.material.dispose();return polys;};
    return {merge,minus,triangles};
  }
- function toggleNegative(){if(is2d()||!selection.size)return status('Select a 3D part to negate.');remember();const toggle=new Set(selection);if(mirror)for(const i of selection){const j=mirrorPartner(i);if(j>=0)toggle.add(j);}for(const i of toggle)if(parts[i])parts[i].negative=!parts[i].negative;
+ function toggleNegative(){return status('Boolean editing is no longer available.');if(is2d()||!selection.size)return status('Select a 3D part to negate.');remember();const toggle=new Set(selection);if(mirror)for(const i of selection){const j=mirrorPartner(i);if(j>=0)toggle.add(j);}for(const i of toggle)if(parts[i])parts[i].negative=!parts[i].negative;
    redraw();status('Toggled negative part(s). Select positives + negatives and press U to subtract.');}
- function unionSelected(){
+ function unionSelected(){return status('Boolean editing is no longer available.');
    if(is2d()||selection.size<2)return status('Ctrl+select two or more 3D parts, then press U.');
    const ids=[...selection].filter(i=>parts[i]).sort((a,b)=>a-b),positives=ids.filter(i=>!parts[i].negative),negatives=ids.filter(i=>parts[i].negative);
    if(!positives.length)return status('A union needs at least one positive part.');
@@ -16804,7 +16795,7 @@ body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-score-hud{di
  function redraw(){
    if(!root)return;releaseChildren(root);parts.forEach((p,i)=>{const m=partMesh(p);m.userData.partIndex=i;root.add(m);});
    updatePartHighlights();const list=$('kwg-creator-parts');list.replaceChildren();
-   parts.forEach((p,i)=>{const b=document.createElement('button');b.textContent=(selection.has(i)?'▸ ':'')+(i+1)+' '+(p.name||p.type)+(p.negative?' [NEG]':'');
+   parts.forEach((p,i)=>{const b=document.createElement('button');b.type='button';b.textContent=(selection.has(i)?'▸ ':'')+(i+1)+' '+(p.name||p.type)+(p.negative?' [NEG]':'');
      b.onclick=e=>select(i,e.ctrlKey||e.metaKey);b.classList.toggle('active',i===selected);b.classList.toggle('kwg-multi-selected',selection.has(i));
      b.title='Ctrl+click to toggle multiselection';list.append(b);});
    const count=$('kwgc-part-count');if(count)count.textContent=parts.length+' PART'+(parts.length===1?'':'S')+' · '+selection.size+' SELECTED';
@@ -16865,18 +16856,8 @@ body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-score-hud{di
  function init(){if(renderer)return;const T=get(),canvas=$('kwg-creator-viewport');canvas.tabIndex=0;if(!T)return status('Three.js could not load.');scene=new T.Scene();scene.background=new T.Color('#111b29');camera=new T.PerspectiveCamera(38,1,.1,100);camera.position.set(3.4,2.5,5.8);camera.lookAt(0,1.5,0);renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));scene.add(new T.HemisphereLight(0xffffff,0x344a61,.85));const light=new T.DirectionalLight(0xffffff,.9);light.position.set(3,7,5);scene.add(light);root=new T.Group();scene.add(root);gizmo=new T.Group();scene.add(gizmo);elementOverlay=new T.Group();scene.add(elementOverlay);hoverOverlay=new T.Group();scene.add(hoverOverlay);
  // Use the same avatar builder as the rest of KWG, rather than a placeholder mannequin.
  avatar=window.kwgCreatorBuildAvatar?window.kwgCreatorBuildAvatar(defaultAvatarAppearance):new T.Group();scene.add(avatar);
- // Friendly default eyes on the editor's fitting model (not exported with items).
- previewEyeGroup=new T.Group();previewEyeGroup.name='kwgc-optional-eyes';avatar.add(previewEyeGroup);
- const eyeWhite=new T.MeshStandardMaterial({color:'#ffffff',roughness:.44});
- const irisMat=new T.MeshStandardMaterial({color:'#40bbf7',roughness:.3});
- const pupilMat=new T.MeshStandardMaterial({color:'#0b1d35',roughness:.2});
- const shineMat=new T.MeshBasicMaterial({color:'#ffffff'});
- for(const x of [-.165,.165]){
-   const white=new T.Mesh(new T.SphereGeometry(.112,24,16),eyeWhite);white.position.set(x,2.065,.327);previewEyeGroup.add(white);
-   const iris=new T.Mesh(new T.SphereGeometry(.072,22,16),irisMat);iris.position.set(x,2.061,.425);previewEyeGroup.add(iris);
-   const pupil=new T.Mesh(new T.SphereGeometry(.043,20,16),pupilMat);pupil.position.set(x-.008,2.06,.485);previewEyeGroup.add(pupil);
-   const sparkle=new T.Mesh(new T.SphereGeometry(.019,12,10),shineMat);sparkle.position.set(x-.025,2.086,.516);previewEyeGroup.add(sparkle);
- }
+ // The fitting mannequin is KWG's actual default avatar: no oversized 3D eyes.
+ previewEyeGroup=null;
 
  cameraTarget=new T.Vector3(0,2.35,0);
  let frame=0;let lastFrame=performance.now();const tick=()=>{ if(!renderer)return;frame=requestAnimationFrame(tick);const now=performance.now(),dt=Math.min(.05,(now-lastFrame)/1000);lastFrame=now;
@@ -16888,7 +16869,7 @@ body.kwg-in-world:not(.kwg-thumbnail-camera):not(.kwg-editing) #kwg-score-hud{di
      if(cameraKeys.has('q'))move.y-=1;if(cameraKeys.has(' '))move.y+=1;
      if(move.lengthSq()>0)cameraTarget.addScaledVector(move.normalize(),dt*2.4*fast);
    }
-const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=Math.max(1,Math.round(box.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}camera.position.set(cameraTarget.x+Math.sin(angle)*Math.cos(elevation)*distance,cameraTarget.y+Math.sin(elevation)*distance,cameraTarget.z+Math.cos(angle)*Math.cos(elevation)*distance);camera.lookAt(cameraTarget);renderer.render(scene,camera);};tick();const ray=new T.Raycaster(),pointer=new T.Vector2();
+if(!modal.getClientRects().length)return;const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=Math.max(1,Math.round(box.height));if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}camera.position.set(cameraTarget.x+Math.sin(angle)*Math.cos(elevation)*distance,cameraTarget.y+Math.sin(elevation)*distance,cameraTarget.z+Math.cos(angle)*Math.cos(elevation)*distance);camera.lookAt(cameraTarget);renderer.render(scene,camera);};tick();const ray=new T.Raycaster(),pointer=new T.Vector2();
  function hit(e){const rect=canvas.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);return ray.intersectObjects(root.children,false)[0];}
  function setPointer(e){
    const rect=canvas.getBoundingClientRect();
@@ -16966,11 +16947,74 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
  canvas.addEventListener('wheel',e=>{e.preventDefault();if(selected>=0&&root?.children[selected]){root.children[selected].updateMatrixWorld(true);const b=new T.Box3().setFromObject(root.children[selected]);if(!b.isEmpty())cameraTarget.lerp(b.getCenter(new T.Vector3()),.55);}else targetCreatedItem();distance=Math.max(.55,Math.min(16,distance*Math.exp(e.deltaY*.001)));},{passive:false});
 
  }
- const paint=$('kwg-creator-paint'),ctx=paint.getContext('2d',{willReadFrequently:true});function clearPainting(){ctx.clearRect(0,0,512,512);paintDirty=false;}clearPainting();
- document.querySelectorAll('#kwgc-2dtools [data-paint]').forEach(b=>b.onclick=()=>{paintMode=b.dataset.paint;status('Paint tool: '+paintMode);if(paintMode==='checker'||paintMode==='stripes'){remember();const size=32;ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);ctx.fillStyle=$('kwgc-color').value;for(let y=0;y<512;y+=size)for(let x=0;x<512;x+=size)if(paintMode==='stripes'||((x+y)/size)%2===0)ctx.fillRect(x,y,size,size);paintDirty=true;}});
- $('kwgc-clear-paint').onclick=()=>{remember();clearPainting();status('Texture cleared.');};
- function paintAt(e){const b=paint.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*512,y=(e.clientY-b.top)/b.height*512,r=Number($('kwgc-brush').value);ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(paintMode==='eraser'){ctx.save();ctx.globalCompositeOperation='destination-out';ctx.fill();ctx.restore();}else{ctx.fillStyle=$('kwgc-color').value;ctx.fill();}paintDirty=true;}
- paint.addEventListener('pointerdown',e=>{remember();painting=true;paint.setPointerCapture(e.pointerId);if(paintMode==='fill'){ctx.fillStyle=$('kwgc-color').value;ctx.fillRect(0,0,512,512);paintDirty=true;}else paintAt(e)});paint.addEventListener('pointermove',e=>{if(painting&&paintMode!=='fill')paintAt(e)});paint.addEventListener('pointerup',()=>painting=false);paint.addEventListener('pointercancel',()=>painting=false);
+ const paint=$('kwg-creator-paint'),ctx=paint.getContext('2d',{willReadFrequently:true});let lastPaintPoint=null;function clearPainting(){ctx.clearRect(0,0,512,512);paintDirty=true;}clearPainting();
+ document.querySelectorAll('#kwgc-2dtools [data-paint]').forEach(b=>b.onclick=()=>{paintMode=b.dataset.paint;status('Paint tool: '+paintMode);if(paintMode==='checker'||paintMode==='stripes'){remember();const size=32;ctx.fillStyle='#e6ba93';ctx.fillRect(0,0,512,512);ctx.fillStyle=$('kwgc-color').value;for(let y=0;y<512;y+=size)for(let x=0;x<512;x+=size)if(paintMode==='stripes'||((x+y)/size)%2===0)ctx.fillRect(x,y,size,size);paintDirty=true;drawFacePreview(true);}});
+ $('kwgc-clear-paint').onclick=()=>{remember();clearPainting();drawFacePreview(true);status('Texture cleared.');};
+ function paintAt(e){
+   const b=paint.getBoundingClientRect();if(!b.width||!b.height)return;
+   const x=Math.max(0,Math.min(512,(e.clientX-b.left)/b.width*512)),y=Math.max(0,Math.min(512,(e.clientY-b.top)/b.height*512));
+   const r=Number($('kwgc-brush').value),previous=lastPaintPoint||{x,y};
+   const steps=Math.max(1,Math.ceil(Math.hypot(x-previous.x,y-previous.y)/Math.max(1,r*.38)));
+   ctx.save();if(paintMode==='eraser')ctx.globalCompositeOperation='destination-out';else ctx.fillStyle=$('kwgc-color').value;
+   for(let i=0;i<=steps;i++){
+     const px=previous.x+(x-previous.x)*i/steps,py=previous.y+(y-previous.y)*i/steps;
+     ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);ctx.fill();
+     if(mirror){ctx.beginPath();ctx.arc(512-px,py,r,0,Math.PI*2);ctx.fill();}
+   }
+   ctx.restore();lastPaintPoint={x,y};paintDirty=true;
+ }
+ paint.addEventListener('pointerdown',e=>{remember();painting=true;lastPaintPoint=null;paint.setPointerCapture(e.pointerId);if(paintMode==='fill'){ctx.fillStyle=$('kwgc-color').value;ctx.fillRect(0,0,512,512);paintDirty=true;drawFacePreview();}else{paintAt(e);drawFacePreview();}});
+ paint.addEventListener('pointermove',e=>{if(painting&&paintMode!=='fill'){paintAt(e);drawFacePreview();}});
+ const finishPainting=()=>{painting=false;lastPaintPoint=null;};
+ paint.addEventListener('pointerup',finishPainting);paint.addEventListener('pointercancel',finishPainting);
+
+ // V46: actual 3D head preview using the same face decal dimensions/curvature as gameplay.
+ let facePreview=null;
+ function ensureFacePreview(){
+   if(facePreview||!window.THREE)return;
+   const T=get(),canvas=$('kwgc-face-preview');if(!canvas)return;
+   try{
+     const previewRenderer=new T.WebGLRenderer({canvas,alpha:true,antialias:true});
+     previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+     previewRenderer.setSize(180,180,false);
+     const previewScene=new T.Scene();previewScene.background=new T.Color('#162739');
+     previewScene.add(new T.HemisphereLight(0xffffff,0x64738a,1.25));
+     const key=new T.DirectionalLight(0xffffff,1.1);key.position.set(2,4,5);previewScene.add(key);
+     const head=new T.Mesh(new T.SphereGeometry(.37,32,24),new T.MeshStandardMaterial({color:defaultAvatarAppearance.headColor,roughness:.82}));
+     head.position.set(0,2.04,0);previewScene.add(head);
+     const tex=new T.CanvasTexture(paint);tex.colorSpace=T.SRGBColorSpace||tex.colorSpace;tex.needsUpdate=true;
+     const mat=new T.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.025,depthWrite:false,side:T.DoubleSide});
+     const verts=[],uvs=[],indices=[],cols=22,rows=10;
+     for(let j=0;j<=rows;j++)for(let i=0;i<=cols;i++){
+       const u=i/cols,v=j/rows;
+       verts.push(0,0,0);uvs.push(u,v);
+     }
+     for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+       const k=j*(cols+1)+i;indices.push(k,k+1,k+cols+1,k+1,k+cols+2,k+cols+1);
+     }
+     const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));
+     geo.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));geo.setIndex(indices);
+     const decal=new T.Mesh(geo,mat);decal.renderOrder=5;previewScene.add(decal);
+     const previewCamera=new T.PerspectiveCamera(36,1,.1,10);previewCamera.position.set(0,2.04,1.55);previewCamera.lookAt(0,2.04,0);
+     facePreview={renderer:previewRenderer,scene:previewScene,texture:tex,geometry:geo,camera:previewCamera,head,decal,lastCategory:''};
+   }catch(e){console.warn('KWG head preview:',e);}
+ }
+ function drawFacePreview(force=false){
+   if(!is2d()||!modal.getClientRects().length)return;
+   ensureFacePreview();const v=facePreview;if(!v)return;
+   const cat=category();if(!force&&!paintDirty&&v.lastCategory===cat)return;
+   const width=cat==='eyes'?.45:.32,height=cat==='eyes'?.19:.14,y=cat==='eyes'?2.115:1.935;
+   const positions=v.geometry.getAttribute('position');let n=0;
+   for(let j=0;j<=10;j++)for(let i=0;i<=22;i++){
+     const x=(i/22-.5)*width,yy=y+(j/10-.5)*height;
+     const z=Math.sqrt(Math.max(.001,.37*.37-x*x-(yy-2.04)**2))+.009;
+     positions.setXYZ(n++,x,yy,z);
+   }
+   positions.needsUpdate=true;v.geometry.computeVertexNormals();
+   v.texture.needsUpdate=true;v.renderer.render(v.scene,v.camera);
+   v.lastCategory=cat;paintDirty=false;
+ }
+ window.kwgV46PreviewUpdate=()=>drawFacePreview(true);
  // Only expose the base body pieces relevant to fitting the chosen item.
  // Mesh visibility is local to the editor; exported GLBs contain ONLY root parts.
  function updateFittingPreview(){
@@ -17007,7 +17051,7 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
    const host=$('kwg-creator-drafts');
    if(!host)return;host.replaceChildren();
    const drafts=JSON.parse(localStorage.getItem('kwg_creator_local_drafts')||'[]');
-   drafts.forEach((d,i)=>{if(d.category==='torso_decal')return;const b=document.createElement('button');b.textContent=d.name+' ('+d.category+')';b.onclick=()=>{$('kwgc-category').value=d.category;switchCategory(true);$('kwgc-name').value=d.name;parts=JSON.parse(JSON.stringify(d.parts||[]));selection.clear();resetHistory();if(d.paint){const image=new Image();image.onload=()=>{clearPainting();ctx.drawImage(image,0,0,512,512);paintDirty=true;};image.src=d.paint;}select(-1);status('Loaded local draft.');};host.appendChild(b);});
+   drafts.forEach((d,i)=>{if(d.category==='torso_decal')return;const b=document.createElement('button');b.type='button';b.textContent=d.name+' ('+d.category+')';b.onclick=()=>{$('kwgc-category').value=d.category;switchCategory(true);$('kwgc-name').value=d.name;parts=JSON.parse(JSON.stringify(d.parts||[]));selection.clear();resetHistory();if(d.paint){const image=new Image();image.onload=()=>{clearPainting();ctx.drawImage(image,0,0,512,512);paintDirty=true;drawFacePreview(true);};image.src=d.paint;}select(-1);status('Loaded local draft.');};host.appendChild(b);});
    if(!drafts.length)host.textContent='No local drafts yet.';
    status('Loaded '+drafts.length+' local draft(s).');
  }
@@ -17017,7 +17061,7 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
    if($('kwgc-transforms'))$('kwgc-transforms').style.display='none';
    $('kwgc-name').value='New Creation';
    redraw();
-   updateFittingPreview();
+   updateFittingPreview();if(is2d())drawFacePreview(true);
    status(is2d()?'New texture ready. Choose a brush to begin.':'New item ready. Choose Insert to add a shape.');
  }
  $('kwgc-refresh-drafts').onclick=refresh;
@@ -17038,7 +17082,7 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
    if(texture){mode='select';activeDrag=null;drag=false;document.querySelectorAll('#kwgc-modebar [data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode==='select'));}
    if($('kwgc-selection-empty'))$('kwgc-selection-empty').style.display='block';
    if($('kwgc-transforms'))$('kwgc-transforms').style.display='none';
-   updateFittingPreview();redraw();window.kwgCreatorSyncToolPanels?.();
+   updateFittingPreview();redraw();window.kwgCreatorSyncToolPanels?.();if(texture)drawFacePreview(true);
    const sceneName=$('kwgc-scene-label');if(sceneName)sceneName.textContent=texture?'TEXTURE VIEW':'SCENE VIEW';
    const itemCount=$('kwgc-part-count');if(itemCount)itemCount.textContent=texture?'2D SKIN':'0 PARTS';
    status(texture?'2D texture/decal session — paint directly on the canvas.':'New '+$('kwgc-category').selectedOptions[0].text+' session.');
@@ -17076,8 +17120,8 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
    updateGizmo();window.kwgCreatorSyncToolPanels?.();$('kwgc-mode-hint').textContent=mode==='select'?'Click a part to select · drag empty space to orbit':mode==='recolor'?'Click a part to apply the chosen color':mode==='insert'?'Choose a shape and click ADD PART': 'Drag a selected part to '+mode+' · drag empty space to orbit';
  });
  $('kwgc-mirror').onchange=e=>{mirror=e.target.checked;
-   if(mirror&&selected>=0&&parts[selected]&&Math.abs(parts[selected].x)>.001){remember();syncMirror(selected,true);redraw();}
-   status(mirror?'Mirror X enabled. Geometry and part edits are reflected across X.':'Mirror X disabled. Edit each side independently.');};
+   if(mirror&&!is2d()&&selected>=0&&parts[selected]&&Math.abs(parts[selected].x)>.001){remember();syncMirror(selected,true);redraw();}
+   status(mirror?(is2d()?'Mirror X: painting both sides.':'Mirror X: editing both sides.'):'Mirror X off.');};
  $('kwgc-zoom-in').onclick=()=>distance=Math.max(1.2,distance*.8);
  $('kwgc-zoom-out').onclick=()=>distance=Math.min(16,distance*1.25);
  document.querySelectorAll('#kwgc-views [data-view]').forEach(b=>b.onclick=()=>{
@@ -17098,11 +17142,9 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
    if(key==='f'&&!mod&&!e.altKey){e.preventDefault();focusSelected();return;}
    if(mod&&key==='d'){e.preventDefault();duplicatePart();return;}
    if(is2d()||mod||e.altKey&&key!=='arrowleft'&&key!=='arrowright')return;
-   if(key==='u'){e.preventDefault();unionSelected();return;}if(key==='n'){e.preventDefault();toggleNegative();return;}if(key==='delete'||key==='backspace'){e.preventDefault();deleteSelectedPart();return;}
-   if(key==='e'){e.preventDefault();extrudeFace();return;}
+   if(key==='delete'||key==='backspace'){e.preventDefault();deleteSelectedPart();return;}
    if(key==='g'||key==='s'||key==='r'){e.preventDefault();activateTool({g:'move',s:'scale',r:'rotate'}[key]);return;}
    if(key==='i'){e.preventDefault();activateTool('insert');return;}
-   if(['1','2','3','4'].includes(key)){e.preventDefault();setMeshMode(['polygon','face','vertex','edge'][Number(key)-1]);return;}
    if(key==='escape'){e.preventDefault();select(-1);return;}
    if((key==='['||key===']'||(e.altKey&&(key==='arrowleft'||key==='arrowright')))&&parts[selected]){
      e.preventDefault();const sign=(key==='['||key==='arrowleft')?-1:1;
@@ -17130,6 +17172,112 @@ const box=canvas.getBoundingClientRect(),w=Math.max(1,Math.round(box.width)),h=M
  async function exportGlb(){return new Promise((resolve,reject)=>{const T=get(),exp=new T.GLTFExporter(),g=new T.Group();parts.filter(p=>!p.negative).forEach(p=>g.add(partMesh(p)));try{exp.parse(g,data=>{if(!(data instanceof ArrayBuffer))return reject(new Error('Binary GLB export failed'));resolve(new Uint8Array(data));},{binary:true,onlyVisible:true});}catch(e){reject(e);}});}
  $('kwgc-publish').onclick=async()=>{const name=$('kwgc-name').value.trim(),price=Number($('kwgc-price').value),cat=category(),dist=$('kwgc-distribution').value;if(!name||!Number.isSafeInteger(price)||price<0||price>1000000)return status('Enter a valid name and price.');if(!is2d()&&!parts.length)return status('Add a shape before publishing.');status('Exporting item...');try{let bytes,fileName,mimeType;if(is2d()){const bin=atob(paint.toDataURL('image/png').split(',')[1]);bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);fileName='item.png';mimeType='image/png';}else{bytes=await exportGlb();fileName='item.glb';mimeType='model/gltf-binary';}status('Uploading to store...');const r=await sock('create_avatar_item',{category:cat,name,price,distribution:dist,fileName,mimeType,fileData:bytes,metadata:{size:1,offsetX:0,offsetY:0,offsetZ:0},isVisible:dist==='store'});if(r.success)window.dispatchEvent(new Event('kwg-item-catalog-updated'));status(r.success?'Published '+name+' (#'+r.item.id+') to '+(dist==='starter'?'STARTER INVENTORY (not listed for sale)':'STORE → '+cat.toUpperCase())+'. Note: purchased items move into My Stuff and are hidden from the for-sale list.':(r.message||'Publish failed'));}catch(e){console.error(e);status(e.message||'Export failed.');}};
  // Existing application-scoped socket is assigned to this bridge from its own scope below.
+})();
+</script>
+
+<style id="kwg-v46-inline-studio">
+/* The creator is part of Create > Avatar Items, not a separate full-screen modal. */
+#create-pane .kwg-create-quick{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important}
+#create-pane .kwg-create-studio-heading{grid-column:1/-1;font:10px 'Silkscreen','Chakra Petch',monospace;color:#cce9f2;margin-top:5px}
+#create-pane #kwg-create-studio-host{grid-column:1/-1;min-width:0;width:100%;}
+#create-pane #kwg-create-item-submit{grid-column:1/-1}
+#create-pane #kwg-create-studio-host #kwg-creator{position:relative!important;inset:auto!important;display:flex!important;align-items:stretch!important;justify-content:stretch!important;z-index:auto!important;background:transparent!important;color:#e7f1ff!important;width:100%!important;max-width:100%!important;min-height:590px!important;height:590px!important;overflow:hidden!important}
+#create-pane #kwg-create-studio-host #kwg-creator .kwg-creator-shell{width:100%!important;max-width:100%!important;height:100%!important;max-height:none!important;box-shadow:none!important;min-width:0!important}
+#create-pane #kwg-creator .kwg-creator-main{grid-template-columns:minmax(145px,205px) minmax(170px,1fr) minmax(145px,195px)!important}
+#create-pane #kwg-creator .kwgc-left-stack{grid-template-rows:minmax(175px,1.3fr) minmax(100px,.7fr)!important}
+#create-pane #kwg-creator .kwgc-mesh-edit{display:none!important}
+#create-pane #kwg-creator .kwgc-right-stack{display:block!important}
+#create-pane #kwg-creator .kwgc-right-stack .kwgc-explorer-panel{height:100%!important}
+#create-pane #kwg-creator .kwgc-poly-box,#create-pane #kwg-creator .kwgc-boolean-actions,#create-pane #kwg-creator #kwgc-mesh-modes,#create-pane #kwg-creator #kwgc-extrude-face{display:none!important}
+#create-pane #kwg-creator .kwg-creator-bar>strong,#create-pane #kwg-creator #kwgc-category,#create-pane #kwg-creator #kwgc-close,#create-pane #kwg-creator #kwgc-publish,#create-pane #kwg-creator #kwgc-name,#create-pane #kwg-creator #kwgc-price{display:none!important}
+#create-pane #kwg-creator .kwgc-settings label:has(> #kwgc-name),#create-pane #kwg-creator .kwgc-settings label:has(> #kwgc-price){display:none!important}
+#create-pane #kwg-creator .kwgc-settings .kwgc-action-row{grid-template-columns:1fr!important}
+#create-pane #kwg-creator .kwg-creator-bar{justify-content:flex-end!important}
+#create-pane #kwg-creator .kwgc-tool-help,#create-pane #kwg-creator #kwgc-mode-hint{display:none!important}
+#create-pane #kwg-creator.kwgc-2d .kwgc-mirror-row{display:inline-flex!important}
+#create-pane #kwg-creator.kwgc-2d .kwgc-explorer::before{display:none!important;content:none!important}
+#create-pane #kwg-creator.kwgc-2d .kwg-creator-main{grid-template-columns:minmax(155px,220px) minmax(0,1fr)!important}
+#create-pane #kwg-creator.kwgc-2d .kwgc-right-stack{display:none!important}
+#create-pane #kwg-creator.kwgc-2d .kwgc-explorer{display:none!important}
+#create-pane #kwg-creator.kwgc-2d #kwgc-2dtools{display:block!important}
+#create-pane #kwg-creator.kwgc-2d #kwgc-delete-part{display:none!important}
+#create-pane #kwg-creator.kwgc-2d #kwgc-recolor-options{display:block!important}
+#create-pane #kwg-creator.kwgc-2d #kwg-creator-paint{max-height:calc(100% - 95px)!important;max-width:calc(100% - 28px)!important;object-fit:contain!important;z-index:1;transform:translateX(-22px)}
+#kwgc-face-preview-wrap{display:none;position:absolute;top:46px;right:10px;width:158px;height:179px;background:#162739;border:2px solid #7896a9;box-shadow:3px 3px 0 #08131d;z-index:4;pointer-events:none;overflow:hidden}
+#kwgc-face-preview-wrap span{display:block;text-align:center;font:8px 'Silkscreen','Chakra Petch',monospace;color:#e2f3fc;padding:5px 1px;background:#30485e}
+#kwgc-face-preview{display:block;width:154px;height:154px;object-fit:contain}
+#create-pane #kwg-creator.kwgc-2d #kwgc-face-preview-wrap{display:block!important}
+@media(max-width:880px){#create-pane #kwg-creator .kwg-creator-main{grid-template-columns:minmax(135px,180px) minmax(145px,1fr) minmax(125px,160px)!important}}
+@media(max-width:690px){
+ #create-pane .kwg-create-quick{grid-template-columns:1fr 1fr!important}
+ #create-pane .kwg-create-quick>label:first-of-type{grid-column:1/-1}
+ #create-pane #kwg-create-studio-host #kwg-creator{height:880px!important;min-height:880px!important}
+ #create-pane #kwg-creator .kwg-creator-main,#create-pane #kwg-creator.kwgc-2d .kwg-creator-main{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:minmax(385px,1fr) minmax(215px,.8fr) minmax(100px,.6fr)!important}
+ #create-pane #kwg-creator .kwg-creator-stage{grid-row:1!important}
+ #create-pane #kwg-creator .kwg-creator-main>.kwg-creator-side:first-child{grid-row:2!important}
+ #create-pane #kwg-creator .kwg-creator-main>.kwg-creator-side:last-child{grid-row:3!important}
+ #create-pane #kwg-creator .kwgc-left-stack{grid-template-rows:minmax(120px,1fr) minmax(90px,.8fr)!important}
+ #create-pane #kwg-creator .kwgc-right-stack{height:100%!important}
+ #create-pane #kwg-creator.kwgc-2d .kwg-creator-main{grid-template-rows:minmax(395px,1fr) minmax(235px,.65fr)!important}
+ #create-pane #kwg-creator.kwgc-2d .kwg-creator-main>.kwg-creator-side:last-child{display:none!important}
+ #create-pane #kwg-creator.kwgc-2d #kwg-creator-paint{transform:none;top:160px!important;bottom:30px!important;max-height:calc(100% - 200px)!important}
+ #kwgc-face-preview-wrap{width:112px;height:133px}
+ #kwgc-face-preview{width:108px;height:108px}
+}
+</style>
+<script id="kwg-v46-studio-bridge">
+(()=>{
+ const host=document.getElementById('kwg-create-studio-host');
+ const creator=document.getElementById('kwg-creator');
+ if(!host||!creator)return;
+ host.append(creator);
+ // The old creator was a standalone dialog; now it lives inside a publish form.
+ // Make every studio control non-submitting so Insert/Move/Mirror/Save cannot publish.
+ creator.querySelectorAll('button').forEach(button=>button.type='button');
+ creator.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.closest('input,select'))e.preventDefault();});
+ let opened=false;
+ const type=document.getElementById('kwg-create-category'),internal=document.getElementById('kwgc-category');
+ const status=document.getElementById('kwg-create-item-status'),studioStatus=document.getElementById('kwgc-status');
+ const form=document.getElementById('kwg-create-quick');
+ const syncDetails=()=>{
+   document.getElementById('kwgc-name').value=document.getElementById('kwg-create-item-name').value.trim()||'New Creation';
+   document.getElementById('kwgc-price').value=document.getElementById('kwg-create-item-price').value;
+ };
+ form.addEventListener('input',e=>{if(['kwg-create-item-name','kwg-create-item-price'].includes(e.target.id))syncDetails();});
+ const ensure=()=>{
+   if(!opened){opened=true;window.kwgOpenItemCreator?.();}
+   if(internal.value!==type.value){internal.value=type.value;internal.dispatchEvent(new Event('change',{bubbles:true}));}
+   syncDetails();
+ };
+ window.kwgV46StudioShow=ensure;
+ window.kwgV46StudioCategory=cat=>{
+   if(!opened)return;
+   if(internal.value!==cat){internal.value=cat;internal.dispatchEvent(new Event('change',{bubbles:true}));}
+   syncDetails();
+ };
+ window.kwgV46StudioPublish=({category,name,price})=>{
+   ensure();
+   if(!name||!Number.isInteger(price)||price<0||price>1000000){status.textContent='Enter a valid name and price.';return;}
+   document.getElementById('kwgc-name').value=name;
+   document.getElementById('kwgc-price').value=price;
+   document.getElementById('kwgc-publish').click();
+ };
+ const observer=new MutationObserver(()=>{
+   if(!opened)return;
+   status.textContent=studioStatus.textContent||'';
+ });
+ observer.observe(studioStatus,{subtree:true,childList:true,characterData:true});
+ window.addEventListener('kwg-item-catalog-updated',()=>{status.textContent='Published!';});
+ // A saved draft may contain a name and price; keep the form in sync on draft load.
+ document.getElementById('kwg-creator-drafts')?.addEventListener('click',()=>{
+   setTimeout(()=>{
+     document.getElementById('kwg-create-item-name').value=document.getElementById('kwgc-name').value;
+     document.getElementById('kwg-create-item-price').value=document.getElementById('kwgc-price').value;
+     type.value=internal.value;
+   },0);
+ });
+ // No separate modal or upload field: studio produces the GLB/PNG and publishes it.
+ if(document.getElementById('create-pane')?.classList.contains('active')&&!document.getElementById('kwg-create-items').hidden)ensure();
 })();
 </script>
 </body>
