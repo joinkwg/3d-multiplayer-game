@@ -750,7 +750,8 @@ async function worldSummary(row) {
     likes: Number(row.like_count || 0),
     plays: Number(row.plays || 0),
     likedByMe: !!row.liked_by_me,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }
 
@@ -1463,7 +1464,7 @@ io.on('connection', (socket) => {
         }))});
       }
       const rows=await pool.query(`
-        SELECT w.name,w.data,w.created_at,w.plays,u.username AS owner_username,
+        SELECT w.name,w.data,w.created_at,w.updated_at,w.plays,u.username AS owner_username,
                (SELECT COUNT(*)::int FROM world_likes wl WHERE wl.world_id=w.id) AS like_count,
                EXISTS(SELECT 1 FROM world_likes wl WHERE wl.world_id=w.id AND wl.user_id=$1) AS liked_by_me
         FROM worlds w LEFT JOIN users u ON u.id=w.owner_user_id
@@ -2098,8 +2099,21 @@ io.on('connection', (socket) => {
   });
   socket.on('player_respawned',({worldName}={})=>{
     if(!requireAuth(socket))return;
-    const p=playersBySocket.get(socket.id);
-    if(p&&p.worldName===cleanWorldName(worldName))p.runStartedAt=Date.now();
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key)return;
+    // A checkpoint death is part of the same Speed attempt. Survival is a
+    // separate life-based attempt and still resets after a death.
+    getWorldByName(key).then(world=>{
+      if(world&&kwgLevelType(world.data)==='survival'&&playersBySocket.get(socket.id)===p&&p.worldName===key)
+        p.runStartedAt=Date.now();
+    }).catch(e=>console.error('Respawn timer:',e));
+  });
+  socket.on('world_restart',async ({worldName}={},cb)=>{
+    if(!requireAuth(socket,cb))return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key)return cb&&cb({success:false,message:'Join this world first.'});
+    p.runStartedAt=Date.now();
+    cb&&cb({success:true,runStartedAt:p.runStartedAt});
   });
 
   socket.on('player_movement', (data) => {
@@ -2392,7 +2406,7 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); cb && cb({success:false,message:'Could not save world settings.'}); }
   });
 
-  socket.on('world_info_update', async ({worldName,displayName,description,thumbnailData,levelType} = {}, cb) => {
+  socket.on('world_info_update', async ({worldName,displayName,description,thumbnailData,levelType,confirmLeaderboardReset=false} = {}, cb) => {
     if (!requireAuth(socket,cb)) return;
     const key=cleanWorldName(worldName);
     if (socket.data.worldName!==key) return cb && cb({success:false,message:'Join this world before editing its info.'});
@@ -2411,16 +2425,52 @@ io.on('connection', (socket) => {
           thumbnailUrl=await uploadWorldThumbnail(world.id,thumbnailData);
           data.thumbnailAuto=false;
         }
+        const previousMode=kwgLevelType(data);
+        const newMode=['casual','speed','survival','wins'].includes(levelType)?levelType:previousMode;
+        const leaderstatsReset=newMode!==previousMode;
+        if(leaderstatsReset&&confirmLeaderboardReset!==true)
+          return {success:false,message:'Confirm the leaderboard reset before changing the level type.'};
         data.displayName=title;
         data.description=desc;
-        data.levelType=['casual','speed','survival','wins'].includes(levelType)?levelType:(data.levelType||'casual');
+        data.levelType=newMode;
         data.thumbnailUrl=thumbnailUrl;
-        await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
-        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,levelType:data.levelType,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true});
-        return {success:true,displayName:title,description:desc,levelType:data.levelType,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true};
+        // Metadata update and score deletion must succeed or fail together.
+        const client=await pool.connect();
+        try{
+          await client.query('BEGIN');
+          await client.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(data),world.id]);
+          if(leaderstatsReset)await client.query('DELETE FROM world_level_scores WHERE world_id=$1',[world.id]);
+          await client.query('COMMIT');
+        }catch(error){await client.query('ROLLBACK');throw error;}
+        finally{client.release();}
+        // A newly selected scoring mode starts a fresh clock for every player.
+        const newRunStartedAt=leaderstatsReset?Date.now():null;
+        if(leaderstatsReset)for(const peer of worldPeers(key))peer.p.runStartedAt=newRunStartedAt;
+        io.to(`world:${key}`).emit('world_info_updated',{worldName:key,displayName:title,description:desc,levelType:data.levelType,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true,runStartedAt:newRunStartedAt});
+        if(leaderstatsReset)io.to(`world:${key}`).emit('world_leaderboard_changed',{worldName:key,reset:true});
+        return {success:true,displayName:title,description:desc,levelType:data.levelType,thumbnailUrl,thumbnailAuto:data.thumbnailAuto===true,leaderstatsReset};
       });
       cb && cb(result);
     } catch(e){console.error('World info update:',e);cb && cb({success:false,message:e.clientMessage||'Could not save world info or thumbnail. Check thumbnail storage configuration.'});}
+  });
+
+  // Owner-only destructive reset. All modes are cleared, not just the
+  // currently active mode; the server never trusts client-supplied user IDs.
+  socket.on('reset_world_leaderstats',async ({worldName}={},cb)=>{
+    if(!requireAuth(socket,cb)||typeof cb!=='function')return;
+    const key=cleanWorldName(worldName);
+    if(socket.data.worldName!==key)return cb({success:false,message:'Join this world before resetting scores.'});
+    try{
+      const result=await queueWorldSave(key,async()=>{
+        const world=await getWorldByName(key);
+        if(!world)return {success:false,message:'World not found.'};
+        if(!canEditWorld(socket,world))return {success:false,message:'Only the world owner or an admin can reset scores.'};
+        const deleted=await pool.query('DELETE FROM world_level_scores WHERE world_id=$1',[world.id]);
+        io.to(`world:${key}`).emit('world_leaderboard_changed',{worldName:key,reset:true});
+        return {success:true,deleted:deleted.rowCount};
+      });
+      cb(result);
+    }catch(error){console.error('Leaderboard reset:',error);cb({success:false,message:'Could not reset leaderboard scores.'});}
   });
 
   // World owners can edit display metadata directly from the Worlds page.
