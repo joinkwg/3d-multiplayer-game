@@ -2802,6 +2802,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <input id="kwg-audio-volume" type="range" min="0" max="100" step="5" value="35" aria-label="Sound effects volume">
       <p>8-bit sounds · settings saved on this device</p>
     </div>
+    <div id="kwg-side-buttons">
+      <button id="kwg-chat-toggle" type="button" aria-pressed="true">CHAT</button>
+      <button id="kwg-leaderboard-toggle" type="button" aria-pressed="false">LEADERBOARD</button>
+    </div>
     <button id="kwg-audio-toggle" type="button" aria-label="Sound settings" aria-expanded="false" aria-controls="kwg-audio-menu">
       <span class="kwg-audio-glyph" id="kwg-audio-icon" aria-hidden="true">♫</span><span>SOUND</span>
     </button>
@@ -3188,6 +3192,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     </form>
   </div>
 
+  <div id="kwg-leaderboard-window" aria-label="World leaderboard" hidden>
+    <div class="kwg-leaderboard-heading">LEADERBOARD <span id="kwg-leaderboard-mode"></span></div>
+    <div id="kwg-leaderboard-rows">Loading...</div>
+    <div class="kwg-leaderboard-foot">Top 50 · Scores saved per world</div>
+  </div>
+
   <!-- Admin management panel -->
   <div id="admin-panel">
     <div id="admin-card">
@@ -3259,7 +3269,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       <div class="kwg-recolor-heading"><span class="kwg-recolor-heading-icon" aria-hidden="true">+</span> PLACE PRESETS</div>
       <p class="kwg-recolor-help" style="margin:0 0 10px">New parts use these properties automatically.</p>
       <label class="kwg-recolor-field"><span>Shape</span><select id="kwg-place-shape"><option value="box">Cube / Box</option><option value="wedge">Wedge</option><option value="sphere">Sphere</option><option value="cylinder">Cylinder</option></select></label>
-      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option><option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option><option value="health">Health Block</option><option value="tool_dispenser">Tool Dispenser</option></select></label>
+      <label class="kwg-recolor-field"><span>Block Type</span><select id="kwg-place-type"><option value="normal">Normal Block</option><option value="kill">Kill Part</option><option value="checkpoint">Checkpoint</option><option value="finish">Finish</option><option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option><option value="health">Health Block</option><option value="tool_dispenser">Tool Dispenser</option></select></label>
       <label class="kwg-recolor-field"><span>Material</span><select id="kwg-place-material"><option value="grid">Grid Pattern</option><option value="brick">Brick Wall</option><option value="wood">Wood Planks</option></select></label>
       <label class="kwg-recolor-field"><span>Color</span><span class="kwg-recolor-color-wrap"><input type="color" id="kwg-place-color" value="#888888" aria-label="Place preset color"></span></label>
       <label class="kwg-recolor-field"><span>Transparency (0–1)</span><input type="number" id="kwg-place-transparency" min="0" max="1" step="0.01" value="0" inputmode="decimal" aria-label="Place transparency, 0 to 1"></label>
@@ -3315,6 +3325,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
               <option value="normal">Normal Solid Block</option>
               <option value="kill">Kill Part</option>
               <option value="checkpoint">Checkpoint</option>
+              <option value="finish">Finish</option>
               <option value="spawn">Spawn</option><option value="enemy_spawner">Enemy Spawner</option><option value="health">Health Block</option><option value="tool_dispenser">Tool Dispenser</option>
             </select>
           </div>
@@ -3881,11 +3892,27 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgSoundToggle.title=kwgAudio.enabled?'Sound settings':'Sound effects muted';
     }
     syncKWGAudioUI();
+    let kwgSideWindow='chat';
+    const kwgChatToggle=document.getElementById('kwg-chat-toggle');
+    const kwgLeaderboardToggle=document.getElementById('kwg-leaderboard-toggle');
+    const kwgLeaderboardWindow=document.getElementById('kwg-leaderboard-window');
+    function kwgSetSideWindow(which){
+      kwgSideWindow=which;
+      document.body.classList.toggle('kwg-chat-open',which==='chat');
+      kwgLeaderboardWindow.hidden=which!=='leaderboard';
+      kwgChatToggle.setAttribute('aria-pressed',String(which==='chat'));
+      kwgLeaderboardToggle.setAttribute('aria-pressed',String(which==='leaderboard'));
+      kwgSoundMenu.hidden=which!=='sound';
+      kwgSoundToggle.setAttribute('aria-expanded',String(which==='sound'));
+      if(which==='leaderboard')kwgRefreshLeaderboard();
+    }
+    kwgChatToggle.addEventListener('click',()=>kwgSetSideWindow(kwgSideWindow==='chat'?null:'chat'));
+    kwgLeaderboardToggle.addEventListener('click',()=>kwgSetSideWindow(kwgSideWindow==='leaderboard'?null:'leaderboard'));
+    kwgSetSideWindow('chat');
     kwgSoundToggle.addEventListener('click',e=>{
       e.stopPropagation();
-      const open=kwgSoundMenu.hidden;
-      kwgSoundMenu.hidden=!open;
-      kwgSoundToggle.setAttribute('aria-expanded',String(open));
+      const open=kwgSideWindow!=='sound';
+      kwgSetSideWindow(open?'sound':null);
       if(open)kwgAudio.play('toggle');
     });
     kwgSoundMenu.addEventListener('click',e=>e.stopPropagation());
@@ -3900,12 +3927,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     document.addEventListener('pointerdown',e=>{
       if(e.target.closest?.('#kwg-audio-dock'))return;
       if(!kwgSoundMenu.hidden){
-        kwgSoundMenu.hidden=true;kwgSoundToggle.setAttribute('aria-expanded','false');
+        kwgSetSideWindow(null);
       }
     },true);
     document.addEventListener('keydown',e=>{
       if(e.key==='Escape'&&!kwgSoundMenu.hidden){
-        kwgSoundMenu.hidden=true;kwgSoundToggle.setAttribute('aria-expanded','false');
+        kwgSetSideWindow(null);
       }
     });
     // One delegated listener covers existing and dynamically generated game buttons.
@@ -5025,6 +5052,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           },2400);
         }
         document.getElementById('world-chat').style.display = 'block';
+        kwgSetSideWindow('chat');
         startWorldIdleWatch();
         loadWorldChat();
       });
@@ -5107,9 +5135,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
     socket.on('world_info_updated', info=>{
       if(!info || info.worldName!==currentWorldName)return;
-      if(currentWorldData)Object.assign(currentWorldData,{displayName:info.displayName,description:info.description,thumbnailUrl:info.thumbnailUrl,thumbnailAuto:info.thumbnailAuto===true});
+      if(currentWorldData)Object.assign(currentWorldData,{displayName:info.displayName,description:info.description,levelType:info.levelType||currentWorldData?.levelType||'casual',thumbnailUrl:info.thumbnailUrl,thumbnailAuto:info.thumbnailAuto===true});
       document.getElementById('current-room-text').textContent=filterKWGUserText(info.displayName||currentWorldName);
       if(!isEditMode)resetWorldInfoEditor(currentWorldData,currentWorldName);
+      kwgRefreshLeaderboard();
     });
     function stageWorldSettings(settings){
       if(isEditMode && canEditCurrentWorld){
@@ -5163,8 +5192,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const completed=stagedWorldEdits.splice(0,count);
           for(const edit of completed){
             if(edit.eventName==='world_info_update') {
-              if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl,thumbnailAuto:res.thumbnailAuto===true});
-              kwgInfoOriginal={displayName:res.displayName,description:res.description,thumbnailUrl:res.thumbnailUrl};
+              if(currentWorldData) Object.assign(currentWorldData,{displayName:res.displayName,description:res.description,levelType:res.levelType||'casual',thumbnailUrl:res.thumbnailUrl,thumbnailAuto:res.thumbnailAuto===true});
+              kwgInfoOriginal={displayName:res.displayName,description:res.description,levelType:res.levelType||'casual',thumbnailUrl:res.thumbnailUrl};
               kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
               document.getElementById('current-room-text').textContent=filterKWGUserText(res.displayName);
               refreshWorldInfoThumbnail();
@@ -5246,6 +5275,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       requestAnimationFrame(resizeWorldViewport);
       document.getElementById('hud').style.display = 'none';
       document.getElementById('world-chat').style.display = 'none';
+      kwgSetSideWindow(null);
       document.getElementById('world-chat-messages').innerHTML = '';
       document.getElementById('room-info-label').style.display = 'none';
       document.getElementById('build-toolbar').style.display = 'none';
@@ -5400,11 +5430,58 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       socket.emit('get_world_chat', { worldName: currentWorldName }, (res) => {
         if (!res || !res.success) return;
         const box = document.getElementById('world-chat-messages');
+        const liveEvents=[...box.querySelectorAll('.kwg-system-line')].map(node=>node.cloneNode(true));
         box.innerHTML = '';
         (res.messages || []).forEach(appendChatMessage);
+        for(const node of liveEvents)box.appendChild(node);
+        box.scrollTop=box.scrollHeight;
         chatMessagesLoaded = true;
       });
     }
+
+    function kwgLevelMode(){return ['casual','speed','survival','wins'].includes(currentWorldData?.levelType)?currentWorldData.levelType:'casual';}
+    function kwgScoreLabel(mode,score){
+      if(mode==='wins')return `${score} ${score===1?'win':'wins'}`;
+      const sec=Math.max(0,Number(score)||0)/1000;
+      if(mode==='speed')return `${Math.floor(sec/60)}:${(sec%60).toFixed(2).padStart(5,'0')}`;
+      return `${Math.floor(sec/60)}m ${Math.floor(sec%60)}s`;
+    }
+    function kwgRefreshLeaderboard(){
+      if(!currentWorldName||!socket?.connected)return;
+      const worldName=currentWorldName;
+      const mode=kwgLevelMode();
+      document.getElementById('kwg-leaderboard-mode').textContent=mode.toUpperCase();
+      const target=document.getElementById('kwg-leaderboard-rows');
+      if(mode==='casual'){target.textContent='Casual worlds do not have a leaderboard.';return;}
+      target.textContent='Loading scores...';
+      socket.emit('get_world_leaderboard',{worldName},res=>{
+        if(currentWorldName!==worldName||kwgLevelMode()!==mode)return;
+        target.replaceChildren();
+        if(!res?.success){target.textContent=res?.message||'Unable to load scores.';return;}
+        if(!res.entries?.length){target.textContent='No scores yet. Be the first!';return;}
+        for(const [index,entry] of res.entries.entries()){
+          const row=document.createElement('div');row.className='kwg-leaderboard-entry';
+          const rank=document.createElement('strong');rank.textContent='#'+(index+1);
+          const name=document.createElement('span');name.textContent=filterKWGUserText(entry.username||'Player');
+          const value=document.createElement('span');value.textContent=kwgScoreLabel(mode,entry.score);
+          row.append(rank,name,value);target.appendChild(row);
+        }
+      });
+    }
+    function kwgSystemChat(message){
+      const box=document.getElementById('world-chat-messages');
+      if(!box)return;
+      const row=document.createElement('div');row.className='chat-line kwg-system-line';
+      row.textContent='✦ '+filterKWGUserText(String(message||''));
+      box.appendChild(row);while(box.children.length>100)box.firstChild.remove();
+      box.scrollTop=box.scrollHeight;
+    }
+    socket.on('world_system_message',data=>{
+      if(data?.worldName===currentWorldName)kwgSystemChat(data.message);
+    });
+    socket.on('world_leaderboard_changed',data=>{
+      if(data?.worldName===currentWorldName&&kwgSideWindow==='leaderboard')kwgRefreshLeaderboard();
+    });
 
     const worldChatInput = document.getElementById('world-chat-input');
     worldChatInput.addEventListener('focus', () => {
@@ -8934,7 +9011,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const opacityVal = isUncollidable ? Math.min(0.65, 1.0 - transparency) : (1.0 - transparency);
 
       const matOptions = { 
-        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : blockData.actionType === 'spawn' ? '#a86cff' : blockData.actionType === 'enemy_spawner' ? '#57b9f4' : blockData.actionType === 'health' ? '#5fe082' : blockData.actionType === 'tool_dispenser' ? '#f5b35b' : '#888888'),
+        color: blockData.color || (blockData.actionType === 'checkpoint' ? '#f4cf45' : blockData.actionType === 'finish' ? '#ff72b6' : blockData.actionType === 'spawn' ? '#a86cff' : blockData.actionType === 'enemy_spawner' ? '#57b9f4' : blockData.actionType === 'health' ? '#5fe082' : blockData.actionType === 'tool_dispenser' ? '#f5b35b' : '#888888'),
         transparent: isUncollidable || transparency > 0,
         opacity: opacityVal
       };
@@ -9191,7 +9268,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     const editorSettingsWindow = document.createElement('div');
     editorSettingsWindow.id = 'kwg-settings-window';
     editorSettingsWindow.className = 'kwg-editor-panel';
-    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><button id="kwg-info-auto-btn" type="button" class="kwg-info-camera-button">GENERATE SPAWN PREVIEW</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save with Save & Exit.</div></div>';
+    editorSettingsWindow.innerHTML = '<div class="kwg-panel-title"><span class="kwg-panel-title-icon" aria-hidden="true">⚙</span><span>SETTINGS</span> <button type="button" id="kwg-close-settings" aria-label="Close settings">×</button></div><div class="kwg-settings-tabs"><button type="button" class="active" data-kwg-setting="environment">ENVIRONMENT</button><button type="button" data-kwg-setting="info">INFO</button></div><div id="kwg-settings-environment"></div><div id="kwg-settings-info" style="display:none"><label class="kwg-info-label" for="kwg-info-title">WORLD NAME</label><input id="kwg-info-title" maxlength="40" placeholder="World title" autocomplete="off"><div class="kwg-info-hint">Displayed to players. Your original world ID stays the same.</div><label class="kwg-info-label" for="kwg-info-description">DESCRIPTION</label><textarea id="kwg-info-description" maxlength="300" rows="4" placeholder="What makes your world special?"></textarea><div id="kwg-info-char-count" class="kwg-info-hint">0 / 300</div><label class="kwg-info-label" for="kwg-info-level-type">LEVEL TYPE</label><select id="kwg-info-level-type"><option value="casual">Casual — no leaderboard</option><option value="speed">Speed — fastest finish</option><option value="survival">Survival — longest survival</option><option value="wins">Wins — most finishes</option></select><div class="kwg-info-hint">Finish blocks complete runs. Scores are shared with visitors.</div><label class="kwg-info-label">THUMBNAIL</label><div class="kwg-info-photo"><img id="kwg-info-photo-img" alt="World thumbnail preview" style="display:none"><span id="kwg-info-photo-empty">NO THUMBNAIL YET</span></div><button id="kwg-info-camera-btn" type="button" class="kwg-info-camera-button">SET THUMBNAIL</button><button id="kwg-info-auto-btn" type="button" class="kwg-info-camera-button">GENERATE SPAWN PREVIEW</button><div class="kwg-info-hint">Fly around your world and capture a real screenshot. Changes save with Save & Exit.</div></div>';
     document.body.appendChild(editorSettingsWindow);
     const envHeading = [...buildToolbar.querySelectorAll('div')].find(el=>el.textContent.trim()==='World Environment' && el.children.length===0);
     if(envHeading && envHeading.parentElement) editorSettingsWindow.querySelector('#kwg-settings-environment').appendChild(envHeading.parentElement);
@@ -9206,15 +9283,16 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       editorSettingsWindow.querySelector('#kwg-settings-info').style.display=btn.dataset.kwgSetting==='info'?'block':'none';
     }));
     // ===== V3.28: World Info editor and free-camera thumbnails =====
-    let kwgInfoOriginal={displayName:'',description:'',thumbnailUrl:''};
-    let kwgInfoDraft={displayName:'',description:'',thumbnailUrl:'',thumbnailData:null};
+    let kwgInfoOriginal={displayName:'',description:'',thumbnailUrl:'',levelType:'casual'};
+    let kwgInfoDraft={displayName:'',description:'',thumbnailUrl:'',levelType:'casual',thumbnailData:null};
     const kwgInfoTitle=document.getElementById('kwg-info-title');
     const kwgInfoDescription=document.getElementById('kwg-info-description');
     function resetWorldInfoEditor(world,worldId){
-      kwgInfoOriginal={displayName:String(world?.displayName||worldId||''),description:String(world?.description||''),thumbnailUrl:String(world?.thumbnailUrl||'')};
+      kwgInfoOriginal={displayName:String(world?.displayName||worldId||''),description:String(world?.description||''),thumbnailUrl:String(world?.thumbnailUrl||''),levelType:['casual','speed','survival','wins'].includes(world?.levelType)?world.levelType:'casual'};
       kwgInfoDraft={...kwgInfoOriginal,thumbnailData:null};
       kwgInfoTitle.value=kwgInfoDraft.displayName;
       kwgInfoDescription.value=kwgInfoDraft.description;
+      document.getElementById('kwg-info-level-type').value=kwgInfoDraft.levelType;
       document.getElementById('kwg-info-char-count').textContent=`${kwgInfoDraft.description.length} / 300`;
       refreshWorldInfoThumbnail();
     }
@@ -9227,6 +9305,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       document.getElementById('kwg-info-camera-btn').textContent=src?'RETAKE THUMBNAIL':'SET THUMBNAIL';
     }
     kwgInfoTitle.addEventListener('input',()=>{kwgInfoDraft.displayName=kwgInfoTitle.value;});
+    document.getElementById('kwg-info-level-type').addEventListener('change',e=>{kwgInfoDraft.levelType=e.target.value;});
     kwgInfoDescription.addEventListener('input',()=>{
       kwgInfoDraft.description=kwgInfoDescription.value;
       document.getElementById('kwg-info-char-count').textContent=`${kwgInfoDraft.description.length} / 300`;
@@ -9235,11 +9314,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       if(!currentWorldName || !canEditCurrentWorld)return;
       const title=kwgInfoDraft.displayName.trim();
       const description=kwgInfoDraft.description.trim();
-      const changed=title!==kwgInfoOriginal.displayName || description!==kwgInfoOriginal.description || !!kwgInfoDraft.thumbnailData;
+      const changed=title!==kwgInfoOriginal.displayName || description!==kwgInfoOriginal.description || kwgInfoDraft.levelType!==kwgInfoOriginal.levelType || !!kwgInfoDraft.thumbnailData;
       const idx=stagedWorldEdits.findIndex(x=>x.eventName==='world_info_update');
       if(!changed){if(idx>=0)stagedWorldEdits.splice(idx,1);return true;}
       if(!title){showToast('World name cannot be empty');return false;}
-      const payload={worldName:currentWorldName,displayName:title,description};
+      const payload={worldName:currentWorldName,displayName:title,description,levelType:kwgInfoDraft.levelType};
       if(kwgInfoDraft.thumbnailData)payload.thumbnailData=kwgInfoDraft.thumbnailData;
       const item={eventName:'world_info_update',payload};
       if(idx>=0)stagedWorldEdits[idx]=item;else stagedWorldEdits.push(item);
@@ -9756,7 +9835,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         partFields.style.display = 'block';
 
         document.getElementById('block-shape-select').value = (!block.shape || block.shape === 'baseplate') ? 'box' : block.shape;
-        document.getElementById('block-action-select').value = ['normal','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(block.actionType) ? block.actionType : 'normal';
+        document.getElementById('block-action-select').value = ['normal','kill','checkpoint','finish','spawn','enemy_spawner','health','tool_dispenser'].includes(block.actionType) ? block.actionType : 'normal';
         document.getElementById('block-material-select').value = ['grid','brick','wood'].includes(block.material) ? block.material : 'grid';
         document.getElementById('block-color-input').value = block.color || '#888888'; kwgSyncRGBField('block-color-input');
         document.getElementById('block-transparency-input').value = block.transparency !== undefined ? block.transparency : 0;
@@ -9787,6 +9866,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const nextType=document.getElementById('block-action-select').value;
       if(nextType!==blockData.actionType){
         if(nextType==='checkpoint')document.getElementById('block-color-input').value='#f4cf45';
+        if(nextType==='finish')document.getElementById('block-color-input').value='#ff72b6';
         if(nextType==='spawn')document.getElementById('block-color-input').value='#a86cff';
         if(nextType==='kill')document.getElementById('block-color-input').value='#d95757';
         if(nextType==='enemy_spawner')document.getElementById('block-color-input').value='#57b9f4';
@@ -10267,6 +10347,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           const colorInput=document.getElementById('kwg-place-color');
           if(type!==kwgLastPlaceType){
             if(type==='checkpoint')colorInput.value='#f4cf45';
+            else if(type==='finish')colorInput.value='#ff72b6';
             else if(type==='spawn')colorInput.value='#a86cff';
             else if(type==='kill')colorInput.value='#d95757';
             else if(type==='enemy_spawner')colorInput.value='#57b9f4';
@@ -12353,7 +12434,10 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgRagdollPhase=Math.random()*Math.PI*2;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;kwgJumpPressedAt=0;velocityY=reason==='enemy'?.06:0;isGrounded=false;
       kwgClearTools();
-      if(socket?.connected)socket.emit('kwg_tools_lost',{worldName:currentWorldName});
+      if(socket?.connected){
+        socket.emit('kwg_tools_lost',{worldName:currentWorldName});
+        socket.emit('player_died',{worldName:currentWorldName,reason});
+      }
       kwgResetStompAnimation(true);
       kwgEnsureStompRig(localPlayerAvatar);
       // A fall death happens in the void, not on the last safe platform.
@@ -13044,20 +13128,21 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
 
     // V31: Webs are world-anchored puddles. They NEVER attach to an avatar.
     const kwgWebProjectiles=[],kwgWebPatches=[];
+    let kwgSpiderVelocity={x:0,z:0};
     function kwgWebPatch(position){
       const group=new THREE.Group();group.position.copy(position);group.position.y+=.045;
       const silk=new THREE.MeshBasicMaterial({color:0xdceeff,transparent:true,opacity:.56,depthWrite:false,side:THREE.DoubleSide});
-      const disk=new THREE.Mesh(new THREE.CircleGeometry(2.25,16),silk);disk.rotation.x=-Math.PI/2;group.add(disk);
+      const disk=new THREE.Mesh(new THREE.CircleGeometry(3.35,24),silk);disk.rotation.x=-Math.PI/2;group.add(disk);
       const lines=new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.90,depthWrite:false});
-      for(const radius of [.68,1.40,2.19]){
+      for(const radius of [1.02,2.05,3.28]){
         const points=[];for(let i=0;i<=24;i++){const a=i*Math.PI/12;points.push(new THREE.Vector3(Math.cos(a)*radius,.018,Math.sin(a)*radius));}
         group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),lines));
       }
       for(let i=0;i<8;i++){
         const a=i*Math.PI/4;
-        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,.02,0),new THREE.Vector3(Math.cos(a)*2.23,.02,Math.sin(a)*2.23)]),lines));
+        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,.02,0),new THREE.Vector3(Math.cos(a)*3.31,.02,Math.sin(a)*3.31)]),lines));
       }
-      scene.add(group);kwgWebPatches.push({mesh:group,position:position.clone(),radius:2.25,until:performance.now()+9500});
+      scene.add(group);kwgWebPatches.push({mesh:group,position:position.clone(),radius:3.35,until:performance.now()+9500});
       while(kwgWebPatches.length>42)kwgDisposeWebPatch(kwgWebPatches.shift());
     }
     function kwgDisposeWebPatch(p){scene.remove(p.mesh);p.mesh.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});}
@@ -13103,13 +13188,11 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       slot.webChargeAt=0;slot.nextWebAt=now+180+Math.random()*190;slot.attackUntil=now+450;
       // Predict the player's landing position from recent movement. The web
       // still lands on the WORLD, not on a character, and cannot cross walls.
-      const prev=kwgSpiderPrevPlayerPos;
-      const frameSeconds=Math.max(.016,Math.min(.09,kwgSpiderFrameDt||.016));
-      const velX=prev?(player.position.x-prev.x)/frameSeconds:0;
-      const velZ=prev?(player.position.z-prev.z)/frameSeconds:0;
-      const flightSeconds=Math.max(.19,Math.min(.45,dist*.035));
-      const leadX=Math.max(-3.5,Math.min(3.5,velX*flightSeconds*.92));
-      const leadZ=Math.max(-3.5,Math.min(3.5,velZ*flightSeconds*.92));
+      // V40: use the smoothed player velocity captured every frame, not a
+      // never-updated position snapshot (which previously made lead = zero).
+      const flightSeconds=Math.max(.16,Math.min(.37,dist*.027));
+      const leadX=Math.max(-5.5,Math.min(5.5,kwgSpiderVelocity.x*flightSeconds*1.12));
+      const leadZ=Math.max(-5.5,Math.min(5.5,kwgSpiderVelocity.z*flightSeconds*1.12));
       let aimX=player.position.x+leadX,aimZ=player.position.z+leadZ;
       const predicted=new THREE.Vector3(aimX,player.position.y+.9,aimZ);
       if(!kwgRayWorldClear(from,predicted,blocks)){
@@ -13120,7 +13203,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const to=new THREE.Vector3(aimX,Number.isFinite(floor)?floor:player.position.y,aimZ);
       const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.25,0),new THREE.MeshBasicMaterial({color:0xe6f8ff,transparent:true,opacity:.9}));
       mesh.position.copy(from);scene.add(mesh);
-      kwgWebProjectiles.push({mesh,from,to,start:now,duration:Math.max(180,Math.min(420,dist*33))});
+      kwgWebProjectiles.push({mesh,from,to,start:now,duration:Math.max(155,Math.min(365,dist*27))});
       kwgAudio.play('spider_spit');
     }
     // The beam stops at the FIRST solid world object; roofs protect players.
@@ -13259,6 +13342,36 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     function kwgAlienFlightOrLanding(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ){
       if(slot.alienMode==='landing')kwgAlienLandStep(slot,now,dt);
       else kwgAlienFlightStep(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ);
+    }
+
+    // V40: on-foot aliens can call their parked saucer back. The ship flies
+    // to the alien rather than leaving a grounded NPC stuck behind obstacles.
+    function kwgAlienCallUfo(slot,now){
+      if(slot.alienMode!=='foot'||!slot.parkedUfo||!slot.mesh)return;
+      slot.alienMode='reboarding';slot.alienReboardAt=now;
+      slot.path=[];slot.pathAt=0;slot.dropGoal=null;slot.alienChargeAt=0;
+      if(slot.alienBeam)slot.alienBeam.visible=false;
+    }
+    function kwgAlienReboardStep(slot,now,dt,origin){
+      const npc=slot.mesh,ship=slot.parkedUfo;
+      if(!npc||!ship){slot.alienMode='flight';return;}
+      const dest=npc.position.clone().add(new THREE.Vector3(0,1.9,0));
+      ship.position.lerp(dest,Math.min(1,dt*3.7));
+      ship.rotation.y=npc.rotation.y;
+      if(ship.position.distanceTo(dest)>.28&&now-slot.alienReboardAt<2600)return;
+      // Reparent while preserving the original model's local offset.
+      scene.remove(ship);
+      ship.position.set(0,.15,0);ship.rotation.y=0;
+      npc.add(ship);npc.userData.alienShip=ship;slot.parkedUfo=null;
+      npc.position.y+=2.8;slot.alienMode='flight';slot.alienHiddenAt=0;
+      slot.alienNextZap=now+1500;slot.chaseStartedAt=0;
+      slot.fallSpeed=0;slot.grounded=false;slot.alienFootStuckAt=0;
+      kwgAudio.play('alien_land');
+    }
+    function kwgAlienCanZapFromSky(player,blocks){
+      const from=player.position.clone().add(new THREE.Vector3(0,7.2,0));
+      const to=player.position.clone().add(new THREE.Vector3(0,1.05,0));
+      return kwgAlienBeamEnd(from,to,blocks).clear;
     }
 
     function kwgAlienFootFire(slot,player,props,blocks,now){
@@ -13401,7 +13514,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.spawnedOnce=false;slot.nextShotAt=0;slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);
             slot.attackUntil=0;slot.muzzleUntil=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;slot.nextHopAt=0;slot.chaseStartedAt=0;
             slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;slot.wasChasing=false;
-            slot.alienMode='flight';slot.baboonMode='flight';slot.baboonBombAt=0;slot.baboonLostAt=0;slot.bananaAt=0;slot.alienChargeAt=0;slot.webChargeAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
+            slot.alienMode='flight';slot.alienFootStuckAt=0;slot.alienReboardAt=0;slot.baboonMode='flight';slot.baboonBombAt=0;slot.baboonLostAt=0;slot.bananaAt=0;slot.alienChargeAt=0;slot.webChargeAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
             // Replace an already visible NPC right here, even while the
             // World Editor camera is active and the AI update is paused.
             if(wasVisible){
@@ -13864,6 +13977,12 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       kwgSpiderFrameDt=Math.max(.016,Math.min(.09,delta));
       const player=localPlayerAvatar,now=kwgEnemyClock();
       const playerBefore=kwgEnemyPreviousPlayerPos||{x:player.position.x,y:player.position.y,z:player.position.z};
+      const sampleSeconds=Math.max(.012,Math.min(.09,delta));
+      const instantVX=Math.max(-24,Math.min(24,(player.position.x-playerBefore.x)/sampleSeconds));
+      const instantVZ=Math.max(-24,Math.min(24,(player.position.z-playerBefore.z)/sampleSeconds));
+      const smoothing=Math.min(1,delta*14);
+      kwgSpiderVelocity.x+=(instantVX-kwgSpiderVelocity.x)*smoothing;
+      kwgSpiderVelocity.z+=(instantVZ-kwgSpiderVelocity.z)*smoothing;
       kwgEnemyPreviousPlayerPos={x:player.position.x,y:player.position.y,z:player.position.z};
       const blocks=Object.values(currentWorldData.blocks||{});
       const dt=Math.min(delta,.05);
@@ -13901,7 +14020,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             slot.chaseStartedAt=0;slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;
             slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
             slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.dropGoal=null;slot.dropCommitUntil=0;slot.nextShotAt=0;slot.nextHopAt=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;
-            slot.alienMode='flight';slot.baboonMode='flight';slot.baboonBombAt=0;slot.baboonLostAt=0;slot.bananaAt=0;slot.alienChargeAt=0;slot.alienHiddenAt=0;slot.alienNextZap=0;slot.webChargeAt=0;slot.nextWebAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
+            slot.alienMode='flight';slot.alienFootStuckAt=0;slot.alienReboardAt=0;slot.baboonMode='flight';slot.baboonBombAt=0;slot.baboonLostAt=0;slot.bananaAt=0;slot.alienChargeAt=0;slot.alienHiddenAt=0;slot.alienNextZap=0;slot.webChargeAt=0;slot.nextWebAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
             if(props.enemyCharacter==='alien'||props.enemyCharacter==='balloon_baboon')slot.mesh.position.y=origin.y+5.8;
             if(slot.spawnedOnce&&spawnDistance<15)kwgAudio.play('devil_respawn');
             slot.spawnedOnce=true;
@@ -13963,6 +14082,26 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             continue;
           }
           if(props.enemyCharacter==='balloon_baboon'&&kwgBaboonStep(slot,player,props,blocks,now,dt,origin,chasing)){continue;}
+          if(props.enemyCharacter==='alien'&&slot.alienMode==='reboarding'){
+            kwgAlienReboardStep(slot,now,dt,origin);
+            kwgEnemyAnimate(slot,now,false,props.enemySpeed,index);
+            continue;
+          }
+          if(props.enemyCharacter==='alien'&&slot.alienMode==='foot'){
+            // Dead/out-of-range targets always trigger return. A live target
+            // above/behind an unreachable walking route triggers return only
+            // when an unobstructed aerial zap is possible.
+            const outOfReach=!chasing||!playerAlive;
+            const cannotWalk=(slot.stuckSince&&now-slot.stuckSince>2300)||
+              (chasing&&distance>3.5&&now-(slot.lastProgressAt||now)>2600);
+            const tooFar=Math.hypot(npc.position.x-player.position.x,npc.position.z-player.position.z)>Math.max(10,props.noticeRange*.85);
+            if(outOfReach||((cannotWalk||tooFar)&&kwgAlienCanZapFromSky(player,blocks)))kwgAlienCallUfo(slot,now);
+            if(slot.alienMode==='reboarding'){
+              kwgAlienReboardStep(slot,now,dt,origin);
+              kwgEnemyAnimate(slot,now,false,props.enemySpeed,index);
+              continue;
+            }
+          }
           if(props.enemyCharacter==='alien'&&slot.alienMode!=='foot'){
             kwgAlienFlightOrLanding(slot,player,props,blocks,now,dt,origin,chasing,centerX,centerZ);
             kwgEnemyAnimate(slot,now,false,props.enemySpeed,index);
@@ -15065,6 +15204,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     }
     function respawnPlayer() {
       kwgResetLifeState();
+      if(socket?.connected&&currentWorldName)socket.emit('player_respawned',{worldName:currentWorldName});
       kwgInvulnerableUntil=performance.now()+1600; // Brief spawn protection.
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
       kwgResetStompAnimation(true);
@@ -15094,13 +15234,24 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const now = Date.now();
       if (now - lastFinishTime < 3000) return;
       lastFinishTime = now;
-      showToast("🎉 WORLD FINISHED! GREAT JOB! 🎉", 4000);
+      if(!currentWorldName||kwgDeadUntil||isEditMode)return;
+      const worldName=currentWorldName;
+      kwgSendPlayerMovement(localPlayerAvatar,false,true);
+      socket.emit('world_finish',{worldName},res=>{
+        if(currentWorldName!==worldName)return;
+        if(!res?.success){lastFinishTime=0;showToast(res?.message||'Finish not registered.');return;}
+        const score=res.score===null?'':` · ${kwgScoreLabel(res.mode,res.score)}`;
+        showToast(`🎉 FINISHED!${score}${res.newRecord?' · NEW RECORD!':''} 🎉`,5000);
+        currentCheckpoint=null;
+        respawnPlayer();
+        kwgSetSideWindow('leaderboard');
+      });
     }
 
     let lastSendTime = 0;
-    function kwgSendPlayerMovement(player,isMoving){
+    function kwgSendPlayerMovement(player,isMoving,force=false){
       const now=Date.now();
-      if(!player||!currentWorldName||now-lastSendTime<=40)return;
+      if(!player||!currentWorldName||(!force&&now-lastSendTime<=40))return;
       lastSendTime=now;
       socket.emit('player_movement',{
         x:player.position.x,y:player.position.y,z:player.position.z,
@@ -15346,7 +15497,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
           // even when physics stops the avatar at the block's outer face.
           if(b.actionType==='checkpoint'){
             if(isPlayerTouchingSpecialPart(b,player.position))triggerCheckpoint(b);
-          }else if(checkPlayerIntersectingBlockData(b,player.position)){
+          }else if(isPlayerTouchingSpecialPart(b,player.position)){
             triggerFinishLine();
           }
         }
@@ -15934,6 +16085,27 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
   }
   #friends-pane .friends-shell{gap:7px!important;}
 }
+
+/* KWG V40: three exclusive bottom-right windows; dock never overlaps chat. */
+body.kwg-in-world #kwg-audio-dock{right:14px!important;bottom:12px!important;display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100vw - 24px)}
+#kwg-side-buttons{display:none;align-items:center;gap:7px}
+body.kwg-in-world:not(.kwg-editing) #kwg-side-buttons{display:flex}
+#kwg-side-buttons button{cursor:pointer;padding:7px 9px;min-height:35px;background:#253c4d;color:#e8f5ff;border:2px solid #6d8aa2;font:700 11px 'Pixelify Sans',monospace;box-shadow:3px 3px #0b1420}
+#kwg-side-buttons button[aria-pressed="true"]{background:#2d796b;border-color:#a4e88c}
+body.kwg-in-world #kwg-audio-menu{bottom:calc(100% + 10px);right:0}
+body.kwg-in-world:not(.kwg-editing) #world-chat{position:fixed!important;right:14px!important;bottom:62px!important;top:auto!important;left:auto!important;z-index:17980!important;display:none!important;width:min(360px,calc(100vw - 28px))!important;max-height:min(58vh,440px)!important}
+body.kwg-in-world.kwg-chat-open:not(.kwg-editing) #world-chat{display:block!important}
+#kwg-leaderboard-window{position:fixed;right:14px;bottom:62px;width:min(360px,calc(100vw - 28px));max-height:min(60vh,440px);overflow:auto;background:#202b3b;color:#f3f7ff;border:2px solid #6d8aa2;box-shadow:4px 4px #0b1420;z-index:17980;font:13px 'Pixelify Sans',monospace}
+#kwg-leaderboard-window[hidden]{display:none!important}
+.kwg-leaderboard-heading{background:#30465a;padding:11px 12px;border-bottom:2px solid #68859b;font:700 11px 'Press Start 2P','Pixelify Sans',monospace;line-height:1.6}
+#kwg-leaderboard-mode{font:12px 'Pixelify Sans',monospace;color:#a4e88c}
+#kwg-leaderboard-rows{padding:9px 11px;max-height:300px;overflow:auto}
+.kwg-leaderboard-entry{display:grid;grid-template-columns:26px 1fr auto;gap:9px;align-items:center;padding:7px 3px;border-bottom:1px solid #3c5265}
+.kwg-leaderboard-entry strong{color:#a4e88c}
+.kwg-leaderboard-foot{font-size:10px;color:#a8bfcb;padding:8px 11px;border-top:1px solid #3c5265}
+.chat-line.kwg-system-line{color:#a4e88c;font-style:italic}
+body.kwg-editing #kwg-side-buttons,body.kwg-editing #kwg-leaderboard-window{display:none!important}
+@media(max-width:550px){body.kwg-in-world #kwg-audio-dock{right:7px!important;bottom:7px!important;gap:4px}#kwg-side-buttons{gap:4px}#kwg-side-buttons button{padding:6px;font-size:10px}body.kwg-in-world:not(.kwg-editing) #world-chat,#kwg-leaderboard-window{right:7px!important;bottom:56px!important}}
 </style>
 <script>
 (()=>{
