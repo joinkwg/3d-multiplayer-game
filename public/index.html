@@ -4605,7 +4605,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // --- PROCEDURAL TEXTURE GENERATOR ---
     const textureCache = {};
     function getMaterialTexture(matType) {
-      if (!['grid','brick','wood','kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
+      if (!['grid','brick','wood','kill','checkpoint','finish','spawn','enemy_spawner','health','tool_dispenser','yellow_flag','checker_flag'].includes(matType)) matType = 'grid';
       if (textureCache[matType]) return textureCache[matType];
 
       const canvas = document.createElement('canvas');
@@ -4658,19 +4658,31 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         ctx.fillRect(63, 69, 5, 10);
         ctx.fillRect(72, 69, 5, 10);
       } else if (matType === 'checkpoint') {
-        // Tileable pixel-art checkpoint marker: a flag and check mark.
-        // White tile lets the part's yellow tint color the whole surface.
+        // V41: repeating map waypoint / location pin. All geometry is
+        // pixel-aligned, with a white background to preserve block tint.
         ctx.fillStyle='#343a43';
-        ctx.fillRect(33,22,10,85); // flag pole
-        ctx.fillRect(28,103,24,9); // stand
-        ctx.fillRect(43,22,57,10);
-        ctx.fillRect(90,32,10,37);
-        ctx.fillRect(43,64,57,9);
-        // A chunky pixel check on the flag.
-        ctx.fillRect(53,43,10,10);
-        ctx.fillRect(63,53,10,10);
-        ctx.fillRect(73,43,10,10);
-        ctx.fillRect(83,33,10,10);
+        for(const [x,y,w,h] of [
+          [49,17,30,9],[36,26,56,10],[27,36,74,30],
+          [35,66,58,12],[43,78,42,12],[51,90,26,11],
+          [58,101,12,12]
+        ])ctx.fillRect(x,y,w,h);
+        // Hollow center makes the waypoint readable on every face.
+        ctx.fillStyle='#ffffff';
+        ctx.fillRect(51,41,26,25);
+        ctx.fillRect(57,35,14,7);
+      } else if (matType === 'finish') {
+        // V41: the classic checkered flag from the legacy Finish, but
+        // rendered as a repeating flat icon on normal part geometry.
+        ctx.fillStyle='#343a43';
+        ctx.fillRect(22,19,10,91); // pole
+        ctx.fillRect(16,107,22,8); // base
+        ctx.fillRect(32,20,78,10); // flag top
+        ctx.fillRect(102,29,9,58); // right hem
+        ctx.fillRect(32,83,79,9); // flag bottom
+        // Pixel checkerboard, 4 columns x 3 rows.
+        for(let row=0;row<3;row++)for(let col=0;col<4;col++){
+          if((row+col)%2===0)ctx.fillRect(35+col*17,30+row*17,17,17);
+        }
       } else if (matType === 'enemy_spawner') {
         // Repeatable pixel-art devil face, dark on white so the blue tint shows.
         ctx.fillStyle='#343a43';
@@ -4732,7 +4744,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // exact same UVs, so scaling works consistently on every shape.
     function getBlockSurfaceTexture(materialType, actionType) {
       const baseType=['grid','brick','wood'].includes(materialType) ? materialType : 'grid';
-      const iconType=['kill','checkpoint','spawn','enemy_spawner','health','tool_dispenser'].includes(actionType) ? actionType : null;
+      const iconType=['kill','checkpoint','finish','spawn','enemy_spawner','health','tool_dispenser'].includes(actionType) ? actionType : null;
       if (!iconType) return getMaterialTexture(baseType);
       const key='combined:'+baseType+':'+iconType;
       if(textureCache[key])return textureCache[key];
@@ -8774,74 +8786,6 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
     // --- WORLD & BLOCK OBJECT MANAGEMENT ---
     const worldBlocks = {};
 
-    function createFlagMesh(blockData, isPreview = false) {
-      const group = new THREE.Group();
-      
-      const baseGeo = new THREE.CylinderGeometry(0.6, 0.7, 0.2, 16);
-      const transparency = blockData.transparency || 0;
-      const baseMat = new THREE.MeshLambertMaterial({ 
-        color: blockData.actionType === 'finish' ? 0x222222 : 0x7f8c8d,
-        transparent: transparency > 0, 
-        opacity: 1.0 - transparency
-      });
-      const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-      baseMesh.position.y = 0.1;
-      group.add(baseMesh);
-
-      const poleGeo = new THREE.CylinderGeometry(0.06, 0.06, 2.5, 12);
-      const poleMat = new THREE.MeshLambertMaterial({ 
-        color: 0xdddddd,
-        transparent: transparency > 0, 
-        opacity: 1.0 - transparency
-      });
-      const poleMesh = new THREE.Mesh(poleGeo, poleMat);
-      poleMesh.position.y = 1.25;
-      group.add(poleMesh);
-
-      const flagGeo = new THREE.PlaneGeometry(1.0, 0.6);
-      const texType = blockData.actionType === 'finish' ? 'checker_flag' : 'yellow_flag';
-      const flagMat = new THREE.MeshLambertMaterial({ 
-        map: getMaterialTexture(texType),
-        side: THREE.DoubleSide,
-        transparent: transparency > 0, 
-        opacity: 1.0 - transparency
-      });
-      const flagCloth = new THREE.Mesh(flagGeo, flagMat);
-      
-      flagCloth.position.set(0.5, 1.1, 0);
-      group.add(flagCloth);
-
-      group.position.set(blockData.x || 0, blockData.y || 0, blockData.z || 0);
-
-      group.userData = {
-        isBlock: !isPreview,
-        blockId: blockData.id,
-        shape: 'box',
-        actionType: blockData.actionType,
-        canCollide: blockData.canCollide !== false,
-        anchored: true,
-        transparency: transparency,
-        flagCloth: flagCloth
-      };
-
-      if (isPreview) {
-        group.traverse((child) => {
-          if (child.isMesh && child.material) {
-            child.material = child.material.clone();
-            child.material.transparent = true;
-            child.material.opacity = Math.max(0.2, transparency);
-          }
-        });
-        const wireGeo = new THREE.BoxGeometry(1.2, 2.7, 1.2);
-        const wireMat = new THREE.MeshBasicMaterial({ color: 0x3388ff, wireframe: true });
-        const outline = new THREE.Mesh(wireGeo, wireMat);
-        outline.position.y = 1.25;
-        group.add(outline);
-      }
-
-      return group;
-    }
-
     // KWG V3.42.2: Tile in physical part units, including curved surfaces.
     // The texture UVs belong to each mesh geometry, not to the shared texture.
     function applyPartFaceTiling(geometry, blockData) {
@@ -8993,10 +8937,8 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
     }
     function buildBlockMesh(blockData, isPreview = false) {
-      if (blockData.actionType === 'finish') {
-        return createFlagMesh(blockData, isPreview);
-      }
-
+      // V41: Finish is a standard editable block (including wedge/sphere/etc),
+      // never the legacy standalone flagpole model.
       let geo;
       if (blockData.shape === 'sphere') geo = new THREE.SphereGeometry(0.5, 16, 16);
       else if (blockData.shape === 'cylinder') geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 16);
@@ -13450,9 +13392,78 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       });
       slot.mesh=null;
     }
+    // V41: A camera-facing timer floats over a spawner while any of its
+    // enemy slots is defeated. Never serialize this visual as a world part.
+    function kwgDisposeEnemyRespawnIndicator(entry){
+      const sprite=entry?.respawnIndicator;
+      if(!sprite)return;
+      scene.remove(sprite);
+      sprite.material.map?.dispose();
+      sprite.material.dispose();
+      entry.respawnIndicator=null;
+      entry.respawnLastLabel='';
+    }
+    function kwgUpdateEnemyRespawnIndicators(now=kwgEnemyClock()){
+      for(const entry of kwgEnemySpawners.values()){
+        const dead=entry.slots.filter(slot=>slot.deadUntil>now);
+        if(!dead.length||isEditMode||kwgFreeCamera.active){
+          if(entry.respawnIndicator)entry.respawnIndicator.visible=false;
+          continue;
+        }
+        const next=dead.reduce((a,b)=>a.deadUntil<b.deadUntil?a:b);
+        const seconds=Math.max(0,(next.deadUntil-now)/1000);
+        const respawnStart=next.squishUntil||next.deadUntil;
+        const respawnDuration=Math.max(1,next.deadUntil-respawnStart);
+        const progress=Math.max(0,Math.min(1,(now-respawnStart)/respawnDuration));
+        if(!entry.respawnIndicator){
+          const canvas=document.createElement('canvas');
+          canvas.width=512;canvas.height=128;
+          const tex=new THREE.CanvasTexture(canvas);
+          tex.colorSpace=THREE.SRGBColorSpace;
+          tex.minFilter=THREE.LinearFilter;
+          tex.magFilter=THREE.NearestFilter;
+          const material=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false,depthTest:true});
+          const sprite=new THREE.Sprite(material);
+          sprite.name='kwg-enemy-spawner-respawn-timer';
+          sprite.scale.set(3.4,.85,1);
+          sprite.raycast=()=>{};
+          sprite.userData.kwgRespawnCanvas=canvas;
+          entry.respawnIndicator=sprite;
+          scene.add(sprite);
+        }
+        const sprite=entry.respawnIndicator;
+        sprite.visible=true;
+        const bounds=getBlockAABB(entry.block);
+        sprite.position.set(Number(entry.block.x)||0,bounds.maxY+1.05,Number(entry.block.z)||0);
+        // Redraw only when the displayed tenth-second or bar segment changes.
+        const tenth=Math.ceil(seconds*10);
+        const step=Math.floor(progress*50);
+        const label=`${tenth}:${step}:${dead.length}:${entry.slots.length}`;
+        if(entry.respawnLastLabel===label)continue;
+        entry.respawnLastLabel=label;
+        const canvas=sprite.userData.kwgRespawnCanvas;
+        const ctx=canvas.getContext('2d');
+        ctx.clearRect(0,0,512,128);
+        ctx.fillStyle='rgba(11,23,38,.94)';ctx.fillRect(8,8,496,112);
+        ctx.strokeStyle='#7db7dc';ctx.lineWidth=5;ctx.strokeRect(10,10,492,108);
+        ctx.fillStyle='#e7f5ff';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.font='bold 31px monospace';
+        ctx.fillText(`RESPAWN  ${(tenth/10).toFixed(1)}s`,256,46);
+        if(entry.slots.length>1){
+          ctx.font='bold 16px monospace';
+          ctx.fillStyle='#a7c9e0';
+          ctx.fillText(`${dead.length} / ${entry.slots.length} ENEMIES DOWN`,256,77);
+        }
+        const barY=entry.slots.length>1?93:80;
+        ctx.fillStyle='#263f55';ctx.fillRect(30,barY,452,18);
+        ctx.fillStyle='#66d998';ctx.fillRect(30,barY,452*progress,18);
+        ctx.strokeStyle='#c4e9f8';ctx.lineWidth=2;ctx.strokeRect(30,barY,452,18);
+        sprite.material.map.needsUpdate=true;
+      }
+    }
     function kwgClearEnemySpawners(){
       kwgClearBlockPreviews();
-      for(const entry of kwgEnemySpawners.values())for(const slot of entry.slots)kwgDestroyEnemySlot(slot);
+      for(const entry of kwgEnemySpawners.values()){kwgDisposeEnemyRespawnIndicator(entry);for(const slot of entry.slots)kwgDestroyEnemySlot(slot);}
       kwgEnemySpawners.clear();
       kwgLastEnemySync=0;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
@@ -13494,6 +13505,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const blocks=currentWorldData.blocks;
       for(const [id,entry] of kwgEnemySpawners){
         if(!blocks[id]||blocks[id].actionType!=='enemy_spawner'){
+          kwgDisposeEnemyRespawnIndicator(entry);
           for(const slot of entry.slots)kwgDestroyEnemySlot(slot);
           kwgEnemySpawners.delete(id);
         }
@@ -14590,7 +14602,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if(px<bounds.minX-.2||px>bounds.maxX+.2||pz<bounds.minZ-.2||pz>bounds.maxZ+.2)return null;
         // Rectangular parts rotated by 90 degrees are still axis-aligned,
         // with swapped dimensions; the top of the new bounds is the floor.
-        if(shape==='box'||shape==='baseplate'||b.actionType==='finish')
+        if(shape==='box'||shape==='baseplate')
           return bounds.maxY;
         // Rotated ellipsoids use the exact same inverse-rotation geometry
         // as their side collider, rather than a faceted mesh raycast.
@@ -14605,7 +14617,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       const hx=sx/2, hy=sy/2, hz=sz/2;
       const lx=px-bx, lz=pz-bz;
 
-      if (shape==='box' || shape==='baseplate' || b.actionType==='finish') {
+      if (shape==='box' || shape==='baseplate') {
         if (Math.abs(lx)<=hx+0.2 && Math.abs(lz)<=hz+0.2) return by+hy;
         return null;
       }
@@ -14661,7 +14673,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       for (const [x,y,z] of pts) {
         const lx=x-bx,ly=y-by,lz=z-bz;
         let inside=false;
-        if (shape==='box'||shape==='baseplate'||b.actionType==='finish')
+        if (shape==='box'||shape==='baseplate')
           inside=Math.abs(lx)<=hx&&Math.abs(ly)<=hy&&Math.abs(lz)<=hz;
         else if (shape==='sphere')
           inside=Math.pow(lx/hx,2)+Math.pow(ly/hy,2)+Math.pow(lz/hz,2)<=1;
@@ -14971,8 +14983,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
             kwgResolveRotatedCylinderSide(pos,b,previousX,previousZ,feet,head,pr);
             continue;
           }
-          if(shape!=='box'&&shape!=='baseplate'&&
-             b.actionType!=='finish'){
+          if(shape!=='box'&&shape!=='baseplate'){
             kwgResolveRotatedShapeSide(pos,b,previousX,previousZ,feet,head,pr);
             continue;
           }
@@ -15020,7 +15031,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         if (by+hy<=feet+.05 || by-hy>=head) continue;
         const lx=pos.x-bx,lz=pos.z-bz;
 
-        if (shape==='box'||shape==='baseplate'||b.actionType==='finish') {
+        if (shape==='box'||shape==='baseplate') {
           const minX=bx-hx-pr,maxX=bx+hx+pr,minZ=bz-hz-pr,maxZ=bz+hz+pr;
           if (pos.x>minX&&pos.x<maxX&&pos.z>minZ&&pos.z<maxZ) {
             const vals=[pos.x-minX,maxX-pos.x,pos.z-minZ,maxZ-pos.z];
@@ -15312,7 +15323,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
              pos.z<bounds.minZ-.38||pos.z>bounds.maxZ+.38)continue;
           let undersideY=null;
           const shape=b.shape||'box';
-          if(shape==='box'||shape==='baseplate'||b.actionType==='finish'){
+          if(shape==='box'||shape==='baseplate'){
             undersideY=bounds.minY;
           }else{
             // Curved and sloped surfaces use the real rotated triangle mesh.
@@ -15337,7 +15348,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         let undersideY = null;
 
         // Boxes/baseplates/flags have a flat underside.
-        if (shape === 'box' || shape === 'baseplate' || b.actionType === 'finish') {
+        if (shape === 'box' || shape === 'baseplate') {
           if (Math.abs(lx) <= hx + 0.38 && Math.abs(lz) <= hz + 0.38) undersideY = by - hy;
         } else if (shape === 'cylinder') {
           const d2 = Math.pow(lx / (hx + 0.38), 2) + Math.pow(lz / (hz + 0.38), 2);
@@ -15560,6 +15571,7 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       }
       kwgSyncHeldTool();
       kwgStudioHideActors();
+      if(currentWorldName)kwgUpdateEnemyRespawnIndicators();
       kwgStudioTick(delta);
       if(!kwgFreeCamera.active&&!isEditMode&&!kwgDeadUntil&&kwgEquippedTool)
         kwgAnimateHeldWeapon(localPlayerAvatar,kwgEquippedTool,performance.now(),true);
