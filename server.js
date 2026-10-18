@@ -1856,19 +1856,19 @@ io.on('connection', (socket) => {
     if(toolKind==='ufo'){
       if(Math.hypot(origin.x-shooter.x,origin.y-(shooter.y-.65),origin.z-shooter.z)>1.6)return;
       if(direction.y>-.985||Math.abs(direction.x)>.14||Math.abs(direction.z)>.14)return;
-      if(shooter.y<3)return;
+      if(shooter.y<2.1)return;
     }else if(Math.hypot(origin.x-shooter.x,origin.y-(shooter.y+1.5),origin.z-shooter.z)>8)return;
     const distance=Math.hypot(target.x-origin.x,target.y+1.1-origin.y,target.z-origin.z);
     if(distance>115||distance<.4)return;
     const toTarget={x:target.x-origin.x,y:target.y+1.1-origin.y,z:target.z-origin.z};
     const dot=(toTarget.x*direction.x+toTarget.y*direction.y+toTarget.z*direction.z)/distance;
     if(toolKind!=='ufo'&&dot<Math.cos(Math.atan2(1.2,Math.max(1,distance))))return;
-    if(toolKind==='ufo'&&(Math.hypot(target.x-origin.x,target.z-origin.z)>2.35||target.y>origin.y+.2))return;
+    if(toolKind==='ufo'&&(Math.hypot(target.x-origin.x,target.z-origin.z)>2.85||target.y>origin.y+.2))return;
     try{
       const world=await getWorldByName(key);
       if(world?.data?.friendlyFire!==true)return;
       const targetBox={minX:target.x-.55,maxX:target.x+.55,minY:target.y-.2,maxY:target.y+2.45,minZ:target.z-.55,maxZ:target.z+.55};
-       if(toolKind==='ufo'){targetBox.minX-=1.85;targetBox.maxX+=1.85;targetBox.minZ-=1.85;targetBox.maxZ+=1.85;}
+       if(toolKind==='ufo'){targetBox.minX-=2.35;targetBox.maxX+=2.35;targetBox.minZ-=2.35;targetBox.maxZ+=2.35;}
        const hit=kwgRayBoxDistance(origin,direction,targetBox);
       if(!Number.isFinite(hit)||hit>115)return;
       for(const block of Object.values(world.data.blocks||{})){
@@ -1883,7 +1883,7 @@ io.on('connection', (socket) => {
       else if(kwgPvpLaserTarget!==targetId||now-kwgPvpLaserLastAt>650){kwgPvpLaserTarget=targetId;kwgPvpLaserSince=now;}
       if(toolKind==='laser')kwgPvpLaserLastAt=now;
       const laserRamp=toolKind==='laser'?Math.min(1,(now-kwgPvpLaserSince)/4700):0;
-      const damage=toolKind==='ufo'?48:toolKind==='laser'?Math.round(2+6*laserRamp):toolKind==='minigun'?9:32;
+      const damage=toolKind==='ufo'?100:toolKind==='laser'?Math.round(2+6*laserRamp):toolKind==='minigun'?9:32;
       io.to(targetId).emit('tool_damage_taken',{damage,shooterPosition:{x:shooter.x,y:shooter.y,z:shooter.z}});
     }catch(err){console.warn('PVP hit validation:',err.message);}
   });
@@ -2125,7 +2125,7 @@ io.on('connection', (socket) => {
     if(!requireAuth(socket,cb))return;
     const key=cleanWorldName(worldName);
     if(socket.data.worldName!==key)return cb?.({success:false,message:'Join the world before uploading.'});
-    if(!['sky','decal'].includes(kind)||kind==='decal'&&!['front','back','left','right','top','bottom'].includes(side))return cb?.({success:false,message:'Invalid image target.'});
+    if(!['sky','decal'].includes(kind)||!['front','back','left','right','top','bottom'].includes(side))return cb?.({success:false,message:'Invalid image target.'});
     const bytes=fileBufferFromSocket(raw);
     if(!kwgValidImageBytes(bytes,mimeType))return cb?.({success:false,message:'Use PNG, JPEG, or WebP under 1.5 MB.'});
     if(!KWG_IMAGE_MODERATION_KEY||!SUPABASE_URL||!SUPABASE_SERVICE_ROLE_KEY)return cb?.({success:false,message:'Image moderation/storage not configured: set OPENAI_API_KEY and Supabase storage environment variables.'});
@@ -2139,7 +2139,7 @@ io.on('connection', (socket) => {
         worldId=world.id;
         if(kind==='decal'&&!world.data.blocks?.[blockId])throw new Error('Select a saved part first.');
         const review={status:'pending',token,fileName:safeFileName};
-        if(kind==='sky')world.data.skyImageReview=review;
+        if(kind==='sky'){world.data.skyboxFaces=world.data.skyboxFaces||{};world.data.skyboxFaces[side]=review;}
         else{const block=world.data.blocks[blockId];block.decals=block.decals||{};block.decals[side]=review;}
         await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(world.data),world.id]);
         io.to(`world:${key}`).emit('kwg_image_review_updated',{kind,blockId,side,review});
@@ -2155,11 +2155,11 @@ io.on('connection', (socket) => {
       }catch(e){failed=true;console.error('KWG world image review:',e.message);}
       try{await queueWorldSave(key,async()=>{
         const world=await getWorldByName(key);if(!world)return;
-        const record=kind==='sky'?world.data.skyImageReview:world.data.blocks?.[blockId]?.decals?.[side];
+        const record=kind==='sky'?world.data.skyboxFaces?.[side]:world.data.blocks?.[blockId]?.decals?.[side];
         if(record?.token!==token||record.status!=='pending')return;
         const review={status:failed?'error':approved?'approved':'rejected',token,fileName:record.fileName||'Image'};
         if(url)review.url=url;
-        if(kind==='sky')world.data.skyImageReview=review;
+        if(kind==='sky'){world.data.skyboxFaces=world.data.skyboxFaces||{};world.data.skyboxFaces[side]=review;}
         else world.data.blocks[blockId].decals[side]=review;
         await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(world.data),world.id]);
         io.to(`world:${key}`).emit('kwg_image_review_updated',{kind,blockId,side,review});
@@ -2170,10 +2170,10 @@ io.on('connection', (socket) => {
     if(!requireAuth(socket,cb))return;
     const key=cleanWorldName(worldName);
     if(socket.data.worldName!==key)return cb?.({success:false,message:'Join the world first.'});
-    if(!['sky','decal'].includes(kind)||kind==='decal'&&!['front','back','left','right','top','bottom'].includes(side))return cb?.({success:false,message:'Invalid image target.'});
+    if(!['sky','decal'].includes(kind)||!['front','back','left','right','top','bottom'].includes(side))return cb?.({success:false,message:'Invalid image target.'});
     try{await queueWorldSave(key,async()=>{
       const world=await getWorldByName(key);if(!world||!canEditWorld(socket,world))throw new Error('Not allowed to edit images.');
-      if(kind==='sky')delete world.data.skyImageReview;
+      if(kind==='sky'&&world.data.skyboxFaces)delete world.data.skyboxFaces[side];
       else if(world.data.blocks?.[blockId]?.decals)delete world.data.blocks[blockId].decals[side];
       await pool.query('UPDATE worlds SET data=$1,updated_at=NOW() WHERE id=$2',[JSON.stringify(world.data),world.id]);
       io.to(`world:${key}`).emit('kwg_image_review_updated',{kind,blockId,side,review:null});
