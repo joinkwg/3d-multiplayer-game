@@ -602,6 +602,7 @@ async function migrate() {
       is_read BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE notifications ADD COLUMN IF NOT EXISTS related_group_id BIGINT;
     CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id,created_at DESC);
     CREATE INDEX IF NOT EXISTS notifications_unread_idx ON notifications(user_id,is_read);
 
@@ -970,7 +971,11 @@ async function kwgRefreshProgress(userId){
         if(progress<a.goals[i])break;
         const inserted=await client.query(`INSERT INTO user_achievement_awards(user_id,achievement_key,tier,xp_awarded)
           VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING xp_awarded`,[userId,a.key,i+1,a.xp[i]]);
-        if(inserted.rowCount){gained+=a.xp[i];unlocked.push({key:a.key,title:a.title,tier:KWG_TIER_NAMES[i],xp:a.xp[i]});}
+        if(inserted.rowCount){
+          gained+=a.xp[i];unlocked.push({key:a.key,title:a.title,tier:KWG_TIER_NAMES[i],xp:a.xp[i]});
+          await client.query(`INSERT INTO notifications(user_id,type,message)
+            VALUES($1,'achievement',$2)`,[userId,`Achievement unlocked: ${a.title} ${KWG_TIER_NAMES[i]} (+${a.xp[i]} XP)!`]);
+        }
       }
     }
     if(gained)await client.query('UPDATE user_xp_progress SET total_xp=total_xp+$2,updated_at=NOW() WHERE user_id=$1',[userId,gained]);
@@ -985,6 +990,7 @@ async function kwgRefreshProgress(userId){
     await client.query('COMMIT');
     const state={totalXP,level,levelStartXP:kwgXPForLevel(level),nextLevelXP:kwgXPForLevel(level+1),achievements};
     if(gained){
+      kwgPingNotifications([userId]);
       for(const s of io.sockets.sockets.values()){
         if(s.user&&Number(s.user.id)===Number(userId)){
           s.emit('kwg_progress_updated',{...state,gained,unlocked});
@@ -1015,6 +1021,29 @@ const KWG_GROUP_ICONS=new Set(['shield','star','bolt','flame','crown','moon','pa
 const KWG_GROUP_POLICIES=new Set(['open','invite','closed']);
 const KWG_GROUP_COLOR=/^#[0-9a-f]{6}$/i;
 function kwgGroupId(value){const n=Number(value);return Number.isSafeInteger(n)&&n>0?n:null;}
+// V52: persisted, server-generated notifications. A group ID enables a safe
+// action on the Notifications page without trusting a URL or message text.
+async function kwgNotify(userId,actorId,type,message,groupId=null,db=pool){
+  if(!userId||Number(userId)===Number(actorId))return;
+  try{
+    if(actorId&&await blockedTogether(actorId,userId))return;
+    const clean=String(message).slice(0,240);
+    await db.query(`INSERT INTO notifications(user_id,actor_user_id,type,message,related_group_id)
+      VALUES($1,$2,$3,$4,$5)`,[userId,actorId||null,type,clean,groupId]);
+    if(db===pool)kwgPingNotifications([userId]);
+  }catch(e){console.error('Notification delivery:',e);}
+}
+function kwgPingNotifications(ids){
+  const wanted=new Set(ids.map(Number));
+  for(const sock of io.sockets.sockets.values())if(wanted.has(Number(sock.user?.id)))sock.emit('kwg_notification_new');
+}
+async function kwgNotifyGroupStaff(groupId,actorId,type,message){
+  try{
+    const r=await pool.query(`SELECT user_id FROM kwg_group_members
+      WHERE group_id=$1 AND role IN ('owner','elder') AND user_id!=$2`,[groupId,actorId]);
+    for(const m of r.rows)await kwgNotify(m.user_id,actorId,type,message,groupId);
+  }catch(e){console.error('Group staff notifications:',e);}
+}
 function kwgGroupDesign(raw={}){
   return {
     iconKey:KWG_GROUP_ICONS.has(raw.iconKey)?raw.iconKey:'shield',
@@ -1151,6 +1180,9 @@ io.on('connection', (socket) => {
     try {
       const r=await pool.query(`
         SELECT n.id,n.type,n.message,n.is_read AS "isRead",n.created_at AS "createdAt",
+               n.related_group_id AS "relatedGroupId",
+               (n.type='group_invite' AND EXISTS(SELECT 1 FROM kwg_group_invites i
+                 WHERE i.group_id=n.related_group_id AND i.user_id=n.user_id)) AS "isInvitePending",
                u.username AS "actorUsername"
         FROM notifications n
         LEFT JOIN users u ON u.id=n.actor_user_id
@@ -1368,6 +1400,9 @@ io.on('connection', (socket) => {
       const users=await pool.query(`SELECT u.id FROM kwg_group_members m JOIN users u ON u.id=m.user_id
         WHERE m.group_id=$1 AND (u.appearance->'groupBadge'->>'id')=$2`,[id,String(id)]);
       for(const row of users.rows)await kwgGroupSyncBadge(row.id);
+      const updated=await pool.query('SELECT name FROM kwg_groups WHERE id=$1',[id]);
+      const members=await pool.query('SELECT user_id FROM kwg_group_members WHERE group_id=$1 AND user_id!=$2',[id,socket.user.id]);
+      for(const m of members.rows)await kwgNotify(m.user_id,socket.user.id,'group_edited',`${socket.user.username} edited ${updated.rows[0]?.name||'your group'}.`,id);
       cb({success:true});
     }catch(e){console.error('Group update:',e);cb({success:false,message:e.code==='23505'?'Group name already exists.':'Could not update group.'});}
   });
@@ -1389,7 +1424,9 @@ io.on('connection', (socket) => {
         ON CONFLICT DO NOTHING`,[id,socket.user.id]);
       const role=await kwgGroupRole(id,socket.user.id);
       if(!role)return cb({success:false,message:'Group is no longer accepting members.'});
-      await pool.query('DELETE FROM kwg_group_invites WHERE group_id=$1 AND user_id=$2',[id,socket.user.id]);
+      const pending=await pool.query('DELETE FROM kwg_group_invites WHERE group_id=$1 AND user_id=$2 RETURNING invited_by',[id,socket.user.id]);
+      await kwgNotifyGroupStaff(id,socket.user.id,'group_joined',`${socket.user.username} joined ${group.name}.`);
+      for(const invite of pending.rows)await kwgNotify(invite.invited_by,socket.user.id,'group_invite_accepted',`${socket.user.username} accepted your invitation to ${group.name}.`,id);
       cb({success:true});
     }catch(e){console.error('Group join:',e);cb({success:false,message:'Could not join group.'});}
   });
@@ -1408,7 +1445,10 @@ io.on('connection', (socket) => {
       if(Date.now()-(socket.data.kwgLastGroupInvite||0)<10000)return cb({success:false,message:'Please wait before sending another invitation.'});
       await pool.query(`INSERT INTO kwg_group_invites(group_id,user_id,invited_by) VALUES($1,$2,$3)
         ON CONFLICT(group_id,user_id) DO UPDATE SET invited_by=EXCLUDED.invited_by,created_at=NOW()`,[id,u.rows[0].id,socket.user.id]);
-      socket.data.kwgLastGroupInvite=Date.now();cb({success:true});
+      socket.data.kwgLastGroupInvite=Date.now();
+      const group=await pool.query('SELECT name FROM kwg_groups WHERE id=$1',[id]);
+      await kwgNotify(u.rows[0].id,socket.user.id,'group_invite',`${socket.user.username} invited you to ${group.rows[0]?.name||'a group'}.`,id);
+      cb({success:true});
     }catch(e){console.error('Group invite:',e);cb({success:false,message:'Could not invite player.'});}
   });
   socket.on('kwg_group_decline',async ({groupId}={},cb)=>{
@@ -1432,6 +1472,10 @@ io.on('connection', (socket) => {
         await kwgGroupSyncBadge(target);
       }
       else return cb({success:false,message:'No role change needed.'});
+      const group=await pool.query('SELECT name FROM kwg_groups WHERE id=$1',[id]);
+      const name=group.rows[0]?.name||'your group';
+      const verb=action==='promote'?'promoted you to Elder in':action==='demote'?'demoted you to Member in':'removed you from';
+      await kwgNotify(target,socket.user.id,action==='kick'?'group_kicked':action==='promote'?'group_promoted':'group_demoted',`${socket.user.username} ${verb} ${name}.`,id);
       cb({success:true});
     }catch(e){console.error('Group member action:',e);cb({success:false,message:'Could not manage member.'});}
   });
@@ -1441,7 +1485,10 @@ io.on('connection', (socket) => {
     try{
       const r=await pool.query(`DELETE FROM kwg_group_members WHERE group_id=$1 AND user_id=$2 AND role!='owner' RETURNING user_id`,[id,socket.user.id]);
       if(!r.rowCount)return cb({success:false,message:'Owners must delete their group to leave.'});
-      await kwgGroupSyncBadge(socket.user.id);cb({success:true});
+      await kwgGroupSyncBadge(socket.user.id);
+      const group=await pool.query('SELECT name FROM kwg_groups WHERE id=$1',[id]);
+      await kwgNotifyGroupStaff(id,socket.user.id,'group_left',`${socket.user.username} left ${group.rows[0]?.name||'your group'}.`);
+      cb({success:true});
     }catch(e){console.error(e);cb({success:false,message:'Could not leave group.'});}
   });
   socket.on('kwg_group_delete',async ({groupId}={},cb)=>{
@@ -1477,6 +1524,16 @@ io.on('connection', (socket) => {
         AND (author_id=$3 OR $4::text IN ('owner','elder')) RETURNING id`,[pid,id,socket.user.id,role||'']);
       cb(r.rowCount?{success:true}:{success:false,message:'Cannot remove this post.'});
     }catch(e){console.error(e);cb({success:false,message:'Could not remove post.'});}
+  });
+  socket.on('kwg_group_my_badges',async (_payload,cb)=>{
+    if(!requireAuth(socket,cb))return;
+    try{
+      const r=await pool.query(`SELECT g.id,g.name,g.icon_key AS "iconKey",
+        g.primary_color AS "primaryColor",g.secondary_color AS "secondaryColor"
+        FROM kwg_groups g JOIN kwg_group_members m ON m.group_id=g.id
+        WHERE m.user_id=$1 ORDER BY g.name LIMIT 20`,[socket.user.id]);
+      cb({success:true,badges:r.rows});
+    }catch(e){console.error('Group shirt choices:',e);cb({success:false,message:'Could not load group emblems.'});}
   });
   socket.on('kwg_group_badge',async ({groupId,enabled}={},cb)=>{
     if(!requireAuth(socket,cb))return;
@@ -1961,8 +2018,10 @@ io.on('connection', (socket) => {
         await pool.query('DELETE FROM world_likes WHERE world_id=$1 AND user_id=$2',[world.id,socket.user.id]);
         liked=false;
       } else {
-        await pool.query('INSERT INTO world_likes(world_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[world.id,socket.user.id]);
+        const added=await pool.query('INSERT INTO world_likes(world_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING world_id',[world.id,socket.user.id]);
         liked=true;
+        if(added.rowCount && Number(world.owner_user_id)!==Number(socket.user.id))
+          await kwgNotify(world.owner_user_id,socket.user.id,'world_liked',`${socket.user.username} liked your world ${filterKWGUserText(world.name)}.`);
       }
       const count=await pool.query('SELECT COUNT(*)::int AS n FROM world_likes WHERE world_id=$1',[world.id]);
       cb({success:true,liked,likes:Number(count.rows[0].n||0)});
