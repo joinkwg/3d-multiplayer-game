@@ -469,6 +469,28 @@ async function migrate() {
     ALTER TABLE worlds ADD COLUMN IF NOT EXISTS plays BIGINT NOT NULL DEFAULT 0;
     ALTER TABLE worlds ADD COLUMN IF NOT EXISTS bumped_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS worlds_bumped_at_idx ON worlds(bumped_at DESC NULLS LAST, created_at DESC);
+    -- V49: Persistent, account-wide progression. XP is awarded only on the server.
+    CREATE TABLE IF NOT EXISTS user_xp_progress (
+      user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      total_xp BIGINT NOT NULL DEFAULT 0 CHECK(total_xp >= 0),
+      finishes BIGINT NOT NULL DEFAULT 0 CHECK(finishes >= 0),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS user_xp_progress_ranking_idx ON user_xp_progress(total_xp DESC,user_id ASC);
+    CREATE TABLE IF NOT EXISTS user_achievement_peaks (
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      achievement_key VARCHAR(32) NOT NULL,
+      best_progress BIGINT NOT NULL DEFAULT 0 CHECK(best_progress >= 0),
+      PRIMARY KEY(user_id,achievement_key)
+    );
+    CREATE TABLE IF NOT EXISTS user_achievement_awards (
+      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      achievement_key VARCHAR(32) NOT NULL,
+      tier SMALLINT NOT NULL CHECK(tier BETWEEN 1 AND 4),
+      xp_awarded INTEGER NOT NULL CHECK(xp_awarded > 0),
+      unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY(user_id,achievement_key,tier)
+    );
     CREATE TABLE IF NOT EXISTS world_level_scores (
       world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -864,6 +886,92 @@ function worldPlayerCount(worldName) {
   return count;
 }
 
+
+// V49: Account-wide XP and four-tier achievements. No client-provided XP or
+// progress values are accepted. Existing world visits/likes/worlds/friendships
+// count toward achievements, and historical Wins scores seed finish counts once.
+const KWG_ACHIEVEMENTS = Object.freeze([
+  {key:'explorer',title:'Explorer',description:'Unique worlds visited',goals:[1,3,10,25],xp:[50,150,400,1000]},
+  {key:'finisher',title:'Finisher',description:'Levels completed',goals:[1,5,20,75],xp:[75,200,500,1250]},
+  {key:'builder',title:'Builder',description:'Worlds created',goals:[1,3,8,20],xp:[100,250,600,1500]},
+  {key:'supporter',title:'Supporter',description:'Worlds liked',goals:[1,5,15,40],xp:[40,125,350,900]},
+  {key:'social',title:'Social Star',description:'Friends made',goals:[1,3,10,25],xp:[60,175,450,1100]}
+]);
+const KWG_TIER_NAMES=['Bronze','Silver','Gold','Platinum'];
+function kwgXPForLevel(level){const n=Math.max(1,Math.floor(level));return 50*n*(n-1);}
+function kwgLevelFromXP(xp){return Math.max(1,Math.floor((1+Math.sqrt(1+Number(xp)/12.5))/2));}
+function kwgRankName(level){
+  return level>=13?'Legend':level>=10?'Elite':level>=7?'Veteran':level>=5?'Adventurer':level>=3?'Scout':'Rookie';
+}
+async function kwgRefreshProgress(userId){
+  const client=await pool.connect();
+  let gained=0,unlocked=[];
+  try{
+    await client.query('BEGIN');
+    // First use backfills the historical Wins leaderboard where available.
+    await client.query(`INSERT INTO user_xp_progress(user_id,finishes)
+      SELECT $1,COALESCE(SUM(best_score),0)::bigint FROM world_level_scores
+      WHERE user_id=$1 AND mode='wins' ON CONFLICT(user_id) DO NOTHING`,[userId]);
+    // Serialize award calculation per account, including concurrent sockets.
+    const current=await client.query('SELECT total_xp,finishes FROM user_xp_progress WHERE user_id=$1 FOR UPDATE',[userId]);
+    if(!current.rowCount)throw new Error('Progress account missing');
+    const countsResult=await client.query(`SELECT
+      (SELECT COUNT(*) FROM user_world_visits WHERE user_id=$1)::bigint AS explorer,
+      $2::bigint AS finisher,
+      (SELECT COUNT(*) FROM worlds WHERE owner_user_id=$1)::bigint AS builder,
+      (SELECT COUNT(*) FROM world_likes WHERE user_id=$1)::bigint AS supporter,
+      (SELECT COUNT(*) FROM friendships WHERE status='accepted' AND (requester_id=$1 OR addressee_id=$1))::bigint AS social`,
+      [userId,current.rows[0].finishes]);
+    const counts=countsResult.rows[0];
+    for(const a of KWG_ACHIEVEMENTS){
+      // Once earned, progress never falls when a world is deleted or a
+      // friendship/like changes. Rewards themselves are awarded once.
+      const peak=await client.query(`INSERT INTO user_achievement_peaks(user_id,achievement_key,best_progress)
+        VALUES($1,$2,$3) ON CONFLICT(user_id,achievement_key)
+        DO UPDATE SET best_progress=GREATEST(user_achievement_peaks.best_progress,EXCLUDED.best_progress)
+        RETURNING best_progress`,[userId,a.key,counts[a.key]||0]);
+      counts[a.key]=peak.rows[0].best_progress;
+      const progress=Number(counts[a.key]||0);
+      for(let i=0;i<4;i++){
+        if(progress<a.goals[i])break;
+        const inserted=await client.query(`INSERT INTO user_achievement_awards(user_id,achievement_key,tier,xp_awarded)
+          VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING xp_awarded`,[userId,a.key,i+1,a.xp[i]]);
+        if(inserted.rowCount){gained+=a.xp[i];unlocked.push({key:a.key,title:a.title,tier:KWG_TIER_NAMES[i],xp:a.xp[i]});}
+      }
+    }
+    if(gained)await client.query('UPDATE user_xp_progress SET total_xp=total_xp+$2,updated_at=NOW() WHERE user_id=$1',[userId,gained]);
+    const totalXP=Number(current.rows[0].total_xp)+gained;
+    const level=kwgLevelFromXP(totalXP);
+    const awards=await client.query('SELECT achievement_key,tier FROM user_achievement_awards WHERE user_id=$1',[userId]);
+    const earned=new Set(awards.rows.map(r=>r.achievement_key+':'+r.tier));
+    const achievements=KWG_ACHIEVEMENTS.map(a=>({
+      key:a.key,title:a.title,description:a.description,progress:Number(counts[a.key]||0),
+      tiers:a.goals.map((goal,i)=>({name:KWG_TIER_NAMES[i],goal,xp:a.xp[i],unlocked:earned.has(a.key+':'+(i+1))}))
+    }));
+    await client.query('COMMIT');
+    const state={totalXP,level,rank:kwgRankName(level),levelStartXP:kwgXPForLevel(level),nextLevelXP:kwgXPForLevel(level+1),achievements};
+    if(gained){
+      for(const s of io.sockets.sockets.values()){
+        if(s.user&&Number(s.user.id)===Number(userId))s.emit('kwg_progress_updated',{...state,gained,unlocked});
+      }
+    }
+    return state;
+  }catch(err){await client.query('ROLLBACK').catch(()=>{});throw err;}
+  finally{client.release();}
+}
+async function kwgCreditFinish(userId,mode){
+  // On first use, backfill historical Wins, including the current win if this
+  // was a Wins level. Otherwise count this completion as one new finish.
+  await pool.query(`INSERT INTO user_xp_progress(user_id,finishes)
+    SELECT $1,COALESCE(SUM(best_score),0)::bigint+CASE WHEN $2='wins' THEN 0 ELSE 1 END
+    FROM world_level_scores WHERE user_id=$1 AND mode='wins'
+    ON CONFLICT(user_id) DO UPDATE SET finishes=user_xp_progress.finishes+1,updated_at=NOW()`,[userId,mode]);
+  return kwgRefreshProgress(userId);
+}
+function kwgProgressLater(userId){
+  kwgRefreshProgress(userId).catch(err=>console.error('Achievement progress:',err));
+}
+
 io.on('connection', (socket) => {
   socket.on('register', async ({ username, password }, cb) => {
     try {
@@ -1068,6 +1176,7 @@ io.on('connection', (socket) => {
           [other.id,socket.user.id,`${socket.user.username} accepted your friend request.`]);
       }
       cb({success:true});
+      if(accept){kwgProgressLater(socket.user.id);kwgProgressLater(other.id);}
     } catch(e){console.error(e);cb({success:false,message:'Could not update friend request.'});}
   });
 
@@ -1094,6 +1203,12 @@ io.on('connection', (socket) => {
         [socket.user.id,other.id]);
       cb({success:true});
     } catch(e){console.error(e);cb({success:false,message:'Could not remove friend.'});}
+  });
+
+  socket.on('get_my_progress',async (_payload,cb)=>{
+    if(!requireAuth(socket,cb)||typeof cb!=='function')return;
+    try{cb({success:true,progression:await kwgRefreshProgress(socket.user.id)});}
+    catch(err){console.error('Progress lookup:',err);cb({success:false,message:'Could not load XP.'});}
   });
 
   socket.on('get_profile', async ({username} = {}, cb) => {
@@ -1224,6 +1339,17 @@ io.on('connection', (socket) => {
         canDelete:Number(m.authorId)===Number(socket.user.id)||Number(u.id)===Number(socket.user.id)
       }));
 
+      const progression=await kwgRefreshProgress(u.id);
+      const topXP=await pool.query(`SELECT p.user_id,u.username,p.total_xp
+        FROM user_xp_progress p JOIN users u ON u.id=p.user_id
+        ORDER BY p.total_xp DESC,p.user_id ASC LIMIT 10`);
+      const rankBlocked=await blockedPeers(socket.user.id,topXP.rows.map(r=>r.user_id));
+      const globalRank=await pool.query(`SELECT 1+COUNT(*)::int AS rank FROM user_xp_progress
+        WHERE total_xp>$1 OR (total_xp=$1 AND user_id<$2)`,[progression.totalXP,u.id]);
+      const rankings=topXP.rows.map((r,i)=>({position:i+1,
+        username:rankBlocked.has(Number(r.user_id))?'Hidden User':r.username,
+        hidden:rankBlocked.has(Number(r.user_id)),totalXP:Number(r.total_xp),
+        level:kwgLevelFromXP(Number(r.total_xp)),isViewed:Number(r.user_id)===Number(u.id)}));
       const onlineSocket = socketsByUser.get(u.id);
       const livePlayer = onlineSocket ? playersBySocket.get(onlineSocket.id) : null;
       cb({
@@ -1236,6 +1362,7 @@ io.on('connection', (socket) => {
           online:!!onlineSocket,
           currentWorld:(friendship.state==='friends'||friendship.state==='self') ? (livePlayer?.worldName||null) : null,
           isOwnProfile:u.id === socket.user.id,
+          progression,globalRank:Number(globalRank.rows[0]?.rank||1),rankings,
           friendship,
           blockedByMe,blockBetween,
           stats:{
@@ -1551,6 +1678,7 @@ io.on('connection', (socket) => {
       }
       const count=await pool.query('SELECT COUNT(*)::int AS n FROM world_likes WHERE world_id=$1',[world.id]);
       cb({success:true,liked,likes:Number(count.rows[0].n||0)});
+      kwgProgressLater(socket.user.id);
     } catch(e){ console.error(e); cb({success:false,message:'Could not update like.'}); }
   });
 
@@ -1735,7 +1863,9 @@ io.on('connection', (socket) => {
           await client.query('INSERT INTO worlds(name,owner_user_id,data) VALUES($1,$2,$3)',[key,socket.user.id,JSON.stringify(data)]);
           await client.query('COMMIT');
           socket.user.coins=Number(charged.rows[0].coins);
-          return cb({success:true,worldName:key,displayName:data.displayName,description:desc,coins:socket.user.coins});
+          cb({success:true,worldName:key,displayName:data.displayName,description:desc,coins:socket.user.coins});
+          kwgProgressLater(socket.user.id);
+          return;
         }catch(err){
           await client.query('ROLLBACK').catch(()=>{});
           if(err.code==='23505'){
@@ -1869,6 +1999,7 @@ io.on('connection', (socket) => {
         `,[socket.user.id,world.id]);
       } catch(visitError) {console.error('Could not record recent world visit:',visitError);}
       joinedSuccessfully=true;
+      kwgProgressLater(socket.user.id);
       try{await pool.query('UPDATE worlds SET plays=plays+1 WHERE id=$1',[world.id]);}
       catch(playError){console.error('Could not increment world plays:',playError);}
       kwgAnnounce(world.name,`${socket.user.username} joined the world.`,socket.user.id);
@@ -2137,6 +2268,8 @@ io.on('connection', (socket) => {
       const score=mode==='speed'?Math.max(250,elapsed):mode==='survival'?elapsed:1;
       p.lastFinishAt=now;
       const result=await kwgSaveLevelScore(world,socket.user.id,mode,score);
+      // Finish XP is independent of per-world leaderboard resets.
+      try{await kwgCreditFinish(socket.user.id,mode);}catch(err){console.error('Finish achievement:',err);}
       p.runStartedAt=now;
       const scoreText=mode==='wins'?`${result.score} wins`:mode==='speed'?`${(score/1000).toFixed(2)}s`:mode==='survival'?`${Math.floor(score/1000)}s survived`:'';
       kwgAnnounce(key,`${p.username} reached the finish${scoreText?' — '+scoreText:''}!${result.newRecord?' NEW HIGH SCORE!':''}`,socket.user.id);
