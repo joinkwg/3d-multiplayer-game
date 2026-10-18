@@ -457,8 +457,10 @@ async function migrate() {
       owner_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
       data JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      plays BIGINT NOT NULL DEFAULT 0
     );
+    ALTER TABLE worlds ADD COLUMN IF NOT EXISTS plays BIGINT NOT NULL DEFAULT 0;
     CREATE TABLE IF NOT EXISTS world_level_scores (
       world_id BIGINT NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
       user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -746,6 +748,7 @@ async function worldSummary(row) {
     onlineCount: io.sockets.adapter.rooms.get(room)?.size || 0,
     ownerUsername: row.owner_username || null,
     likes: Number(row.like_count || 0),
+    plays: Number(row.plays || 0),
     likedByMe: !!row.liked_by_me,
     createdAt: row.created_at
   };
@@ -1460,7 +1463,7 @@ io.on('connection', (socket) => {
         }))});
       }
       const rows=await pool.query(`
-        SELECT w.name,w.data,w.created_at,u.username AS owner_username,
+        SELECT w.name,w.data,w.created_at,w.plays,u.username AS owner_username,
                (SELECT COUNT(*)::int FROM world_likes wl WHERE wl.world_id=w.id) AS like_count,
                EXISTS(SELECT 1 FROM world_likes wl WHERE wl.world_id=w.id AND wl.user_id=$1) AS liked_by_me
         FROM worlds w LEFT JOIN users u ON u.id=w.owner_user_id
@@ -1532,7 +1535,7 @@ io.on('connection', (socket) => {
     await pool.query(`INSERT INTO world_level_scores(world_id,user_id,mode,best_score) VALUES($1,$2,$3,$4)
       ON CONFLICT(world_id,user_id,mode) DO UPDATE SET best_score=EXCLUDED.best_score,updated_at=NOW()`,[world.id,userId,mode,next]);
     io.to(`world:${world.name}`).emit('world_leaderboard_changed',{worldName:world.name});
-    return {score:mode==='wins'?next:score,newRecord};
+    return {score:mode==='wins'?next:score,newRecord,bestScore:next};
   }
   async function kwgAnnounce(worldName,message,actorId=null){
     const peers=worldPeers(worldName);
@@ -1827,8 +1830,10 @@ io.on('connection', (socket) => {
         `,[socket.user.id,world.id]);
       } catch(visitError) {console.error('Could not record recent world visit:',visitError);}
       joinedSuccessfully=true;
+      try{await pool.query('UPDATE worlds SET plays=plays+1 WHERE id=$1',[world.id]);}
+      catch(playError){console.error('Could not increment world plays:',playError);}
       kwgAnnounce(world.name,`${socket.user.username} joined the world.`,socket.user.id);
-      cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics,selfPetKey:petKey});
+      cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,runStartedAt:p.runStartedAt,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics,selfPetKey:petKey});
     } catch (e) {
       console.error(e);
       if (reservedWorldName && worldJoinReservations.has(reservedWorldName)) {
@@ -2023,6 +2028,24 @@ io.on('connection', (socket) => {
     }catch(err){console.warn('Enemy stomp validation:',err.message);}
   });
 
+  // V42: a player's own best is available even when outside the Top 50.
+  socket.on('get_world_player_score',async ({worldName}={},cb)=>{
+    if(!requireAuth(socket,cb)||typeof cb!=='function')return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key)return cb({success:false,message:'Join this world first.'});
+    try{
+      const world=await getWorldByName(key);
+      if(!world)return cb({success:false,message:'World not found.'});
+      const mode=kwgLevelType(world.data);
+      let bestScore=null;
+      if(mode!=='casual'){
+        const r=await pool.query('SELECT best_score FROM world_level_scores WHERE world_id=$1 AND user_id=$2 AND mode=$3',[world.id,socket.user.id,mode]);
+        if(r.rows.length)bestScore=Number(r.rows[0].best_score);
+      }
+      cb({success:true,mode,bestScore,runStartedAt:p.runStartedAt});
+    }catch(e){console.error('Player score:',e);cb({success:false,message:'Could not load personal score.'});}
+  });
+
   socket.on('get_world_leaderboard',async ({worldName}={},cb)=>{
     if(!requireAuth(socket,cb)||typeof cb!=='function')return;
     const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
@@ -2055,7 +2078,7 @@ io.on('connection', (socket) => {
       p.runStartedAt=now;
       const scoreText=mode==='wins'?`${result.score} wins`:mode==='speed'?`${(score/1000).toFixed(2)}s`:mode==='survival'?`${Math.floor(score/1000)}s survived`:'';
       kwgAnnounce(key,`${p.username} reached the finish${scoreText?' — '+scoreText:''}!${result.newRecord?' NEW HIGH SCORE!':''}`,socket.user.id);
-      cb({success:true,mode,score:result.score,newRecord:result.newRecord});
+      cb({success:true,mode,score:result.score,newRecord:result.newRecord,bestScore:result.bestScore});
     }catch(e){console.error('Finish:',e);cb({success:false,message:'Could not record finish.'});}
   });
   socket.on('player_died',async ({worldName}={})=>{
