@@ -5753,12 +5753,14 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
       resizeWorldViewport();
     }
 
-    // V36: independently moderated cube skybox faces. Never load pending URLs.
-    // Roblox-compatible SkyboxRt/Lf/Up/Dn/Ft/Bk inputs. Three.js CubeTexture
-    // internally flips X for background sampling, so its +X slot receives
-    // Roblox Left, its -X slot receives Roblox Right. Roblox Front is -Z.
-    // These swaps make a six-image Roblox skybox usable WITHOUT re-exporting.
-    const kwgSkyCubeOrder=['left','right','top','bottom','back','front'];
+    // V38: six-face skybox with corrected Three.js background mapping.
+    // CubeTexture slots are +X,-X,+Y,-Y,+Z,-Z. Three.js reverses X when
+    // sampling an environment/background cubemap, hence left/right are swapped.
+    // The world-facing front/back slots must NOT also be swapped: doing that
+    // breaks the panorama seam between Front/Left and Front/Right.
+    // SkyboxUp/Down are quarter-turned to match the side-face top/bottom edges.
+    // Approved images only; uploaded assets and moderation metadata are untouched.
+    const kwgSkyCubeOrder=['left','right','top','bottom','front','back'];
     let kwgSkyLoadToken=0,kwgSkyTexture=null;
     function kwgApplySkyImage(world){
       const token=++kwgSkyLoadToken;
@@ -5780,9 +5782,13 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         });
         return;
       }
+      // Match common 1024px skybox exports without the previous 512px downscale.
+      // Keeping every face at one resolution avoids cubemap incompleteness.
+      const kwgSkyFaceSize=1024;
       const makeFallback=()=>{
-        const canvas=document.createElement('canvas');canvas.width=canvas.height=512;
-        const ctx=canvas.getContext('2d');ctx.fillStyle=fallback;ctx.fillRect(0,0,512,512);
+        const canvas=document.createElement('canvas');canvas.width=canvas.height=kwgSkyFaceSize;
+        const ctx=canvas.getContext('2d');ctx.fillStyle=fallback;
+        ctx.fillRect(0,0,kwgSkyFaceSize,kwgSkyFaceSize);
         return canvas;
       };
       const images=urls.map(()=>makeFallback());
@@ -5800,16 +5806,31 @@ body.kwg-editing #block-transparency-input{width:90px!important;min-height:32px;
         const image=new Image();image.crossOrigin='anonymous';
         image.onload=()=>{
           if(token!==kwgSkyLoadToken)return;
-          // Preserve source orientation, without rotating or mirroring.
-          // Roblox cubemap assets are square; non-square art is letterboxed
-          // rather than stretched into distorted edges.
-          const face=document.createElement('canvas');face.width=face.height=512;
+          // The horizontal faces are already correctly oriented. The upper
+          // face needs a clockwise quarter-turn, and the lower face the
+          // opposite turn, to match the CubeTexture face coordinate system.
+          // This is done in memory; creators upload their original six files.
+          const side=kwgSkyCubeOrder[index];
+          const face=document.createElement('canvas');
+          face.width=face.height=kwgSkyFaceSize;
           const ctx=face.getContext('2d');
-          ctx.fillStyle=fallback;ctx.fillRect(0,0,512,512);
-          const scale=Math.min(512/image.width,512/image.height);
+          ctx.fillStyle=fallback;
+          ctx.fillRect(0,0,kwgSkyFaceSize,kwgSkyFaceSize);
+          const scale=Math.min(kwgSkyFaceSize/image.width,kwgSkyFaceSize/image.height);
           const w=image.width*scale,h=image.height*scale;
-          ctx.drawImage(image,(512-w)/2,(512-h)/2,w,h);
-          images[index]=face;texture.images=images;texture.needsUpdate=true;
+          ctx.save();
+          if(side==='top'){
+            ctx.translate(kwgSkyFaceSize,0);
+            ctx.rotate(Math.PI/2);
+          }else if(side==='bottom'){
+            ctx.translate(0,kwgSkyFaceSize);
+            ctx.rotate(-Math.PI/2);
+          }
+          ctx.drawImage(image,(kwgSkyFaceSize-w)/2,(kwgSkyFaceSize-h)/2,w,h);
+          ctx.restore();
+          images[index]=face;
+          texture.images=images;
+          texture.needsUpdate=true;
         };
         image.onerror=()=>{if(token===kwgSkyLoadToken)console.warn('Could not load approved skybox face',kwgSkyCubeOrder[index]);};
         image.src=url;
