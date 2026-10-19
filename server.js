@@ -2360,7 +2360,8 @@ io.on('connection', (socket) => {
         rotationY: 0, walkClock: 0, isMoving:false, isGrounded:true,
         appearance: app, cosmetics, petKey, worldName: world.name,
         level:kwgLevelFromXP(Number((await pool.query('SELECT total_xp FROM user_xp_progress WHERE user_id=$1',[socket.user.id])).rows[0]?.total_xp||0)),
-        runStartedAt:Date.now(),lastFinishAt:0,lastDeathAt:0
+        runStartedAt:Date.now(),lastFinishAt:0,lastDeathAt:0,
+        movementGraceUntil:Date.now()+6000,lastMovementAt:0
       };
       playersBySocket.set(socket.id, p);
       refreshPrimarySocketForUser(userId);
@@ -2651,6 +2652,7 @@ io.on('connection', (socket) => {
       // A minimum duration avoids zero-time entries on maps with Finish at spawn.
       const score=mode==='speed'?Math.max(250,elapsed):mode==='survival'?elapsed:1;
       p.lastFinishAt=now;
+    p.movementGraceUntil=now+4000;
       const result=await kwgSaveLevelScore(world,socket.user.id,mode,score);
       // Finish XP is independent of per-world leaderboard resets.
       try{await kwgCreditFinish(socket.user.id,mode);}catch(err){console.error('Finish achievement:',err);}
@@ -2665,6 +2667,7 @@ io.on('connection', (socket) => {
     const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName),now=Date.now();
     if(!p||p.worldName!==key||now-(p.lastDeathAt||0)<1800)return;
     p.lastDeathAt=now;
+    p.movementGraceUntil=now+6000;
     kwgAnnounce(key,`${p.username} died.`,socket.user.id);
     try{
       const world=await getWorldByName(key);
@@ -2679,6 +2682,7 @@ io.on('connection', (socket) => {
     if(!requireAuth(socket))return;
     const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
     if(!p||p.worldName!==key)return;
+    p.movementGraceUntil=Date.now()+6000;
     // A checkpoint death is part of the same Speed attempt. Survival is a
     // separate life-based attempt and still resets after a death.
     getWorldByName(key).then(world=>{
@@ -2691,17 +2695,44 @@ io.on('connection', (socket) => {
     const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
     if(!p||p.worldName!==key)return cb&&cb({success:false,message:'Join this world first.'});
     p.runStartedAt=Date.now();
+    p.movementGraceUntil=Date.now()+6000;
     cb&&cb({success:true,runStartedAt:p.runStartedAt});
   });
 
+  // V56: bounded movement packets and conservative server-side speed checks.
+  // This is anomaly rejection, not full server-authoritative physics: the
+  // client still simulates movement, and world collisions require further work.
   socket.on('player_movement', (data) => {
     if (!requireAuth(socket)) return;
     const p = playersBySocket.get(socket.id);
-    if (!p || !p.worldName) return;
+    if (!p || !p.worldName || !data || typeof data!=='object') return;
     for (const k of ['x','y','z','rotationY','walkClock']) if (typeof data[k] !== 'number' || !Number.isFinite(data[k])) return;
-    p.x = Math.max(-10000, Math.min(10000, data.x));
-    p.y = Math.max(-1000, Math.min(10000, data.y));
-    p.z = Math.max(-10000, Math.min(10000, data.z));
+    if (data.seq!==undefined){
+      if(!Number.isSafeInteger(data.seq)||data.seq<0||data.seq>Number.MAX_SAFE_INTEGER)return;
+      if(p.lastMovementSeq!==undefined&&data.seq<=p.lastMovementSeq)return;
+      p.lastMovementSeq=data.seq;
+    }
+    const now=Date.now();
+    const previousAt=p.lastMovementAt||0;
+    if(previousAt&&now-previousAt<24)return; // <= ~41 movement packets/second
+    const dt=previousAt?Math.min(0.5,Math.max(0,(now-previousAt)/1000)):0;
+    const nextX=Math.max(-10000,Math.min(10000,data.x));
+    const nextY=Math.max(-1000,Math.min(10000,data.y));
+    const nextZ=Math.max(-10000,Math.min(10000,data.z));
+    const delta=Math.hypot(nextX-p.x,nextY-p.y,nextZ-p.z);
+    const inGrace=now<(p.movementGraceUntil||0);
+    // Vehicle speed is deliberately generous to avoid false positives.
+    const maxSpeed=(p.equippedTool==='ufo'||p.equippedTool==='balloon')?135:90;
+    if(!inGrace&&previousAt&&delta>12+maxSpeed*dt){
+      p.movementViolations=(p.movementViolations||0)+1;
+      // Reject rather than rubber-banding honest players; the client will
+      // continue its own simulation and later valid packets can catch up.
+      return;
+    }
+    p.lastMovementAt=now;
+    p.x=nextX;
+    p.y=nextY;
+    p.z=nextZ;
     p.rotationY = data.rotationY;
     p.walkClock = data.walkClock;
     p.verticalVelocity = (typeof data.verticalVelocity === 'number' && Number.isFinite(data.verticalVelocity)) ? data.verticalVelocity : 0;
