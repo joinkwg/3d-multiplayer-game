@@ -5303,6 +5303,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         editBtn.title = canEditCurrentWorld ? 'Edit this world' : 'Only the world owner or an admin can edit this world';
 
         loadWorldData(res.worldData, res.players, res.selfId, res.selfSpawn);
+        kwgApplyEnemyJoinState(res.enemySync);
         // The initial roster can be stale if someone joins while this world loads.
         kwgRefreshWorldPlayers(true);
         const syncEpoch=kwgPlayerSyncEpoch;
@@ -13139,9 +13140,9 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           const slot=entry.slots[index];if(!slot.mesh||slot.deadUntil>now||slot.squishUntil>now)continue;
           const p=slot.mesh.position.clone().add(new THREE.Vector3(0,1,0));const dist=p.distanceTo(position);
           if(dist>=radius||!kwgRayWorldClear(position.clone().add(new THREE.Vector3(0,.15,0)),p,blocks))continue;
-          slot.weaponHealth=(slot.weaponHealth??kwgEnemyMaxWeaponHealth(entry.block.enemyCharacter))-Math.max(8,Math.round(damage*(1-dist/radius)));
-          slot.hitUntil=now+350;kwgShowEnemyHealth(slot,entry.block.enemyCharacter);
-          if(slot.weaponHealth<=0){slot.defeatMethod='weapon';kwgDefeatEnemy(id,index,true);}
+          // Explosion is local visually; HP is decided and broadcast by server.
+          kwgSendEnemyHit(id,index,'balloon',position,null);
+          slot.hitUntil=now+350;
         }
         if(socket?.connected)socket.emit('kwg_balloon_blast',{worldName:currentWorldName,impact:{x:position.x,y:position.y,z:position.z},origin:{x:origin.x,y:origin.y,z:origin.z}});
       }
@@ -13289,12 +13290,10 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
        }else if(best?.kind==='enemy'){
         // Can Be Stomped controls stomp immunity, not weapon damage.
         // Hops is immune to stomps but must remain defeatable by tools.
-        best.slot.weaponHealth=(best.slot.weaponHealth??100)-kwgToolDamage[kind];
+        kwgSendEnemyHit(best.id,best.index,kind,ray.ray.origin,ray.ray.direction);
         kwgBlockyHitSplash(tracerEnd,kind==='minigun'||kind==='laser'?7:13);
         kwgAudio.play('hit_enemy');
-        kwgShowEnemyHealth(best.slot,best.entry.block.enemyCharacter);
         best.slot.hitUntil=now+370;best.slot.hitSide=Math.random()<.5?-1:1;
-        if(best.slot.weaponHealth<=0){best.slot.defeatMethod='weapon';kwgDefeatEnemy(best.id,best.index,true);}
       }else if(best?.kind==='player'&&socket?.connected){
         kwgBlockyHitSplash(tracerEnd,kind==='minigun'||kind==='laser'?6:11);
         const start=ray.ray.origin,dir=ray.ray.direction;
@@ -14466,6 +14465,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       kwgClearBlockPreviews();
       for(const entry of kwgEnemySpawners.values()){kwgDisposeEnemyRespawnIndicator(entry);for(const slot of entry.slots)kwgDestroyEnemySlot(slot);}
       kwgEnemySpawners.clear();
+      kwgEnemyHostId=null;kwgEnemyRemotePositions.clear();kwgLastEnemyPacketAt=0;kwgLastEnemyReceiveAt=0;
       kwgLastEnemySync=0;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
       kwgEnemyRangeIndicator.visible=false;
@@ -14479,15 +14479,19 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       for(const b of kwgBananas)kwgPreviewDispose(b.mesh);kwgBananas.length=0;
       kwgClearWebs();
     }
-    function kwgDefeatEnemy(spawnerId,index,notify=true){
+    // V56.2: the server owns enemy HP, defeat times and respawns. Clients
+    // only predict hit effects; they do not declare a kill from local damage.
+    let kwgEnemyHostId=null,kwgLastEnemyPacketAt=0,kwgLastEnemyReceiveAt=0,kwgLastEnemyHostRequest=0;
+    const kwgEnemyRemotePositions=new Map();
+    function kwgDefeatEnemy(spawnerId,index,notify=true,remainingMs=null){
       const entry=kwgEnemySpawners.get(spawnerId);
-      if(!entry||!entry.slots[index]||entry.slots[index].deadUntil>kwgEnemyClock())return;
-      const slot=entry.slots[index];
-      const now=kwgEnemyClock();
-      // Keep the flattened model on screen before despawning; respawn delay starts after it.
-      slot.squishUntil=now+480;
+      if(!entry||!entry.slots[index])return;
+      const slot=entry.slots[index],now=kwgEnemyClock();
+      if(slot.deadUntil>now&&remainingMs===null)return;
+      slot.squishUntil=now+Math.min(480,Math.max(0,remainingMs??480));
       slot.respawnStartedAt=slot.squishUntil;
-      slot.deadUntil=slot.squishUntil+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
+      slot.deadUntil=remainingMs===null?slot.squishUntil+kwgEnemyPropsOf(entry.block).enemyRespawn*1000:now+Math.max(0,remainingMs);
+      slot.weaponHealth=0;slot.kwgAuthoritativeHp=0;
       slot.path=[];slot.pathAt=0;slot.jumpSpeed=0;slot.isJumping=false;slot.hopsImpactPending=false;
       if(slot.alienBeam)slot.alienBeam.visible=false;
       kwgClearBusRobots(slot);
@@ -14495,9 +14499,98 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if(notify&&socket?.connected)socket.emit('enemy_stomped',{worldName:currentWorldName,spawnerId,index,method:slot.defeatMethod||'stomp'});
       slot.defeatMethod=null;
     }
-    socket.on('enemy_stomped',({worldName,spawnerId,index}={})=>{
-      if(worldName===currentWorldName)kwgDefeatEnemy(spawnerId,index,false);
+    function kwgApplyEnemyHealth({worldName,spawnerId,index,hp,respawnAt,serverNow}={}){
+      if(worldName!==currentWorldName)return;
+      kwgSyncEnemySpawners();
+      const entry=kwgEnemySpawners.get(spawnerId),slot=entry?.slots?.[index];
+      if(!slot)return;
+      if(respawnAt&&respawnAt>serverNow){
+        const remaining=Math.max(0,respawnAt-serverNow);
+        kwgDefeatEnemy(spawnerId,index,false,remaining);
+      }else{
+        if(slot.deadUntil>kwgEnemyClock()){
+          slot.deadUntil=0;slot.squishUntil=0;
+          if(slot.mesh){kwgDestroyEnemySlot(slot);slot.spawnedOnce=false;}
+        }
+        slot.weaponHealth=hp;slot.kwgAuthoritativeHp=hp;
+        if(slot.mesh)kwgShowEnemyHealth(slot,entry.block.enemyCharacter);
+      }
+    }
+    function kwgApplyEnemyJoinState(state){
+      kwgEnemyHostId=state?.hostId||null;
+      kwgEnemyRemotePositions.clear();kwgLastEnemyPacketAt=0;kwgLastEnemyReceiveAt=kwgEnemyClock();
+      if(!state||state.worldName!==currentWorldName)return;
+      kwgSyncEnemySpawners();
+      for(const item of state.slots||[])kwgApplyEnemyHealth({...item,worldName:currentWorldName,serverNow:state.serverNow});
+      kwgReceiveEnemyPositions({worldName:currentWorldName,hostId:state.hostId,positions:state.positions||[]});
+    }
+    function kwgReceiveEnemyPositions({worldName,hostId,positions}={}){
+      if(worldName!==currentWorldName||!Array.isArray(positions)||hostId!==kwgEnemyHostId)return;
+      if(socket.id===hostId)return;
+      const now=kwgEnemyClock();kwgLastEnemyReceiveAt=now;
+      for(const p of positions){
+        if(typeof p?.spawnerId!=='string'||!Number.isInteger(p.index)||p.index<0||p.index>=12||
+          ![p.x,p.y,p.z,p.yaw].every(Number.isFinite))continue;
+        kwgEnemyRemotePositions.set(`${p.spawnerId}:${p.index}`,{...p,at:now});
+      }
+    }
+    socket.on('enemy_authority',({worldName,hostId}={})=>{
+      if(worldName!==currentWorldName)return;
+      kwgEnemyHostId=hostId||null;kwgEnemyRemotePositions.clear();kwgLastEnemyReceiveAt=kwgEnemyClock();
     });
+    socket.on('enemy_positions',kwgReceiveEnemyPositions);
+    socket.on('enemy_health',kwgApplyEnemyHealth);
+    socket.on('enemy_defeated',({worldName,spawnerId,index,respawnAt,serverNow}={})=>{
+      if(worldName!==currentWorldName)return;
+      kwgApplyEnemyHealth({worldName,spawnerId,index,hp:0,respawnAt,serverNow});
+      kwgAudio.play('devil_stomp');
+    });
+    function kwgSendEnemyPositions(){
+      if(!socket?.connected||!currentWorldName||kwgEnemyHostId!==socket.id||isEditMode)return;
+      const now=kwgEnemyClock();if(now-kwgLastEnemyPacketAt<110)return;
+      kwgLastEnemyPacketAt=now;
+      const positions=[];
+      for(const [spawnerId,entry] of kwgEnemySpawners){
+        for(let index=0;index<entry.slots.length&&positions.length<72;index++){
+          const slot=entry.slots[index];
+          if(!slot.mesh||slot.deadUntil>now||slot.squishUntil>now)continue;
+          const {x,y,z}=slot.mesh.position;
+          positions.push({spawnerId,index,x,y,z,yaw:slot.mesh.rotation.y});
+        }
+        if(positions.length>=72)break;
+      }
+      socket.emit('enemy_positions',{worldName:currentWorldName,positions});
+    }
+    function kwgApplyEnemyPositionCorrections(delta){
+      if(!kwgEnemyHostId||kwgEnemyHostId===socket.id)return;
+      const now=kwgEnemyClock(),alpha=Math.min(1,delta*11);
+      if(socket?.connected&&now-kwgLastEnemyReceiveAt>4200&&now-kwgLastEnemyHostRequest>2500){
+        kwgLastEnemyHostRequest=now;
+        socket.emit('enemy_host_request',{worldName:currentWorldName});
+      }
+      for(const [spawnerId,entry] of kwgEnemySpawners){
+        for(let index=0;index<entry.slots.length;index++){
+          const slot=entry.slots[index];if(!slot.mesh||slot.deadUntil>now)continue;
+          const p=kwgEnemyRemotePositions.get(`${spawnerId}:${index}`);
+          if(!p||now-p.at>1350)continue; // out-of-range host: keep local AI
+          const dist=Math.hypot(slot.mesh.position.x-p.x,slot.mesh.position.y-p.y,slot.mesh.position.z-p.z);
+          if(dist>12)slot.mesh.position.set(p.x,p.y,p.z);
+          else {slot.mesh.position.x+=(p.x-slot.mesh.position.x)*alpha;slot.mesh.position.y+=(p.y-slot.mesh.position.y)*alpha;slot.mesh.position.z+=(p.z-slot.mesh.position.z)*alpha;}
+          slot.mesh.rotation.y+=Math.atan2(Math.sin(p.yaw-slot.mesh.rotation.y),Math.cos(p.yaw-slot.mesh.rotation.y))*alpha;
+        }
+      }
+      for(const [key,p] of kwgEnemyRemotePositions)if(now-p.at>2500)kwgEnemyRemotePositions.delete(key);
+    }
+    function kwgSendEnemyHit(spawnerId,index,kind,shotOrigin=null,shotDirection=null){
+      if(!socket?.connected||!currentWorldName)return false;
+      const payload={worldName:currentWorldName,spawnerId,index,toolKind:kind};
+      if(shotOrigin&&shotDirection){
+        payload.origin={x:shotOrigin.x,y:shotOrigin.y,z:shotOrigin.z};
+        payload.direction={x:shotDirection.x,y:shotDirection.y,z:shotDirection.z};
+      }
+      socket.emit('enemy_hit',payload);
+      return true;
+    }
     let kwgLastEnemySync=0;
     function kwgSyncEnemySpawners(){
       if(!currentWorldName||!currentWorldData?.blocks)return;
@@ -14525,7 +14618,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
             const previousPosition=wasVisible?slot.mesh.position.clone():null;
             kwgDestroyEnemySlot(slot);
             slot.deadUntil=0;slot.squishUntil=0;slot.respawnStartedAt=0;slot.path=[];slot.pathAt=0;
-            slot.spawnedOnce=false;slot.nextShotAt=0;slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);
+            slot.spawnedOnce=false;slot.nextShotAt=0;slot.kwgAuthoritativeHp=null;slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);
             slot.attackUntil=0;slot.muzzleUntil=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;slot.nextHopAt=0;slot.chaseStartedAt=0;
             slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;slot.wasChasing=false;
             slot.alienMode='flight';slot.alienFootStuckAt=0;slot.alienReboardAt=0;slot.baboonMode='flight';slot.baboonBombAt=0;slot.baboonLostAt=0;slot.bananaAt=0;slot.alienChargeAt=0;slot.webChargeAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
@@ -15018,6 +15111,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           }
           if(slot.squishUntil){kwgDestroyEnemySlot(slot);slot.squishUntil=0;}
           if(now<slot.deadUntil)continue;
+          if(slot.kwgAuthoritativeHp===0&&slot.deadUntil)slot.kwgAuthoritativeHp=null;
           const origin=kwgEnemySlotSpawn(entry.block,index,entry.slots.length);
           const spawnDistance=Math.hypot(player.position.x-origin.x,player.position.z-origin.z);
           if(spawnDistance>props.noticeRange+22||visibleDevils>=72){
@@ -15032,7 +15126,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
             slot.spawnIndex=index;slot.walkTime=0;slot.path=[];slot.pathAt=0;
             slot.roamTarget=null;slot.roamUntil=0;slot.attackUntil=0;slot.noticeBubbleUntil=0;
             slot.chaseStartedAt=0;slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;
-            slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
+            slot.weaponHealth=slot.kwgAuthoritativeHp??kwgEnemyMaxWeaponHealth(props.enemyCharacter);slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
             slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.dropGoal=null;slot.dropCommitUntil=0;slot.nextShotAt=0;slot.nextHopAt=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;
             slot.alienMode='flight';slot.alienFootStuckAt=0;slot.alienReboardAt=0;slot.baboonMode='flight';slot.baboonBombAt=0;slot.baboonLostAt=0;slot.bananaAt=0;slot.alienChargeAt=0;slot.alienHiddenAt=0;slot.alienNextZap=0;slot.webChargeAt=0;slot.nextWebAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
             if(props.enemyCharacter==='alien'||props.enemyCharacter==='balloon_baboon')slot.mesh.position.y=origin.y+5.8;
@@ -16581,6 +16675,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           kwgEnemyPreviousFeet=localPlayerAvatar?.position.y??-Infinity;
           updatePlayerPhysics(delta);
           kwgUpdateEnemies(delta);
+          kwgApplyEnemyPositionCorrections(delta);
+          kwgSendEnemyPositions();
         }
         kwgUpdateShotTracers();
         kwgUpdateHitPixels(delta);
