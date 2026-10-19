@@ -763,6 +763,22 @@ async function migrate() {
     WHERE asset_kind = 'procedural'
       AND asset_url LIKE 'procedural:%'
   `);
+  // V53: repair pending invitations that were saved while V52's notification
+  // sender was broken. Re-running this migration cannot duplicate an invite.
+  await pool.query(`
+    INSERT INTO notifications(user_id,actor_user_id,type,message,related_group_id,created_at)
+    SELECT i.user_id,i.invited_by,'group_invite',
+           LEFT(u.username || ' invited you to ' || g.name || '.',240),
+           i.group_id,i.created_at
+    FROM kwg_group_invites i
+    JOIN kwg_groups g ON g.id=i.group_id
+    JOIN users u ON u.id=i.invited_by
+    WHERE NOT EXISTS (
+      SELECT 1 FROM notifications n
+      WHERE n.user_id=i.user_id AND n.type='group_invite'
+        AND n.related_group_id=i.group_id AND n.created_at>=i.created_at
+    )
+  `);
   await pool.query('DELETE FROM auth_sessions WHERE expires_at <= NOW()');
   await pool.query("DELETE FROM active_world_sessions WHERE last_seen < NOW() - INTERVAL '90 seconds'");
 
@@ -1021,17 +1037,26 @@ const KWG_GROUP_ICONS=new Set(['shield','star','bolt','flame','crown','moon','pa
 const KWG_GROUP_POLICIES=new Set(['open','invite','closed']);
 const KWG_GROUP_COLOR=/^#[0-9a-f]{6}$/i;
 function kwgGroupId(value){const n=Number(value);return Number.isSafeInteger(n)&&n>0?n:null;}
-// V52: persisted, server-generated notifications. A group ID enables a safe
+// V53: persisted, server-generated notifications. A group ID enables a safe
 // action on the Notifications page without trusting a URL or message text.
 async function kwgNotify(userId,actorId,type,message,groupId=null,db=pool){
   if(!userId||Number(userId)===Number(actorId))return;
   try{
-    if(actorId&&await blockedTogether(actorId,userId))return;
+    // This helper is defined outside io.on('connection'), so it cannot call
+    // blockedTogether(), which is scoped inside that handler. Check the same
+    // mutual block rule directly with the supplied database connection.
+    if(actorId){
+      const blocked=await db.query(`SELECT 1 FROM user_blocks
+        WHERE (blocker_id=$1 AND blocked_id=$2)
+           OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1`,[actorId,userId]);
+      if(blocked.rowCount)return false;
+    }
     const clean=String(message).slice(0,240);
     await db.query(`INSERT INTO notifications(user_id,actor_user_id,type,message,related_group_id)
       VALUES($1,$2,$3,$4,$5)`,[userId,actorId||null,type,clean,groupId]);
     if(db===pool)kwgPingNotifications([userId]);
-  }catch(e){console.error('Notification delivery:',e);}
+    return true;
+  }catch(e){console.error('Notification delivery:',e);return false;}
 }
 function kwgPingNotifications(ids){
   const wanted=new Set(ids.map(Number));
