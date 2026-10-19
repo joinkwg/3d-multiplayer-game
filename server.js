@@ -435,58 +435,15 @@ async function uploadStoreAsset({ category, fileName, mimeType, buffer }) {
   return `${SUPABASE_URL}/storage/v1/object/public/${bucketId}/${encodedPath}`;
 }
 
-// Shared, server-owned NPC simulation. Clients only render these snapshots.
-const kwgEnemyWorlds = new Map();
-function kwgEnemySpawn(block,index,count){
-  const angle=index*Math.PI*2/Math.max(1,count);
-  return {x:(Number(block.x)||0)+Math.cos(angle)*Math.min(2,count*.35),
-    y:(Number(block.y)||0)+(Number(block.scaleY)||1)/2+.15,
-    z:(Number(block.z)||0)+Math.sin(angle)*Math.min(2,count*.35)};
-}
-async function kwgEnsureEnemyWorld(name,data){
-  const blocks=data?.blocks||{};
-  let world=kwgEnemyWorlds.get(name);
-  if(!world){world={slots:new Map(),blocks:{},last:Date.now()};kwgEnemyWorlds.set(name,world);}
-  world.blocks=blocks;
-  const ids=new Set();
-  for(const [id,block] of Object.entries(blocks)){
-    if(block?.actionType!=='enemy_spawner')continue;
-    normalizeEnemySpawner(block);
-    for(let i=0;i<block.enemyCount;i++){
-      const key=`${id}:${i}`;ids.add(key);
-      if(!world.slots.has(key))world.slots.set(key,{spawnerId:id,index:i,...kwgEnemySpawn(block,i,block.enemyCount),deadUntil:0,angle:0});
-    }
-  }
-  for(const key of world.slots.keys())if(!ids.has(key))world.slots.delete(key);
-  return world;
-}
-setInterval(()=>{
-  const now=Date.now();
-  for(const [name,world] of kwgEnemyWorlds){
-    const players=[...playersBySocket.values()].filter(p=>p.worldName===name);
-    if(!players.length){kwgEnemyWorlds.delete(name);continue;}
-    const dt=Math.min(.15,Math.max(0,(now-world.last)/1000));world.last=now;
-    const snapshots=[];
-    for(const slot of world.slots.values()){
-      const block=world.blocks[slot.spawnerId];if(!block)continue;
-      const origin=kwgEnemySpawn(block,slot.index,block.enemyCount);
-      if(slot.deadUntil&&now>=slot.deadUntil){Object.assign(slot,origin);slot.deadUntil=0;}
-      if(!slot.deadUntil){
-        let target=null,best=Infinity;
-        for(const p of players){const d=Math.hypot(p.x-slot.x,p.z-slot.z);
-          if(d<best&&d<=block.noticeRange&&Math.abs(p.y-slot.y)<block.noticeRange){best=d;target=p;}}
-        if(target&&best>.85){
-          const step=Math.min(best-.85,block.enemySpeed*dt);
-          const nx=slot.x+(target.x-slot.x)/best*step,nz=slot.z+(target.z-slot.z)/best*step;
-          if(Math.hypot(nx-(Number(block.x)||0),nz-(Number(block.z)||0))<=block.noticeRange){slot.x=nx;slot.z=nz;}
-          slot.angle=Math.atan2(target.x-slot.x,target.z-slot.z);
-        }
-      }
-      snapshots.push({spawnerId:slot.spawnerId,index:slot.index,x:slot.x,y:slot.y,z:slot.z,rotationY:slot.angle,deadUntil:slot.deadUntil});
-    }
-    io.to(`world:${name}`).emit('enemy_state',{worldName:name,serverTime:now,enemies:snapshots});
-  }
-},100);
+// Server-owned NPCs: fixed-step simulation, solid collision, gravity and combat.
+const kwgEnemyWorlds=new Map();
+const kwgSolid=b=>b&&b.canCollide!==false&&!['enemy_spawner','tool_dispenser'].includes(b.actionType);
+function kwgBounds(b){const x=Number(b.x)||0,y=Number(b.y)||0,z=Number(b.z)||0;const sx=Math.max(.05,Math.abs(Number(b.scaleX)||1))/2,sy=Math.max(.05,Math.abs(Number(b.scaleY)||1))/2,sz=Math.max(.05,Math.abs(Number(b.scaleZ)||1))/2;return {minX:x-sx,maxX:x+sx,minY:y-sy,maxY:y+sy,minZ:z-sz,maxZ:z+sz};}
+function kwgEnemySpawn(block,index,count){const angle=index*Math.PI*2/Math.max(1,count);return {x:(Number(block.x)||0)+Math.cos(angle)*Math.min(2,count*.35),y:(Number(block.y)||0)+(Number(block.scaleY)||1)/2+.15,z:(Number(block.z)||0)+Math.sin(angle)*Math.min(2,count*.35)};}
+function kwgEnemyGround(x,y,z,solids){let ground=-Infinity;for(const b of solids){const a=kwgBounds(b);if(x<a.minX-.3||x>a.maxX+.3||z<a.minZ-.3||z>a.maxZ+.3)continue;if(a.maxY<=y+.55&&a.maxY>ground)ground=a.maxY;}return ground;}
+function kwgEnemyClear(x,y,z,solids){for(const b of solids){const a=kwgBounds(b);if(y+1.75<=a.minY+.03||y>=a.maxY-.03)continue;if(x+.37>a.minX&&x-.37<a.maxX&&z+.37>a.minZ&&z-.37<a.maxZ)return false;}return true;}
+async function kwgEnsureEnemyWorld(name,data){const blocks=data?.blocks||{};let world=kwgEnemyWorlds.get(name);if(!world){world={slots:new Map(),blocks:{},last:Date.now()};kwgEnemyWorlds.set(name,world);}world.blocks=blocks;const ids=new Set();for(const [id,block] of Object.entries(blocks)){if(block?.actionType!=='enemy_spawner')continue;normalizeEnemySpawner(block);for(let i=0;i<block.enemyCount;i++){const key=`${id}:${i}`;ids.add(key);if(!world.slots.has(key))world.slots.set(key,{spawnerId:id,index:i,...kwgEnemySpawn(block,i,block.enemyCount),deadUntil:0,angle:0,vy:0,nextAttack:0,attackUntil:0});}}for(const key of world.slots.keys())if(!ids.has(key))world.slots.delete(key);return world;}
+setInterval(()=>{const now=Date.now();for(const [name,world] of kwgEnemyWorlds){const players=[...playersBySocket.values()].filter(p=>p.worldName===name&&p.health>0);if(!players.length){kwgEnemyWorlds.delete(name);continue;}const dt=Math.min(.06,Math.max(.001,(now-world.last)/1000));world.last=now;const solids=Object.values(world.blocks).filter(kwgSolid);const snapshots=[];for(const slot of world.slots.values()){const block=world.blocks[slot.spawnerId];if(!block)continue;const origin=kwgEnemySpawn(block,slot.index,block.enemyCount);if(slot.deadUntil&&now>=slot.deadUntil){Object.assign(slot,origin,{deadUntil:0,vy:0});}let moving=false;if(!slot.deadUntil){let target=null,best=Infinity;for(const p of players){const d=Math.hypot(p.x-slot.x,p.z-slot.z);if(d<best&&d<=block.noticeRange&&Math.abs(p.y-slot.y)<block.noticeRange){best=d;target=p;}}if(target){slot.angle=Math.atan2(target.x-slot.x,target.z-slot.z);if(best>.85){const step=Math.min(best-.85,block.enemySpeed*dt),dx=(target.x-slot.x)/best*step,dz=(target.z-slot.z)/best*step;const nx=slot.x+dx,nz=slot.z+dz;const maxDist=block.noticeRange;if(Math.hypot(nx-(Number(block.x)||0),nz-(Number(block.z)||0))<=maxDist){if(kwgEnemyClear(nx,slot.y,slot.z,solids)){slot.x=nx;moving=true;}if(kwgEnemyClear(slot.x,slot.y,nz,solids)){slot.z=nz;moving=true;}}}if(best<1.45&&Math.abs(target.y-slot.y)<2.3&&now>=slot.nextAttack){slot.nextAttack=now+1750;slot.attackUntil=now+480;io.to(target.id).emit('enemy_attack',{worldName:name,spawnerId:slot.spawnerId,index:slot.index,damage:block.enemyDamage,x:slot.x,y:slot.y,z:slot.z});}}const ground=kwgEnemyGround(slot.x,slot.y,slot.z,solids);if(Number.isFinite(ground)&&slot.y<=ground+.18&&slot.vy<=0){slot.y=ground;slot.vy=0;}else{slot.vy=Math.max(-24,(slot.vy||0)-24*dt);const ny=slot.y+slot.vy*dt;if(kwgEnemyClear(slot.x,ny,slot.z,solids))slot.y=ny;else{slot.vy=0;if(Number.isFinite(ground))slot.y=ground;}}if(slot.y<origin.y-35){Object.assign(slot,origin,{vy:0});}}snapshots.push({spawnerId:slot.spawnerId,index:slot.index,x:slot.x,y:slot.y,z:slot.z,rotationY:slot.angle,deadUntil:slot.deadUntil,moving,attackUntil:slot.attackUntil});}io.to(`world:${name}`).emit('enemy_state',{worldName:name,serverTime:now,enemies:snapshots});}},50);
 const socketsByUser = new Map();
 const playersBySocket = new Map();
 
