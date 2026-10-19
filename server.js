@@ -435,6 +435,58 @@ async function uploadStoreAsset({ category, fileName, mimeType, buffer }) {
   return `${SUPABASE_URL}/storage/v1/object/public/${bucketId}/${encodedPath}`;
 }
 
+// Shared, server-owned NPC simulation. Clients only render these snapshots.
+const kwgEnemyWorlds = new Map();
+function kwgEnemySpawn(block,index,count){
+  const angle=index*Math.PI*2/Math.max(1,count);
+  return {x:(Number(block.x)||0)+Math.cos(angle)*Math.min(2,count*.35),
+    y:(Number(block.y)||0)+(Number(block.scaleY)||1)/2+.15,
+    z:(Number(block.z)||0)+Math.sin(angle)*Math.min(2,count*.35)};
+}
+async function kwgEnsureEnemyWorld(name,data){
+  const blocks=data?.blocks||{};
+  let world=kwgEnemyWorlds.get(name);
+  if(!world){world={slots:new Map(),blocks:{},last:Date.now()};kwgEnemyWorlds.set(name,world);}
+  world.blocks=blocks;
+  const ids=new Set();
+  for(const [id,block] of Object.entries(blocks)){
+    if(block?.actionType!=='enemy_spawner')continue;
+    normalizeEnemySpawner(block);
+    for(let i=0;i<block.enemyCount;i++){
+      const key=`${id}:${i}`;ids.add(key);
+      if(!world.slots.has(key))world.slots.set(key,{spawnerId:id,index:i,...kwgEnemySpawn(block,i,block.enemyCount),deadUntil:0,angle:0});
+    }
+  }
+  for(const key of world.slots.keys())if(!ids.has(key))world.slots.delete(key);
+  return world;
+}
+setInterval(()=>{
+  const now=Date.now();
+  for(const [name,world] of kwgEnemyWorlds){
+    const players=[...playersBySocket.values()].filter(p=>p.worldName===name);
+    if(!players.length){kwgEnemyWorlds.delete(name);continue;}
+    const dt=Math.min(.15,Math.max(0,(now-world.last)/1000));world.last=now;
+    const snapshots=[];
+    for(const slot of world.slots.values()){
+      const block=world.blocks[slot.spawnerId];if(!block)continue;
+      const origin=kwgEnemySpawn(block,slot.index,block.enemyCount);
+      if(slot.deadUntil&&now>=slot.deadUntil){Object.assign(slot,origin);slot.deadUntil=0;}
+      if(!slot.deadUntil){
+        let target=null,best=Infinity;
+        for(const p of players){const d=Math.hypot(p.x-slot.x,p.z-slot.z);
+          if(d<best&&d<=block.noticeRange&&Math.abs(p.y-slot.y)<block.noticeRange){best=d;target=p;}}
+        if(target&&best>.85){
+          const step=Math.min(best-.85,block.enemySpeed*dt);
+          const nx=slot.x+(target.x-slot.x)/best*step,nz=slot.z+(target.z-slot.z)/best*step;
+          if(Math.hypot(nx-(Number(block.x)||0),nz-(Number(block.z)||0))<=block.noticeRange){slot.x=nx;slot.z=nz;}
+          slot.angle=Math.atan2(target.x-slot.x,target.z-slot.z);
+        }
+      }
+      snapshots.push({spawnerId:slot.spawnerId,index:slot.index,x:slot.x,y:slot.y,z:slot.z,rotationY:slot.angle,deadUntil:slot.deadUntil});
+    }
+    io.to(`world:${name}`).emit('enemy_state',{worldName:name,serverTime:now,enemies:snapshots});
+  }
+},100);
 const socketsByUser = new Map();
 const playersBySocket = new Map();
 
@@ -2364,6 +2416,7 @@ io.on('connection', (socket) => {
         movementGraceUntil:Date.now()+6000,lastMovementAt:0
       };
       playersBySocket.set(socket.id, p);
+      await kwgEnsureEnemyWorld(world.name,world.data);
       refreshPrimarySocketForUser(userId);
       worldJoinReservations.set(world.name, Math.max(0, (worldJoinReservations.get(world.name) || 1) - 1));
       if (worldJoinReservations.get(world.name) === 0) worldJoinReservations.delete(world.name);
@@ -2602,7 +2655,12 @@ io.on('connection', (socket) => {
       const dx=p.x-(Number(block.x)||0),dz=p.z-(Number(block.z)||0);
       const maxRange=block.noticeRange+5;
       if(Math.hypot(dx,dz)>maxRange||Math.abs(p.y-(Number(block.y)||0))>maxRange+5)return;
-      socket.to(`world:${key}`).emit('enemy_stomped',{worldName:key,spawnerId,index});
+      const state=await kwgEnsureEnemyWorld(key,world.data);
+      const enemy=state.slots.get(`${spawnerId}:${index}`);
+      if(!enemy||enemy.deadUntil>now)return;
+      if(Math.hypot(p.x-enemy.x,p.z-enemy.z)>6||Math.abs(p.y-enemy.y)>6)return;
+      enemy.deadUntil=now+480+block.enemyRespawn*1000;
+      io.to(`world:${key}`).emit('enemy_stomped',{worldName:key,spawnerId,index});
     }catch(err){console.warn('Enemy stomp validation:',err.message);}
   });
 
