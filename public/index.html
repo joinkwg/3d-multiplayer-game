@@ -14504,22 +14504,30 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     socket.on('enemy_state',packet=>{
       if(packet?.worldName!==currentWorldName||!Array.isArray(packet.enemies))return;
       kwgEnemyServerTime=performance.now();
-      kwgAuthoritativeEnemies.clear();
-      for(const e of packet.enemies)kwgAuthoritativeEnemies.set(`${e.spawnerId}:${e.index}`,e);
+      const seen=new Set();
+      for(const e of packet.enemies){const key=`${e.spawnerId}:${e.index}`;seen.add(key);const old=kwgAuthoritativeEnemies.get(key);kwgAuthoritativeEnemies.set(key,{...e,renderX:old?.renderX??e.x,renderY:old?.renderY??e.y,renderZ:old?.renderZ??e.z});}
+      for(const key of kwgAuthoritativeEnemies.keys())if(!seen.has(key))kwgAuthoritativeEnemies.delete(key);
     });
-    function kwgApplyServerEnemies(){
+    socket.on('enemy_attack',e=>{
+      if(e?.worldName!==currentWorldName||!localPlayerAvatar)return;
+      const p=localPlayerAvatar.position;
+      if(Math.hypot(p.x-e.x,p.z-e.z)>2.6||Math.abs(p.y-e.y)>3)return;
+      if(kwgEnemyHitPlayer(e.damage,new THREE.Vector3(e.x,e.y,e.z)))kwgAudio.play('devil_attack');
+    });
+    function kwgApplyServerEnemies(delta=.016){
       if(!kwgEnemyServerTime||performance.now()-kwgEnemyServerTime>2500)return;
+      const blend=Math.min(1,Math.max(.01,delta)*15),now=kwgEnemyClock();
       for(const [id,entry] of kwgEnemySpawners)for(let i=0;i<entry.slots.length;i++){
-        const slot=entry.slots[i],state=kwgAuthoritativeEnemies.get(`${id}:${i}`);
-        if(!state)continue;
-        if(state.deadUntil>Date.now()){
-          if(slot.mesh)slot.mesh.visible=false;
-          continue;
-        }
+        const slot=entry.slots[i],state=kwgAuthoritativeEnemies.get(`${id}:${i}`);if(!state)continue;
+        if(state.deadUntil>Date.now()){if(slot.mesh)slot.mesh.visible=false;continue;}
         if(!slot.mesh){slot.mesh=kwgCreateEnemyModel(kwgEnemyPropsOf(entry.block).enemyCharacter);scene.add(slot.mesh);kwgShowEnemyHealth(slot,kwgEnemyPropsOf(entry.block).enemyCharacter);}
         slot.mesh.visible=true;
-        slot.mesh.position.set(state.x,state.y,state.z);
+        state.renderX+=(state.x-state.renderX)*blend;state.renderY+=(state.y-state.renderY)*blend;state.renderZ+=(state.z-state.renderZ)*blend;
+        slot.mesh.position.set(state.renderX,state.renderY,state.renderZ);
         slot.mesh.rotation.y=state.rotationY||0;
+        slot.aiState=state.moving?'chase':'idle';slot.attackUntil=state.attackUntil||0;
+        slot.walkTime=(slot.walkTime||0)+(state.moving?delta*kwgEnemyPropsOf(entry.block).enemySpeed*5:0);
+        kwgEnemyAnimate(slot,now,!!state.moving,kwgEnemyPropsOf(entry.block).enemySpeed,i);
       }
     }
     let kwgLastEnemySync=0;
@@ -15012,7 +15020,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     function kwgUpdateEnemies(delta){
       if(!currentWorldName||!localPlayerAvatar||kwgFreeCamera.active)return;
       kwgSyncEnemySpawners();
-      if(kwgEnemyServerTime&&performance.now()-kwgEnemyServerTime<2500){kwgApplyServerEnemies();return;}
+      if(kwgEnemyServerTime&&performance.now()-kwgEnemyServerTime<2500){kwgApplyServerEnemies(delta);return;}
       kwgSpiderFrameDt=Math.max(.016,Math.min(.09,delta));
       const player=localPlayerAvatar,now=kwgEnemyClock();
       const playerBefore=kwgEnemyPreviousPlayerPos||{x:player.position.x,y:player.position.y,z:player.position.z};
