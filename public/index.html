@@ -14467,7 +14467,6 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       for(const entry of kwgEnemySpawners.values()){kwgDisposeEnemyRespawnIndicator(entry);for(const slot of entry.slots)kwgDestroyEnemySlot(slot);}
       kwgEnemySpawners.clear();
       kwgLastEnemySync=0;
-      kwgAuthoritativeEnemies.clear();kwgEnemyServerTime=0;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
       kwgEnemyRangeIndicator.visible=false;
       kwgEnemyPreviousPlayerPos=null;
@@ -14485,11 +14484,10 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if(!entry||!entry.slots[index]||entry.slots[index].deadUntil>kwgEnemyClock())return;
       const slot=entry.slots[index];
       const now=kwgEnemyClock();
-      // Immediately hide a locally defeated enemy; the server confirms the shared death state.
-      slot.squishUntil=0;
-      slot.respawnStartedAt=now;
-      slot.deadUntil=now+480+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
-      if(slot.mesh)kwgDestroyEnemySlot(slot);
+      // Keep the flattened model on screen before despawning; respawn delay starts after it.
+      slot.squishUntil=now+480;
+      slot.respawnStartedAt=slot.squishUntil;
+      slot.deadUntil=slot.squishUntil+kwgEnemyPropsOf(entry.block).enemyRespawn*1000;
       slot.path=[];slot.pathAt=0;slot.jumpSpeed=0;slot.isJumping=false;slot.hopsImpactPending=false;
       if(slot.alienBeam)slot.alienBeam.visible=false;
       kwgClearBusRobots(slot);
@@ -14498,64 +14496,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       slot.defeatMethod=null;
     }
     socket.on('enemy_stomped',({worldName,spawnerId,index}={})=>{
-      if(worldName===currentWorldName){const entry=kwgEnemySpawners.get(spawnerId),slot=entry?.slots?.[index];if(slot){slot.squishUntil=0;slot.deadUntil=Date.now()+Math.max(500,kwgEnemyPropsOf(entry.block).enemyRespawn*1000);slot.respawnStartedAt=Date.now();if(slot.mesh)kwgDestroyEnemySlot(slot);}}
+      if(worldName===currentWorldName)kwgDefeatEnemy(spawnerId,index,false);
     });
-    const kwgAuthoritativeEnemies=new Map();
-    let kwgEnemyServerTime=0;
-    socket.on('enemy_state',packet=>{
-      if(packet?.worldName!==currentWorldName||!Array.isArray(packet.enemies))return;
-      kwgEnemyServerTime=performance.now();
-      const seen=new Set();
-      for(const e of packet.enemies){const key=`${e.spawnerId}:${e.index}`;seen.add(key);const old=kwgAuthoritativeEnemies.get(key);kwgAuthoritativeEnemies.set(key,{...e,renderX:old?.renderX??e.x,renderY:old?.renderY??e.y,renderZ:old?.renderZ??e.z});}
-      for(const key of kwgAuthoritativeEnemies.keys())if(!seen.has(key))kwgAuthoritativeEnemies.delete(key);
-    });
-    socket.on('enemy_attack',e=>{
-      if(e?.worldName!==currentWorldName||!localPlayerAvatar)return;
-      const p=localPlayerAvatar.position;
-      if(!e.ranged&&(Math.hypot(p.x-e.x,p.z-e.z)>2.6||Math.abs(p.y-e.y)>3))return;
-      if(kwgEnemyHitPlayer(e.damage,new THREE.Vector3(e.x,e.y,e.z)))kwgAudio.play('devil_attack');
-    });
-    // Visual-only effects. The server decides when each special ability fires.
-    socket.on('enemy_special',e=>{
-      if(e?.worldName!==currentWorldName||!e.from||!e.to)return;
-      const from=new THREE.Vector3(e.from.x,e.from.y,e.from.z);
-      const to=new THREE.Vector3(e.to.x,e.to.y,e.to.z);
-      const entry=kwgEnemySpawners.get(e.spawnerId),slot=entry?.slots?.[e.index];
-      if(slot)slot.attackUntil=kwgEnemyClock()+550;
-      if(e.kind==='sniper'){
-        kwgShowShotTracer(from,to,0xffae5c);kwgAudio.play('sniper_shot');
-      }else if(e.kind==='spider'){
-        const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.25,0),new THREE.MeshBasicMaterial({color:0xe6f8ff,transparent:true,opacity:.9}));
-        mesh.position.copy(from);scene.add(mesh);
-        kwgWebProjectiles.push({mesh,from,to,start:kwgEnemyClock(),duration:350,serverVisual:true});
-        kwgAudio.play('spider_spit');
-      }else if(e.kind==='hops'){
-        const mesh=kwgCarrotVisual();mesh.position.copy(from);scene.add(mesh);
-        kwgCarrotShots.push({mesh,from,to,start:kwgEnemyClock(),duration:550,damage:0,serverVisual:true});
-        kwgAudio.play('carrot_throw');
-      }else if(e.kind==='alien'){
-        kwgShowShotTracer(from,to,0x78ffcf);
-      }else if(e.kind==='bot_bus'||e.kind==='balloon_baboon'){
-        kwgShowShotTracer(from,to,0xff8b53);
-      }
-    });
-    function kwgApplyServerEnemies(delta=.016){
-      if(!kwgEnemyServerTime||performance.now()-kwgEnemyServerTime>2500)return;
-      const blend=Math.min(1,Math.max(.01,delta)*15),now=kwgEnemyClock();
-      for(const [id,entry] of kwgEnemySpawners)for(let i=0;i<entry.slots.length;i++){
-        const slot=entry.slots[i],state=kwgAuthoritativeEnemies.get(`${id}:${i}`);if(!state)continue;
-        if(state.deadUntil>Date.now()){slot.deadUntil=state.deadUntil;slot.squishUntil=0;slot.respawnStartedAt=state.deadUntil-Math.max(0,kwgEnemyPropsOf(entry.block).enemyRespawn*1000);if(slot.mesh)kwgDestroyEnemySlot(slot);continue;}
-        if(slot.deadUntil){slot.deadUntil=0;slot.squishUntil=0;slot.respawnStartedAt=0;if(slot.mesh)kwgDestroyEnemySlot(slot);}
-        if(!slot.mesh){slot.mesh=kwgCreateEnemyModel(kwgEnemyPropsOf(entry.block).enemyCharacter);scene.add(slot.mesh);kwgShowEnemyHealth(slot,kwgEnemyPropsOf(entry.block).enemyCharacter);}
-        slot.mesh.visible=true;slot.mesh.scale.set(1,1,1);
-        state.renderX+=(state.x-state.renderX)*blend;state.renderY+=(state.y-state.renderY)*blend;state.renderZ+=(state.z-state.renderZ)*blend;
-        slot.mesh.position.set(state.renderX,state.renderY,state.renderZ);
-        slot.mesh.rotation.y=state.rotationY||0;
-        slot.aiState=state.moving?'chase':'idle';slot.attackUntil=state.attackUntil?now+Math.max(0,state.attackUntil-Date.now()):0;
-        slot.walkTime=(slot.walkTime||0)+(state.moving?delta*kwgEnemyPropsOf(entry.block).enemySpeed*1.65:0);
-        kwgEnemyAnimate(slot,now,!!state.moving,kwgEnemyPropsOf(entry.block).enemySpeed,i);
-      }
-    }
     let kwgLastEnemySync=0;
     function kwgSyncEnemySpawners(){
       if(!currentWorldName||!currentWorldData?.blocks)return;
@@ -15046,7 +14988,6 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     function kwgUpdateEnemies(delta){
       if(!currentWorldName||!localPlayerAvatar||kwgFreeCamera.active)return;
       kwgSyncEnemySpawners();
-      if(kwgEnemyServerTime&&performance.now()-kwgEnemyServerTime<2500){kwgApplyServerEnemies(delta);return;}
       kwgSpiderFrameDt=Math.max(.016,Math.min(.09,delta));
       const player=localPlayerAvatar,now=kwgEnemyClock();
       const playerBefore=kwgEnemyPreviousPlayerPos||{x:player.position.x,y:player.position.y,z:player.position.z};
@@ -16640,7 +16581,6 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           kwgEnemyPreviousFeet=localPlayerAvatar?.position.y??-Infinity;
           updatePlayerPhysics(delta);
           kwgUpdateEnemies(delta);
-          kwgApplyServerEnemies();
         }
         kwgUpdateShotTracers();
         kwgUpdateHitPixels(delta);
