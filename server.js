@@ -2640,7 +2640,7 @@ io.on('connection', (socket) => {
     for(const e of enemies){
       if(!e||typeof e.id!=='string'||e.id.length>160||!Number.isInteger(e.index)||e.index<0||e.index>=12)continue;
       if(!['x','y','z','yaw'].every(k=>typeof e[k]==='number'&&Number.isFinite(e[k])&&Math.abs(e[k])<100000))continue;
-      validated.push({id:e.id,index:e.index,x:e.x,y:e.y,z:e.z,yaw:e.yaw,ai:typeof e.ai==='string'?e.ai.slice(0,16):'roam'});
+      validated.push({id:e.id,index:e.index,x:e.x,y:e.y,z:e.z,yaw:e.yaw,ai:typeof e.ai==='string'?e.ai.slice(0,16):'roam',walkTime:Number.isFinite(e.walkTime)?Math.max(-1e6,Math.min(1e6,e.walkTime)):0,walking:e.walking===true,jumping:e.jumping===true,attackMs:Number.isFinite(e.attackMs)?Math.max(0,Math.min(900,e.attackMs)):0});
     }
     kwgLastEnemyMotionAt=now;
     socket.to(`world:${key}`).emit('kwg_enemy_motion',{worldName:key,enemies:validated,at:now});
