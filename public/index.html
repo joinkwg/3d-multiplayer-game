@@ -14543,6 +14543,13 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         else m.position.lerp(new THREE.Vector3(target.x,target.y,target.z),blend);
         m.rotation.y+=Math.atan2(Math.sin(target.yaw-m.rotation.y),Math.cos(target.yaw-m.rotation.y))*blend;
         slot.aiState=target.ai;
+        // Followers animate locally from the host's phase and attack state;
+        // they never make independent AI or damage decisions.
+        slot.walkTime=Number.isFinite(target.walkTime)?target.walkTime:(slot.walkTime||0);
+        slot.attackUntil=target.attackMs?kwgEnemyClock()+target.attackMs:0;
+        slot.isJumping=!!target.jumping;
+        const moving=!!target.walking;
+        kwgEnemyAnimate(slot,kwgEnemyClock(),moving,kwgEnemyPropsOf(entry.block).enemySpeed,index);
       }
     }
     function kwgEnemyMotionPublish(now){
@@ -14552,7 +14559,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       for(const [id,entry] of kwgEnemySpawners)for(let index=0;index<entry.slots.length;index++){
         const slot=entry.slots[index];if(!slot.mesh||slot.deadUntil>kwgEnemyClock())continue;
         const m=slot.mesh;
-        enemies.push({id,index,x:m.position.x,y:m.position.y,z:m.position.z,yaw:m.rotation.y,ai:slot.aiState||'roam'});
+        enemies.push({id,index,x:m.position.x,y:m.position.y,z:m.position.z,yaw:m.rotation.y,ai:slot.aiState||'roam',walkTime:slot.walkTime||0,walking:!!slot.kwgWasWalking,jumping:!!slot.isJumping,attackMs:Math.max(0,Math.min(900,(slot.attackUntil||0)-kwgEnemyClock()))});
         if(enemies.length>=100)break;
       }
       socket.emit('kwg_enemy_motion',{worldName:currentWorldName,enemies});
@@ -15091,7 +15098,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       kwgEnemyMotionRole(performance.now());
       if(!kwgEnemyMotionHost){kwgEnemyMotionFollower(delta);return;}
       kwgSpiderFrameDt=Math.max(.016,Math.min(.09,delta));
-      const player=localPlayerAvatar,now=kwgEnemyClock();
+      let player=localPlayerAvatar;const now=kwgEnemyClock();
       const playerBefore=kwgEnemyPreviousPlayerPos||{x:player.position.x,y:player.position.y,z:player.position.z};
       const sampleSeconds=Math.max(.012,Math.min(.09,delta));
       const instantVX=Math.max(-24,Math.min(24,(player.position.x-playerBefore.x)/sampleSeconds));
@@ -15103,7 +15110,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       const blocks=Object.values(currentWorldData.blocks||{});
       const dt=Math.min(delta,.05);
       let visibleDevils=0,pathBudget=1;
-      const playerAlive=!kwgDeadUntil&&kwgHealth>0;
+      let playerAlive=!kwgDeadUntil&&kwgHealth>0;
       for(const [id,entry] of kwgEnemySpawners){
         const props=kwgEnemyPropsOf(entry.block);
         for(let index=0;index<entry.slots.length;index++){
@@ -15144,6 +15151,17 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
             kwgShowEnemyHealth(slot,props.enemyCharacter);
           }
           const npc=slot.mesh;
+          // Choose the closest visible avatar, not automatically the host.
+          // Enemy AI can now chase remote players without independent simulation.
+          let targetAvatar=localPlayerAvatar, targetIsLocal=true;
+          let targetDistance=playerAlive?npc.position.distanceToSquared(localPlayerAvatar.position):Infinity;
+          for(const remote of Object.values(otherPlayers)){
+            if(!remote?.mesh||remote.hidden||!remote.mesh.visible)continue;
+            const candidateDistance=npc.position.distanceToSquared(remote.mesh.position);
+            if(candidateDistance<targetDistance){targetAvatar=remote.mesh;targetDistance=candidateDistance;targetIsLocal=false;}
+          }
+          player=targetAvatar;
+          playerAlive=targetIsLocal?(!kwgDeadUntil&&kwgHealth>0):true;
           const enemyBefore={x:npc.position.x,z:npc.position.z};
           const dx=player.position.x-npc.position.x,dz=player.position.z-npc.position.z;
           const distance=Math.hypot(dx,dz);
@@ -15464,6 +15482,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
             slot.fallSpeed=0;slot.path=[];slot.grounded=false;
           }
           kwgEnemySeparate(slot,blocks);
+          slot.kwgWasWalking=walking;
           kwgEnemyAnimate(slot,now,walking,props.enemySpeed,index);
           // Landing from above bounces. A double-jump flip gives a finishing stomp.
           if(isEditMode||kwgDeadUntil)continue;
