@@ -14467,6 +14467,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       for(const entry of kwgEnemySpawners.values()){kwgDisposeEnemyRespawnIndicator(entry);for(const slot of entry.slots)kwgDestroyEnemySlot(slot);}
       kwgEnemySpawners.clear();
       kwgLastEnemySync=0;
+      kwgAuthoritativeEnemies.clear();kwgEnemyServerTime=0;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
       kwgEnemyRangeIndicator.visible=false;
       kwgEnemyPreviousPlayerPos=null;
@@ -14498,6 +14499,29 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     socket.on('enemy_stomped',({worldName,spawnerId,index}={})=>{
       if(worldName===currentWorldName)kwgDefeatEnemy(spawnerId,index,false);
     });
+    const kwgAuthoritativeEnemies=new Map();
+    let kwgEnemyServerTime=0;
+    socket.on('enemy_state',packet=>{
+      if(packet?.worldName!==currentWorldName||!Array.isArray(packet.enemies))return;
+      kwgEnemyServerTime=performance.now();
+      kwgAuthoritativeEnemies.clear();
+      for(const e of packet.enemies)kwgAuthoritativeEnemies.set(`${e.spawnerId}:${e.index}`,e);
+    });
+    function kwgApplyServerEnemies(){
+      if(!kwgEnemyServerTime||performance.now()-kwgEnemyServerTime>2500)return;
+      for(const [id,entry] of kwgEnemySpawners)for(let i=0;i<entry.slots.length;i++){
+        const slot=entry.slots[i],state=kwgAuthoritativeEnemies.get(`${id}:${i}`);
+        if(!state)continue;
+        if(state.deadUntil>Date.now()){
+          if(slot.mesh)slot.mesh.visible=false;
+          continue;
+        }
+        if(!slot.mesh){slot.mesh=kwgCreateEnemyModel(kwgEnemyPropsOf(entry.block).enemyCharacter);scene.add(slot.mesh);kwgShowEnemyHealth(slot,kwgEnemyPropsOf(entry.block).enemyCharacter);}
+        slot.mesh.visible=true;
+        slot.mesh.position.set(state.x,state.y,state.z);
+        slot.mesh.rotation.y=state.rotationY||0;
+      }
+    }
     let kwgLastEnemySync=0;
     function kwgSyncEnemySpawners(){
       if(!currentWorldName||!currentWorldData?.blocks)return;
@@ -14988,6 +15012,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     function kwgUpdateEnemies(delta){
       if(!currentWorldName||!localPlayerAvatar||kwgFreeCamera.active)return;
       kwgSyncEnemySpawners();
+      if(kwgEnemyServerTime&&performance.now()-kwgEnemyServerTime<2500){kwgApplyServerEnemies();return;}
       kwgSpiderFrameDt=Math.max(.016,Math.min(.09,delta));
       const player=localPlayerAvatar,now=kwgEnemyClock();
       const playerBefore=kwgEnemyPreviousPlayerPos||{x:player.position.x,y:player.position.y,z:player.position.z};
@@ -16581,6 +16606,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           kwgEnemyPreviousFeet=localPlayerAvatar?.position.y??-Infinity;
           updatePlayerPhysics(delta);
           kwgUpdateEnemies(delta);
+          kwgApplyServerEnemies();
         }
         kwgUpdateShotTracers();
         kwgUpdateHitPixels(delta);
