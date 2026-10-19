@@ -2588,10 +2588,22 @@ io.on('connection', (socket) => {
     }catch(err){console.warn('Balloon blast validation:',err.message);}
   });
 
+  // V56 Part 2c (stage 1): server-validated remote-player contact damage.
+  // Only contact enemies are included; projectiles and beams need separate hit logic.
+  const kwgContactCooldowns=new Map();
+  const kwgSpawnerCache=new Map();
+  async function kwgContactSpawner(worldName){
+    const now=Date.now(),cached=kwgSpawnerCache.get(worldName);
+    if(cached&&now-cached.at<5000)return cached.blocks;
+    const world=await getWorldByName(worldName);
+    const blocks=world?.data?.blocks||{};
+    kwgSpawnerCache.set(worldName,{at:now,blocks});
+    return blocks;
+  }
   // V56 Part 2b: one elected room simulator publishes enemy transforms.
   // This is server-relayed simulation, NOT server-authoritative AI or combat.
   let kwgLastEnemyMotionAt=0;
-  socket.on('kwg_enemy_motion',({worldName,enemies}={})=>{
+  socket.on('kwg_enemy_motion',async ({worldName,enemies}={})=>{
     const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
     if(!p||!key||p.worldName!==key||socket.data.worldName!==key||p.health<=0)return;
     const members=io.sockets.adapter.rooms.get(`world:${key}`);
@@ -2606,6 +2618,36 @@ io.on('connection', (socket) => {
     }
     kwgLastEnemyMotionAt=now;
     socket.to(`world:${key}`).emit('kwg_enemy_motion',{worldName:key,enemies:validated,at:now});
+    // Server checks each remote victim against the current enemy transform,
+    // saved spawner configuration, and a per-victim/per-enemy cooldown.
+    // Host's own existing local contact system is intentionally left intact.
+    try{
+      const blocks=await kwgContactSpawner(key);
+      if(playersBySocket.get(socket.id)!==p||p.worldName!==key)return;
+      for(const e of validated){
+        const block=blocks[e.id];
+        if(!block||block.actionType!=='enemy_spawner')continue;
+        const kind=block.enemyCharacter||'devil';
+        if(!['devil','spider','balloon_baboon'].includes(kind))continue;
+        if(e.index>=Math.max(1,Math.min(12,Number(block.enemyCount)||1)))continue;
+        if(Math.hypot(e.x-(Number(block.x)||0),e.z-(Number(block.z)||0))>Math.min(110,Math.max(12,Number(block.noticeRange)||18)+12))continue;
+        const dead=kwgEnemyRoomState(key).get(kwgEnemyStateKey(e.id,e.index));
+        if(dead?.deadUntil>now)continue;
+        for(const victim of playersBySocket.values()){
+          if(victim.id===socket.id||victim.worldName!==key||victim.health<=0)continue;
+          if(Math.hypot(victim.x-e.x,victim.z-e.z)>.89||victim.y>e.y+1.6||victim.y+1.95<e.y+.2)continue;
+          const ck=JSON.stringify([victim.id,key,e.id,e.index]);
+          if(now-(kwgContactCooldowns.get(ck)||0)<1650)continue;
+          kwgContactCooldowns.set(ck,now);
+          const damage=Math.max(1,Math.min(100,Math.round(Number(block.enemyDamage)||25)));
+          io.to(victim.id).emit('kwg_enemy_damage_taken',{worldName:key,damage,enemyPosition:{x:e.x,y:e.y,z:e.z},kind});
+        }
+      }
+      if(kwgContactCooldowns.size>10000){
+        for(const [k,t] of kwgContactCooldowns)if(now-t>10000)kwgContactCooldowns.delete(k);
+      }
+    }catch(err){console.warn('Enemy contact sync:',err.message);}
+
   });
   socket.on('kwg_enemy_motion_host',({worldName}={},cb)=>{
     if(typeof cb!=='function')return;
