@@ -2588,6 +2588,33 @@ io.on('connection', (socket) => {
     }catch(err){console.warn('Balloon blast validation:',err.message);}
   });
 
+  // V56 Part 2b: one elected room simulator publishes enemy transforms.
+  // This is server-relayed simulation, NOT server-authoritative AI or combat.
+  let kwgLastEnemyMotionAt=0;
+  socket.on('kwg_enemy_motion',({worldName,enemies}={})=>{
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||!key||p.worldName!==key||socket.data.worldName!==key||p.health<=0)return;
+    const members=io.sockets.adapter.rooms.get(`world:${key}`);
+    if(!members||[...members].filter(id=>playersBySocket.get(id)?.worldName===key).sort()[0]!==socket.id)return;
+    const now=Date.now();if(now-kwgLastEnemyMotionAt<90)return;
+    if(!Array.isArray(enemies)||enemies.length>100)return;
+    const validated=[];
+    for(const e of enemies){
+      if(!e||typeof e.id!=='string'||e.id.length>160||!Number.isInteger(e.index)||e.index<0||e.index>=12)continue;
+      if(!['x','y','z','yaw'].every(k=>typeof e[k]==='number'&&Number.isFinite(e[k])&&Math.abs(e[k])<100000))continue;
+      validated.push({id:e.id,index:e.index,x:e.x,y:e.y,z:e.z,yaw:e.yaw,ai:typeof e.ai==='string'?e.ai.slice(0,16):'roam'});
+    }
+    kwgLastEnemyMotionAt=now;
+    socket.to(`world:${key}`).emit('kwg_enemy_motion',{worldName:key,enemies:validated,at:now});
+  });
+  socket.on('kwg_enemy_motion_host',({worldName}={},cb)=>{
+    if(typeof cb!=='function')return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key||socket.data.worldName!==key)return cb({host:false});
+    const members=io.sockets.adapter.rooms.get(`world:${key}`);
+    cb({host:!!members&&[...members].filter(id=>playersBySocket.get(id)?.worldName===key).sort()[0]===socket.id});
+  });
+
   // V56 Part 2a: room-scoped shared enemy HP. In-memory state is intentionally
   // ephemeral: it never changes saved worlds, user records, or world parts.
   // Server decides the HP and broadcasts every accepted change. The browser
