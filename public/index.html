@@ -14511,8 +14511,32 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     socket.on('enemy_attack',e=>{
       if(e?.worldName!==currentWorldName||!localPlayerAvatar)return;
       const p=localPlayerAvatar.position;
-      if(Math.hypot(p.x-e.x,p.z-e.z)>2.6||Math.abs(p.y-e.y)>3)return;
+      if(!e.ranged&&(Math.hypot(p.x-e.x,p.z-e.z)>2.6||Math.abs(p.y-e.y)>3))return;
       if(kwgEnemyHitPlayer(e.damage,new THREE.Vector3(e.x,e.y,e.z)))kwgAudio.play('devil_attack');
+    });
+    // Visual-only effects. The server decides when each special ability fires.
+    socket.on('enemy_special',e=>{
+      if(e?.worldName!==currentWorldName||!e.from||!e.to)return;
+      const from=new THREE.Vector3(e.from.x,e.from.y,e.from.z);
+      const to=new THREE.Vector3(e.to.x,e.to.y,e.to.z);
+      const entry=kwgEnemySpawners.get(e.spawnerId),slot=entry?.slots?.[e.index];
+      if(slot)slot.attackUntil=kwgEnemyClock()+550;
+      if(e.kind==='sniper'){
+        kwgShowShotTracer(from,to,0xffae5c);kwgAudio.play('sniper_shot');
+      }else if(e.kind==='spider'){
+        const mesh=new THREE.Mesh(new THREE.IcosahedronGeometry(.25,0),new THREE.MeshBasicMaterial({color:0xe6f8ff,transparent:true,opacity:.9}));
+        mesh.position.copy(from);scene.add(mesh);
+        kwgWebProjectiles.push({mesh,from,to,start:kwgEnemyClock(),duration:350,serverVisual:true});
+        kwgAudio.play('spider_spit');
+      }else if(e.kind==='hops'){
+        const mesh=kwgCarrotVisual();mesh.position.copy(from);scene.add(mesh);
+        kwgCarrotShots.push({mesh,from,to,start:kwgEnemyClock(),duration:550,damage:0,serverVisual:true});
+        kwgAudio.play('carrot_throw');
+      }else if(e.kind==='alien'){
+        kwgShowShotTracer(from,to,0x78ffcf);
+      }else if(e.kind==='bot_bus'||e.kind==='balloon_baboon'){
+        kwgShowShotTracer(from,to,0xff8b53);
+      }
     });
     function kwgApplyServerEnemies(delta=.016){
       if(!kwgEnemyServerTime||performance.now()-kwgEnemyServerTime>2500)return;
@@ -14525,8 +14549,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         state.renderX+=(state.x-state.renderX)*blend;state.renderY+=(state.y-state.renderY)*blend;state.renderZ+=(state.z-state.renderZ)*blend;
         slot.mesh.position.set(state.renderX,state.renderY,state.renderZ);
         slot.mesh.rotation.y=state.rotationY||0;
-        slot.aiState=state.moving?'chase':'idle';slot.attackUntil=state.attackUntil||0;
-        slot.walkTime=(slot.walkTime||0)+(state.moving?delta*kwgEnemyPropsOf(entry.block).enemySpeed*5:0);
+        slot.aiState=state.moving?'chase':'idle';slot.attackUntil=state.attackUntil?now+Math.max(0,state.attackUntil-Date.now()):0;
+        slot.walkTime=(slot.walkTime||0)+(state.moving?delta*kwgEnemyPropsOf(entry.block).enemySpeed*1.65:0);
         kwgEnemyAnimate(slot,now,!!state.moving,kwgEnemyPropsOf(entry.block).enemySpeed,i);
       }
     }
