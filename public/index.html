@@ -13324,6 +13324,14 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       const index=Number(e.key)-1;
       if(index>=0&&index<kwgTools.length&&index<9){kwgToggleToolSlot(index);e.preventDefault();}
     });
+    // V56 Part 2c: damage for non-host players from server-checked contact enemies.
+    socket.on('kwg_enemy_damage_taken',packet=>{
+      if(!packet||packet.worldName!==currentWorldName||kwgEnemyMotionHost||isEditMode||kwgDeadUntil)return;
+      const pos=packet.enemyPosition;
+      if(!pos||![pos.x,pos.y,pos.z].every(Number.isFinite))return;
+      const amount=Math.max(1,Math.min(100,Math.round(Number(packet.damage)||1)));
+      kwgEnemyHitPlayer(amount,new THREE.Vector3(pos.x,pos.y,pos.z));
+    });
     let kwgPvpLastDamageAt=0;
     socket.on('tool_damage_taken',({damage,shooterPosition}={})=>{
       if(!currentWorldName||isEditMode||kwgDeadUntil||!shooterPosition)return;
