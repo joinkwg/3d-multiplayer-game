@@ -2591,6 +2591,32 @@ io.on('connection', (socket) => {
   // V56 Part 2c (stage 1): server-validated remote-player contact damage.
   // Only contact enemies are included; projectiles and beams need separate hit logic.
   const kwgContactCooldowns=new Map();
+  // V56 candidate: server-gated special damage for non-simulator players.
+  // Conservative collision tests; the client still simulates AI and visuals.
+  const kwgSpecialAttackTimes=new Map();
+  function kwgSpecialClear(a,b,blocks){
+    // Segment vs solid, axis-aligned block bounds. Rotated blocks use a
+    // conservative bounding box; this can reject a legitimate shot, never
+    // deliberately fire through the bounding box.
+    const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
+    for(const block of Object.values(blocks)){
+      if(!block||block.canCollide===false||['enemy_spawner','tool_dispenser'].includes(block.actionType))continue;
+      const hx=Math.max(.001,Math.abs(Number(block.scaleX)||1)/2),hy=Math.max(.001,Math.abs(Number(block.scaleY)||1)/2),hz=Math.max(.001,Math.abs(Number(block.scaleZ)||1)/2);
+      const x=Number(block.x)||0,y=Number(block.y)||0,z=Number(block.z)||0;
+      // Rotation-safe outer sphere box (intentionally conservative).
+      const r=Math.hypot(hx,hy,hz),pad=(block.rotationX||block.rotationY||block.rotationZ)?r:0;
+      const ext=pad||0;
+      const bounds=[[x-(ext||hx),x+(ext||hx),a.x,dx],[y-(ext||hy),y+(ext||hy),a.y,dy],[z-(ext||hz),z+(ext||hz),a.z,dz]];
+      let lo=.02,hi=.98,hit=true;
+      for(const [min,max,start,d] of bounds){
+        if(Math.abs(d)<1e-8){if(start<min||start>max){hit=false;break;}}
+        else{let t1=(min-start)/d,t2=(max-start)/d;if(t1>t2)[t1,t2]=[t2,t1];lo=Math.max(lo,t1);hi=Math.min(hi,t2);if(lo>hi){hit=false;break;}}
+      }
+      if(hit)return false;
+    }
+    return true;
+  }
+
   const kwgSpawnerCache=new Map();
   async function kwgContactSpawner(worldName){
     const now=Date.now(),cached=kwgSpawnerCache.get(worldName);
@@ -2628,6 +2654,39 @@ io.on('connection', (socket) => {
         const block=blocks[e.id];
         if(!block||block.actionType!=='enemy_spawner')continue;
         const kind=block.enemyCharacter||'devil';
+        if(['sniper','alien','hops','bot_bus'].includes(kind)){
+          const range=Math.min(40,Math.max(3,Number(block.noticeRange)||18));
+          for(const victim of playersBySocket.values()){
+            if(victim.id===socket.id||victim.worldName!==key||victim.health<=0)continue;
+            const dx=victim.x-e.x,dz=victim.z-e.z,dist=Math.hypot(dx,dz),dy=victim.y-e.y;
+            if(dist>range||Math.abs(dy)>12)continue;
+            const from={x:e.x,y:e.y+(kind==='alien'?-.2:kind==='hops'?2:1.3),z:e.z};
+            const to={x:victim.x,y:victim.y+1,z:victim.z};
+            let interval=1950,valid=false,damage=Number(block.enemyDamage)||25;
+            if(kind==='sniper'){
+              const aim=Math.atan2(dx,dz);
+              valid=dist>=1.5&&Math.abs(dy)<3.5&&Math.cos(aim-e.yaw)>.985;
+            }else if(kind==='alien'){
+              // UFO beam is vertical; foot-zap is a short-range clear shot.
+              valid=(dist<1.3&&e.y>victim.y+1.5)||(dist<13&&Math.abs(dy)<3.5);
+              interval=2200;
+            }else if(kind==='hops'){
+              // Impact is proximity-based; a separate projectile path is needed
+              // for exact carrot landing simulation.
+              valid=dist<2.05&&Math.abs(dy)<2.0;
+              interval=3250;damage=100;
+            }else if(kind==='bot_bus'){
+              valid=dist<2.2&&Math.abs(dy)<2.5;
+              interval=1900;damage=Math.max(40,damage);
+            }
+            if(!valid||!kwgSpecialClear(from,to,blocks))continue;
+            const ck=JSON.stringify([victim.id,key,e.id,e.index,kind]);
+            if(now-(kwgSpecialAttackTimes.get(ck)||0)<interval)continue;
+            kwgSpecialAttackTimes.set(ck,now);
+            io.to(victim.id).emit('kwg_enemy_damage_taken',{worldName:key,damage:Math.max(1,Math.min(100,Math.round(damage))),enemyPosition:{x:e.x,y:e.y,z:e.z},kind});
+          }
+          continue;
+        }
         if(!['devil','spider','balloon_baboon'].includes(kind))continue;
         if(e.index>=Math.max(1,Math.min(12,Number(block.enemyCount)||1)))continue;
         if(Math.hypot(e.x-(Number(block.x)||0),e.z-(Number(block.z)||0))>Math.min(110,Math.max(12,Number(block.noticeRange)||18)+12))continue;
@@ -2642,6 +2701,9 @@ io.on('connection', (socket) => {
           const damage=Math.max(1,Math.min(100,Math.round(Number(block.enemyDamage)||25)));
           io.to(victim.id).emit('kwg_enemy_damage_taken',{worldName:key,damage,enemyPosition:{x:e.x,y:e.y,z:e.z},kind});
         }
+      }
+      if(kwgSpecialAttackTimes.size>10000){
+        for(const [k,t] of kwgSpecialAttackTimes)if(now-t>12000)kwgSpecialAttackTimes.delete(k);
       }
       if(kwgContactCooldowns.size>10000){
         for(const [k,t] of kwgContactCooldowns)if(now-t>10000)kwgContactCooldowns.delete(k);
