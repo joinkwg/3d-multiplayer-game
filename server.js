@@ -2650,7 +2650,7 @@ io.on('connection', (socket) => {
       const enemy=state.slots.get(`${spawnerId}:${index}`);
       if(!enemy||enemy.deadUntil>now)return;
       if(Math.hypot(p.x-enemy.x,p.z-enemy.z)>6||Math.abs(p.y-enemy.y)>6)return;
-      enemy.deadUntil=now+480+block.enemyRespawn*1000;
+      enemy.deadUntil=now+480+block.enemyRespawn*1000;enemy.vy=0;enemy.attackUntil=0;enemy.nextAttack=enemy.deadUntil;enemy.nextSpecial=enemy.deadUntil;
       io.to(`world:${key}`).emit('enemy_stomped',{worldName:key,spawnerId,index});
     }catch(err){console.warn('Enemy stomp validation:',err.message);}
   });
