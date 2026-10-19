@@ -5177,7 +5177,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         const row=document.createElement('div');row.className='kwg-home-notice'+(n.isRead?'':' unread');
         const dot=document.createElement('span');dot.className='kwg-home-notice-dot';dot.setAttribute('aria-hidden','true');
         const body=document.createElement('div');
-        const msg=document.createElement('div');msg.className='kwg-home-notice-message';msg.textContent=filterKWGUserText(n.message||'');
+        const msg=document.createElement('div');msg.className='kwg-home-notice-message';msg.textContent=String(n.message||''); // V54: trusted server-generated notification
         const time=document.createElement('div');time.className='kwg-home-notice-time';time.textContent=timeAgo(n.createdAt);
         body.append(msg,time);row.append(dot,body);box.append(row);
       });
@@ -5644,23 +5644,9 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
   'rape','raped','raping','rapist','molest','molested','molesting',
   'pedophile','paedophile','pedo','pedos',
     ];
-    // Spell-out numbers are blocked as *whole words* to avoid damaging
-    // harmless words such as someone, alone, stone, weight or sixth.
-    const KWG_NUMBER_WORDS = [
-      'zero','one','two','three','four','five','six','seven','eight','nine',
-      'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen',
-      'seventeen','eighteen','nineteen','twenty','thirty','forty','fourty',
-      'fifty','sixty','seventy','eighty','ninety','hundred','thousand',
-      'million','billion','trillion',
-      'first','second','third','fourth','fifth','sixth','seventh','eighth',
-      'ninth','tenth','eleventh','twelfth','thirteenth','fourteenth',
-      'fifteenth','sixteenth','seventeenth','eighteenth','nineteenth',
-      'twentieth','thirtieth','fortieth','fiftieth','sixtieth',
-      'seventieth','eightieth','ninetieth','hundredth','thousandth'
-    ];
-    // Match obfuscated spellings such as s.e.x and t-w-o, while requiring
-    // word boundaries so innocent words are not partly censored.
-    const KWG_FILTER_TERMS = [...new Set([...KWG_BLOCKED_TERMS, ...KWG_NUMBER_WORDS])];
+    // V54: Only moderate restricted words here. Ordinary numeric game data,
+    // including XP, levels, scores, dates and prices, must remain readable.
+    const KWG_FILTER_TERMS = [...new Set(KWG_BLOCKED_TERMS)];
     const KWG_BLOCKED_REGEX = new RegExp(
       '(^|[^a-z])(' + KWG_FILTER_TERMS
         .sort((a,b)=>b.length-a.length)
@@ -5692,8 +5678,31 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           for(let k=bounds[0];k<bounds[1];k++)if(!/\s/.test(raw[k]))masked.add(k);
         }
       }
-      // Numbers are masked even when embedded in otherwise permitted words.
-      for(let i=0;i<raw.length;i++)if(/\p{N}/u.test(raw[i]))masked.add(i);
+      // V54: Mask only likely personal information, not all numbers.
+      // Phone numbers: standard separated 10-digit patterns, or digits near a
+      // contact/phone label. Do not mistake XP, level, dates or scores for PII.
+      const maskDigitsIn = (start,end) => {
+        for(let i=start;i<end;i++)if(/[0-9]/.test(raw[i]))masked.add(i);
+      };
+      const phonePattern = /(?:\+?1[ .-]?)?(?:\([0-9]{3}\)|[0-9]{3})[ .-][0-9]{3}[ .-][0-9]{4}(?![0-9])/g;
+      for(const m of raw.matchAll(phonePattern)){
+        if(m.index>0 && /[0-9]/.test(raw[m.index-1]))continue;
+        maskDigitsIn(m.index,m.index+m[0].length);
+      }
+      const contactPattern = /\b(?:my\s+)?(?:phone(?:\s+number)?|cell(?:\s+number)?|mobile(?:\s+number)?|call\s+me(?:\s+at)?|text\s+me(?:\s+at)?)\s*(?:is|:|=|at)?\s*([+0-9][0-9 .()\-]{8,18}[0-9])\b/gi;
+      for(const m of raw.matchAll(contactPattern)){
+        const value=m[1],digits=value.replace(/\D/g,'');
+        if(digits.length>=10 && digits.length<=11){const i=m.index+m[0].lastIndexOf(value);maskDigitsIn(i,i+value.length);}
+      }
+      // Age disclosures: require explicit age context; do not censor "Level 12".
+      const agePatterns=[
+        /\b(?:i\s*am|i'm|im|my\s+age\s+is|age\s*:)\s*([0-9]{1,3})\s*(?:years?\s*old|yo|y\/o)?\b/gi,
+        /\b([0-9]{1,3})\s*(?:years?\s*old|yo|y\/o)\b/gi
+      ];
+      for(const pattern of agePatterns)for(const m of raw.matchAll(pattern)){
+        const age=Number(m[1]);if(age<1||age>120)continue;
+        const i=m.index+m[0].indexOf(m[1]);maskDigitsIn(i,i+m[1].length);
+      }
       return raw.split('').map((ch,i)=>masked.has(i)?'*':ch).join('');
     }
     
@@ -12007,7 +12016,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         const row=document.createElement('div');row.className='notification-row'+(n.isRead?'':' unread');
         const dot=document.createElement('span');dot.className='notification-dot';
         const body=document.createElement('div');
-        const msg=document.createElement('div');msg.className='notification-message';msg.textContent=filterKWGUserText(n.message);
+        const msg=document.createElement('div');msg.className='notification-message';msg.textContent=String(n.message||''); // V54: trusted server-generated notification; keep XP amounts
         const tm=document.createElement('div');tm.className='notification-time';tm.textContent=timeAgo(n.createdAt);
         body.append(msg,tm);row.append(dot,body);
         const actions=document.createElement('div');actions.className='kwg-notification-actions';
