@@ -438,6 +438,81 @@ async function uploadStoreAsset({ category, fileName, mimeType, buffer }) {
 const socketsByUser = new Map();
 const playersBySocket = new Map();
 
+// V56.2 — per-world server-owned enemy HP/death/respawn and a bounded
+// snapshot relay. AI/pathfinding and enemy attacks are still client-side.
+const kwgEnemyWorlds=new Map(),kwgEnemyConfigCache=new Map();
+const kwgEnemyHP={devil:100,sniper:100,hops:160,spider:110,alien:125,bot_bus:230,balloon_baboon:150};
+const kwgEnemyWeaponDamage={pistol:32,minigun:9,laser:6,ufo:100,balloon:70};
+const kwgEnemyWeaponDelay={pistol:320,minigun:80,laser:110,ufo:1050,balloon:300};
+function kwgEnemyWorld(name){
+  let state=kwgEnemyWorlds.get(name);
+  if(!state){state={hostId:null,slots:new Map(),positions:new Map(),lastPacketAt:0};kwgEnemyWorlds.set(name,state);}
+  return state;
+}
+function kwgEnemyChooseHost(worldName){
+  const state=kwgEnemyWorlds.get(worldName);if(!state)return null;
+  const live=[...playersBySocket.entries()].filter(([sid,p])=>p.worldName===worldName&&io.sockets.sockets.get(sid)?.connected);
+  if(!live.length){kwgEnemyWorlds.delete(worldName);kwgEnemyConfigCache.delete(worldName);return null;}
+  const host=live.some(([sid])=>sid===state.hostId)?state.hostId:live[0][0];
+  if(host!==state.hostId){state.hostId=host;state.positions.clear();state.lastPacketAt=0;io.to(`world:${worldName}`).emit('enemy_authority',{worldName,hostId:host});}
+  return host;
+}
+async function kwgEnemyConfig(worldName){
+  const now=Date.now(),cached=kwgEnemyConfigCache.get(worldName);
+  if(cached&&now-cached.at<2500)return cached.spawners;
+  const world=await getWorldByName(worldName);
+  if(!world)return null;
+  const spawners=new Map();
+  for(const [id,block] of Object.entries(world.data?.blocks||{})){
+    if(block?.actionType!=='enemy_spawner')continue;
+    normalizeEnemySpawner(block);spawners.set(id,block);
+  }
+  kwgEnemyConfigCache.set(worldName,{at:now,spawners});
+  const state=kwgEnemyWorlds.get(worldName);
+  if(state){
+    for(const [key,slot] of state.slots){
+      const block=spawners.get(slot.spawnerId);
+      if(!block||slot.index>=block.enemyCount)state.slots.delete(key);
+    }
+    for(const [key,pos] of state.positions){
+      const block=spawners.get(pos.spawnerId);
+      if(!block||pos.index>=block.enemyCount||now-pos.at>5000)state.positions.delete(key);
+    }
+  }
+  return spawners;
+}
+function kwgEnemySlot(state,id,index,block,now=Date.now()){
+  const key=`${id}:${index}`,max=kwgEnemyHP[block.enemyCharacter]||100;
+  let slot=state.slots.get(key);
+  if(!slot){slot={spawnerId:id,index,hp:max,respawnAt:0,character:block.enemyCharacter};state.slots.set(key,slot);}
+  if(slot.character!==block.enemyCharacter||(slot.respawnAt&&slot.respawnAt<=now)){
+    slot.hp=max;slot.respawnAt=0;slot.character=block.enemyCharacter;
+  }
+  return slot;
+}
+function kwgEnemyDefeat(worldName,state,slot,block){
+  if(slot.respawnAt>Date.now())return false;
+  slot.hp=0;
+  slot.respawnAt=Date.now()+480+block.enemyRespawn*1000;
+  const serverNow=Date.now();
+  io.to(`world:${worldName}`).emit('enemy_defeated',{
+    worldName,spawnerId:slot.spawnerId,index:slot.index,respawnAt:slot.respawnAt,serverNow
+  });
+  return true;
+}
+function kwgEnemyJoinState(worldName){
+  const state=kwgEnemyWorld(worldName),serverNow=Date.now();
+  // Lazy respawn normalization prevents stale zero-HP join snapshots.
+  for(const slot of state.slots.values())if(slot.respawnAt&&slot.respawnAt<=serverNow){
+    slot.respawnAt=0;slot.hp=kwgEnemyHP[slot.character]||100;
+  }
+  return {worldName,serverNow,hostId:state.hostId,
+    slots:[...state.slots.values()].filter(v=>v.respawnAt>serverNow||v.hp<(kwgEnemyHP[v.character]||100))
+      .slice(0,120).map(v=>({spawnerId:v.spawnerId,index:v.index,hp:v.hp,respawnAt:v.respawnAt})),
+    positions:[...state.positions.values()].filter(v=>serverNow-v.at<1500).slice(0,72).map(({spawnerId,index,x,y,z,yaw})=>({spawnerId,index,x,y,z,yaw}))};
+}
+
+
 function requireAuth(socket, cb) {
   if (!socket.user) {
     if (cb) cb({ success: false, message: 'You must be logged in.' });
@@ -1200,6 +1275,7 @@ io.on('connection', (socket) => {
           socket.leave(`world:${p.worldName}`);
         }
         playersBySocket.delete(socket.id);
+        if(p?.worldName)kwgEnemyChooseHost(p.worldName);
         socket.data.worldName=null;
         await releaseWorldSession(uid,socket.id);
         socket.user=null;
@@ -2364,6 +2440,8 @@ io.on('connection', (socket) => {
         movementGraceUntil:Date.now()+6000,lastMovementAt:0
       };
       playersBySocket.set(socket.id, p);
+      if(previousWorld&&previousWorld!==world.name)kwgEnemyChooseHost(previousWorld);
+      kwgEnemyWorld(world.name);kwgEnemyChooseHost(world.name);
       refreshPrimarySocketForUser(userId);
       worldJoinReservations.set(world.name, Math.max(0, (worldJoinReservations.get(world.name) || 1) - 1));
       if (worldJoinReservations.get(world.name) === 0) worldJoinReservations.delete(world.name);
@@ -2388,7 +2466,7 @@ io.on('connection', (socket) => {
       try{await pool.query('UPDATE worlds SET plays=plays+1 WHERE id=$1',[world.id]);}
       catch(playError){console.error('Could not increment world plays:',playError);}
       kwgAnnounce(world.name,`${socket.user.username} joined the world.`,socket.user.id);
-      cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,runStartedAt:p.runStartedAt,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics,selfPetKey:petKey});
+      cb({success:true,worldData:world.data,players,selfId:socket.id,selfSpawn,runStartedAt:p.runStartedAt,canEdit:canEditWorld(socket, world),selfAppearance:app,selfCosmetics:cosmetics,selfPetKey:petKey,enemySync:kwgEnemyJoinState(world.name)});
     } catch (e) {
       console.error(e);
       if (reservedWorldName && worldJoinReservations.has(reservedWorldName)) {
@@ -2437,6 +2515,7 @@ io.on('connection', (socket) => {
     }
     socket.data.worldName = null;
     playersBySocket.delete(socket.id);
+    if(p?.worldName)kwgEnemyChooseHost(p.worldName);
     if (socket.user) {
       const uid=socket.user.id;
       refreshPrimarySocketForUser(uid);
@@ -2575,35 +2654,118 @@ io.on('connection', (socket) => {
     }catch(err){console.warn('Balloon blast validation:',err.message);}
   });
 
-  // Stomp events are room-scoped and validated against saved spawner settings.
-  // Movement/AI remain client-side in this version; defeat broadcasts keep
-  // active visitors' respawn timers consistent.
-  let lastEnemyStomp=0;
-  socket.on('enemy_stomped',async ({worldName,spawnerId,index,method}={})=>{
-    if(!requireAuth(socket))return;
-    const p=playersBySocket.get(socket.id);
-    const key=cleanWorldName(worldName);
-    if(!p||p.worldName!==key||socket.data.worldName!==key)return;
-    if(typeof spawnerId!=='string'||spawnerId.length>160||!Number.isInteger(index)||index<0||index>=12)return;
-    const now=Date.now();
-    if(now-lastEnemyStomp<180)return;
-    lastEnemyStomp=now;
+  // Enemy snapshots: only the elected host may relay positions. Every entry
+  // is checked against the saved spawner, bounds and a generous speed limit.
+  let kwgLastPositionPacket=0,kwgLastEnemyHitAt=Object.create(null),kwgLastStomp=0;
+  socket.on('enemy_positions',async ({worldName,positions}={})=>{
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key||socket.data.worldName!==key||!Array.isArray(positions)||positions.length>72)return;
+    const state=kwgEnemyWorlds.get(key),now=Date.now();
+    if(!state||state.hostId!==socket.id||now-kwgLastPositionPacket<85)return;
+    kwgLastPositionPacket=now;
     try{
-      const world=await getWorldByName(key);
-      const block=world?.data?.blocks?.[spawnerId];
-      if(!block||block.actionType!=='enemy_spawner')return;
-      normalizeEnemySpawner(block);
-      // Hops is stomp-immune but can still be defeated with a collected tool.
-      // This remains client-simulated combat, not authoritative hit validation.
-      if(method==='weapon'){
-        if(!kwgServerTools.size||!p.equippedTool||!kwgServerTools.has(p.equippedTool))return;
-      }else if(block.enemyKillable===false||block.enemyCharacter==='hops')return;
-      if(index>=block.enemyCount)return;
-      const dx=p.x-(Number(block.x)||0),dz=p.z-(Number(block.z)||0);
-      const maxRange=block.noticeRange+5;
-      if(Math.hypot(dx,dz)>maxRange||Math.abs(p.y-(Number(block.y)||0))>maxRange+5)return;
-      socket.to(`world:${key}`).emit('enemy_stomped',{worldName:key,spawnerId,index});
-    }catch(err){console.warn('Enemy stomp validation:',err.message);}
+      const spawners=await kwgEnemyConfig(key);if(!spawners)return;
+      const accepted=[];
+      for(const item of positions){
+        if(typeof item?.spawnerId!=='string'||!Number.isInteger(item.index)||item.index<0||item.index>=12||
+          !['x','y','z','yaw'].every(k=>typeof item[k]==='number'&&Number.isFinite(item[k])))continue;
+        const block=spawners.get(item.spawnerId);if(!block||item.index>=block.enemyCount)continue;
+        const {x,y,z,yaw}=item;
+        if(Math.hypot(x-(Number(block.x)||0),z-(Number(block.z)||0))>block.noticeRange+35||
+          Math.abs(y-(Number(block.y)||0))>75||Math.max(Math.abs(x),Math.abs(z))>10000)continue;
+        const id=`${item.spawnerId}:${item.index}`,old=state.positions.get(id);
+        if(old&&now-old.at<1800){
+          const dist=Math.hypot(x-old.x,y-old.y,z-old.z);
+          if(dist>8+85*Math.max(.02,(now-old.at)/1000))continue;
+        }
+        const slot=kwgEnemySlot(state,item.spawnerId,item.index,block,now);
+        if(slot.respawnAt>now)continue;
+        const clean={spawnerId:item.spawnerId,index:item.index,x,y,z,yaw,at:now};
+        state.positions.set(id,clean);accepted.push(clean);
+      }
+      state.lastPacketAt=now;
+      socket.to(`world:${key}`).emit('enemy_positions',{worldName:key,hostId:socket.id,positions:accepted});
+    }catch(err){console.warn('Enemy positions:',err.message);}
+  });
+
+  // When the host edits a world and stops simulating enemies, another active
+  // visitor can take over after a few seconds of missing snapshots.
+  let kwgLastHostRequest=0;
+  socket.on('enemy_host_request',({worldName}={})=>{
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key||socket.data.worldName!==key)return;
+    const state=kwgEnemyWorlds.get(key),now=Date.now();
+    if(!state||now-kwgLastHostRequest<2000||now-state.lastPacketAt<3500)return;
+    kwgLastHostRequest=now;
+    if(state.hostId===socket.id)return;
+    state.hostId=socket.id;state.positions.clear();state.lastPacketAt=now;
+    io.to(`world:${key}`).emit('enemy_authority',{worldName:key,hostId:socket.id});
+  });
+
+  // Weapon hits are applied ONCE on the server. Client-supplied damage and
+  // health are ignored; ownership, fire rate, target and ray proximity checked.
+  socket.on('enemy_hit',async ({worldName,spawnerId,index,toolKind,origin,direction}={})=>{
+    if(!socket.user)return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key||socket.data.worldName!==key||p.health<=0||
+       typeof spawnerId!=='string'||spawnerId.length>160||!Number.isInteger(index)||index<0||index>=12||
+       !Object.hasOwn(kwgEnemyWeaponDamage,toolKind)||p.equippedTool!==toolKind||!kwgServerTools.has(toolKind))return;
+    const now=Date.now();
+    const rateKey=toolKind==='balloon'?`balloon:${spawnerId}:${index}`:toolKind;
+    if(now-(kwgLastEnemyHitAt[rateKey]||0)<kwgEnemyWeaponDelay[toolKind])return;
+    if(!origin||!['x','y','z'].every(k=>typeof origin[k]==='number'&&Number.isFinite(origin[k])))return;
+    if(toolKind!=='balloon'&&(!direction||!['x','y','z'].every(k=>typeof direction[k]==='number'&&Number.isFinite(direction[k]))||
+       Math.abs(Math.hypot(direction.x,direction.y,direction.z)-1)>.12))return;
+    const playerToOrigin=Math.hypot(origin.x-p.x,origin.y-p.y,origin.z-p.z);
+    if(playerToOrigin>(toolKind==='balloon'?70:toolKind==='ufo'?4:9))return;
+    try{
+      const spawners=await kwgEnemyConfig(key),block=spawners?.get(spawnerId);
+      if(!block||index>=block.enemyCount)return;
+      const state=kwgEnemyWorld(key),slot=kwgEnemySlot(state,spawnerId,index,block,now);
+      if(slot.respawnAt>now)return;
+      const target=state.positions.get(`${spawnerId}:${index}`);
+      const ex=target&&now-target.at<1600?target.x:(Number(block.x)||0),
+            ey=target&&now-target.at<1600?target.y:(Number(block.y)||0),
+            ez=target&&now-target.at<1600?target.z:(Number(block.z)||0);
+      if(Math.hypot(p.x-ex,p.z-ez)>(toolKind==='balloon'?75:120)||Math.abs(p.y-ey)>125)return;
+      if(toolKind==='balloon'){
+        if(Math.hypot(origin.x-ex,origin.y-(ey+1),origin.z-ez)>(target&&now-target.at<1600?5.6:block.noticeRange+8))return;
+      }else{
+        // Fresh host snapshots are accurate enough for a narrow ray check.
+        // Without one, use a wider fallback around the spawner (e.g. first
+        // seconds after joining) rather than accepting hits from any angle.
+        const vx=ex-origin.x,vy=ey+1-origin.y,vz=ez-origin.z;
+        const along=vx*direction.x+vy*direction.y+vz*direction.z;
+        const miss=Math.hypot(vx-along*direction.x,vy-along*direction.y,vz-along*direction.z);
+        if(along<0||along>115||miss>(target&&now-target.at<1600?3.6:3.4))return;
+      }
+      kwgLastEnemyHitAt[rateKey]=now;
+      slot.hp=Math.max(0,slot.hp-kwgEnemyWeaponDamage[toolKind]);
+      if(slot.hp===0){kwgEnemyDefeat(key,state,slot,block);return;}
+      io.to(`world:${key}`).emit('enemy_health',{worldName:key,spawnerId,index,hp:slot.hp,respawnAt:0,serverNow:now});
+    }catch(err){console.warn('Enemy hit:',err.message);}
+  });
+
+  // Legacy stomp messages are only allowed for actual stomp-eligible NPCs;
+  // weapon kills MUST go through the server-owned enemy_hit event.
+  socket.on('enemy_stomped',async ({worldName,spawnerId,index,method}={})=>{
+    if(!socket.user||method==='weapon')return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key||socket.data.worldName!==key||typeof spawnerId!=='string'||spawnerId.length>160||
+       !Number.isInteger(index)||index<0||index>=12)return;
+    const now=Date.now();if(now-kwgLastStomp<220)return;
+    try{
+      const spawners=await kwgEnemyConfig(key),block=spawners?.get(spawnerId);
+      if(!block||index>=block.enemyCount||!block.enemyKillable||block.enemyCharacter==='hops')return;
+      const state=kwgEnemyWorld(key),slot=kwgEnemySlot(state,spawnerId,index,block,now);
+      if(slot.respawnAt>now)return;
+      const target=state.positions.get(`${spawnerId}:${index}`);
+      const x=target&&now-target.at<1600?target.x:Number(block.x)||0;
+      const y=target&&now-target.at<1600?target.y:Number(block.y)||0;
+      const z=target&&now-target.at<1600?target.z:Number(block.z)||0;
+      if(Math.hypot(p.x-x,p.z-z)>2.8||Math.abs(p.y-y)>5)return;
+      kwgLastStomp=now;kwgEnemyDefeat(key,state,slot,block);
+    }catch(err){console.warn('Enemy stomp:',err.message);}
   });
 
   // V42: a player's own best is available even when outside the Top 50.
@@ -3752,6 +3914,7 @@ io.on('connection', (socket) => {
     const p = playersBySocket.get(socket.id);
     if (p?.worldName){socket.to(`world:${p.worldName}`).emit('player_left', socket.id);kwgAnnounce(p.worldName,`${p.username} left the world.`,socket.user?.id);}
     playersBySocket.delete(socket.id);
+    if(p?.worldName)kwgEnemyChooseHost(p.worldName);
     if (socket.user) {
       const uid=socket.user.id;
       refreshPrimarySocketForUser(uid);
