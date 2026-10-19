@@ -2591,6 +2591,7 @@ io.on('connection', (socket) => {
   // V56 Part 2c (stage 1): server-validated remote-player contact damage.
   // Only contact enemies are included; projectiles and beams need separate hit logic.
   const kwgContactCooldowns=new Map();
+  const kwgSniperCooldowns=new Map();
   const kwgSpawnerCache=new Map();
   async function kwgContactSpawner(worldName){
     const now=Date.now(),cached=kwgSpawnerCache.get(worldName);
@@ -2628,6 +2629,24 @@ io.on('connection', (socket) => {
         const block=blocks[e.id];
         if(!block||block.actionType!=='enemy_spawner')continue;
         const kind=block.enemyCharacter||'devil';
+        if(kind==='sniper'){
+          const notice=Math.max(2,Math.min(100,Number(block.noticeRange)||18));
+          for(const victim of playersBySocket.values()){
+            if(victim.id===socket.id||victim.worldName!==key||victim.health<=0)continue;
+            const dx=victim.x-e.x,dz=victim.z-e.z;
+            const dist=Math.hypot(dx,dz);
+            if(dist<1.5||dist>notice)continue;
+            if(Math.abs(victim.y-e.y)>3.5)continue;
+            const aim=Math.atan2(dx,dz);
+            if(Math.cos(aim-e.yaw)<.98)continue;
+            const ck=JSON.stringify([victim.id,key,e.id,e.index,'sniper']);
+            if(now-(kwgSniperCooldowns.get(ck)||0)<1950)continue;
+            kwgSniperCooldowns.set(ck,now);
+            const damage=Math.max(1,Math.min(100,Math.round(Number(block.enemyDamage)||25)));
+            io.to(victim.id).emit('kwg_enemy_damage_taken',{worldName:key,damage,enemyPosition:{x:e.x,y:e.y,z:e.z},kind});
+          }
+          continue;
+        }
         if(!['devil','spider','balloon_baboon'].includes(kind))continue;
         if(e.index>=Math.max(1,Math.min(12,Number(block.enemyCount)||1)))continue;
         if(Math.hypot(e.x-(Number(block.x)||0),e.z-(Number(block.z)||0))>Math.min(110,Math.max(12,Number(block.noticeRange)||18)+12))continue;
@@ -2642,6 +2661,9 @@ io.on('connection', (socket) => {
           const damage=Math.max(1,Math.min(100,Math.round(Number(block.enemyDamage)||25)));
           io.to(victim.id).emit('kwg_enemy_damage_taken',{worldName:key,damage,enemyPosition:{x:e.x,y:e.y,z:e.z},kind});
         }
+      }
+      if(kwgSniperCooldowns.size>10000){
+        for(const [k,t] of kwgSniperCooldowns)if(now-t>10000)kwgSniperCooldowns.delete(k);
       }
       if(kwgContactCooldowns.size>10000){
         for(const [k,t] of kwgContactCooldowns)if(now-t>10000)kwgContactCooldowns.delete(k);
