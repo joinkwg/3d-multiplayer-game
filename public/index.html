@@ -11,6 +11,11 @@
   <style>
     body { margin: 0; overflow: hidden; font-family: 'Courier New', Courier, monospace, sans-serif; user-select: none; }
     
+    #kwg-performance-hud{position:fixed;top:55px;right:12px;z-index:200;pointer-events:none;
+      background:rgba(12,27,44,.92);border:2px solid #7096b0;padding:7px 9px;
+      color:#bdecd8;font:11px 'Chakra Petch',monospace;white-space:pre;line-height:1.5;
+      box-shadow:3px 3px 0 #080e17}
+    #kwg-performance-hud[hidden]{display:none!important}
     /* Overlays & Modals */
     .overlay-screen {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -3377,6 +3382,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     </div>
   </div>
 
+  <!-- V55 optional diagnostics: F3 toggles; no permanent editor clutter. -->
+  <div id="kwg-performance-hud" aria-live="off" hidden></div>
   <!-- Game HUD -->
   <div id="hud">
     <button class="hud-btn kwg-control-icon" id="toggle-edit-btn" title="Enable Edit Mode" aria-label="Enable Edit Mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M5 15l10-10 4 4-10 10H5zM13 7l4 4"/></svg><span class="kwg-hud-button-label" id="kwg-edit-mode-label">EDIT</span></button>
@@ -9316,6 +9323,61 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 
     // --- WORLD & BLOCK OBJECT MANAGEMENT ---
     const worldBlocks = {};
+    // V55: Broad-phase physics index. Indexed by horizontal cells because
+    // world floors/ceilings may span large vertical ranges.
+    const kwgPhysicsCellSize=12;
+    let kwgPhysicsRevision=0;
+    let kwgPhysicsIndex=null;
+    const kwgPhysicsQueryStats={candidates:0,total:0};
+    function kwgInvalidatePhysicsIndex(){kwgPhysicsRevision++;kwgPhysicsIndex=null;}
+    function kwgRebuildPhysicsIndex(){
+      const cells=new Map(),oversized=[];
+      const blocks=Object.values(currentWorldData?.blocks||{});
+      for(const b of blocks){
+        const a=getBlockAABB(b);
+        const x0=Math.floor(a.minX/kwgPhysicsCellSize),x1=Math.floor(a.maxX/kwgPhysicsCellSize);
+        const z0=Math.floor(a.minZ/kwgPhysicsCellSize),z1=Math.floor(a.maxZ/kwgPhysicsCellSize);
+        const count=(x1-x0+1)*(z1-z0+1);
+        const entry={block:b,bounds:a};
+        // Large baseplates go in one overflow bucket instead of thousands
+        // of grid cells. Queries still check their exact horizontal bounds.
+        if(count>128){oversized.push(entry);continue;}
+        for(let x=x0;x<=x1;x++)for(let z=z0;z<=z1;z++){
+          const key=x+','+z;
+          let bucket=cells.get(key);
+          if(!bucket){bucket=[];cells.set(key,bucket);}
+          bucket.push(entry);
+        }
+      }
+      kwgPhysicsIndex={world:currentWorldData,blocks:currentWorldData?.blocks,revision:kwgPhysicsRevision,cells,oversized,total:blocks.length};
+      return kwgPhysicsIndex;
+    }
+    function kwgNearbyPhysicsBlocks(x,z,radius=5){
+      let index=kwgPhysicsIndex;
+      if(!index||index.world!==currentWorldData||index.blocks!==currentWorldData?.blocks||index.revision!==kwgPhysicsRevision)
+        index=kwgRebuildPhysicsIndex();
+      const minX=x-radius,maxX=x+radius,minZ=z-radius,maxZ=z+radius;
+      const x0=Math.floor(minX/kwgPhysicsCellSize),x1=Math.floor(maxX/kwgPhysicsCellSize);
+      const z0=Math.floor(minZ/kwgPhysicsCellSize),z1=Math.floor(maxZ/kwgPhysicsCellSize);
+      const found=new Set(),result=[];
+      const consider=entry=>{
+        if(found.has(entry.block.id))return;
+        found.add(entry.block.id);
+        const a=entry.bounds;
+        if(a.maxX<minX||a.minX>maxX||a.maxZ<minZ||a.minZ>maxZ)return;
+        result.push(entry.block);
+      };
+      for(let ix=x0;ix<=x1;ix++)for(let iz=z0;iz<=z1;iz++){
+        const bucket=index.cells.get(ix+','+iz);
+        if(bucket)for(const entry of bucket)consider(entry);
+      }
+      for(const entry of index.oversized)consider(entry);
+      if(radius>=5){
+        kwgPhysicsQueryStats.candidates=result.length;
+        kwgPhysicsQueryStats.total=index.total;
+      }
+      return result;
+    }
 
     // KWG V3.42.2: Tile in physical part units, including curved surfaces.
     // The texture UVs belong to each mesh geometry, not to the shared texture.
@@ -9496,12 +9558,10 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         // Independent, high-resolution repeats on all five wedge faces.
         mat=buildWedgeFaceMaterials(geo,surfaceTexture,blockData,matOptions);
       }else{
-        const tex=surfaceTexture.clone();
-        tex.needsUpdate=true;
-        tex.wrapS=THREE.RepeatWrapping;
-        tex.wrapT=THREE.RepeatWrapping;
-        tex.repeat.set(1,1);
-        mat=new THREE.MeshLambertMaterial({...matOptions,map:tex});
+        // Face repeats are stored in the geometry UVs, not texture transforms.
+        // Reuse the cached atlas rather than uploading a clone for every part.
+        // The material remains per-part for color/transparency customization.
+        mat=new THREE.MeshLambertMaterial({...matOptions,map:surfaceTexture});
       }
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(blockData.x || 0, blockData.y || 0, blockData.z || 0);
@@ -9519,7 +9579,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         transparency: transparency
       };
 
-      if(!isPreview)kwgAddPartDecals(mesh,blockData);
+      if(!isPreview){kwgInvalidatePhysicsIndex();kwgAddPartDecals(mesh,blockData);}
 
       if (isPreview) {
         const previewOpacity=Math.max(0.2,transparency);
@@ -9550,6 +9610,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       kwgClearBlockPreviews();
       kwgClearWorldPets();
       currentWorldData = world;
+      kwgInvalidatePhysicsIndex();
       if (localPlayerAvatar) { scene.remove(localPlayerAvatar); localPlayerAvatar = null; }
       for (const id in otherPlayers) {
         scene.remove(otherPlayers[id].mesh);
@@ -9618,6 +9679,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         }
         if (selectedBlockId === blockId) selectBlock(null);
       }
+      kwgInvalidatePhysicsIndex();
       updatePartCounter();
     });
 
@@ -16281,7 +16343,9 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     function updatePlayerPhysics(delta) {
       if (!localPlayerAvatar || !currentWorldName) return;
       const player=localPlayerAvatar;
-      const blocks=currentWorldData ? Object.values(currentWorldData.blocks) : [];
+      // The player only interacts with nearby geometry. Include a generous
+      // margin for footsteps, knockback, vehicle hulls, and 9-point sampling.
+      const blocks=currentWorldData ? kwgNearbyPhysicsBlocks(player.position.x,player.position.z,6) : [];
       if(kwgUpdateLifeMotion(delta,blocks))return;
       if(!isEditMode&&(kwgEquippedTool==='ufo'||kwgEquippedTool==='balloon')){
         // W/S fly forward/back, A/D steer, Space ascend, Shift descend.
@@ -16445,6 +16509,25 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 
     // --- MAIN GAME LOOP ---
     const clock = new THREE.Clock();
+    let kwgLastDispenserCheck=0,kwgLastRespawnIndicatorCheck=0;
+    const kwgPerfHud=document.getElementById('kwg-performance-hud');
+    let kwgPerfFrameCount=0,kwgPerfLastTime=performance.now(),kwgPerfFps=0;
+    window.addEventListener('keydown',event=>{
+      if(event.code!=='F3'||event.repeat||event.ctrlKey||event.altKey||event.metaKey)return;
+      event.preventDefault();
+      kwgPerfHud.hidden=!kwgPerfHud.hidden;
+      kwgPerfLastTime=performance.now();kwgPerfFrameCount=0;
+    });
+    function kwgUpdatePerformanceHud(){
+      if(kwgPerfHud.hidden)return;
+      kwgPerfFrameCount++;
+      const now=performance.now(),elapsed=now-kwgPerfLastTime;
+      if(elapsed<500)return;
+      kwgPerfFps=Math.round(kwgPerfFrameCount*1000/elapsed);
+      kwgPerfFrameCount=0;kwgPerfLastTime=now;
+      const info=renderer.info.render;
+      kwgPerfHud.textContent=`FPS ${kwgPerfFps}  |  DRAW ${info.calls}  |  TRI ${info.triangles}\nPHYSICS ${kwgPhysicsQueryStats.candidates} / ${kwgPhysicsQueryStats.total} nearby`;
+    }
 
     function animate() {
       requestAnimationFrame(animate);
@@ -16463,13 +16546,20 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         kwgUpdateBombs(delta);
         kwgUpdateBananas(delta);
         kwgUpdateWebs(delta);
-        if(!isEditMode&&currentWorldData?.blocks)kwgTouchToolDispensers(Object.values(currentWorldData.blocks),localPlayerAvatar);
+        // Dispenser proximity is not frame-critical; 10 Hz is responsive.
+        if(!isEditMode&&currentWorldData?.blocks&&localPlayerAvatar&&performance.now()-kwgLastDispenserCheck>=100){
+          kwgLastDispenserCheck=performance.now();
+          kwgTouchToolDispensers(kwgNearbyPhysicsBlocks(localPlayerAvatar.position.x,localPlayerAvatar.position.z,3),localPlayerAvatar);
+        }
         if(kwgFireHeld&&kwgEquippedTool)kwgFireTool();
         kwgAnimateStomp(kwgEnemyClock());
       }
       kwgSyncHeldTool();
       kwgStudioHideActors();
-      if(currentWorldName)kwgUpdateEnemyRespawnIndicators();
+      if(currentWorldName&&performance.now()-kwgLastRespawnIndicatorCheck>=95){
+        kwgLastRespawnIndicatorCheck=performance.now();
+        kwgUpdateEnemyRespawnIndicators();
+      }
       kwgStudioTick(delta);
       if(!kwgFreeCamera.active&&!isEditMode&&!kwgDeadUntil&&kwgEquippedTool)
         kwgAnimateHeldWeapon(localPlayerAvatar,kwgEquippedTool,performance.now(),true);
@@ -16514,6 +16604,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
 
       kwgAnimateWorldPets(delta);
       renderer.render(scene, camera);
+      kwgUpdatePerformanceHud();
     }
 
     animate();
