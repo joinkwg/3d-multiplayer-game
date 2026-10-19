@@ -9134,6 +9134,48 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       kwgSetWorldPet(id,petKey);
     });
 
+    // V56: Render remote avatars a short time behind incoming network packets.
+    // This smooths 25 Hz movement without adding latency to the local player.
+    const kwgRemoteDelayMs=105;
+    const kwgRemoteMaxExtrapolationMs=65;
+    const kwgRemoteBufferLimit=18;
+    function kwgQueueRemoteSnapshot(p,data){
+      if(!p?.mesh)return;
+      const now=performance.now();
+      const x=Number(data.x),y=Number(data.y),z=Number(data.z),yaw=Number(data.rotationY);
+      if(![x,y,z,yaw].every(Number.isFinite))return;
+      if(!p.snapshots)p.snapshots=[];
+      const previous=p.snapshots[p.snapshots.length-1];
+      // Respawns, vehicle teleports and large corrections should snap, not
+      // drag a ghost avatar across the world for several seconds.
+      if(previous&&Math.hypot(x-previous.x,y-previous.y,z-previous.z)>15){
+        p.snapshots.length=0;
+        p.mesh.position.set(x,y,z);p.mesh.rotation.y=yaw;
+      }
+      p.snapshots.push({t:now,x,y,z,yaw});
+      if(p.snapshots.length>kwgRemoteBufferLimit)p.snapshots.splice(0,p.snapshots.length-kwgRemoteBufferLimit);
+    }
+    function kwgAnimateRemotePlayers(){
+      if(!currentWorldName||kwgStudioCam.active)return;
+      const target=performance.now()-kwgRemoteDelayMs;
+      for(const p of Object.values(otherPlayers)){
+        const samples=p.snapshots;
+        if(!p.mesh||!samples?.length)continue;
+        while(samples.length>2&&samples[1].t<=target)samples.shift();
+        const a=samples[0],b=samples[1];
+        if(!b){p.mesh.position.set(a.x,a.y,a.z);p.mesh.rotation.y=a.yaw;continue;}
+        let alpha=(target-a.t)/Math.max(1,b.t-a.t);
+        if(target>b.t){
+          // A small capped extrapolation masks a delayed packet, but never
+          // allows unbounded drift on packet loss.
+          alpha=1+Math.min(kwgRemoteMaxExtrapolationMs,target-b.t)/Math.max(20,b.t-a.t);
+        }else alpha=Math.max(0,Math.min(1,alpha));
+        p.mesh.position.set(a.x+(b.x-a.x)*alpha,a.y+(b.y-a.y)*alpha,a.z+(b.z-a.z)*alpha);
+        const angle=Math.atan2(Math.sin(b.yaw-a.yaw),Math.cos(b.yaw-a.yaw));
+        p.mesh.rotation.y=a.yaw+angle*Math.min(1,alpha);
+      }
+    }
+
     // --- MULTIPLAYER PLAYER SYNC ---
     // V48: Build/update a remote player from either join events or an
     // authoritative roster. This prevents asymmetric invisibility when a join
@@ -9150,7 +9192,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         mesh.rotation.y=Number(pData.rotationY)||0;
         mesh.visible=!kwgStudioCam.active;
         scene.add(mesh);
-        p=otherPlayers[pData.id]={mesh,username:pData.username,hidden:!!pData.hidden,level:pData.level||1};
+        p=otherPlayers[pData.id]={mesh,username:pData.username,hidden:!!pData.hidden,level:pData.level||1,snapshots:[]};
         kwgSetWorldPet(pData.id,pData.petKey);
       }else if(p.username!==pData.username || p.hidden!==!!pData.hidden || p.level!==(pData.level||1)){
         // Refresh the overhead name when block/privacy state changes.
@@ -9240,8 +9282,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     socket.on('player_moved', (pData) => {
       const p = otherPlayers[pData.id];
       if (!p) {kwgRefreshWorldPlayers();return;}
-      p.mesh.position.set(pData.x, pData.y, pData.z);
-      p.mesh.rotation.y = pData.rotationY;
+      kwgQueueRemoteSnapshot(p,pData);
       kwgAttachOverheadHealth(p.mesh,pData.health??100);
 
       updateAvatarAnimations(p.mesh, pData.isMoving, pData.isGrounded !== false, 0.016, pData.walkClock, pData.verticalVelocity || 0);
@@ -16220,11 +16261,13 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     }
 
     let lastSendTime = 0;
+    let kwgMovementSequence=0;
     function kwgSendPlayerMovement(player,isMoving,force=false){
       const now=Date.now();
       if(!player||!currentWorldName||(!force&&now-lastSendTime<=40))return;
       lastSendTime=now;
       socket.emit('player_movement',{
+        seq:++kwgMovementSequence,
         x:player.position.x,y:player.position.y,z:player.position.z,
         rotationY:player.rotation.y,walkClock:player.userData.walkClock||0,
         verticalVelocity:velocityY,isMoving,isGrounded,
@@ -16602,6 +16645,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
         }
       }
 
+      kwgAnimateRemotePlayers();
       kwgAnimateWorldPets(delta);
       renderer.render(scene, camera);
       kwgUpdatePerformanceHud();
