@@ -1129,6 +1129,19 @@ async function kwgGroupPublic(groupId,userId){
   return r.rows[0]||null;
 }
 
+  const kwgSharedEnemyStates = new Map();
+  const kwgEnemyMaxHp = kind => kind==='hops'?160:kind==='alien'?125:kind==='spider'?110:kind==='bot_bus'?230:kind==='balloon_baboon'?150:100;
+  const kwgEnemyStateKey = (id,index) => JSON.stringify([id,index]);
+  function kwgEnemyRoomState(worldName){
+    let state=kwgSharedEnemyStates.get(worldName);
+    if(!state){state=new Map();kwgSharedEnemyStates.set(worldName,state);}
+    return state;
+  }
+  function kwgEnemySnapshot(worldName){
+    const state=kwgSharedEnemyStates.get(worldName);
+    return state?[...state.entries()].map(([key,value])=>({key,...value})):[];
+  }
+
 io.on('connection', (socket) => {
   socket.on('register', async ({ username, password }, cb) => {
     try {
@@ -2573,6 +2586,56 @@ io.on('connection', (socket) => {
         io.to(target.id).emit('tool_damage_taken',{damage,shooterPosition:{x:impact.x,y:impact.y,z:impact.z}});
       }
     }catch(err){console.warn('Balloon blast validation:',err.message);}
+  });
+
+  // V56 Part 2a: room-scoped shared enemy HP. In-memory state is intentionally
+  // ephemeral: it never changes saved worlds, user records, or world parts.
+  // Server decides the HP and broadcasts every accepted change. The browser
+  // reports hit intent, NOT its chosen remaining HP or defeat outcome.
+  const kwgEnemyLastHit=new Map();
+  socket.on('kwg_enemy_hit',async ({worldName,spawnerId,index,toolKind}={})=>{
+    if(!requireAuth(socket))return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key||socket.data.worldName!==key||p.health<=0)return;
+    if(typeof spawnerId!=='string'||spawnerId.length>160||!Number.isInteger(index)||index<0||index>=12)return;
+    const damages={pistol:32,minigun:9,laser:4,ufo:100,balloon:70};
+    if(!Object.hasOwn(damages,toolKind)||!kwgServerTools.has(toolKind)||p.equippedTool!==toolKind)return;
+    const now=Date.now(),rate=toolKind==='minigun'?70:toolKind==='laser'?70:toolKind==='ufo'?350:toolKind==='balloon'?950:240;
+    const throttleKey=JSON.stringify([key,spawnerId,index,toolKind]);
+    if(now-(kwgEnemyLastHit.get(throttleKey)||0)<rate)return;
+    try{
+      const world=await getWorldByName(key),block=world?.data?.blocks?.[spawnerId];
+      if(!block||block.actionType!=='enemy_spawner')return;
+      normalizeEnemySpawner(block);
+      if(index>=block.enemyCount)return;
+      const dx=p.x-(Number(block.x)||0),dz=p.z-(Number(block.z)||0);
+      const range=Math.min(65,Math.max(10,block.noticeRange+8));
+      if(Math.hypot(dx,dz)>range||Math.abs(p.y-(Number(block.y)||0))>range+10)return;
+      // Recheck after async database work; a player may have switched worlds.
+      if(playersBySocket.get(socket.id)!==p||p.worldName!==key||socket.data.worldName!==key)return;
+      const room=kwgEnemyRoomState(key),stateKey=kwgEnemyStateKey(spawnerId,index);
+      const max=kwgEnemyMaxHp(block.enemyCharacter),respawnMs=Math.max(1000,Number(block.enemyRespawn||5)*1000);
+      let state=room.get(stateKey);
+      if(!state||state.kind!==block.enemyCharacter||(now>=state.deadUntil&&state.deadUntil>0)){
+        state={spawnerId,index,kind:block.enemyCharacter,hp:max,max,deadUntil:0,revision:(state?.revision||0)+1};
+      }
+      if(state.deadUntil>now)return;
+      // Prevent concurrent awaited requests from both applying a hit based on stale HP.
+      const prior=kwgEnemyLastHit.get(throttleKey)||0;
+      if(now-prior<rate)return;
+      kwgEnemyLastHit.set(throttleKey,now);
+      state.hp=Math.max(0,state.hp-damages[toolKind]);
+      if(state.hp===0)state.deadUntil=now+respawnMs+480;
+      state.revision++;
+      room.set(stateKey,state);
+      io.to(`world:${key}`).emit('kwg_enemy_state',{worldName:key,...state});
+    }catch(err){console.warn('Shared enemy hit:',err.message);}
+  });
+  socket.on('kwg_enemy_snapshot',({worldName}={},cb)=>{
+    if(typeof cb!=='function'||!requireAuth(socket,cb))return;
+    const p=playersBySocket.get(socket.id),key=cleanWorldName(worldName);
+    if(!p||p.worldName!==key||socket.data.worldName!==key)return cb({success:false});
+    cb({success:true,states:kwgEnemySnapshot(key)});
   });
 
   // Stomp events are room-scoped and validated against saved spawner settings.
