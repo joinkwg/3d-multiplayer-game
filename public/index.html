@@ -14469,6 +14469,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       for(const entry of kwgEnemySpawners.values()){kwgDisposeEnemyRespawnIndicator(entry);for(const slot of entry.slots)kwgDestroyEnemySlot(slot);}
       kwgEnemySpawners.clear();
       kwgSharedEnemyHp.clear();
+      kwgEnemyMotionTargets.clear();kwgEnemyMotionHost=false;kwgEnemyMotionHostChecked=0;
       kwgEnemySnapshotWorld=null;
       kwgLastEnemySync=0;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
@@ -14498,6 +14499,55 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if(notify)kwgAudio.play('devil_stomp');
       if(notify&&socket?.connected)socket.emit('enemy_stomped',{worldName:currentWorldName,spawnerId,index,method:slot.defeatMethod||'stomp'});
       slot.defeatMethod=null;
+    }
+    // V56 Part 2b: one elected client runs the existing seven AI behaviors;
+    // other browsers display its movement snapshots (no duplicate AI attacks).
+    let kwgEnemyMotionHost=false,kwgEnemyMotionHostChecked=0,kwgEnemyMotionSent=0;
+    const kwgEnemyMotionTargets=new Map();
+    socket.on('kwg_enemy_motion',packet=>{
+      if(!packet||packet.worldName!==currentWorldName||kwgEnemyMotionHost)return;
+      for(const e of packet.enemies||[]){
+        if(!e||!Number.isFinite(e.x)||!Number.isFinite(e.y)||!Number.isFinite(e.z))continue;
+        kwgEnemyMotionTargets.set(JSON.stringify([e.id,e.index]),{...e,received:performance.now()});
+      }
+    });
+    function kwgEnemyMotionRole(now){
+      if(!socket?.connected||!currentWorldName){kwgEnemyMotionHost=false;return;}
+      if(now-kwgEnemyMotionHostChecked<1200)return;
+      kwgEnemyMotionHostChecked=now;
+      const world=currentWorldName;
+      socket.emit('kwg_enemy_motion_host',{worldName:world},reply=>{
+        if(world!==currentWorldName)return;
+        kwgEnemyMotionHost=!!reply?.host;
+      });
+    }
+    function kwgEnemyMotionFollower(delta){
+      const t=performance.now();
+      for(const [id,entry] of kwgEnemySpawners)for(let index=0;index<entry.slots.length;index++){
+        const slot=entry.slots[index],target=kwgEnemyMotionTargets.get(JSON.stringify([id,index]));
+        if(!target||t-target.received>3000||slot.deadUntil>kwgEnemyClock())continue;
+        if(!slot.mesh){
+          slot.mesh=kwgCreateEnemyModel(kwgEnemyPropsOf(entry.block).enemyCharacter);
+          scene.add(slot.mesh);slot.spawnedOnce=true;
+        }
+        const m=slot.mesh,blend=Math.min(1,Math.max(.08,delta*15));
+        if(m.position.distanceToSquared(new THREE.Vector3(target.x,target.y,target.z))>100)m.position.set(target.x,target.y,target.z);
+        else m.position.lerp(new THREE.Vector3(target.x,target.y,target.z),blend);
+        m.rotation.y+=Math.atan2(Math.sin(target.yaw-m.rotation.y),Math.cos(target.yaw-m.rotation.y))*blend;
+        slot.aiState=target.ai;
+      }
+    }
+    function kwgEnemyMotionPublish(now){
+      if(!kwgEnemyMotionHost||now-kwgEnemyMotionSent<100||!socket?.connected)return;
+      kwgEnemyMotionSent=now;
+      const enemies=[];
+      for(const [id,entry] of kwgEnemySpawners)for(let index=0;index<entry.slots.length;index++){
+        const slot=entry.slots[index];if(!slot.mesh||slot.deadUntil>kwgEnemyClock())continue;
+        const m=slot.mesh;
+        enemies.push({id,index,x:m.position.x,y:m.position.y,z:m.position.z,yaw:m.rotation.y,ai:slot.aiState||'roam'});
+        if(enemies.length>=100)break;
+      }
+      socket.emit('kwg_enemy_motion',{worldName:currentWorldName,enemies});
     }
     // V56 Part 2a: weapon damage is reconciled from shared server HP.
     // Existing local enemy AI and enemy-to-player attacks are unchanged.
@@ -15030,6 +15080,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
     function kwgUpdateEnemies(delta){
       if(!currentWorldName||!localPlayerAvatar||kwgFreeCamera.active)return;
       kwgSyncEnemySpawners();
+      kwgEnemyMotionRole(performance.now());
+      if(!kwgEnemyMotionHost){kwgEnemyMotionFollower(delta);return;}
       kwgSpiderFrameDt=Math.max(.016,Math.min(.09,delta));
       const player=localPlayerAvatar,now=kwgEnemyClock();
       const playerBefore=kwgEnemyPreviousPlayerPos||{x:player.position.x,y:player.position.y,z:player.position.z};
@@ -16624,6 +16676,7 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           kwgEnemyPreviousFeet=localPlayerAvatar?.position.y??-Infinity;
           updatePlayerPhysics(delta);
           kwgUpdateEnemies(delta);
+          kwgEnemyMotionPublish(performance.now());
         }
         kwgUpdateShotTracers();
         kwgUpdateHitPixels(delta);
