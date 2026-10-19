@@ -13139,9 +13139,10 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
           const slot=entry.slots[index];if(!slot.mesh||slot.deadUntil>now||slot.squishUntil>now)continue;
           const p=slot.mesh.position.clone().add(new THREE.Vector3(0,1,0));const dist=p.distanceTo(position);
           if(dist>=radius||!kwgRayWorldClear(position.clone().add(new THREE.Vector3(0,.15,0)),p,blocks))continue;
-          slot.weaponHealth=(slot.weaponHealth??kwgEnemyMaxWeaponHealth(entry.block.enemyCharacter))-Math.max(8,Math.round(damage*(1-dist/radius)));
+          if(socket?.connected)kwgReportEnemyHit(id,index,'balloon');
+          else slot.weaponHealth=(slot.weaponHealth??kwgEnemyMaxWeaponHealth(entry.block.enemyCharacter))-Math.max(8,Math.round(damage*(1-dist/radius)));
           slot.hitUntil=now+350;kwgShowEnemyHealth(slot,entry.block.enemyCharacter);
-          if(slot.weaponHealth<=0){slot.defeatMethod='weapon';kwgDefeatEnemy(id,index,true);}
+          if(!socket?.connected&&slot.weaponHealth<=0){slot.defeatMethod='weapon';kwgDefeatEnemy(id,index,true);}
         }
         if(socket?.connected)socket.emit('kwg_balloon_blast',{worldName:currentWorldName,impact:{x:position.x,y:position.y,z:position.z},origin:{x:origin.x,y:origin.y,z:origin.z}});
       }
@@ -13289,12 +13290,13 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
        }else if(best?.kind==='enemy'){
         // Can Be Stomped controls stomp immunity, not weapon damage.
         // Hops is immune to stomps but must remain defeatable by tools.
-        best.slot.weaponHealth=(best.slot.weaponHealth??100)-kwgToolDamage[kind];
+        if(socket?.connected){kwgReportEnemyHit(best.id,best.index,kind);}
+        else best.slot.weaponHealth=(best.slot.weaponHealth??100)-kwgToolDamage[kind];
         kwgBlockyHitSplash(tracerEnd,kind==='minigun'||kind==='laser'?7:13);
         kwgAudio.play('hit_enemy');
         kwgShowEnemyHealth(best.slot,best.entry.block.enemyCharacter);
         best.slot.hitUntil=now+370;best.slot.hitSide=Math.random()<.5?-1:1;
-        if(best.slot.weaponHealth<=0){best.slot.defeatMethod='weapon';kwgDefeatEnemy(best.id,best.index,true);}
+        if(!socket?.connected&&best.slot.weaponHealth<=0){best.slot.defeatMethod='weapon';kwgDefeatEnemy(best.id,best.index,true);}
       }else if(best?.kind==='player'&&socket?.connected){
         kwgBlockyHitSplash(tracerEnd,kind==='minigun'||kind==='laser'?6:11);
         const start=ray.ray.origin,dir=ray.ray.direction;
@@ -14466,6 +14468,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       kwgClearBlockPreviews();
       for(const entry of kwgEnemySpawners.values()){kwgDisposeEnemyRespawnIndicator(entry);for(const slot of entry.slots)kwgDestroyEnemySlot(slot);}
       kwgEnemySpawners.clear();
+      kwgSharedEnemyHp.clear();
+      kwgEnemySnapshotWorld=null;
       kwgLastEnemySync=0;
       kwgAirJumps=0;kwgDoubleJumpStomp=false;
       kwgEnemyRangeIndicator.visible=false;
@@ -14495,15 +14499,53 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
       if(notify&&socket?.connected)socket.emit('enemy_stomped',{worldName:currentWorldName,spawnerId,index,method:slot.defeatMethod||'stomp'});
       slot.defeatMethod=null;
     }
+    // V56 Part 2a: weapon damage is reconciled from shared server HP.
+    // Existing local enemy AI and enemy-to-player attacks are unchanged.
+    const kwgSharedEnemyHp=new Map();
+    function kwgReceiveEnemyState(state){
+      if(!state||state.worldName!==currentWorldName)return;
+      if(state.deadUntil>0&&state.deadUntil<=Date.now())state={...state,hp:state.max,deadUntil:0};
+      const key=JSON.stringify([state.spawnerId,state.index]);
+      const old=kwgSharedEnemyHp.get(key);
+      if(old&&Number(old.revision)>Number(state.revision))return;
+      kwgSharedEnemyHp.set(key,state);
+      const entry=kwgEnemySpawners.get(state.spawnerId),slot=entry?.slots[state.index];
+      if(!slot)return;
+      slot.weaponHealth=state.hp;
+      if(state.hp<=0&&state.deadUntil>Date.now()&&slot.deadUntil<=kwgEnemyClock()){
+        kwgDefeatEnemy(state.spawnerId,state.index,false);
+        // Align the countdown with the server's remaining wall-clock delay.
+        slot.deadUntil=kwgEnemyClock()+Math.max(0,state.deadUntil-Date.now());
+      }else if(state.hp>0&&slot.mesh)kwgShowEnemyHealth(slot,entry.block.enemyCharacter);
+    }
+    socket.on('kwg_enemy_state',kwgReceiveEnemyState);
+    function kwgReportEnemyHit(id,index,toolKind){
+      if(socket?.connected&&currentWorldName)socket.emit('kwg_enemy_hit',{worldName:currentWorldName,spawnerId:id,index,toolKind});
+    }
+    function kwgLoadEnemySnapshot(){
+      if(!socket?.connected||!currentWorldName)return;
+      const requestedWorld=currentWorldName;
+      socket.emit('kwg_enemy_snapshot',{worldName:requestedWorld},reply=>{
+        if(!reply?.success||requestedWorld!==currentWorldName)return;
+        kwgSharedEnemyHp.clear();
+        for(const state of reply.states||[])kwgReceiveEnemyState({...state,worldName:requestedWorld});
+      });
+    }
     socket.on('enemy_stomped',({worldName,spawnerId,index}={})=>{
       if(worldName===currentWorldName)kwgDefeatEnemy(spawnerId,index,false);
     });
     let kwgLastEnemySync=0;
+    let kwgEnemySnapshotWorld=null;
     function kwgSyncEnemySpawners(){
       if(!currentWorldName||!currentWorldData?.blocks)return;
       const now=kwgEnemyClock();
       if(now-kwgLastEnemySync<180)return;
       kwgLastEnemySync=now;
+      if(kwgEnemySnapshotWorld!==currentWorldName){
+        kwgEnemySnapshotWorld=currentWorldName;
+        kwgSharedEnemyHp.clear();
+        kwgLoadEnemySnapshot();
+      }
       const blocks=currentWorldData.blocks;
       for(const [id,entry] of kwgEnemySpawners){
         if(!blocks[id]||blocks[id].actionType!=='enemy_spawner'){
@@ -15032,7 +15074,8 @@ body.kwg-editing #hud #leave-world-btn{display:none!important}
             slot.spawnIndex=index;slot.walkTime=0;slot.path=[];slot.pathAt=0;
             slot.roamTarget=null;slot.roamUntil=0;slot.attackUntil=0;slot.noticeBubbleUntil=0;
             slot.chaseStartedAt=0;slot.exhaustedUntil=0;slot.chaseCooldownUntil=0;
-            slot.weaponHealth=kwgEnemyMaxWeaponHealth(props.enemyCharacter);slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
+            const sharedHp=kwgSharedEnemyHp.get(JSON.stringify([id,index]));
+            slot.weaponHealth=sharedHp&&(!sharedHp.deadUntil||sharedHp.deadUntil>Date.now())?sharedHp.hp:kwgEnemyMaxWeaponHealth(props.enemyCharacter);slot.chaseSoundAt=0;slot.wasChasing=false;slot.aiState='roam';
             slot.stuckSince=0;slot.lastProgressX=origin.x;slot.lastProgressZ=origin.z;slot.lastProgressAt=now;slot.escapeUntil=0;slot.escapeSide=index%2?1:-1;slot.dropGoal=null;slot.dropCommitUntil=0;slot.nextShotAt=0;slot.nextHopAt=0;slot.hopsImpactAt=0;slot.hopsImpactPending=false;slot.hopsLeapUntil=0;
             slot.alienMode='flight';slot.alienFootStuckAt=0;slot.alienReboardAt=0;slot.baboonMode='flight';slot.baboonBombAt=0;slot.baboonLostAt=0;slot.bananaAt=0;slot.alienChargeAt=0;slot.alienHiddenAt=0;slot.alienNextZap=0;slot.webChargeAt=0;slot.nextWebAt=0;slot.busDeployed=false;slot.busBlockedAt=0;slot.robots=[];
             if(props.enemyCharacter==='alien'||props.enemyCharacter==='balloon_baboon')slot.mesh.position.y=origin.y+5.8;
